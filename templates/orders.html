@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>الطلبات</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body class="orders-page">
+  <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
+    <div class="nav-main d-flex align-items-center gap-2">
+      <span class="navbar-brand fw-bold fs-6 mb-0">
+        <i class="bi bi-bag-check-fill me-2"></i>الطلبات
+      </span>
+    </div>
+    <div class="nav-actions d-flex align-items-center gap-2">
+      <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ request.args.get('key','') }}">
+        <i class="bi bi-chat-dots me-1"></i>الداشبورد
+      </a>
+      <a class="btn btn-outline-light btn-sm" href="/products?key={{ request.args.get('key','') }}">
+        <i class="bi bi-box-seam me-1"></i>المنتجات
+      </a>
+      <button class="btn btn-outline-light btn-sm" type="button" onclick="loadOrders()" title="تحديث">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+  </nav>
+
+  <main class="orders-layout">
+    <section class="orders-panel">
+      <div class="orders-toolbar">
+        <div>
+          <div class="fw-bold">كل الطلبات</div>
+          <div class="small" style="color:var(--text-muted)" id="ordersCount">—</div>
+        </div>
+        <div class="orders-filters flex-grow-1 justify-content-end">
+          <div class="input-group input-group-sm" style="max-width:280px;min-width:160px;">
+            <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
+            <input type="text" class="form-control border-0" id="orderSearch"
+              placeholder="بحث بالاسم، الهاتف، المنتج، العنوان..."
+              oninput="renderOrders()">
+          </div>
+          <select class="form-select form-select-sm" id="orderStatusFilter" onchange="renderOrders()">
+            <option value="">كل الحالات</option>
+          </select>
+        </div>
+      </div>
+      <div class="p-2 border-bottom" style="border-color:var(--border)!important;background:var(--sidebar-bg);">
+        <div class="small" style="color:var(--text-muted)">أحدث 500 طلب محفوظ في النظام</div>
+      </div>
+      <div class="orders-list" id="ordersList">
+        <div class="text-center py-5" style="color:var(--text-muted)">
+          <div class="spinner-border spinner-border-sm mb-2"></div>
+          <div class="small">جاري التحميل...</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast-container position-fixed bottom-0 start-0 p-3" id="toastContainer"></div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/js/orders.js"></script>
+</body>
+</html>

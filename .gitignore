@@ -1,0 +1,26 @@
+.env
+.env.*
+!.env.example
+Facebook → Python API Bridge.json
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+sales.db
+*.sqlite
+*.sqlite3
+incoming_requests.jsonl
+ad_tracking.jsonl
+bookings.jsonl
+*.log
+product_image/uploads/
+
+*.tmp
+.DS_Store
+Thumbs.db
+
+.venv/
+venv/
+env/
