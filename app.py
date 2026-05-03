@@ -151,7 +151,7 @@ def _normalize_manychat_key_value(value: str = "") -> str:
     return key
 
 
-DEFAULT_MANYCHAT_API_KEY = "131a8ea8121f6eff3a0695fb8982c32c"
+DEFAULT_MANYCHAT_API_KEY = ""
 
 
 def _manychat_key_from_environ() -> str:
@@ -1666,8 +1666,13 @@ def is_ai_handoff_reply(reply: str) -> bool:
 
 # ── ManyChat customer sender ──────────────────────────────────────────────────
 
+def normalize_manychat_platform(platform: str = "") -> str:
+    value = str(platform or "").strip().lower()
+    return "instagram" if value in ("instagram", "ig") else "facebook"
+
+
 def is_instagram_platform(platform: str = "") -> bool:
-    return str(platform or "").strip().lower() == "instagram"
+    return normalize_manychat_platform(platform) == "instagram"
 
 
 def manychat_content_type(platform: str = "") -> str:
@@ -1895,6 +1900,12 @@ def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "fac
                 message = f"{top_message} — {detail_text}"
             else:
                 message = top_message or detail_text
+            if "wrong format token" in message.lower():
+                message = (
+                    "MANYCHAT_API_KEY غير صحيح أو ليس API token صالح. "
+                    "أنشئ مفتاح API جديد من ManyChat Settings > API وضعه في Railway Variables "
+                    "بدون كلمة Bearer أو علامات اقتباس."
+                )
         print(
             f"[ManyChat][{label}] subscriber={subscriber_id} type={content_type} tag={message_tag or retried_with_tag or '-'} "
             f"http={resp.status_code} ok={ok} status={status} response={body}",
@@ -4785,7 +4796,11 @@ def api_send_message(sender_id):
         (sender_id,),
     ).fetchone()
     page_id = customer["page_id"] if customer else ""
-    platform = customer["platform"] if customer else "facebook"
+    requested_platform = str(data.get("platform") or "").strip().lower()
+    if requested_platform in ("instagram", "ig", "facebook", "messenger", "fb"):
+        platform = normalize_manychat_platform(requested_platform)
+    else:
+        platform = normalize_manychat_platform(customer["platform"] if customer else "facebook")
     now = now_baghdad_iso()
     db.execute(
         "INSERT INTO messages (sender_id, direction, message_type, text, image_url, created_at) "

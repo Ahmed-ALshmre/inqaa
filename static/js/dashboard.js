@@ -691,10 +691,11 @@ async function sendMessage(text = null, imgUrl = null) {
 
   _setSendingState(true);
   try {
+    const platform = (currentCustomer && currentCustomer.platform) || 'facebook';
     const res  = await apiFetch(`/api/conversations/${currentSenderId}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: txt, image_url: img }),
+      body: JSON.stringify({ text: txt, image_url: img, platform }),
     });
     const data = await res.json();
     if (data.ok) {
