@@ -1578,6 +1578,19 @@ def build_public_image_url(image_url):
     return image_url
 
 
+def is_public_https_url(url: str) -> bool:
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme != "https" or not parsed.netloc:
+        return False
+    host = parsed.netloc.lower()
+    return not (
+        host.startswith("localhost")
+        or host.startswith("127.")
+        or host.startswith("10.")
+        or host.startswith("192.168.")
+    )
+
+
 def build_catalog_reply(products):
     active = [
         p for p in products
@@ -1756,7 +1769,97 @@ def _looks_like_image_url(value):
     )
 
 
+def _looks_like_video_url(value):
+    text = str(value or "").strip()
+    if not text:
+        return False
+    lowered = text.lower()
+    return (
+        lowered.startswith("http")
+        and (
+            any(ext in lowered for ext in (".mp4", ".mov", ".m4v", ".webm"))
+            or "video" in lowered
+            or "/reel/" in lowered
+            or "/reels/" in lowered
+        )
+    )
+
+
+def _looks_like_reel_url(value):
+    text = str(value or "").strip().lower()
+    return text.startswith("http") and (
+        "instagram.com/reel/" in text
+        or "instagram.com/reels/" in text
+        or "/reel/" in text
+        or "/reels/" in text
+    )
+
+
+def _extract_url_from_value(value):
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("http"):
+            return text
+        match = re.search(r"https?://\S+", text)
+        if match:
+            return match.group(0).rstrip(").,؛،")
+    return ""
+
+
+def extract_media_url_from_manychat_data(data):
+    keys = (
+        "reel_url", "reels_url", "instagram_reel_url", "ig_reel_url",
+        "video_url", "last_input_video_url", "ig_last_input_video_url",
+        "last_input_attachment_url", "attachment_url", "media_url", "file_url",
+        "last_input_image_url", "image_url", "last_input_image",
+        "photo_url", "picture_url", "last_image_url", "url",
+        "ig_last_input_image_url", "instagram_image_url",
+    )
+    for key in keys:
+        value = (data or {}).get(key)
+        url = _extract_url_from_value(value)
+        if _looks_like_reel_url(url):
+            return url, "reel"
+        if _looks_like_video_url(url):
+            return url, "video"
+        if _looks_like_image_url(url):
+            return url, "image"
+
+    for value in (data or {}).values():
+        if isinstance(value, dict):
+            nested_url, nested_type = extract_media_url_from_manychat_data(value)
+            if nested_url:
+                return nested_url, nested_type
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    nested_url, nested_type = extract_media_url_from_manychat_data(item)
+                    if nested_url:
+                        return nested_url, nested_type
+                else:
+                    url = _extract_url_from_value(item)
+                    if _looks_like_reel_url(url):
+                        return url, "reel"
+                    if _looks_like_video_url(url):
+                        return url, "video"
+                    if _looks_like_image_url(url):
+                        return url, "image"
+        else:
+            url = _extract_url_from_value(value)
+            if _looks_like_reel_url(url):
+                return url, "reel"
+            if _looks_like_video_url(url):
+                return url, "video"
+            if _looks_like_image_url(url):
+                return url, "image"
+    return "", ""
+
+
 def extract_image_url_from_manychat_data(data):
+    media_url, media_type = extract_media_url_from_manychat_data(data)
+    if media_type == "image":
+        return media_url
+
     keys = (
         "last_input_image_url", "image_url", "last_input_image",
         "last_input_attachment_url", "attachment_url", "photo_url",
@@ -2062,14 +2165,30 @@ def extract_facebook_event(body):
 
     attachments = message.get("attachments", [])
     image_url   = None
+    media_type  = ""
     for att in attachments:
-        if att.get("type") == "image":
-            image_url = att.get("payload", {}).get("url")
+        att_type = str(att.get("type") or "").strip().lower()
+        payload_url = (att.get("payload") or {}).get("url") or (att.get("payload") or {}).get("src") or ""
+        if att_type == "image":
+            image_url = payload_url
+            media_type = "image"
             break
+        if att_type in ("video", "share", "fallback"):
+            image_url = payload_url
+            media_type = "reel" if _looks_like_reel_url(payload_url) else "video"
+            break
+    if not image_url:
+        url = _extract_url_from_value(text)
+        if _looks_like_reel_url(url):
+            image_url = url
+            media_type = "reel"
+        elif _looks_like_video_url(url):
+            image_url = url
+            media_type = "video"
 
     ref, ad_id, referral_source, referral_type = extract_referral(event)
 
-    print(f"[Extract] platform={platform} sender={sender_id} text={text!r} image={bool(image_url)} "
+    print(f"[Extract] platform={platform} sender={sender_id} text={text!r} media={media_type or bool(image_url)} "
           f"ref={ref} ad_id={ad_id}", flush=True)
 
     return {
@@ -2080,6 +2199,7 @@ def extract_facebook_event(body):
         "text"           : text,
         "attachments"    : attachments,
         "image_url"      : image_url,
+        "media_type"     : media_type,
         "quick_reply"    : quick_reply,
         "postback"       : postback,
         "ref"            : ref,
@@ -2112,6 +2232,8 @@ def _is_emoji_only(text):
 def detect_message_type(ev):
     if ev["postback"]:
         return "postback"
+    if ev.get("media_type") in ("reel", "video"):
+        return ev["media_type"]
     if ev["image_url"]:
         return "image"
     if ev["attachments"] and not ev["image_url"]:
@@ -4126,7 +4248,7 @@ def manychat_webhook():
     last_name = data.get("last_name", "") or ""
     platform = detect_manychat_platform(data)
     page_id = str(data.get("page_id") or "")
-    image_url = extract_image_url_from_manychat_data(data)
+    image_url, media_type = extract_media_url_from_manychat_data(data)
     ref = data.get("ref") or ""
     ad_id = data.get("ad_id") or ""
 
@@ -4141,7 +4263,7 @@ def manychat_webhook():
     print(f"[AdTrack/ManyChat] page_id={page_id} ad_id={ad_id}", flush=True)
 
     print(
-        f"[ManyChat IN] subscriber={subscriber_id} text={text!r} image={bool(image_url)}",
+        f"[ManyChat IN] subscriber={subscriber_id} text={text!r} media={media_type or bool(image_url)}",
         flush=True,
     )
 
@@ -4168,7 +4290,7 @@ def manychat_webhook():
                     "mid": f"manychat_{subscriber_id}_{timestamp_ms}",
                     "text": text,
                     "attachments": ([{
-                        "type": "image",
+                        "type": media_type if media_type in ("image", "video") else "share",
                         "payload": {"url": image_url},
                     }] if image_url else []),
                 },
@@ -4702,7 +4824,7 @@ def api_conversations():
 def api_conversation_messages(sender_id):
     db = get_db()
     rows = db.execute(
-        "SELECT id, direction, message_type, text, image_url, ad_id, created_at "
+        "SELECT id, direction, message_type, text, image_url, ad_id, raw_payload, created_at "
         "FROM messages WHERE sender_id=? ORDER BY id DESC LIMIT 50",
         (sender_id,),
     ).fetchall()
@@ -4801,11 +4923,12 @@ def api_send_message(sender_id):
         platform = normalize_manychat_platform(requested_platform)
     else:
         platform = normalize_manychat_platform(customer["platform"] if customer else "facebook")
+    outgoing_type = "image" if image_url and not text else "text"
     now = now_baghdad_iso()
     db.execute(
         "INSERT INTO messages (sender_id, direction, message_type, text, image_url, created_at) "
-        "VALUES (?, 'outgoing', 'text', ?, ?, ?)",
-        (sender_id, text or None, image_url or None, now),
+        "VALUES (?, 'outgoing', ?, ?, ?, ?)",
+        (sender_id, outgoing_type, text or None, image_url or None, now),
     )
     db.commit()
 
@@ -4817,7 +4940,19 @@ def api_send_message(sender_id):
     if image_url:
         public_img = build_public_image_url(image_url)
         print(f"[Dashboard] Sending image: {public_img}", flush=True)
-        image_result = send_image_via_manychat_detailed(sender_id, public_img, platform=platform, message_tag=manual_tag)
+        if not is_public_https_url(public_img):
+            image_result = {
+                "ok": False,
+                "status_code": 0,
+                "status": "invalid_image_url",
+                "message": (
+                    "رابط الصورة ليس عاماً بصيغة HTTPS. اضبط PUBLIC_URL في Railway على رابط التطبيق "
+                    "مثل https://web-production-3949a.up.railway.app ثم أعد الرفع."
+                ),
+                "response": None,
+            }
+        else:
+            image_result = send_image_via_manychat_detailed(sender_id, public_img, platform=platform, message_tag=manual_tag)
 
     sent = bool(
         (text_result and text_result.get("ok"))
@@ -4828,6 +4963,13 @@ def api_send_message(sender_id):
     warning = None
     if not manychat_key and not sent:
         warning = "MANYCHAT_API_KEY غير مُهيّأ — تم حفظ الرسالة في القاعدة فقط"
+    elif image_result and not image_result.get("ok"):
+        status = image_result.get("status") or "unknown"
+        message = image_result.get("message") or ""
+        http_code = image_result.get("status_code")
+        warning = f"تم إرسال النص إن وجد، لكن الصورة لم تُرسل (status={status}, http={http_code})"
+        if message:
+            warning += f"\nالتفاصيل: {message}"
     elif not sent:
         status = primary.get("status") or "unknown"
         message = primary.get("message") or ""
@@ -5156,8 +5298,17 @@ def api_upload_image():
     file.save(os.path.join(uploads_dir, filename))
 
     image_url = build_public_image_url(f"/product_image/uploads/{filename}")
-    print(f"[Dashboard] Image uploaded: {filename}", flush=True)
-    return jsonify({"image_url": image_url, "filename": filename})
+    send_ready = is_public_https_url(image_url)
+    warning = "" if send_ready else (
+        "تم حفظ الصورة، لكن رابطها غير عام HTTPS. اضبط PUBLIC_URL في Railway حتى يستطيع ManyChat إرسالها."
+    )
+    print(f"[Dashboard] Image uploaded: {filename} send_ready={send_ready} url={image_url}", flush=True)
+    return jsonify({
+        "image_url": image_url,
+        "filename": filename,
+        "send_ready": send_ready,
+        "warning": warning,
+    })
 
 
 @app.route("/api/manychat/diag", methods=["GET"])
