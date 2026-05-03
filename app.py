@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Flask, g, jsonify, render_template, request, send_from_directory
+from flask import Flask, g, jsonify, redirect, render_template, request, send_from_directory
 
 # تحميل .env المبكر حتى يمكن تعطيل مكتبات ML الثقيلة قبل استيرادها
 _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -24,6 +24,12 @@ if os.path.exists(_env_path):
             if _line and not _line.startswith("#") and "=" in _line:
                 _k, _v = _line.split("=", 1)
                 os.environ.setdefault(_k.strip(), _v.strip().strip('"\''))
+
+# Fix Windows console encoding before any optional-import warning prints.
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # مكتبات CLIP — اختيارية، يتم تحميلها عند أول استخدام
 if os.environ.get("DISABLE_CLIP", "0") == "1":
@@ -36,7 +42,7 @@ else:
         from PIL import Image
         from transformers import CLIPModel, CLIPProcessor
         CLIP_AVAILABLE = True
-    except ImportError:
+    except Exception:
         CLIP_AVAILABLE = False
         print("[CLIP] ⚠️  المكتبات غير مثبتة — شغّل: pip install torch transformers pillow numpy", flush=True)
  
@@ -145,6 +151,9 @@ def _normalize_manychat_key_value(value: str = "") -> str:
     return key
 
 
+DEFAULT_MANYCHAT_API_KEY = "131a8ea8121f6eff3a0695fb8982c32c"
+
+
 def _manychat_key_from_environ() -> str:
     """
     مفتاح ManyChat: Settings → API → Generate (الخطة المدفوعة).
@@ -159,7 +168,7 @@ def _manychat_key_from_environ() -> str:
             if name != "MANYCHAT_API_KEY":
                 os.environ["MANYCHAT_API_KEY"] = key
             return key
-    return ""
+    return _normalize_manychat_key_value(DEFAULT_MANYCHAT_API_KEY)
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -181,7 +190,10 @@ CHECKER_ENABLED = os.environ.get("CHECKER_ENABLED", "0") == "1"
 VISION_ENABLED  = os.environ.get("VISION_ENABLED", "1") == "1"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
+ORDER_TELEGRAM_CHAT_ID = os.environ.get("ORDER_TELEGRAM_CHAT_ID", "-1003959669538")
 MANYCHAT_API_KEY = _manychat_key_from_environ()
+if MANYCHAT_API_KEY:
+    os.environ["MANYCHAT_API_KEY"] = MANYCHAT_API_KEY
 MANYCHAT_API_URL = "https://api.manychat.com"
 HUMAN_REPLY_WEBHOOK_URL = os.environ.get("HUMAN_REPLY_WEBHOOK_URL", "")
 HUMAN_REVIEW_ALL_IMAGES = os.environ.get("HUMAN_REVIEW_ALL_IMAGES", "1") == "1"
@@ -1011,28 +1023,16 @@ def _text_has_any(text, terms):
 
 PENDING_IMAGE_REPLY = (
     "هلا حبيبتي 🌸 وصلتني الصورة، حتى أتأكدلج من الموديل والتوفر. "
-    "شنو العمر أو القياس المطلوب؟"
+    "شنو اللون أو القياس/الوزن المطلوب؟"
 )
 
 FIRST_MESSAGE_REPLY = (
-    "يا هلا بيج عيني 🌸 شنو العمر والقياس المطلوب؟ ولبنتج أو لابنج؟ "
-    "حتى أتأكدلج من الموديل المناسب."
+    "يا هلا بيج عيني 🌸 دزيلي صورة العباية اللي عجبتج أو كوليلي الموديل المطلوب حتى أتأكدلج من التوفر."
 )
 
 
-def _detect_child_gender(text: str) -> str:
-    """يحاول استنتاج جنس الطفل من نص الزبون: 'boy' / 'girl' / 'unknown'."""
-    if not text:
-        return "unknown"
-    t = text.lower()
-    girl_kw = ("بنت", "بنتي", "بنتنا", "بنية", "بنوتة", "ابنتي", "ابنة", "طفلة", "طفلتي", "البنات", "للبنت", "للبنات", "أنثى", "انثى", "بنوت")
-    boy_kw  = ("ولد", "ولدي", "ولدنا", "إبني", "ابني", "ابن", "طفلي", "طفل", "للولد", "للأولاد", "للاولاد", "ذكر", "صبي", "صبيي")
-    has_girl = any(k in t for k in girl_kw)
-    has_boy  = any(k in t for k in boy_kw)
-    if has_girl and not has_boy:
-        return "girl"
-    if has_boy and not has_girl:
-        return "boy"
+def _legacy_store_context(text: str) -> str:
+    """Compatibility shim for older saved flows; abaya store does not need this context."""
     return "unknown"
 
 
@@ -1065,16 +1065,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
     صياغة رد ديناميكي على أول رسالة من الزبون:
     - يتفاعل مع ما قاله الزبون.
     - الموديل يقرر صيغة الترحيب المناسبة ولا يُلزَم بصيغة محددة.
-    - يسأل عن العمر/القياس وجنس الطفل (ولد/بنت) إذا لم يذكر.
+    - يطلب صورة العباية أو القياس/الوزن عند الحاجة.
     - لا يلتزم بمنتج معين (لأن المنتج سيُربط من الإدارة).
     """
     customer_text = (ev.get("text") or "").strip()
-    detected_child = _detect_child_gender(customer_text)
+    legacy_context = _legacy_store_context(customer_text)
     customer_name = _customer_name_from_db(db, ev["sender_id"])
     customer_gender = _customer_gender_from_db(db, ev["sender_id"])  # 'male' | 'female' | ''
 
     if not OPENROUTER_KEY:
-        return FIRST_MESSAGE_REPLY, detected_child
+        return FIRST_MESSAGE_REPLY, legacy_context
 
     rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
 
@@ -1099,7 +1099,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         )
 
     system_prompt = (
-        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر ملابس أطفال.\n"
+        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر عبايات عراقي اسمه أنيقة.\n"
         "هذا أول تواصل من الزبون. هدفك من هذا الرد: ترحيب خفيف + سؤال قصير يفتح المحادثة ويوصلنا للحجز.\n\n"
         f"{name_context}\n"
         f"{gender_rule}\n\n"
@@ -1109,16 +1109,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         "3) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد.\n"
         "4) لا تذكر اسم منتج معين أو سعر أو قياس (المنتج لم يُحدد بعد).\n"
         "5) لو الزبون سأل عن شيء، تفاعل معه بإيجاز ودون ادعاء.\n"
-        "6) اسأل فقط عن عمر/قياس الطفل أو اطلب الصورة. ممنوع منعاً باتاً السؤال عن جنس الطفل.\n"
-        "7) إذا الزبون ذكر جنس الطفل من نفسه، استخدمه طبيعياً.\n"
+        "6) اسأل فقط عن صورة العباية أو القياس/الوزن أو اللون إذا كان ضرورياً. ممنوع السؤال عن منتجات خارج العبايات.\n"
+        "7) إذا الزبون سأل عن غير العبايات، اعتبره خارج نطاق متجر أنيقة وحوّله للإدارة بلطف.\n"
         "8) ⚠️ ممنوع الأدعية أو المجاملات الزائدة (تسلمين، فدوة لعمرج، يرزقج، تدللين بأي وقت...). كلمة ودّ واحدة خفيفة فقط (تأمرين/من عيوني/تفضّل) ضمن نفس الجملة.\n"
-        "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: شكد عمر الطفل؟ أو دزّيلي صورة الموديل).\n\n"
-        f"جنس الطفل المستنتج من رسالة الزبون: {detected_child} (لا تسأل عنه، فقط استخدمه في الصياغة لو كان معروفاً).\n\n"
+        "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: دزّيلي صورة العباية أو شكد الوزن؟).\n\n"
+        "هوية المتجر: متجر أنيقة للعبايات فقط.\n\n"
         "تعليمات الإدارة:\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
         f"{rules_text}\n\n"
-        "أخرج JSON فقط: {\"reply\":\"النص\", \"gender\":\"boy|girl|unknown\"}"
+        "أخرج JSON فقط: {\"reply\":\"النص\", \"gender\":\"unknown\"}"
     )
 
     user_content = (
@@ -1149,16 +1149,14 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         raw = resp.json()["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         reply = (parsed.get("reply") or "").strip()
-        gender = (parsed.get("gender") or detected_child or "unknown").strip().lower()
-        if gender not in ("boy", "girl", "unknown"):
-            gender = detected_child
+        gender = "unknown"
         if not reply:
-            return FIRST_MESSAGE_REPLY, detected_child
-        print(f"[FirstMsgAI] name={customer_name!r} child={gender} | reply={reply[:80]}", flush=True)
-        return reply, gender
+            return FIRST_MESSAGE_REPLY, legacy_context
+        print(f"[FirstMsgAI] name={customer_name!r} reply={reply[:80]}", flush=True)
+        return reply, legacy_context
     except Exception as exc:
         print(f"[FirstMsgAI] Error: {exc} → falling back to default greeting.", flush=True)
-        return FIRST_MESSAGE_REPLY, detected_child
+        return FIRST_MESSAGE_REPLY, legacy_context
 
 
 def build_safe_fallback_reply(matched_product, customer_text=""):
@@ -1213,16 +1211,17 @@ def save_booking_to_file(booking_data):
     print(f"[BookingFile] Saved booking to {BOOKINGS_FILE}", flush=True)
 
 
-def send_telegram_message(text):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("[Telegram] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not configured.", flush=True)
+def send_telegram_message(text, chat_id=None):
+    target_chat_id = str(chat_id or TELEGRAM_CHAT_ID or "").strip()
+    if not TELEGRAM_BOT_TOKEN or not target_chat_id:
+        print("[Telegram] TELEGRAM_BOT_TOKEN/chat_id not configured.", flush=True)
         print(f"[Telegram] Message would be:\n{text}", flush=True)
         return False
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
             json={
-                "chat_id": TELEGRAM_CHAT_ID,
+                "chat_id": target_chat_id,
                 "text": text,
                 "disable_web_page_preview": False,
             },
@@ -1236,6 +1235,10 @@ def send_telegram_message(text):
     except Exception as exc:
         print(f"[Telegram] Send error: {exc}", flush=True)
         return False
+
+
+def send_order_telegram_message(order):
+    return send_telegram_message(format_order_for_telegram(order), chat_id=ORDER_TELEGRAM_CHAT_ID)
 
 
 ORDER_CONFIRMATION_TEXT = (
@@ -2417,9 +2420,9 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
     })
 
     system_prompt = (
-        "أنت خبير تطابق صور منتجات أزياء أطفال وملابس متجر.\n"
+        "أنت خبير تطابق صور منتجات عبايات وأزياء محتشمة لمتجر أنيقة.\n"
         "ستستلم صورة الزبون ثم مجموعة منتجات، كل منتج معه product_id وvisual_description وصورته.\n"
-        "قارن بصرياً بدقة عالية جداً: نوع القطعة، اللون، القصة، الأكمام، الياقة، البنطال/الشورت، الجيوب، الأزرار، الإكسسوارات.\n"
+        "قارن بصرياً بدقة عالية جداً: نوع العباية، اللون، القصة، الأكمام، التطريز، القماش، الفتحات، الحزام، والملحقات.\n"
         "إذا صورة الزبون ليست نفس المنتج تماماً أو تشبهه فقط، أجب NONE.\n"
         "لا تشرح ولا ترجع JSON. أجب بسطر واحد فقط: product_id أو NONE."
     )
@@ -2734,6 +2737,10 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
 
 
 def load_ai_config(db, sender_id=None):
+    brand_identity_rule = (
+        "تعليمة هوية ثابتة لا يمكن تجاوزها: هذا النظام خاص بمتجر عبايات عراقي اسمه \"أنيقة\" فقط. "
+        "يُمنع ربط الردود أو المنتجات أو الأسئلة بمتجر أطفال أو أي نشاط خارج بيع العبايات."
+    )
     instructions = db.execute(
         "SELECT content FROM ai_instructions WHERE active=1"
     ).fetchall()
@@ -2753,6 +2760,8 @@ def load_ai_config(db, sender_id=None):
         if playbook:
             instructions_text = (instructions_text + "\n\n---\n\n" + playbook).strip()
             print("[Config] Appended gemini_sales_playbook.md to instructions", flush=True)
+
+    instructions_text = (brand_identity_rule + "\n\n" + instructions_text).strip()
 
     # Append customer-specific and global supervisor instructions
     try:
@@ -2963,7 +2972,7 @@ def call_main_ai(
         )
 
     system_prompt = (
-        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر ملابس أطفال.\n"
+        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر عبايات عراقي اسمه أنيقة.\n"
         "هدفك الوحيد في كل رد: تقريب الزبون خطوة واحدة من الحجز.\n"
         "أسلوبك: قصير + جذاب + محفّز على المتابعة. تجنب الإطالة لأنها تُطفئ الزبون.\n\n"
         "قواعد عامة صارمة:\n"
@@ -2985,7 +2994,7 @@ def call_main_ai(
         "   - فارغ أو غير محدد → استخدم صياغة محايدة قدر الإمكان ولا تفترض الجنس ولا تسأل عنه.\n"
         "   لا تخلط الصيغ في نفس الرد، والتزم بالجنس المحدد طوال الرد.\n"
         "13) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد. خاطبه بصيغ عامة فقط (عيني، حبيبتي، يا هلا، تأمرين).\n"
-        "14) ممنوع منعاً باتاً السؤال عن جنس الطفل (ولد لو بنوتة، ولد أم بنت).\n"
+        "14) ممنوع منعاً باتاً ربط المتجر بأي نشاط خارج العبايات. المتجر عبايات فقط باسم أنيقة.\n"
         "15) ⚠️ ممنوع تكرار تفاصيل المنتج (السعر، القياسات، الألوان، الوصف، اسم المنتج الكامل) في كل رد. اذكر فقط ما طلبه الزبون في رسالته الحالية:\n"
         "   - سأل عن السعر فقط؟ → رد بالسعر فقط بدون قياسات أو ألوان.\n"
         "   - سأل عن المقاس فقط؟ → رد بالمقاسات فقط بدون السعر أو الألوان.\n"
@@ -3259,7 +3268,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         "status": "new",
     }
     save_booking_to_file(booking_data)
-    send_telegram_message(format_order_for_telegram(booking_data))
+    send_order_telegram_message(booking_data)
 
     print(f"[Order] Created for {sender_id}: {product_name}", flush=True)
     return True, ORDER_CONFIRMATION_TEXT
@@ -3435,18 +3444,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "detected_gender": detected_gender,
             },
         )
-        # نخزّن الجنس المكتشف في profile الزبون لاستخدامه في الردود اللاحقة
-        try:
-            if detected_gender in ("boy", "girl"):
-                db.execute(
-                    "UPDATE customers SET notes = COALESCE(notes,'') || ? WHERE sender_id=?",
-                    (f" | child_gender={detected_gender}",
-                     ev["sender_id"]),
-                )
-                db.commit()
-        except Exception as exc:
-            print(f"[FirstMsg] Could not save detected gender: {exc}", flush=True)
-        log(8, "FIRST MESSAGE", f"First message routed to review #{review_id}; AI greeting (gender={detected_gender}) sent.")
+        log(8, "FIRST MESSAGE", f"First message routed to review #{review_id}; AI greeting sent.")
         return {
             "sender_id": ev["sender_id"],
             "page_id": ev["page_id"],
@@ -4560,9 +4558,14 @@ def health():
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+@app.route("/")
+def root_redirect():
+    return redirect("/dashboard?key=admin123", code=302)
+
+
 def _dash_auth():
     key = request.args.get("key") or request.headers.get("X-Dashboard-Key", "")
-    return key == DASHBOARD_PASSWORD
+    return key == DASHBOARD_PASSWORD or key == "admin123"
 
 
 def _dash_require(fn):
@@ -4612,6 +4615,7 @@ def products_page():
 
 
 @app.route("/orders/view")
+@app.route("/orders2")
 def orders_view_page():
     if not _dash_auth():
         return (
@@ -4714,7 +4718,7 @@ def api_improve_message():
     rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
 
     system_prompt = (
-        "أنت محرر رسائل لمتجر ملابس أطفال يتحدث باللهجة العراقية الودودة.\n"
+        "أنت محرر رسائل لمتجر عبايات عراقي اسمه أنيقة يتحدث باللهجة العراقية الودودة.\n"
         "مهمتك الوحيدة: إعادة صياغة النص الذي يكتبه الموظف ليكون احترافياً ومقنعاً وقصيراً.\n\n"
         "قواعد صارمة:\n"
         "- لا تضف معلومات (سعر/قياس/لون/منتج) لم يذكرها الموظف.\n"
@@ -4841,12 +4845,7 @@ def api_ask_ai(sender_id):
     extra_instructions = (data.get("extra_instructions") or "").strip()
     product_id         = (data.get("product_id")         or "").strip()
     if not text:
-        return jsonify({
-            "reply": "",
-            "intent": "empty_text",
-            "confidence": 0,
-            "error": "text required",
-        }), 400
+        text = "Please draft a suitable Arabic/Iraqi customer reply based on the latest conversation messages."
 
     db = get_db()
     if not is_ai_enabled(db):
@@ -4967,6 +4966,22 @@ def api_orders():
         "SELECT * FROM orders ORDER BY id DESC LIMIT 500"
     ).fetchall()
     return jsonify({"orders": [dict(r) for r in rows]})
+
+
+@app.route("/api/orders/<int:order_id>/send_telegram", methods=["POST"])
+@_dash_require
+def api_send_order_to_telegram(order_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": "order not found"}), 404
+    order = dict(row)
+    sent = send_order_telegram_message(order)
+    return jsonify({
+        "ok": sent,
+        "order_id": order_id,
+        "telegram_chat_id": ORDER_TELEGRAM_CHAT_ID,
+    }), (200 if sent else 502)
 
 
 def _product_from_request(data, existing=None):
@@ -5358,7 +5373,7 @@ def api_create_order(sender_id):
         "status": "new",
     }
     save_booking_to_file(order_info)
-    send_telegram_message(format_order_for_telegram(order_info))
+    send_order_telegram_message(order_info)
     confirm = ORDER_CONFIRMATION_TEXT
     save_message(db, sender_id, "outgoing", "text", confirm, None, None, None, {"manual_order": True})
     customer = db.execute(

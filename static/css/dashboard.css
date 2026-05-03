@@ -1,25 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --primary:     #6C5CE7;
-  --primary-light:#a29bfe;
-  --primary-dark: #5541d8;
-  --success:     #00b894;
-  --danger:      #e17055;
-  --warning:     #fdcb6e;
-  --info:        #74b9ff;
-  --chat-bg:     #1a1a2e;
-  --msg-in:      #16213e;
+  --primary:     #14b8a6;
+  --primary-light:#67e8f9;
+  --primary-dark: #0f766e;
+  --success:     #22c55e;
+  --danger:      #f97316;
+  --warning:     #f59e0b;
+  --info:        #38bdf8;
+  --chat-bg:     #111827;
+  --msg-in:      #1f2937;
   --msg-in-text: #e0e0e0;
-  --msg-out:     #6C5CE7;
+  --msg-out:     #0f766e;
   --msg-out-text:#ffffff;
-  --sidebar-bg:  #0f0f23;
-  --control-bg:  #0f0f23;
-  --surface:     #16213e;
-  --surface-2:   #1a1a3e;
-  --border:      #2a2a4a;
-  --text:        #e0e0e0;
-  --text-muted:  #8888aa;
+  --sidebar-bg:  #0b1220;
+  --control-bg:  #0b1220;
+  --surface:     #162033;
+  --surface-2:   #202b3f;
+  --border:      #334155;
+  --text:        #f8fafc;
+  --text-muted:  #94a3b8;
   --sidebar-w:   300px;
   --control-w:   320px;
   --navbar-h:    56px;
@@ -49,9 +49,9 @@ body {
 
 /* ── Navbar ──────────────────────────────────────────── */
 .navbar-custom {
-  background: linear-gradient(135deg, #6C5CE7, #a29bfe) !important;
+  background: linear-gradient(135deg, #0f766e, #2563eb 55%, #f59e0b) !important;
   height: var(--navbar-h);
-  box-shadow: 0 2px 20px rgba(108,92,231,.3);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, .36);
   gap: 8px;
 }
 .nav-main,
@@ -791,18 +791,23 @@ body {
   min-height: 100dvh;
   padding-top: var(--navbar-h);
   font-family: "Noto Sans Arabic", system-ui, sans-serif;
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, .14), transparent 34%),
+    linear-gradient(315deg, rgba(245, 158, 11, .12), transparent 28%),
+    var(--chat-bg);
 }
 .orders-layout {
-  max-width: 920px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 .orders-panel {
-  background: rgba(15, 15, 35, 0.92);
+  background: rgba(11, 18, 32, 0.92);
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(14px);
 }
 .orders-toolbar {
   display: flex;
@@ -833,12 +838,14 @@ body {
   overflow-y: auto;
 }
 .order-card {
-  padding: 14px 16px;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--border);
-  background: transparent;
+  background: linear-gradient(180deg, rgba(255,255,255,.025), transparent);
+  transition: background .15s ease, transform .15s ease;
 }
 .order-card:hover {
   background: var(--surface-2);
+  transform: translateY(-1px);
 }
 .order-card-top {
   display: flex;
@@ -859,6 +866,26 @@ body {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+}
+.order-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-telegram {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #e0f2fe !important;
+  background: rgba(14, 165, 233, .14) !important;
+  border: 1px solid rgba(56, 189, 248, .55) !important;
+  border-radius: 8px;
+  font-weight: 700;
+}
+.btn-telegram:hover {
+  background: rgba(14, 165, 233, .25) !important;
 }
 .order-card-body {
   display: grid;

@@ -114,7 +114,13 @@ function renderOrders() {
               <div class="order-card-title">طلب #${id} — ${esc(o.customer_name || 'بدون اسم')}</div>
               <div class="order-card-meta">${created}</div>
             </div>
-            <span class="badge ${badgeClass} flex-shrink-0">${stHtml}</span>
+            <div class="order-card-actions">
+              <span class="badge ${badgeClass} flex-shrink-0">${stHtml}</span>
+              <button class="btn btn-sm btn-telegram" type="button" onclick="sendOrderTelegram(${Number(o.id) || 0}, this)" title="إرسال الطلب إلى التليكرام">
+                <i class="bi bi-telegram"></i>
+                <span>إرسال</span>
+              </button>
+            </div>
           </div>
           <dl class="order-card-body mb-0">
             <div><dt>الهاتف</dt><dd>${esc(o.phone || '—')}</dd></div>
@@ -132,6 +138,28 @@ function renderOrders() {
         </article>`;
     })
     .join('');
+}
+
+async function sendOrderTelegram(orderId, btn) {
+  if (!orderId) return;
+  const oldHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:12px;height:12px;"></span><span>جاري</span>';
+  }
+  try {
+    const res = await apiFetch(`/api/orders/${orderId}/send_telegram`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل إرسال الطلب إلى التليكرام');
+    showToast('تم إرسال الطلب إلى التليكرام', 'success');
+  } catch (err) {
+    showToast(err.message || 'فشل إرسال الطلب إلى التليكرام', 'danger');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
+  }
 }
 
 function showToast(msg, type = 'success') {

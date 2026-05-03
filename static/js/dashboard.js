@@ -468,7 +468,7 @@ function openInterventionDialog() {
     _hiPopulateProducts();
   } else {
     _hiPopulateTextProducts();
-    document.getElementById('hiUnifiedText').value = document.getElementById('aiInstructions')?.value || '';
+    document.getElementById('hiUnifiedText').value = '';
     setHIGenderUI((currentCustomer && currentCustomer.gender) || '');
   }
 
@@ -558,14 +558,15 @@ async function _hiSyncGenderIfChosen() {
 async function hiAskAI() {
   if (_hiBusy || !currentSenderId) return;
   const text = (document.getElementById('hiUnifiedText').value || '').trim();
-  if (!text) { showToast('اكتب توجيهاً أو نصاً أولاً', 'warning'); return; }
   _hiSetBusy(true, 'hiBtnAskAI');
   try {
     await _hiSyncGenderIfChosen();
     await _hiSilentLinkIfChosen();
     document.getElementById('messageInput').value = text;
-    document.getElementById('aiInstructions').value = text;
-    await saveInstructions();
+    if (text) {
+      document.getElementById('aiInstructions').value = text;
+      await saveInstructions();
+    }
     await askAI();
     _hiCloseModal();
     hideHumanIntervention();
@@ -738,10 +739,7 @@ async function askAI() {
     return;
   }
   const text             = document.getElementById('messageInput').value.trim();
-  if (!text) {
-    showToast('اكتب نصاً في حقل الرسالة حتى يعيد AI صياغته', 'warning');
-    return;
-  }
+  const textForAI        = text || 'اقترح رداً مناسباً باللهجة العراقية اعتماداً على آخر رسائل الزبون في المحادثة.';
   const savedInstructions = document.getElementById('aiInstructions').value.trim();
   const rewriteInstruction = 'قم بإعادة صياغة النص الموجود في رسالة المشرف فقط، مع الالتزام بباقي التعليمات والقواعد المحفوظة. لا تضف سؤالاً جديداً إذا كان الزبون أجاب عليه سابقاً.';
   const extraInstructions = savedInstructions
@@ -758,7 +756,7 @@ async function askAI() {
     const res  = await apiFetch(`/api/conversations/${currentSenderId}/ask_ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, extra_instructions: extraInstructions, product_id: productId }),
+      body: JSON.stringify({ text: textForAI, extra_instructions: extraInstructions, product_id: productId }),
     });
     const data = await res.json();
     if (data.reply) {
