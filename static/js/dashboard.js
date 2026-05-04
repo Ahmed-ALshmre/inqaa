@@ -1,4 +1,4 @@
-﻿// â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── State ──────────────────────────────────────────────────────────────────
 const DASH_KEY        = new URLSearchParams(window.location.search).get('key') || '';
 let currentSenderId   = null;
 let currentCustomer   = null;
@@ -26,13 +26,13 @@ reviewSound.preload  = 'auto';
 imageSound.preload   = 'auto';
 imageSound.loop      = false;
 
-// â”€â”€ Auth Fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Auth Fetch ─────────────────────────────────────────────────────────────
 function apiFetch(url, opts = {}) {
   opts.headers = { ...(opts.headers || {}), 'X-Dashboard-Key': DASH_KEY };
   return fetch(url, opts);
 }
 
-// â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Boot ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', unlockAudioOnce, { once: true });
   loadConversations();
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   pollConvTimer = setInterval(() => { loadConversations(false); loadStats(); }, 8000);
 });
 
-// â•â• PWA Install â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ PWA Install ═══════════════════════════════════════════════════════════
 let _pwaDeferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -53,18 +53,18 @@ window.addEventListener('appinstalled', () => {
   _pwaDeferredPrompt = null;
   const btn = document.getElementById('pwaInstallBtn');
   if (btn) btn.style.display = 'none';
-  showToast('ØªÙ… ØªØ«Ø¨ÙŠØª Ø§Ù„ØªØ·Ø¨ÙŠÙ‚', 'success');
+  showToast('تم تثبيت التطبيق', 'success');
 });
 
 async function installPWA() {
   if (!_pwaDeferredPrompt) {
-    showToast('Ø§Ù„ØªØ«Ø¨ÙŠØª ØºÙŠØ± Ù…ØªØ§Ø­. Ø§ÙØªØ­ Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© ÙÙŠ Ø§Ù„Ù…ØªØµÙØ­ ÙˆØ§Ø®ØªØ± "Ø¥Ø¶Ø§ÙØ© Ø¥Ù„Ù‰ Ø§Ù„Ø´Ø§Ø´Ø© Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©".', 'info');
+    showToast('التثبيت غير متاح. افتح القائمة في المتصفح واختر "إضافة إلى الشاشة الرئيسية".', 'info');
     return;
   }
   _pwaDeferredPrompt.prompt();
   try {
     const { outcome } = await _pwaDeferredPrompt.userChoice;
-    if (outcome === 'accepted') showToast('Ø³ÙŠØªÙ… Ø§Ù„ØªØ«Ø¨ÙŠØª', 'success');
+    if (outcome === 'accepted') showToast('سيتم التثبيت', 'success');
   } catch (e) {
     console.warn('install prompt error', e);
   } finally {
@@ -74,7 +74,7 @@ async function installPWA() {
   }
 }
 
-// â•â• Mobile Panels â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Mobile Panels ══════════════════════════════════════════════════════════
 function toggleSidebar() {
   const sb = document.getElementById('sidebarPanel');
   const ov = document.getElementById('mobileOverlay');
@@ -99,13 +99,13 @@ function closeAllPanels() {
   document.getElementById('mobileOverlay').classList.remove('show');
 }
 
-// â•â• Conversations â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Conversations ══════════════════════════════════════════════════════════
 async function loadConversations(showSpinner = true) {
   if (showSpinner) {
     document.getElementById('customerList').innerHTML =
       '<div class="text-center py-5" style="color:var(--text-muted)">' +
       '<div class="spinner-border spinner-border-sm mb-2"></div>' +
-      '<div class="small">Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ù…ÙŠÙ„...</div></div>';
+      '<div class="small">جاري التحميل...</div></div>';
   }
   try {
     const previousPending = new Map(allConversations.map(c => [c.sender_id, c.pending_reviews_count || 0]));
@@ -148,7 +148,7 @@ async function loadConversations(showSpinner = true) {
     }
     renderConversations();
   } catch (e) {
-    if (showSpinner) showToast('ÙØ´Ù„ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª', 'danger');
+    if (showSpinner) showToast('فشل تحميل المحادثات', 'danger');
   }
 }
 
@@ -189,16 +189,16 @@ function renderConversations() {
 
   if (!list.length) {
     const emptyText = currentFilter === 'human'
-      ? 'Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø­Ø§Ø¯Ø«Ø§Øª ØªØ­ØªØ§Ø¬ ØªØ¯Ø®Ù„ Ø¨Ø´Ø±ÙŠ'
+      ? 'لا توجد محادثات تحتاج تدخل بشري'
       : currentFilter === 'unanswered'
-        ? 'Ù„Ø§ ØªÙˆØ¬Ø¯ Ø±Ø³Ø§Ø¦Ù„ Ø¨Ø¯ÙˆÙ† Ø±Ø¯'
-        : 'Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø­Ø§Ø¯Ø«Ø§Øª';
+        ? 'لا توجد رسائل بدون رد'
+        : 'لا توجد محادثات';
     el.innerHTML = `<div class="text-center py-4 small" style="color:var(--text-muted)">${emptyText}</div>`;
     return;
   }
 
   el.innerHTML = list.map(c => {
-    const init    = (c.name || c.sender_id || 'ØŸ').slice(0, 2).toUpperCase();
+    const init    = (c.name || c.sender_id || '؟').slice(0, 2).toUpperCase();
     const time    = fmtTime(c.last_time);
     const active  = c.sender_id === currentSenderId ? 'active' : '';
     const badge   = c.pending_reviews_count > 0
@@ -222,7 +222,7 @@ function renderConversations() {
   }).join('');
 }
 
-// â•â• Select Conversation â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Select Conversation ════════════════════════════════════════════════════
 async function selectConversation(senderId) {
   currentSenderId = senderId;
   closeAllPanels();
@@ -236,7 +236,7 @@ async function selectConversation(senderId) {
   currentCustomer = conv;
   currentConversationAIEnabled = conv.ai_enabled !== 0 && conv.ai_enabled !== false;
 
-  const init = (conv.name || senderId || 'ØŸ').slice(0, 2).toUpperCase();
+  const init = (conv.name || senderId || '؟').slice(0, 2).toUpperCase();
   document.getElementById('chatAvatar').textContent   = init;
   document.getElementById('chatName').textContent     = conv.name || senderId;
   document.getElementById('chatSenderId').textContent = senderId;
@@ -248,7 +248,7 @@ async function selectConversation(senderId) {
   if (conv.ad_id || conv.ref) {
     adBadge.style.display = '';
     document.getElementById('chatAdText').textContent = [
-      conv.ad_id ? `Ø¥Ø¹Ù„Ø§Ù†: ${conv.ad_id}` : '',
+      conv.ad_id ? `إعلان: ${conv.ad_id}` : '',
       conv.ref ? `Ref: ${conv.ref}` : '',
     ].filter(Boolean).join(' | ');
   } else {
@@ -272,11 +272,11 @@ async function selectConversation(senderId) {
         `<small style="color:var(--text-muted)">${esc(linkedIds[idx] || '')}</small>`
       ).join('<hr class="my-1" style="border-color:var(--border)">') +
       `<small style="color:var(--text-muted)">` +
-      (conv.ad_id ? ` | Ø¥Ø¹Ù„Ø§Ù†: ${esc(conv.ad_id)}` : '') +
+      (conv.ad_id ? ` | إعلان: ${esc(conv.ad_id)}` : '') +
       (conv.ref ? ` | Ref: ${esc(conv.ref)}` : '') + '</small>';
   } else {
     document.getElementById('linkedProductInfo').innerHTML =
-      '<span style="color:var(--text-muted)" class="small">Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ù…Ù†ØªØ¬ Ù…Ø±ØªØ¨Ø·</span>';
+      '<span style="color:var(--text-muted)" class="small">لا يوجد منتج مرتبط</span>';
   }
 
   renderConversations();
@@ -294,7 +294,7 @@ async function selectConversation(senderId) {
   }, 8000);
 }
 
-// â•â• Messages â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Messages ═══════════════════════════════════════════════════════════════
 async function loadMessages(senderId, scroll = true) {
   try {
     const res  = await apiFetch(`/api/conversations/${senderId}/messages`);
@@ -325,7 +325,7 @@ function renderMessages(msgs, scroll = true) {
   const area = document.getElementById('messagesArea');
 
   if (!msgs.length) {
-    area.innerHTML = '<div class="text-center small py-4" style="color:var(--text-muted)">Ù„Ø§ ØªÙˆØ¬Ø¯ Ø±Ø³Ø§Ø¦Ù„ Ø¨Ø¹Ø¯</div>';
+    area.innerHTML = '<div class="text-center small py-4" style="color:var(--text-muted)">لا توجد رسائل بعد</div>';
     return;
   }
 
@@ -340,8 +340,8 @@ function renderMessages(msgs, scroll = true) {
     if (imgUrl) {
       content += `<img src="${esc(imgUrl)}" class="msg-image mb-1"
         onclick="openLightbox(${esc(jsString(imgUrl))})"
-        onerror="this.outerHTML='<div class=\\'msg-image-error\\'><i class=\\'bi bi-image\\' style=\\'font-size:24px\\'></i><br>ØªØ¹Ø°Ø± Ø¹Ø±Ø¶ Ø§Ù„ØµÙˆØ±Ø©<br><a href=\\'${esc(imgUrl)}\\' target=\\'_blank\\' rel=\\'noopener\\'>ÙØªØ­ Ø§Ù„ØµÙˆØ±Ø©</a></div>'"
-        alt="ØµÙˆØ±Ø©" loading="lazy" referrerpolicy="no-referrer">`;
+        onerror="this.outerHTML='<div class=\\'msg-image-error\\'><i class=\\'bi bi-image\\' style=\\'font-size:24px\\'></i><br>تعذر عرض الصورة<br><a href=\\'${esc(imgUrl)}\\' target=\\'_blank\\' rel=\\'noopener\\'>فتح الصورة</a></div>'"
+        alt="صورة" loading="lazy" referrerpolicy="no-referrer">`;
     } else if (mediaType === 'video' && mediaUrl && /^https?:/i.test(mediaUrl) && !looksLikeReelUrl(mediaUrl)) {
       content += `<video class="msg-video mb-1" controls preload="metadata" playsinline>
         <source src="${esc(mediaUrl)}">
@@ -359,7 +359,7 @@ function renderMessages(msgs, scroll = true) {
     if (m.text && m.text !== imgUrl && m.text !== mediaUrl) {
       content += `<div class="msg-bubble">${esc(m.text)}</div>`;
     }
-    if (!content) content = '<div class="msg-bubble" style="color:var(--text-muted)"><small>[Ø±Ø³Ø§Ù„Ø© ÙØ§Ø±ØºØ©]</small></div>';
+    if (!content) content = '<div class="msg-bubble" style="color:var(--text-muted)"><small>[رسالة فارغة]</small></div>';
 
     return `<div class="msg-wrapper ${dir}">${content}<span class="msg-time">${time}</span></div>`;
   }).join('');
@@ -367,7 +367,7 @@ function renderMessages(msgs, scroll = true) {
   if (scroll) area.scrollTop = area.scrollHeight;
 }
 
-// â•â• Human Intervention (single unified dialog) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Human Intervention (single unified dialog) ════════════════════════════
 let _hiBusy = false;
 let _hiModalInstance = null;
 
@@ -380,17 +380,17 @@ function _hiSetBusy(busy, btnId = null) {
     });
   if (btnId && busy) {
     const b = document.getElementById(btnId);
-    if (b) b.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;"></span> Ø¬Ø§Ø±ÙŠâ€¦';
+    if (b) b.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;"></span> جاري…';
   }
 }
 
 function _hiResetButtons() {
   const map = {
-    hiBtnLinkProduct: '<i class="bi bi-link me-1"></i>Ø±Ø¨Ø· Ø§Ù„Ù…Ù†ØªØ¬ ÙˆØ¥Ø±Ø³Ø§Ù„ Ø±Ø¯',
-    hiBtnUnavailable: '<i class="bi bi-x-circle me-1"></i>ØºÙŠØ± Ù…ØªÙˆÙØ± â€” Ø£Ø¨Ù„Øº Ø§Ù„Ø²Ø¨ÙˆÙ†',
-    hiBtnAskAI: '<i class="bi bi-robot me-1"></i>Ø£Ø¹Ø¯ ØµÙŠØ§ØºØ© Ø¨Ø§Ù„Ù€ AI ÙˆØ§Ø¹Ø±Ø¶ Ø§Ù„Ø§Ù‚ØªØ±Ø§Ø­',
-    hiBtnSendDirect: '<i class="bi bi-send me-1"></i>Ø£Ø±Ø³Ù„ Ø§Ù„Ù†Øµ Ù…Ø¨Ø§Ø´Ø±Ø©',
-    hiBtnCloseReview: '<i class="bi bi-check2-circle me-1"></i>Ø£ØºÙ„Ù‚ Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹Ø© ÙÙ‚Ø·',
+    hiBtnLinkProduct: '<i class="bi bi-link me-1"></i>ربط المنتج وإرسال رد',
+    hiBtnUnavailable: '<i class="bi bi-x-circle me-1"></i>غير متوفر — أبلغ الزبون',
+    hiBtnAskAI: '<i class="bi bi-robot me-1"></i>أعد صياغة بالـ AI واعرض الاقتراح',
+    hiBtnSendDirect: '<i class="bi bi-send me-1"></i>أرسل النص مباشرة',
+    hiBtnCloseReview: '<i class="bi bi-check2-circle me-1"></i>أغلق المراجعة فقط',
   };
   Object.entries(map).forEach(([id, html]) => {
     const b = document.getElementById(id);
@@ -404,7 +404,7 @@ function _hiCurrentMode() {
   const lastNonImage = Number(conv.last_incoming_id || 0); // optional
   const linkedNames = splitPipeList(conv.product_names || conv.product_name);
   const hasPending = Number(conv.pending_reviews_count || 0) > 0;
-  // If image is the latest incoming and no product linked yet â†’ image mode
+  // If image is the latest incoming and no product linked yet → image mode
   if (hasPending && lastImg && !linkedNames.length) return 'image';
   return 'text';
 }
@@ -417,11 +417,11 @@ function _hiShowBanner(visible, mode = 'text') {
   const titleEl = document.getElementById('hiBannerTitle');
   const subEl = document.getElementById('hiBannerSub');
   if (mode === 'image') {
-    titleEl.textContent = 'Ø§Ù„Ø²Ø¨ÙˆÙ† Ø£Ø±Ø³Ù„ ØµÙˆØ±Ø© â€” ÙŠØ­ØªØ§Ø¬ Ø±Ø¨Ø· Ù…Ù†ØªØ¬';
-    subEl.textContent = 'AI Ù…ØªÙˆÙ‚Ù Ù„Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©. Ø§Ø¶ØºØ· Ù„Ø§Ø®ØªÙŠØ§Ø± Ø§Ù„Ù…Ù†ØªØ¬.';
+    titleEl.textContent = 'الزبون أرسل صورة — يحتاج ربط منتج';
+    subEl.textContent = 'AI متوقف لهذه المحادثة. اضغط لاختيار المنتج.';
   } else {
-    titleEl.textContent = 'ØªØ¯Ø®Ù„ Ø¨Ø´Ø±ÙŠ Ù…Ø·Ù„ÙˆØ¨';
-    subEl.textContent = 'Ø§Ø¶ØºØ· Ù„ÙØªØ­ Ø®ÙŠØ§Ø±Ø§Øª Ø§Ù„Ù…Ø¹Ø§Ù„Ø¬Ø©';
+    titleEl.textContent = 'تدخل بشري مطلوب';
+    subEl.textContent = 'اضغط لفتح خيارات المعالجة';
   }
 }
 
@@ -429,8 +429,8 @@ function showHumanIntervention() {
   if (!currentSenderId) return;
   const mode = _hiCurrentMode();
   _hiShowBanner(true, mode);
-  // Ø§Ù„ØµÙˆØª ÙŠÙØ´ØºÙ‘Ù„ ÙÙ‚Ø· Ù…Ù† loadConversations/loadMessages Ø¹Ù†Ø¯ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª Ø§Ù„Ø£Ø®Ø±Ù‰.
-  // Ø¯Ø§Ø®Ù„ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© Ø§Ù„Ù…ÙØªÙˆØ­Ø© Ù„Ø§ Ù†ÙØµØ¯Ø± ØµÙˆØªØ§Ù‹ØŒ ÙÙ‚Ø· Ø´Ø§Ø±Ø© Ø¨ØµØ±ÙŠØ©.
+  // الصوت يُشغّل فقط من loadConversations/loadMessages عند المحادثات الأخرى.
+  // داخل المحادثة المفتوحة لا نُصدر صوتاً، فقط شارة بصرية.
 }
 
 function hideHumanIntervention() {
@@ -442,10 +442,10 @@ function _hiPopulateProducts() {
   if (!sel) return;
   const conv = allConversations.find(c => c.sender_id === currentSenderId) || {};
   const linked = splitPipeList(conv.product_ids || conv.product_id);
-  sel.innerHTML = '<option value="">â€” Ø§Ø®ØªØ± Ù…Ù†ØªØ¬Ø§Ù‹ â€”</option>' +
+  sel.innerHTML = '<option value="">— اختر منتجاً —</option>' +
     allProducts.map(p =>
       `<option value="${esc(p.product_id)}" ${linked.includes(p.product_id) ? 'selected' : ''}>` +
-      `${esc(p.product_name)} â€” ${esc(p.price || '')} (${esc(p.stock || '')})</option>`
+      `${esc(p.product_name)} — ${esc(p.price || '')} (${esc(p.stock || '')})</option>`
     ).join('');
 }
 
@@ -455,24 +455,24 @@ function _hiPopulateTextProducts() {
   const conv = allConversations.find(c => c.sender_id === currentSenderId) || {};
   const linked = splitPipeList(conv.product_ids || conv.product_id);
   const placeholder = linked.length
-    ? `â€” Ù…Ø±Ø¨ÙˆØ· Ø­Ø§Ù„ÙŠØ§Ù‹: ${linked.join(', ')} â€”`
-    : 'â€” Ø§Ø®ØªØ± Ù…Ù†ØªØ¬Ø§Ù‹ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ) â€”';
+    ? `— مربوط حالياً: ${linked.join(', ')} —`
+    : '— اختر منتجاً (اختياري) —';
   sel.innerHTML = `<option value="">${esc(placeholder)}</option>` +
     allProducts.map(p =>
       `<option value="${esc(p.product_id)}">` +
-      `${esc(p.product_name)} â€” ${esc(p.price || '')} (${esc(p.stock || '')})</option>`
+      `${esc(p.product_name)} — ${esc(p.price || '')} (${esc(p.stock || '')})</option>`
     ).join('');
   const hint = document.getElementById('hiTextProductHint');
   if (hint) hint.style.display = linked.length ? 'none' : 'block';
 }
 
 function openInterventionDialog() {
-  if (!currentSenderId) { showToast('Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   const mode = _hiCurrentMode();
   document.getElementById('hiModeImage').style.display = mode === 'image' ? 'block' : 'none';
   document.getElementById('hiModeText').style.display  = mode === 'text'  ? 'block' : 'none';
   document.getElementById('hiModalTitle').textContent = mode === 'image'
-    ? 'ØµÙˆØ±Ø© Ù…Ù† Ø§Ù„Ø²Ø¨ÙˆÙ† â€” Ø±Ø¨Ø· Ø§Ù„Ù…Ù†ØªØ¬' : 'ØªØ¯Ø®Ù„ Ø¨Ø´Ø±ÙŠ';
+    ? 'صورة من الزبون — ربط المنتج' : 'تدخل بشري';
 
   const alertBox = document.getElementById('hiAlertBox');
   alertBox.style.display = 'none';
@@ -501,7 +501,7 @@ async function hiLinkProduct() {
   if (_hiBusy || !currentSenderId) return;
   const sel = document.getElementById('hiUnifiedProduct');
   const pid = sel.value;
-  if (!pid) { showToast('Ø§Ø®ØªØ± Ù…Ù†ØªØ¬Ø§Ù‹ Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!pid) { showToast('اختر منتجاً أولاً', 'warning'); return; }
   _hiSetBusy(true, 'hiBtnLinkProduct');
   try {
     const res = await apiFetch(`/api/conversations/${currentSenderId}/link_product`, {
@@ -511,18 +511,18 @@ async function hiLinkProduct() {
     });
     const data = await res.json();
     if (!data.ok) {
-      showToast('ÙØ´Ù„ Ø±Ø¨Ø· Ø§Ù„Ù…Ù†ØªØ¬: ' + (data.error || ''), 'danger');
+      showToast('فشل ربط المنتج: ' + (data.error || ''), 'danger');
       return;
     }
     const sent = data.auto_reply && data.auto_reply.sent;
-    showToast(sent ? 'ØªÙ… Ø±Ø¨Ø· Ø§Ù„Ù…Ù†ØªØ¬ ÙˆØ¥Ø±Ø³Ø§Ù„ Ø±Ø¯' : 'ØªÙ… Ø±Ø¨Ø· Ø§Ù„Ù…Ù†ØªØ¬ â€” Ù„Ù… ÙŠÙØ±Ø³Ù„ Ø±Ø¯ ØªÙ„Ù‚Ø§Ø¦ÙŠ', sent ? 'success' : 'warning');
+    showToast(sent ? 'تم ربط المنتج وإرسال رد' : 'تم ربط المنتج — لم يُرسل رد تلقائي', sent ? 'success' : 'warning');
     _hiCloseModal();
     hideHumanIntervention();
     await loadConversations(false);
     await loadMessages(currentSenderId);
     await refreshLinkedProductSync();
   } catch (e) {
-    showToast('Ø®Ø·Ø£: ' + e.message, 'danger');
+    showToast('خطأ: ' + e.message, 'danger');
   } finally {
     _hiSetBusy(false);
     _hiResetButtons();
@@ -534,14 +534,14 @@ async function hiMarkUnavailable() {
   _hiSetBusy(true, 'hiBtnUnavailable');
   try {
     await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
-    await sendMessage('Ø­Ø¨ÙŠØ¨ØªÙŠ Ù„Ù„Ø£Ø³Ù Ù‡Ø°Ø§ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„ ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹ ðŸŒ¸ Ø¥Ø°Ø§ ØªØ­Ø¨ÙŠÙ† Ø£Ù‚ØªØ±Ø­Ù„Ø¬ Ù…ÙˆØ¯ÙŠÙ„ Ù…Ø´Ø§Ø¨Ù‡ØŸ');
-    showToast('ØªÙ… Ø¥Ø®Ø¨Ø§Ø± Ø§Ù„Ø²Ø¨ÙˆÙ† Ø¨Ø¹Ø¯Ù… Ø§Ù„ØªÙˆÙØ±', 'info');
+    await sendMessage('حبيبتي للأسف هذا الموديل غير متوفر حالياً 🌸 إذا تحبين أقترحلج موديل مشابه؟');
+    showToast('تم إخبار الزبون بعدم التوفر', 'info');
     _hiCloseModal();
     hideHumanIntervention();
     await loadConversations(false);
     await loadMessages(currentSenderId);
   } catch (e) {
-    showToast('Ø®Ø·Ø£: ' + e.message, 'danger');
+    showToast('خطأ: ' + e.message, 'danger');
   } finally {
     _hiSetBusy(false);
     _hiResetButtons();
@@ -564,7 +564,7 @@ async function _hiSilentLinkIfChosen() {
 async function _hiSyncGenderIfChosen() {
   const gender = getSelectedGender('hiGender');
   if (gender === undefined) return;
-  // ÙÙ‚Ø· Ø§Ø­ÙØ¸ Ø¥Ø°Ø§ Ø§Ø®ØªÙ„Ù Ø¹Ù† Ø§Ù„Ù…Ø®Ø²Ù† ÙÙŠ Ø§Ù„Ø°Ø§ÙƒØ±Ø©
+  // فقط احفظ إذا اختلف عن المخزن في الذاكرة
   const current = (currentCustomer && currentCustomer.gender) || '';
   if ((current || '') === (gender || '')) return;
   await setCustomerGenderQuick(gender);
@@ -596,7 +596,7 @@ async function hiAskAI() {
 async function hiSendDirect() {
   if (_hiBusy || !currentSenderId) return;
   const text = (document.getElementById('hiUnifiedText').value || '').trim();
-  if (!text) { showToast('Ø§ÙƒØªØ¨ Ù†ØµØ§Ù‹ Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!text) { showToast('اكتب نصاً أولاً', 'warning'); return; }
   _hiSetBusy(true, 'hiBtnSendDirect');
   try {
     await _hiSyncGenderIfChosen();
@@ -607,7 +607,7 @@ async function hiSendDirect() {
     _hiCloseModal();
     hideHumanIntervention();
   } catch (e) {
-    showToast('Ø®Ø·Ø£: ' + e.message, 'danger');
+    showToast('خطأ: ' + e.message, 'danger');
   } finally {
     _hiSetBusy(false);
     _hiResetButtons();
@@ -619,12 +619,12 @@ async function hiCloseReview() {
   _hiSetBusy(true, 'hiBtnCloseReview');
   try {
     await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
-    showToast('ØªÙ… Ø¥ØºÙ„Ø§Ù‚ Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹Ø©', 'success');
+    showToast('تم إغلاق المراجعة', 'success');
     _hiCloseModal();
     hideHumanIntervention();
     await loadConversations(false);
   } catch (e) {
-    showToast('Ø®Ø·Ø£: ' + e.message, 'danger');
+    showToast('خطأ: ' + e.message, 'danger');
   } finally {
     _hiSetBusy(false);
     _hiResetButtons();
@@ -645,7 +645,7 @@ async function refreshLinkedProductSync() {
           `<div class="fw-semibold">${esc(name)}</div>` +
           `<small style="color:var(--text-muted)">${esc(linkedIds[idx] || '')}</small>`
         ).join('<hr class="my-1" style="border-color:var(--border)">')
-      : '<span style="color:var(--text-muted)" class="small">Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ù…Ù†ØªØ¬ Ù…Ø±ØªØ¨Ø·</span>';
+      : '<span style="color:var(--text-muted)" class="small">لا يوجد منتج مرتبط</span>';
   }
   const productSelect = document.getElementById('productSelect');
   if (productSelect) {
@@ -662,11 +662,11 @@ async function refreshLinkedProductSync() {
 }
 
 async function resolveWithAI() {
-  if (!currentSenderId) { showToast('Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   openInterventionDialog();
 }
 
-// â•â• Lightbox â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Lightbox ═══════════════════════════════════════════════════════════════
 function openLightbox(url) {
   const overlay = document.createElement('div');
   overlay.className = 'lightbox-overlay';
@@ -675,7 +675,7 @@ function openLightbox(url) {
   document.body.appendChild(overlay);
 }
 
-// â•â• Send Message â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Send Message ═══════════════════════════════════════════════════════════
 let _isSending = false;
 let _isAskingAI = false;
 
@@ -697,12 +697,12 @@ function _setSendingState(busy) {
 
 async function sendMessage(text = null, imgUrl = null) {
   if (!currentSenderId) return;
-  if (_isSending) { showToast('Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„... Ø§Ù†ØªØ¸Ø±', 'warning'); return; }
+  if (_isSending) { showToast('جاري الإرسال... انتظر', 'warning'); return; }
 
   const txt = text  !== null ? text   : (document.getElementById('messageInput').value || '').trim();
   const img = imgUrl !== null ? imgUrl : uploadedImageUrl;
 
-  if (!txt && !img) { showToast('Ø§ÙƒØªØ¨ Ø±Ø³Ø§Ù„Ø© Ø£Ùˆ Ø§Ø±ÙØ¹ ØµÙˆØ±Ø©', 'warning'); return; }
+  if (!txt && !img) { showToast('اكتب رسالة أو ارفع صورة', 'warning'); return; }
 
   _setSendingState(true);
   try {
@@ -717,14 +717,14 @@ async function sendMessage(text = null, imgUrl = null) {
       document.getElementById('messageInput').value = '';
       clearImage();
       if (data.warning) showToast(data.warning, 'warning');
-      else showToast('ØªÙ… Ø§Ù„Ø¥Ø±Ø³Ø§Ù„', 'success');
+      else showToast('تم الإرسال', 'success');
       await loadMessages(currentSenderId);
     } else {
-      const detail = data.warning || data.error || 'ManyChat Ù„Ù… ÙŠØ¤ÙƒØ¯ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„';
+      const detail = data.warning || data.error || 'ManyChat لم يؤكد الإرسال';
       console.warn('[ManualSend] failure', data);
-      showToast('ÙØ´Ù„ Ø§Ù„Ø¥Ø±Ø³Ø§Ù„: ' + detail, 'danger');
+      showToast('فشل الإرسال: ' + detail, 'danger');
     }
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
   finally { _setSendingState(false); }
 }
 
@@ -733,31 +733,31 @@ async function testManyChat() {
     const res = await apiFetch('/api/manychat/test');
     const data = await res.json();
     if (data.ok) {
-      showToast(`ManyChat OK â€” ${data.page_name || data.page_id || 'page connected'}`, 'success');
+      showToast(`ManyChat OK — ${data.page_name || data.page_id || 'page connected'}`, 'success');
     } else {
       console.warn('[ManyChatTest]', data);
-      showToast('ManyChat ØºÙŠØ± ØµØ§Ù„Ø­: ' + (data.message || data.reason || data.status || 'unknown'), 'danger');
+      showToast('ManyChat غير صالح: ' + (data.message || data.reason || data.status || 'unknown'), 'danger');
     }
-  } catch (e) { showToast('ÙØ´Ù„ Ø§Ø®ØªØ¨Ø§Ø± ManyChat: ' + e.message, 'danger'); }
+  } catch (e) { showToast('فشل اختبار ManyChat: ' + e.message, 'danger'); }
 }
 
-// â•â• Ask AI â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Ask AI ═════════════════════════════════════════════════════════════════
 async function askAI() {
   if (!currentSenderId) return;
-  if (_isAskingAI) { showToast('Ø¬Ø§Ø±ÙŠ ØªØ¬Ù‡ÙŠØ² Ø§Ù‚ØªØ±Ø§Ø­ AI...', 'warning'); return; }
+  if (_isAskingAI) { showToast('جاري تجهيز اقتراح AI...', 'warning'); return; }
   if (!canUseAI()) {
     const reason = !globalAIEnabled
-      ? 'AI Ù…ØªÙˆÙ‚Ù Ø­Ø§Ù„ÙŠØ§Ù‹ Ù…Ù† Ø§Ù„Ø²Ø± Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ'
-      : 'AI Ù…ØªÙˆÙ‚Ù ÙÙŠ Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©. Ø´ØºÙ‘Ù„Ù‡ Ù…Ù† Ø²Ø± Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© Ø£ÙˆÙ„Ø§Ù‹';
+      ? 'AI متوقف حالياً من الزر الرئيسي'
+      : 'AI متوقف في هذه المحادثة. شغّله من زر المحادثة أولاً';
     showToast(reason, 'warning');
     renderAskAIButton();
     renderAIActionButtons();
     return;
   }
   const text             = document.getElementById('messageInput').value.trim();
-  const textForAI        = text || 'Ø§Ù‚ØªØ±Ø­ Ø±Ø¯Ø§Ù‹ Ù…Ù†Ø§Ø³Ø¨Ø§Ù‹ Ø¨Ø§Ù„Ù„Ù‡Ø¬Ø© Ø§Ù„Ø¹Ø±Ø§Ù‚ÙŠØ© Ø§Ø¹ØªÙ…Ø§Ø¯Ø§Ù‹ Ø¹Ù„Ù‰ Ø¢Ø®Ø± Ø±Ø³Ø§Ø¦Ù„ Ø§Ù„Ø²Ø¨ÙˆÙ† ÙÙŠ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©.';
+  const textForAI        = text || 'اقترح رداً مناسباً باللهجة العراقية اعتماداً على آخر رسائل الزبون في المحادثة.';
   const savedInstructions = document.getElementById('aiInstructions').value.trim();
-  const rewriteInstruction = 'Ù‚Ù… Ø¨Ø¥Ø¹Ø§Ø¯Ø© ØµÙŠØ§ØºØ© Ø§Ù„Ù†Øµ Ø§Ù„Ù…ÙˆØ¬ÙˆØ¯ ÙÙŠ Ø±Ø³Ø§Ù„Ø© Ø§Ù„Ù…Ø´Ø±Ù ÙÙ‚Ø·ØŒ Ù…Ø¹ Ø§Ù„Ø§Ù„ØªØ²Ø§Ù… Ø¨Ø¨Ø§Ù‚ÙŠ Ø§Ù„ØªØ¹Ù„ÙŠÙ…Ø§Øª ÙˆØ§Ù„Ù‚ÙˆØ§Ø¹Ø¯ Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø©. Ù„Ø§ ØªØ¶Ù Ø³Ø¤Ø§Ù„Ø§Ù‹ Ø¬Ø¯ÙŠØ¯Ø§Ù‹ Ø¥Ø°Ø§ ÙƒØ§Ù† Ø§Ù„Ø²Ø¨ÙˆÙ† Ø£Ø¬Ø§Ø¨ Ø¹Ù„ÙŠÙ‡ Ø³Ø§Ø¨Ù‚Ø§Ù‹.';
+  const rewriteInstruction = 'قم بإعادة صياغة النص الموجود في رسالة المشرف فقط، مع الالتزام بباقي التعليمات والقواعد المحفوظة. لا تضف سؤالاً جديداً إذا كان الزبون أجاب عليه سابقاً.';
   const extraInstructions = savedInstructions
     ? `${savedInstructions}\n\n${rewriteInstruction}`
     : rewriteInstruction;
@@ -780,10 +780,10 @@ async function askAI() {
       document.getElementById('aiReplyText').textContent      = data.reply;
       document.getElementById('aiReplyPreview').style.display = 'block';
     } else {
-      showToast('AI Ù„Ù… ÙŠØ³ØªØ·Ø¹ Ø§Ù„Ø±Ø¯ â€” ÙŠÙ…ÙƒÙ†Ùƒ Ø§Ù„ØªØ¯Ø®Ù„ ÙŠØ¯ÙˆÙŠØ§Ù‹', 'warning');
+      showToast('AI لم يستطع الرد — يمكنك التدخل يدوياً', 'warning');
       showHumanIntervention();
     }
-  } catch (e) { showToast('Ø®Ø·Ø£ AI: ' + e.message, 'danger'); }
+  } catch (e) { showToast('خطأ AI: ' + e.message, 'danger'); }
   finally {
     _isAskingAI = false;
     renderAskAIButton();
@@ -797,14 +797,14 @@ function dismissAIPreview() {
   document.getElementById('aiReplyPreview').style.display = 'none';
 }
 
-// â•â• Improve Message (independent of AI on/off) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Improve Message (independent of AI on/off) ════════════════════════════
 let _isImproving = false;
 async function improveMessage() {
   if (_isImproving) return;
   const ta = document.getElementById('messageInput');
   const text = (ta.value || '').trim();
   if (!text) {
-    showToast('Ø§ÙƒØªØ¨ Ù†ØµØ§Ù‹ Ù‚Ø¨Ù„ Ø§Ù„ØªØ­Ø³ÙŠÙ†', 'warning');
+    showToast('اكتب نصاً قبل التحسين', 'warning');
     return;
   }
   const btn = document.getElementById('improveBtn');
@@ -823,15 +823,15 @@ async function improveMessage() {
     if (data.ok && data.improved) {
       ta.value = data.improved;
       ta.focus();
-      showToast('ØªÙ… ØªØ­Ø³ÙŠÙ† Ø§Ù„Ù†Øµ', 'success');
+      showToast('تم تحسين النص', 'success');
     } else if (data.improved) {
       ta.value = data.improved;
-      showToast(data.error ? `ØªØ¹Ø°Ø± Ø§Ù„ØªØ­Ø³ÙŠÙ† Ø¨Ø§Ù„ÙƒØ§Ù…Ù„: ${data.error}` : 'Ù„Ù… ÙŠØªÙ… Ø§Ù„ØªØ­Ø³ÙŠÙ†', 'warning');
+      showToast(data.error ? `تعذر التحسين بالكامل: ${data.error}` : 'لم يتم التحسين', 'warning');
     } else {
-      showToast(data.error || 'ÙØ´Ù„ ØªØ­Ø³ÙŠÙ† Ø§Ù„Ù†Øµ', 'danger');
+      showToast(data.error || 'فشل تحسين النص', 'danger');
     }
   } catch (e) {
-    showToast('Ø®Ø·Ø£ ÙÙŠ Ø§Ù„ØªØ­Ø³ÙŠÙ†: ' + e.message, 'danger');
+    showToast('خطأ في التحسين: ' + e.message, 'danger');
   } finally {
     _isImproving = false;
     if (btn) {
@@ -841,7 +841,7 @@ async function improveMessage() {
   }
 }
 
-// â•â• Image Upload â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Image Upload ═══════════════════════════════════════════════════════════
 async function handleImageUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -863,8 +863,8 @@ async function handleImageUpload(event) {
       uploadedImageUrl = data.image_url;
       showToast(data.warning || 'تم رفع الصورة، اضغط زر الإرسال لإرسالها', data.send_ready === false ? 'warning' : 'success');
     }
-    else showToast('ÙØ´Ù„ Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±Ø©', 'danger');
-  } catch (e) { showToast('Ø®Ø·Ø£ Ø±ÙØ¹: ' + e.message, 'danger'); }
+    else showToast('فشل رفع الصورة', 'danger');
+  } catch (e) { showToast('خطأ رفع: ' + e.message, 'danger'); }
 }
 
 function clearImage() {
@@ -875,7 +875,7 @@ function clearImage() {
   document.getElementById('imageUpload').value          = '';
 }
 
-// â•â• Customer Info â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Customer Info ══════════════════════════════════════════════════════════
 function getSelectedGender(groupName) {
   const el = document.querySelector(`input[name="${groupName}"]:checked`);
   return el ? (el.value || '') : '';
@@ -913,12 +913,12 @@ async function saveCustomerInfo() {
     const r = await res.json();
     if (r.ok) {
       if (currentCustomer) currentCustomer.gender = data.gender || null;
-      showToast('ØªÙ… Ø­ÙØ¸ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø²Ø¨ÙˆÙ†', 'success');
+      showToast('تم حفظ بيانات الزبون', 'success');
       loadConversations(false);
     } else {
-      showToast('ÙØ´Ù„ Ø§Ù„Ø­ÙØ¸', 'danger');
+      showToast('فشل الحفظ', 'danger');
     }
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
 async function setCustomerGenderQuick(gender) {
@@ -938,17 +938,17 @@ async function setCustomerGenderQuick(gender) {
   }
 }
 
-// â•â• Products â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Products ═══════════════════════════════════════════════════════════════
 async function loadProducts() {
   try {
     const res  = await apiFetch('/api/products');
     const data = await res.json();
     allProducts = data.products || [];
     const opts = allProducts.map(p =>
-      `<option value="${esc(p.product_id)}">${esc(p.product_name)} â€” ${esc(p.price)} (${esc(p.stock)})</option>`
+      `<option value="${esc(p.product_id)}">${esc(p.product_name)} — ${esc(p.price)} (${esc(p.stock)})</option>`
     ).join('');
-    document.getElementById('productSelect').innerHTML  = '<option value="">â€” Ø§Ø®ØªØ± Ù…Ù†ØªØ¬Ø§Ù‹ â€”</option>' + opts;
-    document.getElementById('orderProduct').innerHTML   = '<option value="">â€” Ø§Ø®ØªØ± â€”</option>' +
+    document.getElementById('productSelect').innerHTML  = '<option value="">— اختر منتجاً —</option>' + opts;
+    document.getElementById('orderProduct').innerHTML   = '<option value="">— اختر —</option>' +
       allProducts.map(p => `<option value="${esc(p.product_id)}">${esc(p.product_name)}</option>`).join('');
   } catch (e) { console.error('loadProducts', e); }
 }
@@ -957,7 +957,7 @@ let _isLinking = false;
 async function linkProduct() {
   if (_isLinking || !currentSenderId) return;
   const productIds = selectedValues(document.getElementById('productSelect'));
-  if (!productIds.length) { showToast('Ø§Ø®ØªØ± Ù…Ù†ØªØ¬Ø§Ù‹ ÙˆØ§Ø­Ø¯Ø§Ù‹ Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„', 'warning'); return; }
+  if (!productIds.length) { showToast('اختر منتجاً واحداً على الأقل', 'warning'); return; }
   _isLinking = true;
   const linkBtn = document.querySelector('button[onclick="linkProduct()"]');
   const original = linkBtn ? linkBtn.innerHTML : '';
@@ -973,11 +973,11 @@ async function linkProduct() {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast('ØªÙ… Ø±Ø¨Ø· Ø§Ù„Ù…Ù†ØªØ¬ Ø¨Ø¯ÙˆÙ† Ø¥Ø±Ø³Ø§Ù„ Ø£ÙŠ ØªÙØ§ØµÙŠÙ„ Ù„Ù„Ø²Ø¨ÙˆÙ†', 'success');
+      showToast('تم ربط المنتج بدون إرسال أي تفاصيل للزبون', 'success');
       await loadMessages(currentSenderId);
       await refreshLinkedProductSync();
-    } else showToast('ÙØ´Ù„ Ø±Ø¨Ø· Ø§Ù„Ù…Ù†ØªØ¬', 'danger');
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+    } else showToast('فشل ربط المنتج', 'danger');
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
   finally {
     _isLinking = false;
     if (linkBtn) { linkBtn.disabled = false; linkBtn.innerHTML = original; }
@@ -987,11 +987,11 @@ async function linkProduct() {
 async function sendProductDetails() {
   if (!currentSenderId) return;
   const productIds = selectedValues(document.getElementById('productSelect'));
-  if (!productIds.length) { showToast('Ø§Ø®ØªØ± Ù…Ù†ØªØ¬Ø§Ù‹ ÙˆØ§Ø­Ø¯Ø§Ù‹ Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„', 'warning'); return; }
+  if (!productIds.length) { showToast('اختر منتجاً واحداً على الأقل', 'warning'); return; }
   for (const pid of productIds) {
     const p = allProducts.find(x => x.product_id === pid);
     if (!p) continue;
-    const text = `ØªØ¯Ù„Ù„ÙŠÙ† Ø¹ÙŠÙ†ÙŠ ðŸŒ¸\nÙ‡Ø°Ø§ ${p.product_name}\nØ§Ù„Ø³Ø¹Ø±: ${p.price}\nØ§Ù„Ù…Ù‚Ø§Ø³Ø§Øª: ${p.sizes || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯'}`;
+    const text = `تدللين عيني 🌸\nهذا ${p.product_name}\nالسعر: ${p.price}\nالمقاسات: ${p.sizes || 'غير محدد'}`;
     await sendMessage(text);
     for (const url of productImageList(p)) {
       await sendMessage(null, url);
@@ -999,7 +999,7 @@ async function sendProductDetails() {
   }
 }
 
-// â•â• AI Instructions â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ AI Instructions ════════════════════════════════════════════════════════
 async function loadCustomerInstructions(senderId) {
   try {
     const res  = await apiFetch(`/api/conversations/${senderId}/instructions`);
@@ -1020,19 +1020,19 @@ async function saveInstructions() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (data.ok) showToast('ØªÙ… Ø­ÙØ¸ Ø§Ù„ØªØ¹Ù„ÙŠÙ…Ø§Øª', 'success');
-    else showToast('ÙØ´Ù„ Ø§Ù„Ø­ÙØ¸', 'danger');
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+    if (data.ok) showToast('تم حفظ التعليمات', 'success');
+    else showToast('فشل الحفظ', 'danger');
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
-// â•â• Stats â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Stats ══════════════════════════════════════════════════════════════════
 async function loadStats() {
   try {
     const res  = await apiFetch('/api/dashboard_stats');
     const data = await res.json();
-    document.getElementById('statPending').textContent  = `${data.pending_reviews  || 0} Ù…Ø±Ø§Ø¬Ø¹Ø©`;
-    document.getElementById('statOrders').textContent   = `${data.orders_today    || 0} Ø·Ù„Ø¨`;
-    document.getElementById('statMessages').textContent = `${data.messages_today  || 0} Ø±Ø³Ø§Ù„Ø©`;
+    document.getElementById('statPending').textContent  = `${data.pending_reviews  || 0} مراجعة`;
+    document.getElementById('statOrders').textContent   = `${data.orders_today    || 0} طلب`;
+    document.getElementById('statMessages').textContent = `${data.messages_today  || 0} رسالة`;
     globalAIEnabled = data.ai_enabled !== false;
     renderAIToggle();
   } catch (e) { console.error('loadStats', e); }
@@ -1043,8 +1043,8 @@ function renderAIToggle() {
   const txt = document.getElementById('aiToggleText');
   if (!btn || !txt) return;
   btn.classList.toggle('off', !globalAIEnabled);
-  txt.textContent = globalAIEnabled ? 'AI ÙŠØ¹Ù…Ù„' : 'AI Ù…ØªÙˆÙ‚Ù';
-  btn.title = globalAIEnabled ? 'Ø§Ø¶ØºØ· Ù„Ø¥ÙŠÙ‚Ø§Ù AI ÙÙŠ ÙƒÙ„ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª' : 'Ø§Ø¶ØºØ· Ù„ØªØ´ØºÙŠÙ„ AI ÙÙŠ ÙƒÙ„ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª';
+  txt.textContent = globalAIEnabled ? 'AI يعمل' : 'AI متوقف';
+  btn.title = globalAIEnabled ? 'اضغط لإيقاف AI في كل المحادثات' : 'اضغط لتشغيل AI في كل المحادثات';
   renderAskAIButton();
   renderAIActionButtons();
 }
@@ -1055,10 +1055,10 @@ function renderConversationAIToggle() {
   if (!btn || !txt) return;
   btn.classList.toggle('btn-warning', !currentConversationAIEnabled);
   btn.classList.toggle('btn-outline-warning', currentConversationAIEnabled);
-  txt.textContent = currentConversationAIEnabled ? 'AI ÙŠØ¹Ù…Ù„ Ù‡Ù†Ø§' : 'AI Ù…ØªÙˆÙ‚Ù Ù‡Ù†Ø§';
+  txt.textContent = currentConversationAIEnabled ? 'AI يعمل هنا' : 'AI متوقف هنا';
   btn.title = currentConversationAIEnabled
-    ? 'Ø¥ÙŠÙ‚Ø§Ù AI ÙÙŠ Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© ÙÙ‚Ø·'
-    : 'ØªØ³Ù„ÙŠÙ… Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© Ø¥Ù„Ù‰ AI';
+    ? 'إيقاف AI في هذه المحادثة فقط'
+    : 'تسليم هذه المحادثة إلى AI';
   renderAskAIButton();
   renderAIActionButtons();
 }
@@ -1081,8 +1081,8 @@ function renderAskAIButton() {
   btn.classList.toggle('btn-secondary', !enabled);
   btn.classList.toggle('btn-info', enabled);
   btn.title = enabled
-    ? 'Ø§Ù‚ØªØ±Ø§Ø­ AI'
-    : (!globalAIEnabled ? 'AI Ù…ØªÙˆÙ‚Ù Ù…Ù† Ø§Ù„Ø²Ø± Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ' : 'AI Ù…ØªÙˆÙ‚Ù ÙÙŠ Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©');
+    ? 'اقتراح AI'
+    : (!globalAIEnabled ? 'AI متوقف من الزر الرئيسي' : 'AI متوقف في هذه المحادثة');
   btn.innerHTML = '<i class="bi bi-robot d-block mb-1"></i><span style="font-size:9px;">AI</span>';
 }
 
@@ -1093,13 +1093,13 @@ function renderAIActionButtons() {
     resolveBtn.disabled = !enabled;
     resolveBtn.classList.toggle('disabled', !enabled);
     resolveBtn.title = enabled
-      ? 'Ø­Ù„ Ø§Ù„Ù…Ø´ÙƒÙ„Ø© Ø¨Ø§Ù„Ù€ AI'
-      : (!globalAIEnabled ? 'AI Ù…ØªÙˆÙ‚Ù Ù…Ù† Ø§Ù„Ø²Ø± Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ' : 'AI Ù…ØªÙˆÙ‚Ù ÙÙŠ Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©');
+      ? 'حل المشكلة بالـ AI'
+      : (!globalAIEnabled ? 'AI متوقف من الزر الرئيسي' : 'AI متوقف في هذه المحادثة');
   }
   const improveBtn = document.getElementById('improveBtn');
   if (improveBtn) {
     improveBtn.disabled = _isSending || _isImproving;
-    improveBtn.title = 'ØªØ­Ø³ÙŠÙ† Ø§Ù„Ø±Ø³Ø§Ù„Ø© (ÙŠØ¹Ù…Ù„ Ø¯Ø§Ø¦Ù…Ø§Ù‹ØŒ Ø­ØªÙ‰ Ù„Ùˆ AI Ù…ØªÙˆÙ‚Ù)';
+    improveBtn.title = 'تحسين الرسالة (يعمل دائماً، حتى لو AI متوقف)';
   }
 }
 
@@ -1115,15 +1115,15 @@ async function toggleGlobalAI() {
     if (data.ok) {
       globalAIEnabled = data.ai_enabled;
       renderAIToggle();
-      showToast(globalAIEnabled ? 'ØªÙ… ØªØ´ØºÙŠÙ„ AI Ù„ÙƒÙ„ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª' : 'ØªÙ… Ø¥ÙŠÙ‚Ø§Ù AI Ù„ÙƒÙ„ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª', globalAIEnabled ? 'success' : 'warning');
+      showToast(globalAIEnabled ? 'تم تشغيل AI لكل المحادثات' : 'تم إيقاف AI لكل المحادثات', globalAIEnabled ? 'success' : 'warning');
     } else {
-      showToast('ÙØ´Ù„ ØªØºÙŠÙŠØ± Ø­Ø§Ù„Ø© AI', 'danger');
+      showToast('فشل تغيير حالة AI', 'danger');
     }
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
 async function toggleConversationAI() {
-  if (!currentSenderId) { showToast('Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   const next = !currentConversationAIEnabled;
   try {
     const res = await apiFetch(`/api/conversations/${currentSenderId}/ai`, {
@@ -1137,19 +1137,19 @@ async function toggleConversationAI() {
       if (currentCustomer) currentCustomer.ai_enabled = data.ai_enabled ? 1 : 0;
       renderConversationAIToggle();
       showToast(
-        currentConversationAIEnabled ? 'ØªÙ… ØªØ³Ù„ÙŠÙ… Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© Ø¥Ù„Ù‰ AI' : 'ØªÙ… Ø¥ÙŠÙ‚Ø§Ù AI ÙÙŠ Ù‡Ø°Ù‡ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© ÙÙ‚Ø·',
+        currentConversationAIEnabled ? 'تم تسليم هذه المحادثة إلى AI' : 'تم إيقاف AI في هذه المحادثة فقط',
         currentConversationAIEnabled ? 'success' : 'warning',
       );
       loadConversations(false);
     } else {
-      showToast('ÙØ´Ù„ ØªØºÙŠÙŠØ± Ø­Ø§Ù„Ø© AI Ù„Ù„Ù…Ø­Ø§Ø¯Ø«Ø©', 'danger');
+      showToast('فشل تغيير حالة AI للمحادثة', 'danger');
     }
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
-// â•â• Quick Actions â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Quick Actions ══════════════════════════════════════════════════════════
 function openOrderModal() {
-  if (!currentSenderId) { showToast('Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   if (currentCustomer) {
     document.getElementById('orderName').value     = currentCustomer.name     || '';
     document.getElementById('orderPhone').value    = currentCustomer.phone    || '';
@@ -1182,36 +1182,36 @@ async function submitOrder() {
     });
     const r = await res.json();
     if (r.ok) {
-      showToast('ØªÙ… ØªØ«Ø¨ÙŠØª Ø§Ù„Ø·Ù„Ø¨', 'success');
+      showToast('تم تثبيت الطلب', 'success');
       bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide();
-    } else showToast('ÙØ´Ù„ ØªØ«Ø¨ÙŠØª Ø§Ù„Ø·Ù„Ø¨: ' + (r.error || ''), 'danger');
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+    } else showToast('فشل تثبيت الطلب: ' + (r.error || ''), 'danger');
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
 async function sendCatalog() {
-  if (!currentSenderId) { showToast('Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   try {
     const res = await apiFetch(`/api/conversations/${currentSenderId}/send_catalog`, { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      showToast(`ØªÙ… Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„ÙƒØªØ§Ù„ÙˆØ¬ Ù…Ø¹ ${data.image_count || 0} ØµÙˆØ±Ø©`, data.sent ? 'success' : 'warning');
+      showToast(`تم إرسال الكتالوج مع ${data.image_count || 0} صورة`, data.sent ? 'success' : 'warning');
       await loadMessages(currentSenderId);
     } else {
-      showToast('ÙØ´Ù„ Ø¥Ø±Ø³Ø§Ù„ Ø§Ù„ÙƒØªØ§Ù„ÙˆØ¬', 'danger');
+      showToast('فشل إرسال الكتالوج', 'danger');
     }
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
 async function markHumanReview() {
-  if (!currentSenderId) { showToast('Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ø£ÙˆÙ„Ø§Ù‹', 'warning'); return; }
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   try {
     const res  = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
     const data = await res.json();
-    if (data.ok) { showToast('ØªÙ… Ø¥ØºÙ„Ø§Ù‚ Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹Ø©', 'success'); loadConversations(false); }
-  } catch (e) { showToast('Ø®Ø·Ø£: ' + e.message, 'danger'); }
+    if (data.ok) { showToast('تم إغلاق المراجعة', 'success'); loadConversations(false); }
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
-// â•â• Helpers â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══ Helpers ════════════════════════════════════════════════════════════════
 function handleKeyDown(e) {
   if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); sendMessage(); }
 }
@@ -1242,7 +1242,7 @@ function firstUrlFromValue(value) {
     const direct = value.trim();
     if (direct.startsWith('http')) return direct;
     const match = direct.match(/https?:\/\/\S+/);
-    return match ? match[0].replace(/[).,Ø›ØŒ]+$/, '') : '';
+    return match ? match[0].replace(/[).,؛،]+$/, '') : '';
   }
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -1312,7 +1312,7 @@ function splitPipeList(value) {
 
 function customerSourceMeta(c) {
   const parts = [];
-  if (c.ad_id) parts.push(`Ø¥Ø¹Ù„Ø§Ù†: ${esc(c.ad_id)}`);
+  if (c.ad_id) parts.push(`إعلان: ${esc(c.ad_id)}`);
   if (c.ref) parts.push(`Ref: ${esc(c.ref)}`);
   return parts.join(' | ');
 }
