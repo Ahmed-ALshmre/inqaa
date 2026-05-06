@@ -1,4 +1,5 @@
 import base64
+import builtins
 import io
 import json
 import mimetypes
@@ -10,13 +11,35 @@ import tempfile
 import threading
 import time
 import unicodedata
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from functools import wraps
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
 from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory
+
+_ORIGINAL_PRINT = builtins.print
+
+
+def print(*args, **kwargs):
+    return None
+
+
+def _trace_value(value):
+    if isinstance(value, str):
+        value = value.replace("\n", " ").strip()
+        return value if len(value) <= 220 else value[:217] + "..."
+    return value
+
+
+def image_flow(stage, **data):
+    record = {
+        "time": datetime.now().replace(microsecond=0).isoformat(),
+        "stage": stage,
+    }
+    record.update({k: _trace_value(v) for k, v in data.items()})
+    _ORIGINAL_PRINT("[ImageFlow] " + json.dumps(record, ensure_ascii=False, default=str), flush=True)
 
 # تحميل .env المبكر حتى يمكن تعطيل مكتبات ML الثقيلة قبل استيرادها
 _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -26,13 +49,27 @@ if os.path.exists(_env_path):
             _line = _line.strip()
             if _line and not _line.startswith("#") and "=" in _line:
                 _k, _v = _line.split("=", 1)
-                os.environ.setdefault(_k.strip(), _v.strip().strip('"\''))
+                _key = _k.strip()
+                _value = _v.strip().strip('"\'')
+                if _key == "OPENROUTER_API_KEY":
+                    os.environ[_key] = _value
+                else:
+                    os.environ.setdefault(_key, _value)
 
-# Fix Windows console encoding before any optional-import warning prints.
-if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+# قيم افتراضية غير سرية فقط — لا تضع مفاتيح API أو توكنات هنا (استخدم .env أو متغيرات الاستضافة).
+for _k, _v in {
+    "MAIN_MODEL":              "google/gemini-3-flash-preview",
+    "IMPROVE_MODEL":           "google/gemini-3-flash-preview",
+    "CHECKER_MODEL":           "disabled",
+    "VISION_MODEL":            "disabled",
+    "CHECKER_ENABLED":         "0",
+    "VISION_ENABLED":          "0",
+    "DISABLE_CLIP":            "1",
+    "DEBOUNCE_DELAY":          "60",
+    "HUMAN_REVIEW_ALL_IMAGES": "1",
+}.items():
+    if not os.environ.get(_k):
+        os.environ[_k] = _v
 
 # مكتبات CLIP — اختيارية، يتم تحميلها عند أول استخدام
 if os.environ.get("DISABLE_CLIP", "0") == "1":
@@ -45,7 +82,7 @@ else:
         from PIL import Image
         from transformers import CLIPModel, CLIPProcessor
         CLIP_AVAILABLE = True
-    except Exception:
+    except ImportError:
         CLIP_AVAILABLE = False
         print("[CLIP] ⚠️  المكتبات غير مثبتة — شغّل: pip install torch transformers pillow numpy", flush=True)
  
@@ -154,9 +191,6 @@ def _normalize_manychat_key_value(value: str = "") -> str:
     return key
 
 
-DEFAULT_MANYCHAT_API_KEY = ""
-
-
 def _manychat_key_from_environ() -> str:
     """
     مفتاح ManyChat: Settings → API → Generate (الخطة المدفوعة).
@@ -171,16 +205,15 @@ def _manychat_key_from_environ() -> str:
             if name != "MANYCHAT_API_KEY":
                 os.environ["MANYCHAT_API_KEY"] = key
             return key
-    return _normalize_manychat_key_value(DEFAULT_MANYCHAT_API_KEY)
+    return ""
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# (المفاتيح المؤقتة مُعرَّفة في أعلى الملف وتُحقن في os.environ قبل أي فحص لاحق.)
-API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "YOUR_SECRET_KEY")
+API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "")
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 if OPENROUTER_KEY:
-    print(f"[Config] ✅ OPENROUTER_API_KEY loaded ({OPENROUTER_KEY[:12]}...)", flush=True)
+    print("[Config] ✅ OPENROUTER_API_KEY loaded", flush=True)
 else:
     print("[Config] ❌ OPENROUTER_API_KEY is MISSING — AI calls will fail!", flush=True)
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -191,14 +224,17 @@ CHECKER_MODEL   = os.environ.get("CHECKER_MODEL", "google/gemini-3.1-pro-preview
 VISION_MODEL    = os.environ.get("VISION_MODEL",  "google/gemini-3.1-pro-preview")
 CHECKER_ENABLED = os.environ.get("CHECKER_ENABLED", "0") == "1"
 VISION_ENABLED  = os.environ.get("VISION_ENABLED", "1") == "1"
-CATALOG_MATCH_MODEL = os.environ.get("CATALOG_MATCH_MODEL", VISION_MODEL)
+CATALOG_MATCH_MODEL = os.environ.get("CATALOG_MATCH_MODEL", "google/gemini-2.5-flash")
 CATALOG_MATCH_ENABLED = os.environ.get("CATALOG_MATCH_ENABLED", "1") != "0"
+CATALOG_IMAGE_PATH = os.environ.get(
+    "CATALOG_IMAGE_PATH",
+    os.path.join(os.path.dirname(__file__), "Gemini_Generated_Image_efqo6zefqo6zefqo.png")
+)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
-ORDER_TELEGRAM_CHAT_ID = os.environ.get("ORDER_TELEGRAM_CHAT_ID", "-1003959669538")
+TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+TELEGRAM_ORDERS_CHAT_ID = os.environ.get("TELEGRAM_ORDERS_CHAT_ID", "").strip()
+TELEGRAM_NOTIFICATION_HEADER = os.environ.get("TELEGRAM_NOTIFICATION_HEADER", "أنيقة").strip()
 MANYCHAT_API_KEY = _manychat_key_from_environ()
-if MANYCHAT_API_KEY:
-    os.environ["MANYCHAT_API_KEY"] = MANYCHAT_API_KEY
 MANYCHAT_API_URL = "https://api.manychat.com"
 HUMAN_REPLY_WEBHOOK_URL = os.environ.get("HUMAN_REPLY_WEBHOOK_URL", "")
 HUMAN_REVIEW_ALL_IMAGES = os.environ.get("HUMAN_REVIEW_ALL_IMAGES", "1") == "1"
@@ -220,14 +256,10 @@ PRODUCTS_FILE     = os.path.join(os.path.dirname(__file__), "products.json")
 PRODUCT_KNOWLEDGE_FILE = os.path.join(os.path.dirname(__file__), "product_ai_summary.txt")
 PRODUCT_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "product_image")
 AUD_DIR           = os.path.join(os.path.dirname(__file__), "aud")
-CATALOG_IMAGE_PATH = os.environ.get(
-    "CATALOG_IMAGE_PATH",
-    os.path.join(os.path.dirname(__file__), "Gemini_Generated_Image_efqo6zefqo6zefqo.png"),
-)
 BOOKINGS_FILE     = os.path.join(os.path.dirname(__file__), "bookings.jsonl")
-INCOMING_REQUESTS_FILE = os.environ.get("INCOMING_REQUESTS_FILE") or os.path.join(
-    os.path.dirname(__file__),
-    "incoming_requests.jsonl",
+INCOMING_REQUESTS_FILE = os.environ.get(
+    "INCOMING_REQUESTS_FILE",
+    os.path.join(os.path.dirname(__file__), "incoming_requests.jsonl"),
 )
 AD_TRACKING_FILE = os.path.join(os.path.dirname(__file__), "ad_tracking.jsonl")
 MAX_HISTORY  = 20
@@ -235,7 +267,7 @@ FALLBACK_REPLY = (
     "حبيبتي ممكن توضحين أكثر شنو الموديل المطلوب؟ "
     "حتى أتأكدلج من التوفر والسعر 🌸"
 )
-FIXED_DELIVERY_TEXT = "أجور التوصيل بغداد 5 آلاف، باقي المحافظات 6 آلاف"
+FIXED_DELIVERY_TEXT = "أجور التوصيل ثابتة: بغداد 5 آلاف، باقي المحافظات 6 آلاف"
 
 app = Flask(__name__)
 _request_log_lock = threading.Lock()
@@ -246,20 +278,6 @@ BAGHDAD_TZ = ZoneInfo("Asia/Baghdad")
 
 def now_baghdad_iso():
     return datetime.now(BAGHDAD_TZ).replace(microsecond=0).isoformat()
-
-
-def image_flow(stage, **data):
-    record = {
-        "time": datetime.now(BAGHDAD_TZ).replace(microsecond=0).isoformat(),
-        "stage": stage,
-    }
-    for key, value in data.items():
-        if isinstance(value, str):
-            value = value.replace("\n", " ").strip()
-            if len(value) > 220:
-                value = value[:217] + "..."
-        record[key] = value
-    print("[ImageFlow] " + json.dumps(record, ensure_ascii=False, default=str), flush=True)
 
 
 # ── HTTP request/response logging ─────────────────────────────────────────────
@@ -652,104 +670,6 @@ def save_products_to_file(products):
         json.dump(products, f, ensure_ascii=False, indent=2)
         f.write("\n")
     os.replace(temp_path, PRODUCTS_FILE)
-    sync_product_knowledge(products)
-
-
-def _product_knowledge_item(product):
-    return {
-        "product_id": product.get("product_id"),
-        "name": product.get("product_name"),
-        "category": product.get("category"),
-        "price": product.get("price"),
-        "colors": product.get("colors"),
-        "sizes": product.get("sizes"),
-        "stock": product.get("stock"),
-        "description": product.get("description"),
-        "visual_description": product.get("visual_description"),
-        "keywords": product.get("keywords"),
-        "notes": product.get("notes"),
-    }
-
-
-def build_product_knowledge_text(products, analysis_text=""):
-    active = [p for p in (products or []) if _stock_state(p) == "available"]
-    inactive = [p for p in (products or []) if _stock_state(p) != "available"]
-    lines = [
-        "معرفة المنتجات الحالية لمتجر أنيقة:",
-        "هذه المعرفة مولدة من products.json وتُحدَّث تلقائياً عند حفظ أو استيراد أو حذف المنتجات.",
-        "المتجر لا يُحصر بكلمة عباية أو باللون الأسود؛ تعامل مع كل منتج حسب اسمه وتصنيفه وبياناته الفعلية.",
-        "عند سؤال الزبون عن منتج غير محدد قل: شنو الموديل اللي تقصدينه؟ أو دزيلي صورة الموديل، ولا تقل شنو العباية إلا إذا المنتج نفسه عباية.",
-        "ممنوع اختراع لون أو سعر أو قياس غير مذكور في بيانات المنتج. إذا اللون غير مكتوب قل: اللون حسب الصورة أو أحتاج أتأكدلج.",
-        f"عدد المنتجات النشطة: {len(active)}",
-        f"عدد المنتجات غير النشطة/غير المتوفرة: {len(inactive)}",
-    ]
-    if analysis_text:
-        lines.extend(["", "تحليل الذكاء الاصطناعي للمنتجات:", analysis_text.strip()])
-    if active:
-        lines.append("")
-        lines.append("قائمة المنتجات النشطة:")
-        for product in active:
-            item = _product_knowledge_item(product)
-            lines.append("- " + json.dumps(item, ensure_ascii=False))
-    return "\n".join(lines).strip() + "\n"
-
-
-def sync_product_knowledge(products=None, analysis_text=""):
-    try:
-        if products is None:
-            products = load_products_from_file()
-        text = build_product_knowledge_text(products, analysis_text=analysis_text)
-        temp_path = PRODUCT_KNOWLEDGE_FILE + ".tmp"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(temp_path, PRODUCT_KNOWLEDGE_FILE)
-        print(f"[ProductsKnowledge] Synced {len(products or [])} product(s)", flush=True)
-        return text
-    except Exception as exc:
-        print(f"[ProductsKnowledge] Sync failed: {exc}", flush=True)
-        return ""
-
-
-def analyze_products_for_ai(products):
-    products = products or []
-    fallback = build_product_knowledge_text(products)
-    if not products:
-        return fallback, "empty"
-    if not OPENROUTER_KEY:
-        return fallback, "local_sync"
-
-    compact_products = [_product_knowledge_item(p) for p in products]
-    prompt = (
-        "حلل منتجات متجر أنيقة من البيانات التالية واكتب معرفة مختصرة وواضحة لمندوب المبيعات.\n"
-        "المطلوب: ما هي الموديلات المتوفرة، التصنيفات، الألوان الفعلية، القياسات، الأسعار، ونقاط البيع.\n"
-        "مهم جداً: لا تحصر المتجر بالعبايات ولا باللون الأسود. اعتمد على بيانات كل منتج فقط.\n"
-        "إذا حقل اللون أو القياس فارغ، اذكر أنه غير محدد ولا تخترع قيمة.\n"
-        "اكتب بالعربية فقط، بدون JSON، وبصيغة تعليمات عملية قصيرة يقرأها الذكاء الاصطناعي قبل الرد على الزبائن.\n\n"
-        f"المنتجات:\n{json.dumps(compact_products, ensure_ascii=False, indent=2)}"
-    )
-    try:
-        resp = requests.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": IMPROVE_MODEL or MAIN_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 1800,
-                "temperature": 0.2,
-            },
-            timeout=45,
-        )
-        resp.raise_for_status()
-        text = (resp.json()["choices"][0]["message"]["content"] or "").strip()
-        if not text:
-            return fallback, "local_sync_empty_ai"
-        return build_product_knowledge_text(products, analysis_text=text), "ai"
-    except Exception as exc:
-        print(f"[ProductsKnowledge] AI analysis failed: {exc}", flush=True)
-        return fallback, f"local_sync_error:{type(exc).__name__}"
 
 
 def get_setting(db, key, default=""):
@@ -814,6 +734,8 @@ def find_product_by_id(product_id, include_inactive=False):
 def require_api_key(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if not API_SECRET_KEY:
+            return jsonify({"error": "API_SECRET_KEY not configured on server"}), 503
         if request.headers.get("X-API-Key") != API_SECRET_KEY:
             return jsonify({"error": "Unauthorized"}), 401
         return f(*args, **kwargs)
@@ -946,28 +868,35 @@ def remember_customer_product(db, sender_id, product, match_method, confidence=0
 
 
 def complete_customer_product_link(db, sender_id, product, match_method, confidence=100, source=""):
+    """Persist a product match and clear pending human review for this customer."""
     if not sender_id or not product or not product.get("product_id"):
         return {"linked": False, "closed_reviews": 0, "reason": "missing_sender_or_product"}
-
-    remember_customer_product(db, sender_id, product, match_method, confidence=confidence)
     now = now_baghdad_iso()
+    product_id = product.get("product_id")
+    existing = db.execute(
+        """SELECT match_method FROM customer_product_interests
+           WHERE sender_id=? AND product_id=?""",
+        (sender_id, product_id),
+    ).fetchone()
+    existing_method = existing["match_method"] if existing else ""
+    weak_methods = {"auto_product_link", "matched_product_context", ""}
+    effective_method = match_method or existing_method or ""
+    if existing_method and effective_method in weak_methods:
+        effective_method = existing_method
+    remember_customer_product(db, sender_id, product, effective_method, confidence=confidence)
     cur = db.execute(
         "UPDATE human_reviews SET status='linked', replied_at=? "
         "WHERE sender_id=? AND status='pending'",
         (now, sender_id),
     )
-    db.commit()
-    try:
-        set_customer_ai_enabled(db, sender_id, True)
-    except Exception as exc:
-        print(f"[CustomerProduct] Could not re-enable AI after catalog link: {exc}", flush=True)
-
     closed = cur.rowcount if cur.rowcount is not None else 0
+    db.commit()
+    set_customer_ai_enabled(db, sender_id, True)
     image_flow(
         "product_link_completed",
         sender_id=sender_id,
-        product_id=product.get("product_id"),
-        match_method=match_method,
+        product_id=product_id,
+        match_method=effective_method,
         confidence=confidence,
         closed_pending_reviews=closed,
         source=source,
@@ -1009,20 +938,36 @@ def _is_contextual_product_question(text):
     if not text:
         return False
     normalized = text.strip().lower()
-    words = set(re.findall(r"[\w\u0600-\u06FF]+", normalized))
+    words = set(re.findall(r"[A-Za-z0-9_\u0621-\u064A\u0660-\u0669]+", normalized))
     contextual_words = {
         "هذا", "هذه", "هاذا", "هاي", "هذي", "هذاك", "الموديل",
         "موديل", "القطعة", "الطقم", "بيها", "بيها", "موجود",
         "موجوده", "متوفر", "متوفرة", "خلص", "خالص", "السعر",
-        "سعره", "سعرها", "كم", "اريد", "أريد", "اخذ", "آخذ",
+        "سعره", "سعرها", "سعر", "بكم", "شكد", "كدش", "كم",
+        "اريد", "أريد", "اخذ", "آخذ",
     }
     return bool(words & contextual_words)
+
+
+def _requires_linked_product_for_details(text):
+    """أسئلة السعر/التوفر/الحجز لا يجوز جوابها بتفاصيل منتج قبل ربط منتج واضح."""
+    if not text:
+        return False
+    words = set(re.findall(r"[A-Za-z0-9_\u0621-\u064A\u0660-\u0669]+", text.strip().lower()))
+    detail_words = {
+        "سعر", "السعر", "سعره", "سعرها", "بكم", "شكد", "كم",
+        "متوفر", "متوفرة", "موجود", "موجوده", "موجودة",
+        "قياس", "مقاس", "مقاسات", "سايز", "لون", "الوان", "ألوان",
+        "احجز", "حجز", "اريد", "أريد", "اطلب", "طلب", "اخذ", "آخذ",
+        "هذا", "هذه", "هاي", "هذي", "الموديل", "موديل", "المنتج",
+    }
+    return bool(words & detail_words)
 
 
 def _has_demonstrative_reference(text):
     if not text:
         return False
-    words = set(re.findall(r"[\w\u0600-\u06FF]+", text.strip().lower()))
+    words = set(re.findall(r"[A-Za-z0-9_\u0621-\u064A\u0660-\u0669]+", text.strip().lower()))
     return bool(words & {"هذا", "هذه", "هاذا", "هاي", "هذي", "هذاك"})
 
 
@@ -1251,7 +1196,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         )
 
     system_prompt = (
-        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب الكتالوج الحالي.\n"
+        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية.\n"
         "هذا أول تواصل من الزبون. هدفك من هذا الرد: ترحيب خفيف + سؤال قصير يفتح المحادثة ويوصلنا للحجز.\n\n"
         f"{name_context}\n"
         f"{gender_rule}\n\n"
@@ -1265,7 +1210,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         "7) إذا الزبون سأل عن موديل غير واضح، اسأله: شنو الموديل اللي تقصدينه؟ أو دزيلي صورة الموديل.\n"
         "8) ⚠️ ممنوع الأدعية أو المجاملات الزائدة (تسلمين، فدوة لعمرج، يرزقج، تدللين بأي وقت...). كلمة ودّ واحدة خفيفة فقط (تأمرين/من عيوني/تفضّل) ضمن نفس الجملة.\n"
         "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: دزّيلي صورة الموديل أو شنو الموديل اللي تقصدينه؟).\n\n"
-        "هوية المتجر: متجر أنيقة للموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية.\n\n"
+        "هوية المتجر: متجر أنيقة للموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية. تعليمات instructions.txt هي المرجع الأساسي لتوجيه الرد.\n\n"
         "تعليمات الإدارة:\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
@@ -1301,7 +1246,6 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         raw = resp.json()["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         reply = (parsed.get("reply") or "").strip()
-        gender = "unknown"
         if not reply:
             return FIRST_MESSAGE_REPLY, legacy_context
         print(f"[FirstMsgAI] name={customer_name!r} reply={reply[:80]}", flush=True)
@@ -1348,7 +1292,7 @@ def build_safe_fallback_reply(matched_product, customer_text=""):
             )
 
         if _text_has_any(customer_text, ("احجز", "حجز", "اريد", "أريد", "اخذ", "آخذ", "اطلب", "طلب")):
-            return f"تدللين حبيبتي، {name} متوفر 🌸 دزيلي الاسم ورقم الموبايل والمحافظة والعنوان الكامل حتى أثبتلج الطلب."
+            return f"تدللين حبيبتي، {name} متوفر 🌸 دزيلي رقم الموبايل والمحافظة والعنوان الكامل حتى أثبتلج الطلب."
 
         price_part = f" وسعره {price}" if price else ""
         size_part = f" والقياسات {sizes}" if sizes else ""
@@ -1363,10 +1307,14 @@ def save_booking_to_file(booking_data):
     print(f"[BookingFile] Saved booking to {BOOKINGS_FILE}", flush=True)
 
 
-def send_telegram_message(text, chat_id=None):
-    target_chat_id = str(chat_id or TELEGRAM_CHAT_ID or "").strip()
+def send_telegram_message(text, chat_id=None, label="notification"):
+    target_chat_id = chat_id or TELEGRAM_CHAT_ID
+    if label == "notification" and TELEGRAM_NOTIFICATION_HEADER:
+        header = TELEGRAM_NOTIFICATION_HEADER
+        if not str(text or "").startswith(header):
+            text = f"{header}\n\n{text}"
     if not TELEGRAM_BOT_TOKEN or not target_chat_id:
-        print("[Telegram] TELEGRAM_BOT_TOKEN/chat_id not configured.", flush=True)
+        print(f"[Telegram] TELEGRAM_BOT_TOKEN/{label} chat_id not configured.", flush=True)
         print(f"[Telegram] Message would be:\n{text}", flush=True)
         return False
     try:
@@ -1382,15 +1330,11 @@ def send_telegram_message(text, chat_id=None):
         if not resp.ok:
             print(f"[Telegram] Error {resp.status_code}: {resp.text}", flush=True)
             return False
-        print("[Telegram] Sent review message.", flush=True)
+        print(f"[Telegram] Sent {label} message.", flush=True)
         return True
     except Exception as exc:
         print(f"[Telegram] Send error: {exc}", flush=True)
         return False
-
-
-def send_order_telegram_message(order):
-    return send_telegram_message(format_order_for_telegram(order), chat_id=ORDER_TELEGRAM_CHAT_ID)
 
 
 ORDER_CONFIRMATION_TEXT = (
@@ -1420,18 +1364,58 @@ def format_order_for_telegram(order):
     )
 
 
-def send_telegram_photo(photo_url, caption=""):
+def send_order_to_telegram(order):
+    return send_telegram_message(
+        format_order_for_telegram(order),
+        chat_id=TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID,
+        label="order",
+    )
+
+
+def _norm_order_value(value):
+    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+
+
+def find_duplicate_order(db, sender_id, phone="", product_id="", address="", minutes=120):
+    """Return a recent matching order so repeated submits/webhooks do not create duplicates."""
+    sender_id = str(sender_id or "").strip()
+    if not sender_id:
+        return None
+    cutoff = datetime.fromtimestamp(time.time() - (minutes * 60), BAGHDAD_TZ).replace(microsecond=0).isoformat()
+    rows = db.execute(
+        """SELECT * FROM orders
+           WHERE sender_id=? AND created_at >= ?
+           ORDER BY id DESC LIMIT 30""",
+        (sender_id, cutoff),
+    ).fetchall()
+    wanted_phone = _norm_order_value(phone)
+    wanted_product = _norm_order_value(product_id)
+    wanted_address = _norm_order_value(address)
+    for row in rows:
+        row_phone = _norm_order_value(row["phone"])
+        row_product = _norm_order_value(row["product_id"])
+        row_address = _norm_order_value(row["address"])
+        phone_match = wanted_phone and row_phone == wanted_phone
+        product_match = wanted_product and row_product == wanted_product
+        address_match = wanted_address and row_address == wanted_address
+        if phone_match and (product_match or address_match):
+            return dict(row)
+    return None
+
+
+def send_telegram_photo(photo_url, caption="", chat_id=None, label="notification_photo"):
     if not photo_url:
         return False
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("[Telegram] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not configured.", flush=True)
+    target_chat_id = chat_id or TELEGRAM_CHAT_ID
+    if not TELEGRAM_BOT_TOKEN or not target_chat_id:
+        print(f"[Telegram] TELEGRAM_BOT_TOKEN/{label} chat_id not configured.", flush=True)
         print(f"[Telegram] Photo would be: {photo_url}\nCaption: {caption}", flush=True)
         return False
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto",
             json={
-                "chat_id": TELEGRAM_CHAT_ID,
+                "chat_id": target_chat_id,
                 "photo": photo_url,
                 "caption": caption[:1024],
             },
@@ -1440,7 +1424,7 @@ def send_telegram_photo(photo_url, caption=""):
         if not resp.ok:
             print(f"[TelegramPhoto] Error {resp.status_code}: {resp.text}", flush=True)
             return False
-        print("[TelegramPhoto] Sent photo.", flush=True)
+        print(f"[TelegramPhoto] Sent {label}.", flush=True)
         return True
     except Exception as exc:
         print(f"[TelegramPhoto] Send error: {exc}", flush=True)
@@ -1730,19 +1714,6 @@ def build_public_image_url(image_url):
     return image_url
 
 
-def is_public_https_url(url: str) -> bool:
-    parsed = urlparse(str(url or "").strip())
-    if parsed.scheme != "https" or not parsed.netloc:
-        return False
-    host = parsed.netloc.lower()
-    return not (
-        host.startswith("localhost")
-        or host.startswith("127.")
-        or host.startswith("10.")
-        or host.startswith("192.168.")
-    )
-
-
 def build_catalog_reply(products):
     active = [
         p for p in products
@@ -1831,13 +1802,8 @@ def is_ai_handoff_reply(reply: str) -> bool:
 
 # ── ManyChat customer sender ──────────────────────────────────────────────────
 
-def normalize_manychat_platform(platform: str = "") -> str:
-    value = str(platform or "").strip().lower()
-    return "instagram" if value in ("instagram", "ig") else "facebook"
-
-
 def is_instagram_platform(platform: str = "") -> bool:
-    return normalize_manychat_platform(platform) == "instagram"
+    return str(platform or "").strip().lower() == "instagram"
 
 
 def manychat_content_type(platform: str = "") -> str:
@@ -1874,6 +1840,52 @@ def current_manychat_api_key() -> str:
         MANYCHAT_API_KEY = key
         os.environ["MANYCHAT_API_KEY"] = key
     return key
+
+
+_manychat_page_key_map = None
+_manychat_page_key_raw = ""
+
+
+def _manychat_page_id_to_key_map():
+    """تحويل page_id (فيسبوك/قناة ManyChat) إلى مفتاح API منفصل — لعدة صفحات/حسابات."""
+    global _manychat_page_key_map, _manychat_page_key_raw
+    raw = (os.environ.get("MANYCHAT_KEYS_BY_PAGE") or "").strip()
+    if raw == _manychat_page_key_raw and _manychat_page_key_map is not None:
+        return _manychat_page_key_map
+    _manychat_page_key_raw = raw
+    _manychat_page_key_map = {}
+    if not raw:
+        return _manychat_page_key_map
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(f"[ManyChat] تعذّر تحليل MANYCHAT_KEYS_BY_PAGE: {exc}", flush=True)
+        return _manychat_page_key_map
+    if not isinstance(data, dict):
+        print("[ManyChat] MANYCHAT_KEYS_BY_PAGE يجب أن يكون كائناً: {\"PAGE_ID\":\"api_key\",...}", flush=True)
+        return _manychat_page_key_map
+    for pk, val in data.items():
+        pid = str(pk or "").strip()
+        key = normalize_manychat_api_key(str(val or ""))
+        if pid and key:
+            _manychat_page_key_map[pid] = key
+    if _manychat_page_key_map:
+        print(
+            f"[ManyChat] تم تحميل مفاتيح منفصلة لـ {len(_manychat_page_key_map)} page_id (عدة حسابات).",
+            flush=True,
+        )
+    return _manychat_page_key_map
+
+
+def manychat_api_key_for_page(page_id) -> str:
+    """مفتاح الإرسال: خاص بالصفحة إن وُجد في MANYCHAT_KEYS_BY_PAGE وإلا المفتاح العام."""
+    pid = str(page_id or "").strip()
+    if pid:
+        m = _manychat_page_id_to_key_map()
+        key = m.get(pid)
+        if key:
+            return key
+    return current_manychat_api_key()
 
 
 def detect_manychat_platform(data):
@@ -1921,97 +1933,7 @@ def _looks_like_image_url(value):
     )
 
 
-def _looks_like_video_url(value):
-    text = str(value or "").strip()
-    if not text:
-        return False
-    lowered = text.lower()
-    return (
-        lowered.startswith("http")
-        and (
-            any(ext in lowered for ext in (".mp4", ".mov", ".m4v", ".webm"))
-            or "video" in lowered
-            or "/reel/" in lowered
-            or "/reels/" in lowered
-        )
-    )
-
-
-def _looks_like_reel_url(value):
-    text = str(value or "").strip().lower()
-    return text.startswith("http") and (
-        "instagram.com/reel/" in text
-        or "instagram.com/reels/" in text
-        or "/reel/" in text
-        or "/reels/" in text
-    )
-
-
-def _extract_url_from_value(value):
-    if isinstance(value, str):
-        text = value.strip()
-        if text.startswith("http"):
-            return text
-        match = re.search(r"https?://\S+", text)
-        if match:
-            return match.group(0).rstrip(").,؛،")
-    return ""
-
-
-def extract_media_url_from_manychat_data(data):
-    keys = (
-        "reel_url", "reels_url", "instagram_reel_url", "ig_reel_url",
-        "video_url", "last_input_video_url", "ig_last_input_video_url",
-        "last_input_attachment_url", "attachment_url", "media_url", "file_url",
-        "last_input_image_url", "image_url", "last_input_image",
-        "photo_url", "picture_url", "last_image_url", "url",
-        "ig_last_input_image_url", "instagram_image_url",
-    )
-    for key in keys:
-        value = (data or {}).get(key)
-        url = _extract_url_from_value(value)
-        if _looks_like_reel_url(url):
-            return url, "reel"
-        if _looks_like_video_url(url):
-            return url, "video"
-        if _looks_like_image_url(url):
-            return url, "image"
-
-    for value in (data or {}).values():
-        if isinstance(value, dict):
-            nested_url, nested_type = extract_media_url_from_manychat_data(value)
-            if nested_url:
-                return nested_url, nested_type
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    nested_url, nested_type = extract_media_url_from_manychat_data(item)
-                    if nested_url:
-                        return nested_url, nested_type
-                else:
-                    url = _extract_url_from_value(item)
-                    if _looks_like_reel_url(url):
-                        return url, "reel"
-                    if _looks_like_video_url(url):
-                        return url, "video"
-                    if _looks_like_image_url(url):
-                        return url, "image"
-        else:
-            url = _extract_url_from_value(value)
-            if _looks_like_reel_url(url):
-                return url, "reel"
-            if _looks_like_video_url(url):
-                return url, "video"
-            if _looks_like_image_url(url):
-                return url, "image"
-    return "", ""
-
-
 def extract_image_url_from_manychat_data(data):
-    media_url, media_type = extract_media_url_from_manychat_data(data)
-    if media_type == "image":
-        return media_url
-
     keys = (
         "last_input_image_url", "image_url", "last_input_image",
         "last_input_attachment_url", "attachment_url", "photo_url",
@@ -2046,7 +1968,7 @@ def send_image_to_facebook(sender_id: str, image_url: str, page_id: str = "", pl
     if not image_url:
         print("[FB] No image_url provided — skipping send", flush=True)
         return False
-    return send_image_via_manychat(sender_id, image_url, platform=platform)
+    return send_image_via_manychat(sender_id, image_url, "", platform, page_id)
 
 
 # ── ManyChat API ──────────────────────────────────────────────────────────────
@@ -2062,8 +1984,8 @@ def _build_manychat_content(content_type: str, messages: list, message_tag: str 
 
 
 def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "facebook",
-                        label: str = "send", message_tag: str = "") -> dict:
-    api_key = current_manychat_api_key()
+                        label: str = "send", message_tag: str = "", page_id: str = "") -> dict:
+    api_key = manychat_api_key_for_page(page_id)
     if not api_key:
         msg = "MANYCHAT_API_KEY not set"
         print(f"[ManyChat] {msg}", flush=True)
@@ -2155,12 +2077,6 @@ def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "fac
                 message = f"{top_message} — {detail_text}"
             else:
                 message = top_message or detail_text
-            if "wrong format token" in message.lower():
-                message = (
-                    "MANYCHAT_API_KEY غير صحيح أو ليس API token صالح. "
-                    "أنشئ مفتاح API جديد من ManyChat Settings > API وضعه في Railway Variables "
-                    "بدون كلمة Bearer أو علامات اقتباس."
-                )
         print(
             f"[ManyChat][{label}] subscriber={subscriber_id} type={content_type} tag={message_tag or retried_with_tag or '-'} "
             f"http={resp.status_code} ok={ok} status={status} response={body}",
@@ -2181,41 +2097,52 @@ def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "fac
 
 
 def send_text_via_manychat_detailed(subscriber_id: str, reply_text: str, platform: str = "facebook",
-                                    message_tag: str = "") -> dict:
+                                    message_tag: str = "", page_id: str = "") -> dict:
     return _post_manychat_send(
         subscriber_id,
         [{"type": "text", "text": reply_text}],
         platform=platform,
         label="text",
         message_tag=message_tag,
+        page_id=page_id,
     )
 
 
-def send_reply_via_manychat(subscriber_id: str, reply_text: str, platform: str = "facebook") -> bool:
-    return send_text_via_manychat_detailed(subscriber_id, reply_text, platform).get("ok", False)
+def send_reply_via_manychat(subscriber_id: str, reply_text: str, platform: str = "facebook",
+                            page_id: str = "") -> bool:
+    return send_text_via_manychat_detailed(
+        subscriber_id, reply_text, platform, message_tag="", page_id=page_id,
+    ).get("ok", False)
 
 
 def send_image_via_manychat_detailed(subscriber_id: str, image_url: str, caption: str = "",
-                                     platform: str = "facebook", message_tag: str = "") -> dict:
+                                     platform: str = "facebook", message_tag: str = "", page_id: str = "") -> dict:
     messages = [{"type": "image", "url": image_url}]
     if caption:
         messages.append({"type": "text", "text": caption})
-    return _post_manychat_send(subscriber_id, messages, platform=platform, label="image", message_tag=message_tag)
+    return _post_manychat_send(
+        subscriber_id, messages, platform=platform, label="image", message_tag=message_tag, page_id=page_id,
+    )
 
 
-def send_image_via_manychat(subscriber_id: str, image_url: str, caption: str = "", platform: str = "facebook") -> bool:
-    return send_image_via_manychat_detailed(subscriber_id, image_url, caption, platform).get("ok", False)
+def send_image_via_manychat(subscriber_id: str, image_url: str, caption: str = "", platform: str = "facebook",
+                            page_id: str = "") -> bool:
+    return send_image_via_manychat_detailed(
+        subscriber_id, image_url, caption, platform, message_tag="", page_id=page_id,
+    ).get("ok", False)
 
 
-def send_manychat_messages_detailed(subscriber_id: str, messages: list, platform: str = "facebook") -> dict:
-    return _post_manychat_send(subscriber_id, messages, platform=platform, label="batch")
+def send_manychat_messages_detailed(subscriber_id: str, messages: list, platform: str = "facebook",
+                                    page_id: str = "") -> dict:
+    return _post_manychat_send(subscriber_id, messages, platform=platform, label="batch", page_id=page_id)
 
 
-def send_manychat_messages(subscriber_id: str, messages: list, platform: str = "facebook") -> bool:
-    return send_manychat_messages_detailed(subscriber_id, messages, platform).get("ok", False)
+def send_manychat_messages(subscriber_id: str, messages: list, platform: str = "facebook",
+                           page_id: str = "") -> bool:
+    return send_manychat_messages_detailed(subscriber_id, messages, platform, page_id=page_id).get("ok", False)
 
 
-def get_subscriber_info(subscriber_id: str) -> dict:
+def get_subscriber_info(subscriber_id: str, page_id: str = "") -> dict:
     """
     جلب معلومات الزبون من ManyChat
     endpoint: GET /fb/subscriber/getInfo
@@ -2317,30 +2244,23 @@ def extract_facebook_event(body):
 
     attachments = message.get("attachments", [])
     image_url   = None
-    media_type  = ""
     for att in attachments:
-        att_type = str(att.get("type") or "").strip().lower()
-        payload_url = (att.get("payload") or {}).get("url") or (att.get("payload") or {}).get("src") or ""
-        if att_type == "image":
-            image_url = payload_url
-            media_type = "image"
+        if att.get("type") == "image":
+            image_url = att.get("payload", {}).get("url")
             break
-        if att_type in ("video", "share", "fallback"):
-            image_url = payload_url
-            media_type = "reel" if _looks_like_reel_url(payload_url) else "video"
-            break
-    if not image_url:
-        url = _extract_url_from_value(text)
-        if _looks_like_reel_url(url):
-            image_url = url
-            media_type = "reel"
-        elif _looks_like_video_url(url):
-            image_url = url
-            media_type = "video"
+    if image_url:
+        image_flow(
+            "01_received_from_customer",
+            sender_id=sender_id,
+            page_id=page_id,
+            platform=platform,
+            image_url=image_url,
+            text_present=bool(text),
+        )
 
     ref, ad_id, referral_source, referral_type = extract_referral(event)
 
-    print(f"[Extract] platform={platform} sender={sender_id} text={text!r} media={media_type or bool(image_url)} "
+    print(f"[Extract] platform={platform} sender={sender_id} text={text!r} image={bool(image_url)} "
           f"ref={ref} ad_id={ad_id}", flush=True)
 
     return {
@@ -2351,7 +2271,6 @@ def extract_facebook_event(body):
         "text"           : text,
         "attachments"    : attachments,
         "image_url"      : image_url,
-        "media_type"     : media_type,
         "quick_reply"    : quick_reply,
         "postback"       : postback,
         "ref"            : ref,
@@ -2384,8 +2303,6 @@ def _is_emoji_only(text):
 def detect_message_type(ev):
     if ev["postback"]:
         return "postback"
-    if ev.get("media_type") in ("reel", "video"):
-        return ev["media_type"]
     if ev["image_url"]:
         return "image"
     if ev["attachments"] and not ev["image_url"]:
@@ -2707,7 +2624,7 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
     system_prompt = (
         "أنت خبير تطابق صور منتجات وموديلات نسائية محتشمة لمتجر أنيقة.\n"
         "ستستلم صورة الزبون ثم مجموعة منتجات، كل منتج معه product_id وvisual_description وصورته.\n"
-        "قارن بصرياً بدقة عالية جداً: نوع الموديل، اللون، القصة، الأكمام، التطريز، القماش، الفتحات، الحزام، والملحقات.\n"
+        "قارن بصرياً بدقة عالية جداً: نوع القطعة، اللون، القصة، الأكمام، الياقة، البنطال/الشورت، الجيوب، الأزرار، الإكسسوارات.\n"
         "إذا صورة الزبون ليست نفس المنتج تماماً أو تشبهه فقط، أجب NONE.\n"
         "لا تشرح ولا ترجع JSON. أجب بسطر واحد فقط: product_id أو NONE."
     )
@@ -2754,6 +2671,15 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
             "product_found": False, "product_id": "", "confidence": 0,
             "available": False, "reason": str(exc),
         }
+
+
+def _resolve_catalog_image_path():
+    path = str(CATALOG_IMAGE_PATH or "").strip()
+    if not path:
+        return ""
+    if os.path.isabs(path):
+        return path
+    return os.path.join(os.path.dirname(__file__), path)
 
 
 def _file_to_data_url(path):
@@ -2826,16 +2752,17 @@ def _clean_catalog_product_id(raw, products):
 
 
 def match_customer_image_with_catalog(customer_image_url, products):
-    catalog_path = _resolve_catalog_image_path()
     image_flow(
-        "catalog_match_start",
+        "04_catalog_match_start",
         customer_image_url=customer_image_url,
         products_count=len(products or []),
         enabled=CATALOG_MATCH_ENABLED,
         model=CATALOG_MATCH_MODEL,
-        catalog_image_path=os.path.basename(catalog_path),
+        catalog_image_path=os.path.basename(_resolve_catalog_image_path()),
     )
     if not CATALOG_MATCH_ENABLED:
+        image_flow("04_catalog_match_skipped", reason="disabled")
+        print("[CatalogVision] returned NONE, human review required", flush=True)
         return {
             "product_found": False,
             "product_id": "",
@@ -2843,6 +2770,8 @@ def match_customer_image_with_catalog(customer_image_url, products):
             "reason": "Catalog match disabled",
         }
     if not OPENROUTER_KEY:
+        image_flow("04_catalog_match_skipped", reason="missing_openrouter_key")
+        print("[CatalogVision] error=missing OPENROUTER_API_KEY", flush=True)
         return {
             "product_found": False,
             "product_id": "",
@@ -2850,6 +2779,8 @@ def match_customer_image_with_catalog(customer_image_url, products):
             "reason": "No API key",
         }
     if not products:
+        image_flow("04_catalog_match_skipped", reason="no_products")
+        print("[CatalogVision] returned NONE, human review required", flush=True)
         return {
             "product_found": False,
             "product_id": "",
@@ -2858,29 +2789,20 @@ def match_customer_image_with_catalog(customer_image_url, products):
         }
 
     try:
-        catalog_image_url = _file_to_data_url(catalog_path)
+        catalog_image_url = _file_to_data_url(_resolve_catalog_image_path())
         customer_openrouter_url = _image_ref_for_openrouter(customer_image_url)
-        product_ids = ", ".join(
-            str(p.get("product_id") or "").strip()
-            for p in products
-            if p.get("product_id")
-        )
-        prompt = (
-            "You are matching a customer image to a catalog image for a modest women's fashion store. "
-            "Compare the clothing item in the first image with the catalog/models in the second image. "
-            "Return only the exact product_id printed in the catalog when there is a clear visual match. "
-            "A clear match means the same model/item, cut, color family, embroidery/details, sleeves, fabric look, and overall design. "
-            "Do not assume every product is an abaya or black; use the catalog and product data only. "
-            "If the image is only similar, unclear, cropped too much, or not one of the catalog models, return NONE. "
-            f"Valid product_id values are: {product_ids}. "
-            "Do not explain. Output one line only: product_id or NONE."
-        )
         image_flow(
-            "catalog_match_request",
+            "05_openrouter_catalog_request",
             model=CATALOG_MATCH_MODEL,
             customer_image_mode="url" if str(customer_openrouter_url).startswith("https://") else "data_url",
             catalog_image_mode="data_url",
         )
+        prompt = (
+            "أنت خبير في مطابقة المنتجات. قارن قطعة الملابس في الصورة الأولى مع الموديلات الموجودة في الصورة الثانية (الكتالوج). "
+            "استخرج رقم المعرف product_id للموديل المطابق تماماً. أرجع رقم الـ ID فقط دون أي شرح. "
+            "إذا لم تجد تطابقاً واضحاً أرجع NONE فقط."
+        )
+        print("[CatalogVision] sending customer image to OpenRouter", flush=True)
         resp = requests.post(
             OPENROUTER_URL,
             headers={
@@ -2906,14 +2828,17 @@ def match_customer_image_with_catalog(customer_image_url, products):
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
-        selected = _extract_product_id_only(raw, products) or _clean_catalog_product_id(raw, products)
+        selected = _clean_catalog_product_id(raw, products)
         image_flow(
-            "catalog_match_response",
+            "06_openrouter_catalog_response",
             status_code=resp.status_code,
             raw=raw,
             selected=selected or "NONE",
         )
+        print(f"[CatalogVision] raw={raw!r} selected={selected or 'NONE'}", flush=True)
         if not selected:
+            image_flow("07_catalog_match_failed", reason="none_or_unknown", raw=raw)
+            print("[CatalogVision] returned NONE, human review required", flush=True)
             return {
                 "product_found": False,
                 "product_id": "",
@@ -2921,6 +2846,8 @@ def match_customer_image_with_catalog(customer_image_url, products):
                 "reason": "Catalog returned NONE or unknown product_id",
                 "raw": raw,
             }
+        print(f"[CatalogVision] matched product {selected}", flush=True)
+        image_flow("07_catalog_match_success", product_id=selected, confidence=100)
         return {
             "product_found": True,
             "product_id": selected,
@@ -2928,7 +2855,8 @@ def match_customer_image_with_catalog(customer_image_url, products):
             "reason": "Matched by OpenRouter catalog",
         }
     except Exception as exc:
-        image_flow("catalog_match_error", error=str(exc))
+        image_flow("06_openrouter_catalog_error", error=str(exc))
+        print(f"[CatalogVision] error={exc}", flush=True)
         return {
             "product_found": False,
             "product_id": "",
@@ -2998,8 +2926,14 @@ def match_product(db, ev, products):
                     "reason": "Matched from customer's recent product memory",
                 }
 
-    if not matched and image_url and products and CATALOG_MATCH_ENABLED:
+    if not matched and image_url and products:
         candidates = build_product_vision_candidates(products, limit=20)
+        image_flow(
+            "04_match_product_image_branch",
+            sender_id=sender_id,
+            image_url=image_url,
+            candidates_count=len(candidates),
+        )
         catalog_result = match_customer_image_with_catalog(image_url, products)
         image_result = dict(catalog_result or {})
         if catalog_result.get("product_found"):
@@ -3019,8 +2953,24 @@ def match_product(db, ev, products):
                     source="match_product_openrouter_catalog",
                 )
                 print(f"[CatalogVision] matched product {pid}", flush=True)
+                image_flow(
+                    "08_product_linked_automatically",
+                    sender_id=sender_id,
+                    product_id=pid,
+                    match_method=match_method,
+                    stock=matched.get("stock"),
+                    price=matched.get("price"),
+                )
                 return matched, match_method, image_result
+
         image_result["human_review_candidates"] = candidates
+        image_flow(
+            "08_product_not_matched",
+            sender_id=sender_id,
+            reason=image_result.get("reason"),
+            human_review_candidates=len(candidates),
+        )
+        return None, None, image_result
 
     if not matched and image_url and products and VISION_ENABLED:
         # ── Vision product-id pipeline ────────────────────────────────────────
@@ -3105,6 +3055,30 @@ def _load_file_text(path):
         return ""
 
 
+def _write_file_text_atomic(path, content):
+    """Write UTF-8 text atomically inside the application folder."""
+    app_root = os.path.abspath(os.path.dirname(__file__))
+    abs_path = os.path.abspath(path)
+    if not (abs_path == app_root or abs_path.startswith(app_root + os.sep)):
+        raise ValueError("Refusing to write outside application folder")
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    tmp_path = abs_path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(str(content or "").rstrip() + "\n")
+    os.replace(tmp_path, abs_path)
+
+
+def _text_file_payload(path):
+    exists = os.path.exists(path)
+    stat = os.stat(path) if exists else None
+    return {
+        "content": _load_file_text(path),
+        "path": os.path.basename(path),
+        "size": stat.st_size if stat else 0,
+        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
+    }
+
+
 def send_text_to_facebook(sender_id: str, text: str, page_id: str = "", platform: str = "facebook") -> bool:
     """Compatibility wrapper: all customer sending goes through ManyChat."""
     return send_reply_via_manychat(sender_id, text, platform)
@@ -3148,6 +3122,14 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
     """Generate and send the first AI reply as soon as a human links a product."""
     if not matched_product:
         return {"sent": False, "reply": "", "reason": "missing_product"}
+    complete_customer_product_link(
+        db,
+        sender_id,
+        matched_product,
+        matched_product.get("match_method") or "auto_product_link",
+        confidence=matched_product.get("confidence") or 100,
+        source="auto_reply_after_product_link",
+    )
     if not is_ai_enabled(db) or not is_customer_ai_enabled(db, sender_id):
         return {"sent": False, "reply": "", "reason": "ai_disabled"}
 
@@ -3161,9 +3143,10 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
         "تم ربط الصورة/المحادثة الآن بهذا المنتج من قبل الإدارة. "
         "راجع سجل المحادثة بالكامل واستخرج آخر سؤال أو طلب واضح من الزبون قبل الرد. "
         "يجب أن يكون الرد جواباً مباشراً على سؤال الزبون بالتحديد، وليس وصفاً عاماً للمنتج. "
-        "إذا الزبون ذكر العمر أو القياس أو اللون أو أي معلومة سابقاً، استخدمها ولا تسأل عنها مرة ثانية. "
-        "إذا كان آخر رد من الزبون مجرد قياس/عمر بعد الصورة، فجاوبه بتأكيد التوفر للقياس إن كان ضمن بيانات المنتج "
-        "ثم رغّبه بالحجز بلطف واطلب الاسم/الموبايل/العنوان عند الرغبة. "
+        "إذا الزبون ذكر القياس أو الوزن أو اللون أو أي معلومة سابقاً، استخدمها ولا تسأل عنها مرة ثانية. "
+        "إذا كان آخر رد من الزبون مجرد قياس/وزن بعد الصورة، فجاوبه بتأكيد التوفر للقياس إن كان ضمن بيانات المنتج "
+        "ثم رغّبه بالحجز بلطف واطلب رقم الموبايل والمحافظة والعنوان عند الرغبة. "
+        "ممنوع طلب اسم الزبون للحجز؛ الاسم اختياري ولا نوقف الحجز عليه. "
         "ممنوع تكرار قالب مثل: المنتج متوفر وسعره كذا والقياسات كذا شنو تحبين تعرفين عنه. "
         "لا تختم بسؤال عام مثل: شنو تحبين تعرفين عنه؟ اختم بسؤال بيع واضح مثل: أحجزه إلج؟"
     )
@@ -3229,8 +3212,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
 def load_ai_config(db, sender_id=None):
     brand_identity_rule = (
         "تعليمة هوية ثابتة لا يمكن تجاوزها: هذا النظام خاص بمتجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب المنتجات الموجودة في products.json. "
+        "ملف instructions.txt هو المصدر الأساسي لتوجيه أسلوب الذكاء الاصطناعي وسياسة الردود، وأي تعديل فيه يجب أن يظهر في كل رد جديد. "
         "لا تحصر المتجر بالعبايات أو باللون الأسود، ولا تذكر نوع قطعة إلا إذا كان موجوداً في اسم/تصنيف/وصف المنتج. "
-        "يُمنع ربط الردود أو المنتجات أو الأسئلة بمتجر أطفال أو أي نشاط غير موجود ضمن منتجات أنيقة الحالية."
+        "يُمنع ربط الردود أو المنتجات أو الأسئلة بأي نشاط غير موجود ضمن منتجات أنيقة الحالية."
     )
     instructions = db.execute(
         "SELECT content FROM ai_instructions WHERE active=1"
@@ -3246,13 +3230,13 @@ def load_ai_config(db, sender_id=None):
     playbook          = _load_file_text(_PLAYBOOK_FILE)
     instruction_parts = []
     if file_instructions:
-        instruction_parts.append(file_instructions)
+        instruction_parts.append("تعليمات instructions.txt الأساسية:\n" + file_instructions)
         print("[Config] Loaded instructions from instructions.txt", flush=True)
     if product_knowledge:
         instruction_parts.append("معرفة المنتجات المتزامنة من products.json:\n" + product_knowledge)
         print("[Config] Loaded synced product knowledge", flush=True)
     if db_instructions:
-        instruction_parts.append(db_instructions)
+        instruction_parts.append("تعليمات لوحة التحكم الإضافية:\n" + db_instructions)
     instructions_text = "\n\n---\n\n".join(instruction_parts).strip()
     if playbook:
         instructions_text = (instructions_text + "\n\n---\n\n" + playbook).strip()
@@ -3358,14 +3342,14 @@ def call_main_ai(
 
     if (
         ev.get("text")
-        and _is_contextual_product_question(ev.get("text"))
+        and _requires_linked_product_for_details(ev.get("text"))
         and not matched_product
         and not customer_products
     ):
         return {
             "reply": (
-                "حبيبتي ما واضح عندي أي موديل تقصدين حالياً 🌸 "
-                "دزيلي صورة المنتج أو اسمه حتى أتأكدلج إذا متوفر."
+                "ما واضح عندي أي موديل تقصدين حالياً 🌸 "
+                "دزيلي صورة المنتج أو اسمه حتى أتأكدلج من السعر والتوفر."
             ),
             "intent": "question",
             "create_order": False,
@@ -3481,7 +3465,7 @@ def call_main_ai(
         "6) عند سؤال عن الجودة/الفحص/الثقة — أكد أن الفحص عند الاستلام، وإذا غير مطابق يرجع مجاناً.\n"
         "7) عند سؤال عن التوصيل — استخدم نص أجور التوصيل الثابت بالضبط.\n"
         "8) لا تذكر product_id أو ref أو ad_id أو sender_id في الرد.\n"
-        "9) إذا اكتملت بيانات الحجز (اسم + موبايل واضح + عنوان + منتج متوفر) اجعل create_order=true.\n"
+        "9) إذا اكتملت بيانات الحجز (موبايل واضح + عنوان + منتج متوفر) اجعل create_order=true. ممنوع طلب اسم الزبون للحجز.\n"
         "10) لا تختم بسؤال عام مثل 'شنو تحبين تعرفين عنه؟' — اختم بسؤال بيع واضح يجلب الخطوة التالية مثل 'أحجزه إلج؟' أو 'دزّيلي العنوان والموبايل وأحجزه؟'.\n"
         "11) إذا أرسل الزبون أكثر من رسالة متتالية بدون رد منك بينها، اعتبرها كلها سياقاً واحداً وأجب عنها كلها في ردٍ واحد دون تكرار، وراعِ ترتيبها وآخر معلومة قالها.\n"
         "12) جنس الزبون نفسه (الحقل gender في ملف الزبون):\n"
@@ -3500,7 +3484,7 @@ def call_main_ai(
         "   - لم يسأل عن أي تفاصيل؟ → لا تعرض أي تفاصيل، فقط استمر بالحوار وحفّزه للحجز.\n"
         "   اعرض كل التفاصيل دفعة واحدة فقط عند أول طلب صريح من الزبون لها أو عند تأكيد الحجز.\n"
         "16) ⚠️ ممنوع الردود العاطفية الطويلة أو الأدعية أو المجاملات الزائدة (مثل: 'تسلمين يا طيبة'، 'فدوة لعمرج'، 'أجمعين يا رب'، 'يرزقج كل الخير'، 'تدللين بأي وقت'). يُسمح بكلمة ودّ خفيفة واحدة فقط مثل 'تأمرين' أو 'من عيوني' ضمن نفس الجملة.\n"
-        "17) ⚠️ ممنوع إعادة الترحيب عند كل معلومة يقدّمها الزبون (مثل لما يذكر المحافظة أو العمر أو الاسم). لا تقل 'يا هلا بأهل الناصرية' أو 'نورتينا'. تعامل مع المعلومة مباشرة بدون احتفال.\n"
+        "17) ⚠️ ممنوع إعادة الترحيب عند كل معلومة يقدّمها الزبون (مثل لما يذكر المحافظة أو القياس أو الاسم). لا تقل 'يا هلا بأهل الناصرية' أو 'نورتينا'. تعامل مع المعلومة مباشرة بدون احتفال.\n"
         "18) كل رد لازم يدفع المحادثة للأمام نحو الحجز: إما يطلب معلومة ناقصة (موبايل/عنوان) أو يستفز الرغبة (مثل 'الموديل قاعد ينتظرج، أحجزه؟'). تجنب الردود الميتة التي لا تجلب رد من الزبون.\n\n"
         f"قاعدة الترحيب: {greeting_rule}\n\n"
         "تعليمات الإدارة (الأولوية الأعلى بعد القواعد):\n"
@@ -3547,10 +3531,10 @@ def call_main_ai(
             "[الموديلات المحفوظة لهذا الزبون — الأحدث أولاً]\n"
             + json.dumps(customer_products_short, ensure_ascii=False, indent=2)
         )
-    if not matched_product and products_short:
+    if not matched_product and customer_products_short:
         sections.append(
-            "[المنتجات المتاحة (للاطلاع، لا تستعرضها كلها)]\n"
-            + json.dumps(products_short, ensure_ascii=False)
+            "[تنبيه]\n"
+            "لا يوجد منتج مطابق للرسالة الحالية. ممنوع ذكر سعر أو قياس أو لون أي منتج قبل ربط منتج واضح."
         )
     sections.append(
         "[ملف الزبون]\n" + json.dumps(customer_profile, ensure_ascii=False, indent=2)
@@ -3572,7 +3556,7 @@ def call_main_ai(
         "- لا تتجاهل أي رسالة منها ولا تُكرّر إجابات نفس النقطة مرتين.\n"
         "- إذا الزبون سأل عدة أسئلة (مثلاً: السعر + التوصيل + المقاس)، اجمع الإجابات في رد واحد قصير.\n"
         "- لا تكرر وصف المنتج إذا الزبون سأل سؤالاً محدداً.\n"
-        "- إذا كانت الإجابة تحتاج بيانات الزبون الناقصة (اسم/هاتف/عنوان) اطلب الناقص فقط بأسلوب ودود.\n"
+        "- إذا كانت الإجابة تحتاج بيانات الزبون الناقصة (هاتف/محافظة/عنوان) اطلب الناقص فقط بأسلوب ودود، ولا تطلب الاسم.\n"
         f"- التزم بقاعدة الترحيب أعلاه: {'لك حرية اختيار صيغة الترحيب المناسبة لرسالة الزبون.' if is_first_reply else 'لا ترحيب في بداية الرد، ابدأ مباشرة بالإجابة.'}"
     )
     if fix_instruction:
@@ -3581,6 +3565,15 @@ def call_main_ai(
     user_content = "\n\n".join(sections)
 
     try:
+        if ev.get("image_url") or image_result or matched_product:
+            image_flow(
+                "10_main_ai_request",
+                sender_id=ev.get("sender_id"),
+                model=MAIN_MODEL,
+                image_url=ev.get("image_url") or last_customer_image,
+                matched_product_id=(matched_product or {}).get("product_id"),
+                image_result=(image_result or {}).get("reason"),
+            )
         resp = requests.post(
             OPENROUTER_URL,
             headers={
@@ -3600,6 +3593,14 @@ def call_main_ai(
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
+        if ev.get("image_url") or image_result or matched_product:
+            image_flow(
+                "11_main_ai_response",
+                sender_id=ev.get("sender_id"),
+                status_code=resp.status_code,
+                matched_product_id=(matched_product or {}).get("product_id"),
+                raw_preview=raw,
+            )
         print(f"[MainAI] {raw}", flush=True)
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         if not isinstance(parsed, dict):
@@ -3611,6 +3612,13 @@ def call_main_ai(
             parsed["reply"] = ""
         return parsed
     except Exception as exc:
+        if ev.get("image_url") or image_result or matched_product:
+            image_flow(
+                "11_main_ai_error",
+                sender_id=ev.get("sender_id"),
+                matched_product_id=(matched_product or {}).get("product_id"),
+                error=str(exc),
+            )
         print(f"[MainAI] Error: {exc} → escalating to human.", flush=True)
         return {
             "reply": "", "intent": "unknown",
@@ -3701,42 +3709,6 @@ def check_reply(
 
 # ── Order creation ────────────────────────────────────────────────────────────
 
-def _parse_order_timestamp(value):
-    try:
-        return datetime.fromisoformat(str(value or ""))
-    except Exception:
-        return None
-
-
-def find_duplicate_order(db, sender_id, phone, province, address, product_id, product_name, color, size, notes, window_minutes=30):
-    if not sender_id:
-        return None
-
-    rows = db.execute(
-        """SELECT * FROM orders
-           WHERE sender_id = ?
-             AND phone = ?
-             AND province = ?
-             AND address = ?
-             AND product_id = ?
-             AND product_name = ?
-             AND color = ?
-             AND size = ?
-             AND notes = ?
-             AND status = 'new'""",
-        (sender_id, phone, province, address, product_id, product_name, color, size, notes),
-    ).fetchall()
-    if not rows:
-        return None
-
-    cutoff = datetime.now(BAGHDAD_TZ) - timedelta(minutes=window_minutes)
-    for row in rows:
-        created_at = _parse_order_timestamp(row["created_at"])
-        if created_at is None or created_at >= cutoff:
-            return dict(row)
-    return None
-
-
 def create_order_if_valid(db, sender_id, ai_result, matched_product):
     order_data = ai_result.get("order") or {}
     phone   = (order_data.get("phone")   or "").strip()
@@ -3747,20 +3719,31 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         return None, "لو سمحتِ أرسلي رقم هاتفك وعنوانك الكامل لإتمام الطلب 🌸"
 
     now          = now_baghdad_iso()
-    product_id   = (order_data.get("product_id") or (matched_product or {}).get("product_id", "") or "").strip()
-    product_name = (order_data.get("product_name") or (matched_product or {}).get("product_name", "") or "").strip()
-    color        = (order_data.get("color") or "").strip()
-    size         = (order_data.get("size") or "").strip()
-    notes        = (order_data.get("notes") or "").strip()
-    province     = (order_data.get("province") or "").strip()
+    product_id   = order_data.get("product_id")   or (matched_product or {}).get("product_id",   "")
+    product_name = order_data.get("product_name") or (matched_product or {}).get("product_name", "")
+    if not product_id and not product_name:
+        print("[Order] Missing linked product, not creating order.", flush=True)
+        return None, "لازم أحدد المنتج أولاً حتى أثبت الطلب. دزيلي صورة/اسم الموديل 🌸"
 
-    duplicate = find_duplicate_order(
-        db, sender_id, phone, province, address,
-        product_id, product_name, color, size, notes,
-    )
+    duplicate = find_duplicate_order(db, sender_id, phone, product_id, address)
     if duplicate:
-        print(f"[Order] Duplicate order ignored for {sender_id}: {product_name}", flush=True)
-        return None, None
+        print(f"[Order] Duplicate skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
+        return True, ORDER_CONFIRMATION_TEXT
+
+    booking_data = {
+        "created_at": now,
+        "sender_id": sender_id,
+        "customer_name": order_data.get("customer_name", ""),
+        "phone": phone,
+        "province": order_data.get("province", ""),
+        "address": address,
+        "product_id": product_id,
+        "product_name": product_name,
+        "color": order_data.get("color", ""),
+        "size": order_data.get("size", ""),
+        "notes": order_data.get("notes", ""),
+        "status": "new",
+    }
 
     db.execute(
         """INSERT INTO orders
@@ -3771,13 +3754,13 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
             sender_id,
             order_data.get("customer_name", ""),
             phone,
-            province,
+            order_data.get("province", ""),
             address,
             product_id,
             product_name,
-            color,
-            size,
-            notes,
+            order_data.get("color", ""),
+            order_data.get("size",  ""),
+            order_data.get("notes", ""),
             "new",
             now,
         ),
@@ -3798,24 +3781,10 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
     )
     db.commit()
 
-    booking_data = {
-        "created_at": now,
-        "sender_id": sender_id,
-        "customer_name": order_data.get("customer_name", ""),
-        "phone": phone,
-        "province": order_data.get("province", ""),
-        "address": address,
-        "product_id": product_id,
-        "product_name": product_name,
-        "color": order_data.get("color", ""),
-        "size": order_data.get("size", ""),
-        "notes": order_data.get("notes", ""),
-        "status": "new",
-    }
     save_booking_to_file(booking_data)
-    send_order_telegram_message(booking_data)
+    telegram_sent = send_order_to_telegram(booking_data)
 
-    print(f"[Order] Created for {sender_id}: {product_name}", flush=True)
+    print(f"[Order] Created for {sender_id}: {product_name} | telegram_sent={telegram_sent}", flush=True)
     return True, ORDER_CONFIRMATION_TEXT
 
 
@@ -3869,6 +3838,13 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 03: Message type ─────────────────────────────────────────────────
     message_type = detect_message_type(ev)
     log(3, "MSG TYPE", f"Message type = {message_type!r}")
+    if message_type == "image":
+        image_flow(
+            "02_message_type_detected",
+            sender_id=ev["sender_id"],
+            message_type=message_type,
+            image_url=ev.get("image_url"),
+        )
 
     # ── STEP 04: Customer data ────────────────────────────────────────────────
     log(4, "CUSTOMER", "Looking up or creating customer in database...")
@@ -3884,6 +3860,14 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         ev["text"], ev["image_url"], ev["ad_id"], ev["ref"], body,
     )
     log(5, "SAVE MSG", "Incoming message saved")
+    if message_type == "image":
+        image_flow(
+            "03_saved_incoming_image",
+            sender_id=ev["sender_id"],
+            image_url=ev.get("image_url"),
+            ad_id=ev.get("ad_id"),
+            ref=ev.get("ref"),
+        )
 
     # إيقاف AI العام/للمحادثة يجب أن يمنع أي رد تلقائي، بما فيه ترحيب الصور.
     if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
@@ -3899,6 +3883,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                     "match_method": match_method,
                     "ai_disabled_reason": reason,
                 })
+                auto_reply = auto_reply_after_product_link(db, ev["sender_id"], matched_product)
                 return {
                     "sender_id": ev["sender_id"],
                     "page_id": ev["page_id"],
@@ -3911,6 +3896,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                         "catalog_match": True,
                         "product_id": matched_product.get("product_id"),
                         "match_method": match_method,
+                        "auto_reply": auto_reply,
                     },
                 }
 
@@ -4017,7 +4003,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             {
                 "human_review_id": review_id,
                 "first_message_reply": True,
-                "detected_gender": detected_gender,
+                "store_context": detected_gender,
             },
         )
         log(8, "FIRST MESSAGE", f"First message routed to review #{review_id}; AI greeting sent.")
@@ -4031,25 +4017,32 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "skipped": True,
                 "reason": "first_message_waiting_for_human_product",
                 "human_review_id": review_id,
-                "detected_gender": detected_gender,
+                "store_context": detected_gender,
             },
         }
 
     if message_type == "image" and HUMAN_REVIEW_ALL_IMAGES:
-        image_flow("before_image_matching", sender_id=ev["sender_id"], image_url=ev.get("image_url"))
+        image_flow("04_before_image_matching", sender_id=ev["sender_id"], image_url=ev.get("image_url"))
         matched_product, match_method, image_result = match_product(db, ev, products)
         if matched_product:
+            image_flow(
+                "09_no_human_review_auto_reply_start",
+                sender_id=ev["sender_id"],
+                product_id=matched_product.get("product_id"),
+                match_method=match_method,
+            )
             log(8, "CATALOG VISION", "Customer image linked automatically; no human review created", {
                 "product_id": matched_product.get("product_id"),
                 "match_method": match_method,
             })
             auto_reply = auto_reply_after_product_link(db, ev["sender_id"], matched_product)
             image_flow(
-                "auto_reply_after_catalog_match",
+                "12_auto_reply_finished",
                 sender_id=ev["sender_id"],
                 product_id=matched_product.get("product_id"),
                 sent=(auto_reply or {}).get("sent"),
                 reason=(auto_reply or {}).get("reason"),
+                reply_preview=(auto_reply or {}).get("reply", "")[:120],
             )
             return {
                 "sender_id": ev["sender_id"],
@@ -4068,7 +4061,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
         existing_review = has_pending_image_review(db, ev["sender_id"]) or has_pending_human_review(db, ev["sender_id"])
         if existing_review and has_sent_pending_image_reply(db, ev["sender_id"], existing_review):
-            log(8, "HUMAN REVIEW", f"Image already has pending review #{existing_review}; customer was asked size/weight before.")
+            log(8, "HUMAN REVIEW", f"Image already has pending review #{existing_review}; customer was asked size/age before.")
             return {
                 "sender_id": ev["sender_id"],
                 "page_id": ev["page_id"],
@@ -4083,6 +4076,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 },
             }
         candidates = (image_result or {}).get("human_review_candidates") or build_product_vision_candidates(products, limit=20)
+        image_flow(
+            "09_human_review_required",
+            sender_id=ev["sender_id"],
+            candidates_count=len(candidates),
+            reason=(image_result or {}).get("reason"),
+        )
         review_id = create_human_review(
             db,
             ev,
@@ -4351,6 +4350,16 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "failure_reason": failure_reason,
             },
         }
+
+    if matched_product:
+        complete_customer_product_link(
+            db,
+            ev["sender_id"],
+            matched_product,
+            match_method or matched_product.get("match_method") or "matched_product_context",
+            confidence=matched_product.get("confidence") or (image_result or {}).get("confidence") or 100,
+            source="process_webhook_after_main_ai",
+        )
 
     reply = ai_result.get("reply") or FALLBACK_REPLY
     if is_ai_handoff_reply(reply):
@@ -4646,10 +4655,18 @@ def process_webhook_in_background(body):
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
+@app.route("/")
+def home():
+    """نقطة دخول آمنة للـ PWA دون تضمين مفتاح في manifest."""
+    return redirect(f"/dashboard?{urlencode({'key': DASHBOARD_PASSWORD})}", code=302)
+
+
 @app.route("/webhook", methods=["POST"])
 @require_api_key
 def webhook():
-    body = request.get_json(force=True)
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "JSON object body required"}), 400
     _extract_ad_info_from_body(body)
     db   = get_db()
     sender_id = extract_sender_id_from_body(body)
@@ -4721,7 +4738,7 @@ def manychat_webhook():
     last_name = data.get("last_name", "") or ""
     platform = detect_manychat_platform(data)
     page_id = str(data.get("page_id") or "")
-    image_url, media_type = extract_media_url_from_manychat_data(data)
+    image_url = extract_image_url_from_manychat_data(data)
     ref = data.get("ref") or ""
     ad_id = data.get("ad_id") or ""
 
@@ -4736,7 +4753,7 @@ def manychat_webhook():
     print(f"[AdTrack/ManyChat] page_id={page_id} ad_id={ad_id}", flush=True)
 
     print(
-        f"[ManyChat IN] subscriber={subscriber_id} text={text!r} media={media_type or bool(image_url)}",
+        f"[ManyChat IN] subscriber={subscriber_id} text={text!r} image={bool(image_url)}",
         flush=True,
     )
 
@@ -4763,7 +4780,7 @@ def manychat_webhook():
                     "mid": f"manychat_{subscriber_id}_{timestamp_ms}",
                     "text": text,
                     "attachments": ([{
-                        "type": media_type if media_type in ("image", "video") else "share",
+                        "type": "image",
                         "payload": {"url": image_url},
                     }] if image_url else []),
                 },
@@ -4869,7 +4886,7 @@ def manychat_send():
     Route يدوي لإرسال رد من الداشبورد عبر ManyChat.
     body: { "subscriber_id": "...", "text": "...", "image_url": "" }
     """
-    data = request.get_json(force=True)
+    data = request.get_json(silent=True) or {}
     subscriber_id = (data.get("subscriber_id") or "").strip()
     text = (data.get("text") or "").strip()
     image_url = (data.get("image_url") or "").strip()
@@ -4906,7 +4923,7 @@ def manychat_send():
 @app.route("/import/products", methods=["POST"])
 @require_api_key
 def import_products():
-    data = request.get_json(force=True)
+    data = request.get_json(silent=True)
     if not isinstance(data, list):
         return jsonify({"error": "Expected a JSON array"}), 400
 
@@ -4923,7 +4940,7 @@ def import_products():
 @require_api_key
 def import_instructions():
     db   = get_db()
-    data = request.get_json(force=True)
+    data = request.get_json(silent=True)
     if not isinstance(data, list):
         return jsonify({"error": "Expected a JSON array [{title, content}]"}), 400
 
@@ -4941,7 +4958,7 @@ def import_instructions():
 @require_api_key
 def import_forbidden_rules():
     db   = get_db()
-    data = request.get_json(force=True)
+    data = request.get_json(silent=True)
     if not isinstance(data, list):
         return jsonify({"error": "Expected a JSON array of strings"}), 400
 
@@ -4967,7 +4984,20 @@ def _orders_payload(db, limit=500):
            LIMIT ?""",
         (limit,),
     ).fetchall()
-    orders = [dict(r) for r in rows]
+    orders = []
+    seen_order_keys = set()
+    for row in rows:
+        order = dict(row)
+        dedupe_key = (
+            _norm_order_value(order.get("sender_id")),
+            _norm_order_value(order.get("phone")),
+            _norm_order_value(order.get("product_id")),
+            _norm_order_value(order.get("address")),
+        )
+        if all(dedupe_key) and dedupe_key in seen_order_keys:
+            continue
+        seen_order_keys.add(dedupe_key)
+        orders.append(order)
     return {
         "orders": orders,
         "total": len(orders),
@@ -4976,13 +5006,17 @@ def _orders_payload(db, limit=500):
 
 
 @app.route("/orders", methods=["GET"])
-def list_orders():
+def orders_page_or_legacy_api():
     db = get_db()
     if _dash_auth():
         return render_template("orders.html")
     if API_SECRET_KEY and request.headers.get("X-API-Key") == API_SECRET_KEY:
         return jsonify(_orders_payload(db)["orders"]), 200
-    return jsonify({"error": "Unauthorized"}), 403
+    return (
+        "<h1>403 — Unauthorized</h1>"
+        "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط أو استخدم X-API-Key للـ API.</p>",
+        403,
+    )
 
 
 @app.route("/customers", methods=["GET"])
@@ -5015,7 +5049,7 @@ def list_human_reviews():
 @app.route("/human_reviews/<int:review_id>/reply", methods=["POST"])
 @require_api_key
 def reply_human_review(review_id):
-    data = request.get_json(force=True)
+    data = request.get_json(silent=True) or {}
     reply = (data.get("reply") or "").strip()
     if not reply:
         return jsonify({"error": "reply is required"}), 400
@@ -5045,7 +5079,7 @@ def reply_human_review(review_id):
 @app.route("/human_reviews/<int:review_id>/product", methods=["POST"])
 @require_api_key
 def select_human_review_product(review_id):
-    data = request.get_json(force=True)
+    data = request.get_json(silent=True) or {}
     product_id = (data.get("product_id") or "").strip()
     if not product_id:
         return jsonify({"error": "product_id is required"}), 400
@@ -5058,7 +5092,7 @@ def select_human_review_product(review_id):
 
 @app.route("/telegram/webhook", methods=["POST"])
 def telegram_webhook():
-    update = request.get_json(force=True)
+    update = request.get_json(silent=True) or {}
     message = update.get("message") or update.get("edited_message") or {}
     text = (message.get("text") or "").strip()
     chat_id = str((message.get("chat") or {}).get("id", ""))
@@ -5086,39 +5120,43 @@ def telegram_webhook():
             send_telegram_message(f"خطأ: {result.get('error')}")
         return jsonify({"ok": True}), 200
 
-    if not reply_match:
+    if reply_match:
+        review_id = int(reply_match.group(1))
+        reply = reply_match.group(2).strip()
+        sent = False
+        row = None
+        with app.app_context():
+            db = get_db()
+            row = db.execute("SELECT * FROM human_reviews WHERE id=?", (review_id,)).fetchone()
+            if not row:
+                send_telegram_message(f"لم أجد مراجعة برقم {review_id}")
+                return jsonify({"ok": True}), 200
+            now = now_baghdad_iso()
+            db.execute(
+                "UPDATE human_reviews SET status='replied', admin_reply=?, replied_at=? WHERE id=?",
+                (reply, now, review_id),
+            )
+            db.commit()
+            save_message(
+                db, row["sender_id"], "outgoing", "text",
+                reply, None, None, None, {"human_review_id": review_id, "reply": reply},
+            )
+            sent = send_human_reply_to_customer(row["sender_id"], reply)
+        send_telegram_message(
+            f"تم حفظ الرد للمراجعة {review_id}.\n"
+            f"Sender: {row['sender_id']}\n"
+            f"Sent to customer: {sent}"
+        )
+        return jsonify({"ok": True}), 200
+
+    # لا ترسل رسالة المساعدة لكل رسالة واردة (صور/نص عادي) — فقط عند أمر / غير مفهوم
+    if text.startswith("/"):
         send_telegram_message(
             "استخدم إحدى الصيغ:\n"
             "/product REVIEW_ID P001\n"
             "/product REVIEW_ID NONE\n"
             "/reply REVIEW_ID نص الرد"
         )
-        return jsonify({"ok": True}), 200
-
-    review_id = int(reply_match.group(1))
-    reply = reply_match.group(2).strip()
-    with app.app_context():
-        db = get_db()
-        row = db.execute("SELECT * FROM human_reviews WHERE id=?", (review_id,)).fetchone()
-        if not row:
-            send_telegram_message(f"لم أجد مراجعة برقم {review_id}")
-            return jsonify({"ok": True}), 200
-        now = now_baghdad_iso()
-        db.execute(
-            "UPDATE human_reviews SET status='replied', admin_reply=?, replied_at=? WHERE id=?",
-            (reply, now, review_id),
-        )
-        db.commit()
-        save_message(
-            db, row["sender_id"], "outgoing", "text",
-            reply, None, None, None, {"human_review_id": review_id, "reply": reply},
-        )
-        sent = send_human_reply_to_customer(row["sender_id"], reply)
-    send_telegram_message(
-        f"تم حفظ الرد للمراجعة {review_id}.\n"
-        f"Sender: {row['sender_id']}\n"
-        f"Sent to customer: {sent}"
-    )
     return jsonify({"ok": True}), 200
 
 
@@ -5138,7 +5176,7 @@ def serve_audio(filename):
 @require_api_key
 def index_single_product():
     """تفهرس صورة منتج واحد وتخزّن الـ embedding في products.json."""
-    data       = request.get_json(force=True)
+    data       = request.get_json(silent=True) or {}
     product_id = (data.get("product_id") or "").strip()
     image_url  = (data.get("image_url")  or "").strip()
     if not product_id or not image_url:
@@ -5182,19 +5220,18 @@ def health():
         "db"            : DB_PATH,
         "clip_loaded"   : _clip_model is not None,
         "clip_available": CLIP_AVAILABLE,
+        "catalog_match_enabled": CATALOG_MATCH_ENABLED,
+        "catalog_match_model": CATALOG_MATCH_MODEL,
+        "catalog_image_exists": os.path.isfile(_resolve_catalog_image_path()),
+        "openrouter_key_present": bool(OPENROUTER_KEY),
     }), 200
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
-@app.route("/")
-def root_redirect():
-    return redirect("/dashboard?key=admin123", code=302)
-
-
 def _dash_auth():
     key = request.args.get("key") or request.headers.get("X-Dashboard-Key", "")
-    return key == DASHBOARD_PASSWORD or key == "admin123"
+    return key == DASHBOARD_PASSWORD
 
 
 def _dash_require(fn):
@@ -5217,6 +5254,17 @@ def dashboard():
     return render_template("dashboard.html")
 
 
+@app.route("/instructions")
+def instructions_page():
+    if not _dash_auth():
+        return (
+            "<h1>403 — Unauthorized</h1>"
+            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
+            403,
+        )
+    return render_template("instructions.html")
+
+
 @app.route("/manifest.webmanifest")
 def pwa_manifest():
     """يجب أن يكون على نفس scope الجذر حتى يتعرف عليه المتصفح."""
@@ -5232,57 +5280,6 @@ def pwa_service_worker():
     return response
 
 
-@app.route("/api/settings/instructions_file", methods=["GET", "POST"])
-@_dash_require
-def api_settings_instructions_file():
-    path = os.path.abspath(_INSTRUCTIONS_FILE)
-    base_dir = os.path.abspath(os.path.dirname(__file__))
-    if not path.startswith(base_dir):
-        return jsonify({"ok": False, "error": "invalid instructions path"}), 500
-
-    if request.method == "GET":
-        content = _load_file_text(path)
-        exists = os.path.exists(path)
-        stat = os.stat(path) if exists else None
-        return jsonify({
-            "ok": True,
-            "path": os.path.basename(path),
-            "content": content,
-            "exists": exists,
-            "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
-            "size": stat.st_size if stat else 0,
-        })
-
-    data = request.get_json(silent=True) or {}
-    content = data.get("content")
-    if not isinstance(content, str):
-        return jsonify({"ok": False, "error": "content must be a string"}), 400
-    if len(content.encode("utf-8")) > 250_000:
-        return jsonify({"ok": False, "error": "instructions file is too large"}), 400
-
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    if os.path.exists(path):
-        backup_path = path + ".bak"
-        try:
-            with open(path, "rb") as src, open(backup_path, "wb") as dst:
-                dst.write(src.read())
-        except Exception as exc:
-            print(f"[Settings] Could not write instructions backup: {exc}", flush=True)
-
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(content.rstrip() + "\n")
-    os.replace(tmp_path, path)
-    stat = os.stat(path)
-    print(f"[Settings] instructions.txt updated size={stat.st_size}", flush=True)
-    return jsonify({
-        "ok": True,
-        "path": os.path.basename(path),
-        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat(),
-        "size": stat.st_size,
-    })
-
-
 @app.route("/products")
 def products_page():
     if not _dash_auth():
@@ -5294,372 +5291,12 @@ def products_page():
     return render_template("products.html")
 
 
-@app.route("/orders/view")
-@app.route("/orders2")
-def orders_view_page():
-    if not _dash_auth():
-        return (
-            "<h1>403 — Unauthorized</h1>"
-            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
-            403,
-        )
-    return render_template("orders.html")
-
-
-@app.route("/api/conversations")
-@_dash_require
-def api_conversations():
-    db = get_db()
-    rows = db.execute("""
-        SELECT
-            c.sender_id,
-            c.name,
-            c.phone,
-            c.province,
-            c.address,
-            c.gender,
-            m.text       AS last_message,
-            m.direction  AS last_direction,
-            m.created_at AS last_time,
-            COALESCE(c.platform, 'facebook') AS platform,
-            CASE
-              WHEN (
-                SELECT COALESCE(MAX(id), 0) FROM messages
-                WHERE sender_id = c.sender_id AND direction = 'incoming'
-              ) > (
-                SELECT COALESCE(MAX(id), 0) FROM messages
-                WHERE sender_id = c.sender_id AND direction = 'outgoing'
-              )
-              THEN 1 ELSE 0
-            END AS unanswered,
-            (SELECT COUNT(*) FROM human_reviews hr
-             WHERE hr.sender_id = c.sender_id AND hr.status = 'pending') AS pending_reviews_count,
-            (SELECT COALESCE(MAX(id), 0) FROM messages
-             WHERE sender_id = c.sender_id
-               AND direction = 'incoming'
-               AND (message_type = 'image' OR image_url IS NOT NULL)
-            ) AS last_image_id,
-            cpi.product_id,
-            cpi.product_name,
-            (SELECT GROUP_CONCAT(product_id, '||') FROM customer_product_interests
-             WHERE sender_id = c.sender_id) AS product_ids,
-            (SELECT GROUP_CONCAT(product_name, '||') FROM customer_product_interests
-             WHERE sender_id = c.sender_id) AS product_names,
-            (SELECT ad_id FROM messages
-             WHERE sender_id = c.sender_id AND ad_id IS NOT NULL
-             ORDER BY id DESC LIMIT 1) AS ad_id,
-            (SELECT ref FROM messages
-             WHERE sender_id = c.sender_id AND ref IS NOT NULL
-             ORDER BY id DESC LIMIT 1) AS ref,
-            COALESCE(cais.enabled, 1) AS ai_enabled
-        FROM customers c
-        LEFT JOIN customer_ai_settings cais ON cais.sender_id = c.sender_id
-        LEFT JOIN messages m ON m.id = (
-            SELECT id FROM messages WHERE sender_id = c.sender_id ORDER BY id DESC LIMIT 1
-        )
-        LEFT JOIN customer_product_interests cpi ON cpi.id = (
-            SELECT id FROM customer_product_interests
-            WHERE sender_id = c.sender_id ORDER BY last_seen_at DESC LIMIT 1
-        )
-        ORDER BY m.created_at DESC
-    """).fetchall()
-    return jsonify({"conversations": [dict(r) for r in rows]})
-
-
-@app.route("/api/conversations/<sender_id>/messages")
-@_dash_require
-def api_conversation_messages(sender_id):
-    db = get_db()
-    rows = db.execute(
-        "SELECT id, direction, message_type, text, image_url, ad_id, raw_payload, created_at "
-        "FROM messages WHERE sender_id=? ORDER BY id DESC LIMIT 50",
-        (sender_id,),
-    ).fetchall()
-    return jsonify({"messages": list(reversed([dict(r) for r in rows]))})
-
-
-@app.route("/api/improve_message", methods=["POST"])
-@_dash_require
-def api_improve_message():
-    """
-    تحسين/إعادة صياغة نص الموظف بدون أي ارتباط بمحادثة.
-    يعمل دائماً حتى لو AI متوقف لكل المحادثات.
-    يأخذ نص الحقل + التعليمات + القواعد ويرجع نصاً منقحاً جاهزاً للإرسال.
-    """
-    data = request.get_json(force=True) or {}
-    raw_text = (data.get("text") or "").strip()
-    if not raw_text:
-        return jsonify({"ok": False, "error": "text required"}), 400
-    if not OPENROUTER_KEY:
-        return jsonify({"ok": False, "error": "no_openrouter_key", "improved": raw_text}), 503
-
-    db = get_db()
-    instructions_text, rules_list = load_ai_config(db, sender_id=None)
-    rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
-
-    system_prompt = (
-        "أنت محرر رسائل لمتجر أنيقة للموديلات والقطع النسائية المحتشمة يتحدث باللهجة العراقية الودودة.\n"
-        "مهمتك الوحيدة: إعادة صياغة النص الذي يكتبه الموظف ليكون احترافياً ومقنعاً وقصيراً.\n\n"
-        "قواعد صارمة:\n"
-        "- لا تضف معلومات (سعر/قياس/لون/منتج) لم يذكرها الموظف.\n"
-        "- لا تحذف أي معلومة جوهرية ذكرها الموظف.\n"
-        "- لا تضف توقيعاً أو تحية إذا لم يطلبها الموظف.\n"
-        "- لا تتجاوز 60 كلمة.\n"
-        "- التزم بالقواعد المحظورة وتعليمات الإدارة أدناه.\n\n"
-        "تعليمات الإدارة:\n"
-        f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
-        "القواعد المحظورة:\n"
-        f"{rules_text}\n\n"
-        "أخرج JSON فقط بهذا الشكل: {\"improved\":\"النص الجديد\"}"
-    )
-
-    user_content = f"نص الموظف الأصلي:\n{raw_text}\n\nأعد صياغته فقط، احتفظ بكل معلومة فيه."
-
-    try:
-        resp = requests.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": IMPROVE_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                ],
-                "max_tokens": 400,
-                "temperature": 0.5,
-            },
-            timeout=20,
-        )
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
-        parsed = _parse_ai_json(raw) if isinstance(raw, str) else {}
-        improved = (parsed.get("improved") or "").strip()
-        if not improved:
-            m = re.search(r'"improved"\s*:\s*"([^"]+)"', raw or "", re.DOTALL)
-            improved = m.group(1).strip() if m else (raw or "").strip()
-        improved = improved.strip().strip('"').strip()
-        if not improved:
-            return jsonify({"ok": False, "error": "empty_improvement", "improved": raw_text}), 200
-        print(f"[Improve] {raw_text[:60]} → {improved[:60]}", flush=True)
-        return jsonify({"ok": True, "improved": improved})
-    except Exception as exc:
-        print(f"[Improve] Error: {exc}", flush=True)
-        return jsonify({"ok": False, "error": f"{type(exc).__name__}: {exc}", "improved": raw_text}), 200
-
-
-@app.route("/api/conversations/<sender_id>/send", methods=["POST"])
-@_dash_require
-def api_send_message(sender_id):
-    data      = request.get_json(force=True) or {}
-    text      = (data.get("text")      or "").strip()
-    image_url = (data.get("image_url") or "").strip()
-    if not text and not image_url:
-        return jsonify({"error": "text or image_url required"}), 400
-
-    db  = get_db()
-    customer = db.execute(
-        "SELECT page_id, COALESCE(platform, 'facebook') AS platform FROM customers WHERE sender_id=?",
-        (sender_id,),
-    ).fetchone()
-    page_id = customer["page_id"] if customer else ""
-    requested_platform = str(data.get("platform") or "").strip().lower()
-    if requested_platform in ("instagram", "ig", "facebook", "messenger", "fb"):
-        platform = normalize_manychat_platform(requested_platform)
-    else:
-        platform = normalize_manychat_platform(customer["platform"] if customer else "facebook")
-    outgoing_type = "image" if image_url and not text else "text"
-    now = now_baghdad_iso()
-    db.execute(
-        "INSERT INTO messages (sender_id, direction, message_type, text, image_url, created_at) "
-        "VALUES (?, 'outgoing', ?, ?, ?, ?)",
-        (sender_id, outgoing_type, text or None, image_url or None, now),
-    )
-    db.commit()
-
-    text_result = None
-    image_result = None
-    manual_tag = MANYCHAT_DEFAULT_MESSAGE_TAG
-    if text:
-        text_result = send_text_via_manychat_detailed(sender_id, text, platform, message_tag=manual_tag)
-    if image_url:
-        public_img = build_public_image_url(image_url)
-        print(f"[Dashboard] Sending image: {public_img}", flush=True)
-        if not is_public_https_url(public_img):
-            image_result = {
-                "ok": False,
-                "status_code": 0,
-                "status": "invalid_image_url",
-                "message": (
-                    "رابط الصورة ليس عاماً بصيغة HTTPS. اضبط PUBLIC_URL في Railway على رابط التطبيق "
-                    "مثل https://web-production-3949a.up.railway.app ثم أعد الرفع."
-                ),
-                "response": None,
-            }
-        else:
-            image_result = send_image_via_manychat_detailed(sender_id, public_img, platform=platform, message_tag=manual_tag)
-
-    sent = bool(
-        (text_result and text_result.get("ok"))
-        or (image_result and image_result.get("ok"))
-    )
-    manychat_key = current_manychat_api_key()
-    primary = text_result or image_result or {}
-    warning = None
-    if not manychat_key and not sent:
-        warning = "MANYCHAT_API_KEY غير مُهيّأ — تم حفظ الرسالة في القاعدة فقط"
-    elif not sent:
-        status = primary.get("status") or "unknown"
-        message = primary.get("message") or ""
-        http_code = primary.get("status_code")
-        warning = f"ManyChat رفض الإرسال (status={status}, http={http_code}) لمنصة {platform}"
-        if message:
-            warning += f"\nالتفاصيل: {message}"
-
-    print(
-        f"[Dashboard] Manual send to {sender_id} sent={sent} platform={platform} "
-        f"text_status={(text_result or {}).get('status')} image_status={(image_result or {}).get('status')}",
-        flush=True,
-    )
-    return jsonify({
-        "ok": sent,
-        "fb_sent": sent,
-        "warning": warning,
-        "platform": platform,
-        "subscriber_id": sender_id,
-        "text_result": text_result,
-        "image_result": image_result,
-    })
-
-
-@app.route("/api/conversations/<sender_id>/ask_ai", methods=["POST"])
-@_dash_require
-def api_ask_ai(sender_id):
-    data               = request.get_json(force=True) or {}
-    text               = (data.get("text")               or "").strip()
-    extra_instructions = (data.get("extra_instructions") or "").strip()
-    product_id         = (data.get("product_id")         or "").strip()
-    if not text:
-        text = "Please draft a suitable Arabic/Iraqi customer reply based on the latest conversation messages."
-
-    db = get_db()
-    if not is_ai_enabled(db):
-        return jsonify({"reply": "", "intent": "disabled", "confidence": 0, "disabled": True}), 200
-    customer         = get_or_create_customer(db, sender_id, None)
-    history          = load_history(db, sender_id)
-    products         = load_active_products(None)
-    customer_prods   = load_customer_products(db, sender_id)
-    inst_text, rules = load_ai_config(db, sender_id=sender_id)
-
-    if extra_instructions:
-        inst_text += f"\n\nتعليمات إضافية من المشرف:\n{extra_instructions}"
-
-    matched_product = find_product_by_id(product_id) if product_id else None
-
-    ev = {
-        "sender_id": sender_id, "text": text,
-        "image_url": None, "attachments": [],
-        "ref": None, "ad_id": None,
-        "referral_source": None, "referral_type": None,
-        "postback_payload": None, "quick_reply_payload": None,
-        "timestamp": None, "page_id": None,
-    }
-    ai_result = call_main_ai(
-        ev, "text", customer, history, products,
-        matched_product, None, inst_text, rules,
-        customer_products=customer_prods,
-    )
-    return jsonify({
-        "reply":      ai_result.get("reply", ""),
-        "intent":     ai_result.get("intent", ""),
-        "confidence": ai_result.get("confidence", 0),
-    })
-
-
-@app.route("/api/conversations/<sender_id>/save_instructions", methods=["POST"])
-@_dash_require
-def api_save_instructions(sender_id):
-    data         = request.get_json(force=True) or {}
-    instructions = (data.get("instructions") or "").strip()
-    apply_to_all = 1 if data.get("apply_to_all") else 0
-    db  = get_db()
-    now = now_baghdad_iso()
-
-    existing = db.execute(
-        "SELECT id FROM customer_instructions WHERE sender_id=?", (sender_id,)
-    ).fetchone()
-    if existing:
-        db.execute(
-            "UPDATE customer_instructions SET instructions=?, apply_to_all=?, updated_at=? WHERE sender_id=?",
-            (instructions, apply_to_all, now, sender_id),
-        )
-    else:
-        db.execute(
-            "INSERT INTO customer_instructions (sender_id, instructions, apply_to_all, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (sender_id, instructions, apply_to_all, now, now),
-        )
-
-    if apply_to_all:
-        global_row = db.execute(
-            "SELECT id FROM customer_instructions WHERE sender_id IS NULL AND apply_to_all=1"
-        ).fetchone()
-        if global_row:
-            db.execute(
-                "UPDATE customer_instructions SET instructions=?, updated_at=? WHERE id=?",
-                (instructions, now, global_row["id"]),
-            )
-        else:
-            db.execute(
-                "INSERT INTO customer_instructions (sender_id, instructions, apply_to_all, created_at, updated_at) "
-                "VALUES (NULL, ?, 1, ?, ?)",
-                (instructions, now, now),
-            )
-    db.commit()
-    print(f"[Dashboard] Instructions saved for {sender_id} global={apply_to_all}", flush=True)
-    return jsonify({"ok": True})
-
-
-@app.route("/api/conversations/<sender_id>/instructions")
-@_dash_require
-def api_get_instructions(sender_id):
-    db  = get_db()
-    row = db.execute(
-        "SELECT instructions, apply_to_all FROM customer_instructions WHERE sender_id=?",
-        (sender_id,),
-    ).fetchone()
-    if row:
-        return jsonify({"instructions": row["instructions"], "apply_to_all": bool(row["apply_to_all"])})
-    return jsonify({"instructions": "", "apply_to_all": False})
-
-
-@app.route("/api/products")
-@_dash_require
-def api_products():
-    products = load_active_products(None)
-    return jsonify({"products": [
-        {
-            "product_id":   p.get("product_id"),
-            "product_name": p.get("product_name"),
-            "price":        p.get("price"),
-            "stock":        p.get("stock"),
-            "sizes":        p.get("sizes"),
-            "colors":       p.get("colors"),
-            "delivery":     p.get("delivery"),
-            "image_url":    p.get("image_url"),
-            "image_urls":   product_image_urls(p),
-        }
-        for p in products
-    ]})
-
-
 @app.route("/api/orders")
 @_dash_require
 def api_orders():
+    limit = request.args.get("limit", "500")
     try:
-        limit = max(1, min(int(request.args.get("limit", "500")), 2000))
+        limit = max(1, min(int(limit), 2000))
     except ValueError:
         limit = 500
     return jsonify(_orders_payload(get_db(), limit=limit))
@@ -5804,20 +5441,462 @@ def api_import_database():
     return jsonify({"ok": True, "message": "تم استيراد قاعدة البيانات بنجاح"})
 
 
-@app.route("/api/orders/<int:order_id>/send_telegram", methods=["POST"])
+INSTRUCTION_FILE_MAP = {
+    "instructions": {
+        "title": "instructions.txt",
+        "description": "التعليمات الأساسية التي يعتمد عليها الذكاء الاصطناعي في كل رد.",
+        "path": _INSTRUCTIONS_FILE,
+    },
+    "forbidden_rules": {
+        "title": "forbidden_rules.txt",
+        "description": "قواعد المنع والحدود الحمراء التي تمنع الأخطاء.",
+        "path": os.path.join(os.path.dirname(__file__), "forbidden_rules.txt"),
+    },
+    "playbook": {
+        "title": "gemini_sales_playbook.md",
+        "description": "دليل أسلوب البيع المختصر الذي يضاف بعد التعليمات الأساسية.",
+        "path": _PLAYBOOK_FILE,
+    },
+    "product_summary": {
+        "title": "product_ai_summary.txt",
+        "description": "ملخص معرفة المنتجات المتزامن، ويستفيد منه الذكاء الاصطناعي عند الرد.",
+        "path": PRODUCT_KNOWLEDGE_FILE,
+    },
+}
+
+
+def _global_customer_instruction_row(db):
+    return db.execute(
+        "SELECT instructions FROM customer_instructions "
+        "WHERE sender_id IS NULL AND apply_to_all=1 "
+        "ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+
+
+@app.route("/api/settings/instructions_file", methods=["GET", "POST"])
 @_dash_require
-def api_send_order_to_telegram(order_id):
+def api_settings_instructions_file():
+    if request.method == "GET":
+        payload = _text_file_payload(_INSTRUCTIONS_FILE)
+        payload["ok"] = True
+        return jsonify(payload)
+
+    data = request.get_json(silent=True) or {}
+    _write_file_text_atomic(_INSTRUCTIONS_FILE, data.get("content") or "")
+    payload = _text_file_payload(_INSTRUCTIONS_FILE)
+    payload["ok"] = True
+    return jsonify(payload)
+
+
+@app.route("/api/settings/ai_commands", methods=["GET", "POST"])
+@_dash_require
+def api_settings_ai_commands():
     db = get_db()
-    row = db.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
-    if not row:
-        return jsonify({"ok": False, "error": "order not found"}), 404
-    order = dict(row)
-    sent = send_order_telegram_message(order)
+    if request.method == "GET":
+        files = {}
+        for key, meta in INSTRUCTION_FILE_MAP.items():
+            files[key] = {
+                **{k: v for k, v in meta.items() if k != "path"},
+                **_text_file_payload(meta["path"]),
+            }
+        ai_rows = db.execute(
+            "SELECT title, content FROM ai_instructions WHERE active=1 ORDER BY id"
+        ).fetchall()
+        rule_rows = db.execute(
+            "SELECT rule FROM forbidden_rules WHERE active=1 ORDER BY id"
+        ).fetchall()
+        global_row = _global_customer_instruction_row(db)
+        return jsonify({
+            "ok": True,
+            "files": files,
+            "db_ai_instructions": "\n\n---\n\n".join(
+                (r["content"] or "").strip() for r in ai_rows if (r["content"] or "").strip()
+            ),
+            "db_forbidden_rules": "\n".join(
+                (r["rule"] or "").strip() for r in rule_rows if (r["rule"] or "").strip()
+            ),
+            "global_supervisor_instructions": (global_row["instructions"] or "") if global_row else "",
+        })
+
+    data = request.get_json(silent=True) or {}
+    files = data.get("files") or {}
+    for key, content in files.items():
+        meta = INSTRUCTION_FILE_MAP.get(key)
+        if meta is None:
+            continue
+        _write_file_text_atomic(meta["path"], content or "")
+
+    now = now_baghdad_iso()
+    db_ai_text = str(data.get("db_ai_instructions") or "").strip()
+    db.execute("DELETE FROM ai_instructions")
+    if db_ai_text:
+        db.execute(
+            "INSERT INTO ai_instructions (title, content, active) VALUES (?,?,1)",
+            ("تعليمات إضافية من صفحة الأوامر", db_ai_text),
+        )
+
+    db_rules_text = str(data.get("db_forbidden_rules") or "").strip()
+    db.execute("DELETE FROM forbidden_rules")
+    for line in db_rules_text.splitlines():
+        rule = line.strip()
+        if rule:
+            db.execute("INSERT INTO forbidden_rules (rule, active) VALUES (?,1)", (rule,))
+
+    global_text = str(data.get("global_supervisor_instructions") or "").strip()
+    global_row = db.execute(
+        "SELECT id FROM customer_instructions WHERE sender_id IS NULL AND apply_to_all=1 "
+        "ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if global_row:
+        db.execute(
+            "UPDATE customer_instructions SET instructions=?, updated_at=? WHERE id=?",
+            (global_text, now, global_row["id"]),
+        )
+    elif global_text:
+        db.execute(
+            "INSERT INTO customer_instructions (sender_id, instructions, apply_to_all, created_at, updated_at) "
+            "VALUES (NULL, ?, 1, ?, ?)",
+            (global_text, now, now),
+        )
+    db.commit()
+    return jsonify({"ok": True, "message": "تم حفظ جميع التعليمات والأوامر"})
+
+
+@app.route("/api/conversations")
+@_dash_require
+def api_conversations():
+    db = get_db()
+    rows = db.execute("""
+        SELECT
+            c.sender_id,
+            c.name,
+            c.phone,
+            c.province,
+            c.address,
+            c.gender,
+            m.text       AS last_message,
+            m.direction  AS last_direction,
+            m.created_at AS last_time,
+            COALESCE(c.platform, 'facebook') AS platform,
+            CASE
+              WHEN (
+                SELECT COALESCE(MAX(id), 0) FROM messages
+                WHERE sender_id = c.sender_id AND direction = 'incoming'
+              ) > (
+                SELECT COALESCE(MAX(id), 0) FROM messages
+                WHERE sender_id = c.sender_id AND direction = 'outgoing'
+              )
+              THEN 1 ELSE 0
+            END AS unanswered,
+            (SELECT COUNT(*) FROM human_reviews hr
+             WHERE hr.sender_id = c.sender_id AND hr.status = 'pending') AS pending_reviews_count,
+            (SELECT COALESCE(MAX(id), 0) FROM messages
+             WHERE sender_id = c.sender_id
+               AND direction = 'incoming'
+               AND (message_type = 'image' OR image_url IS NOT NULL)
+            ) AS last_image_id,
+            cpi.product_id,
+            cpi.product_name,
+            (SELECT GROUP_CONCAT(product_id, '||') FROM customer_product_interests
+             WHERE sender_id = c.sender_id) AS product_ids,
+            (SELECT GROUP_CONCAT(product_name, '||') FROM customer_product_interests
+             WHERE sender_id = c.sender_id) AS product_names,
+            (SELECT ad_id FROM messages
+             WHERE sender_id = c.sender_id AND ad_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1) AS ad_id,
+            (SELECT ref FROM messages
+             WHERE sender_id = c.sender_id AND ref IS NOT NULL
+             ORDER BY id DESC LIMIT 1) AS ref,
+            COALESCE(cais.enabled, 1) AS ai_enabled
+        FROM customers c
+        LEFT JOIN customer_ai_settings cais ON cais.sender_id = c.sender_id
+        LEFT JOIN messages m ON m.id = (
+            SELECT id FROM messages WHERE sender_id = c.sender_id ORDER BY id DESC LIMIT 1
+        )
+        LEFT JOIN customer_product_interests cpi ON cpi.id = (
+            SELECT id FROM customer_product_interests
+            WHERE sender_id = c.sender_id ORDER BY last_seen_at DESC LIMIT 1
+        )
+        ORDER BY COALESCE(m.created_at, c.last_seen_at, '') DESC
+    """).fetchall()
+    return jsonify({"conversations": [dict(r) for r in rows]})
+
+
+@app.route("/api/conversations/<sender_id>/messages")
+@_dash_require
+def api_conversation_messages(sender_id):
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, direction, message_type, text, image_url, ad_id, created_at "
+        "FROM messages WHERE sender_id=? ORDER BY id DESC LIMIT 50",
+        (sender_id,),
+    ).fetchall()
+    return jsonify({"messages": list(reversed([dict(r) for r in rows]))})
+
+
+@app.route("/api/improve_message", methods=["POST"])
+@_dash_require
+def api_improve_message():
+    """
+    تحسين/إعادة صياغة نص الموظف بدون أي ارتباط بمحادثة.
+    يعمل دائماً حتى لو AI متوقف لكل المحادثات.
+    يأخذ نص الحقل + التعليمات + القواعد ويرجع نصاً منقحاً جاهزاً للإرسال.
+    """
+    data = request.get_json(silent=True) or {}
+    raw_text = (data.get("text") or "").strip()
+    if not raw_text:
+        return jsonify({"ok": False, "error": "text required"}), 400
+    if not OPENROUTER_KEY:
+        return jsonify({"ok": False, "error": "no_openrouter_key", "improved": raw_text}), 503
+
+    db = get_db()
+    instructions_text, rules_list = load_ai_config(db, sender_id=None)
+    rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
+
+    system_prompt = (
+        "أنت محرر رسائل لمتجر أنيقة للموديلات والقطع النسائية المحتشمة يتحدث باللهجة العراقية الودودة.\n"
+        "مهمتك الوحيدة: إعادة صياغة النص الذي يكتبه الموظف ليكون احترافياً ومقنعاً وقصيراً.\n\n"
+        "قواعد صارمة:\n"
+        "- لا تضف معلومات (سعر/قياس/لون/منتج) لم يذكرها الموظف.\n"
+        "- لا تحذف أي معلومة جوهرية ذكرها الموظف.\n"
+        "- لا تضف توقيعاً أو تحية إذا لم يطلبها الموظف.\n"
+        "- لا تتجاوز 60 كلمة.\n"
+        "- التزم بالقواعد المحظورة وتعليمات الإدارة أدناه.\n\n"
+        "تعليمات الإدارة:\n"
+        f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
+        "القواعد المحظورة:\n"
+        f"{rules_text}\n\n"
+        "أخرج JSON فقط بهذا الشكل: {\"improved\":\"النص الجديد\"}"
+    )
+
+    user_content = f"نص الموظف الأصلي:\n{raw_text}\n\nأعد صياغته فقط، احتفظ بكل معلومة فيه."
+
+    try:
+        resp = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": IMPROVE_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                "max_tokens": 400,
+                "temperature": 0.5,
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+        parsed = _parse_ai_json(raw) if isinstance(raw, str) else {}
+        improved = (parsed.get("improved") or "").strip()
+        if not improved:
+            m = re.search(r'"improved"\s*:\s*"([^"]+)"', raw or "", re.DOTALL)
+            improved = m.group(1).strip() if m else (raw or "").strip()
+        improved = improved.strip().strip('"').strip()
+        if not improved:
+            return jsonify({"ok": False, "error": "empty_improvement", "improved": raw_text}), 200
+        print(f"[Improve] {raw_text[:60]} → {improved[:60]}", flush=True)
+        return jsonify({"ok": True, "improved": improved})
+    except Exception as exc:
+        print(f"[Improve] Error: {exc}", flush=True)
+        return jsonify({"ok": False, "error": f"{type(exc).__name__}: {exc}", "improved": raw_text}), 200
+
+
+@app.route("/api/conversations/<sender_id>/send", methods=["POST"])
+@_dash_require
+def api_send_message(sender_id):
+    data      = request.get_json(silent=True) or {}
+    text      = (data.get("text")      or "").strip()
+    image_url = (data.get("image_url") or "").strip()
+    if not text and not image_url:
+        return jsonify({"error": "text or image_url required"}), 400
+
+    db  = get_db()
+    customer = db.execute(
+        "SELECT page_id, COALESCE(platform, 'facebook') AS platform FROM customers WHERE sender_id=?",
+        (sender_id,),
+    ).fetchone()
+    page_id = customer["page_id"] if customer else ""
+    platform = customer["platform"] if customer else "facebook"
+    now = now_baghdad_iso()
+    db.execute(
+        "INSERT INTO messages (sender_id, direction, message_type, text, image_url, created_at) "
+        "VALUES (?, 'outgoing', 'text', ?, ?, ?)",
+        (sender_id, text or None, image_url or None, now),
+    )
+    db.commit()
+
+    text_result = None
+    image_result = None
+    manual_tag = MANYCHAT_DEFAULT_MESSAGE_TAG
+    if text:
+        text_result = send_text_via_manychat_detailed(sender_id, text, platform, message_tag=manual_tag)
+    if image_url:
+        public_img = build_public_image_url(image_url)
+        print(f"[Dashboard] Sending image: {public_img}", flush=True)
+        image_result = send_image_via_manychat_detailed(sender_id, public_img, platform=platform, message_tag=manual_tag)
+
+    sent = bool(
+        (text_result and text_result.get("ok"))
+        or (image_result and image_result.get("ok"))
+    )
+    manychat_key = current_manychat_api_key()
+    primary = text_result or image_result or {}
+    warning = None
+    if not manychat_key and not sent:
+        warning = "MANYCHAT_API_KEY غير مُهيّأ — تم حفظ الرسالة في القاعدة فقط"
+    elif not sent:
+        status = primary.get("status") or "unknown"
+        message = primary.get("message") or ""
+        http_code = primary.get("status_code")
+        warning = f"ManyChat رفض الإرسال (status={status}, http={http_code}) لمنصة {platform}"
+        if message:
+            warning += f"\nالتفاصيل: {message}"
+
+    print(
+        f"[Dashboard] Manual send to {sender_id} sent={sent} platform={platform} "
+        f"text_status={(text_result or {}).get('status')} image_status={(image_result or {}).get('status')}",
+        flush=True,
+    )
     return jsonify({
         "ok": sent,
-        "order_id": order_id,
-        "telegram_chat_id": ORDER_TELEGRAM_CHAT_ID,
-    }), (200 if sent else 502)
+        "fb_sent": sent,
+        "warning": warning,
+        "platform": platform,
+        "subscriber_id": sender_id,
+        "text_result": text_result,
+        "image_result": image_result,
+    })
+
+
+@app.route("/api/conversations/<sender_id>/ask_ai", methods=["POST"])
+@_dash_require
+def api_ask_ai(sender_id):
+    data               = request.get_json(silent=True) or {}
+    text               = (data.get("text")               or "").strip()
+    extra_instructions = (data.get("extra_instructions") or "").strip()
+    product_id         = (data.get("product_id")         or "").strip()
+    if not text:
+        return jsonify({
+            "reply": "",
+            "intent": "empty_text",
+            "confidence": 0,
+            "error": "text required",
+        }), 400
+
+    db = get_db()
+    if not is_ai_enabled(db):
+        return jsonify({"reply": "", "intent": "disabled", "confidence": 0, "disabled": True}), 200
+    customer         = get_or_create_customer(db, sender_id, None)
+    history          = load_history(db, sender_id)
+    products         = load_active_products(None)
+    customer_prods   = load_customer_products(db, sender_id)
+    inst_text, rules = load_ai_config(db, sender_id=sender_id)
+
+    if extra_instructions:
+        inst_text += f"\n\nتعليمات إضافية من المشرف:\n{extra_instructions}"
+
+    matched_product = find_product_by_id(product_id) if product_id else None
+
+    ev = {
+        "sender_id": sender_id, "text": text,
+        "image_url": None, "attachments": [],
+        "ref": None, "ad_id": None,
+        "referral_source": None, "referral_type": None,
+        "postback_payload": None, "quick_reply_payload": None,
+        "timestamp": None, "page_id": None,
+    }
+    ai_result = call_main_ai(
+        ev, "text", customer, history, products,
+        matched_product, None, inst_text, rules,
+        customer_products=customer_prods,
+    )
+    return jsonify({
+        "reply":      ai_result.get("reply", ""),
+        "intent":     ai_result.get("intent", ""),
+        "confidence": ai_result.get("confidence", 0),
+    })
+
+
+@app.route("/api/conversations/<sender_id>/save_instructions", methods=["POST"])
+@_dash_require
+def api_save_instructions(sender_id):
+    data         = request.get_json(silent=True) or {}
+    instructions = (data.get("instructions") or "").strip()
+    apply_to_all = 1 if data.get("apply_to_all") else 0
+    db  = get_db()
+    now = now_baghdad_iso()
+
+    existing = db.execute(
+        "SELECT id FROM customer_instructions WHERE sender_id=?", (sender_id,)
+    ).fetchone()
+    if existing:
+        db.execute(
+            "UPDATE customer_instructions SET instructions=?, apply_to_all=?, updated_at=? WHERE sender_id=?",
+            (instructions, apply_to_all, now, sender_id),
+        )
+    else:
+        db.execute(
+            "INSERT INTO customer_instructions (sender_id, instructions, apply_to_all, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (sender_id, instructions, apply_to_all, now, now),
+        )
+
+    if apply_to_all:
+        global_row = db.execute(
+            "SELECT id FROM customer_instructions WHERE sender_id IS NULL AND apply_to_all=1"
+        ).fetchone()
+        if global_row:
+            db.execute(
+                "UPDATE customer_instructions SET instructions=?, updated_at=? WHERE id=?",
+                (instructions, now, global_row["id"]),
+            )
+        else:
+            db.execute(
+                "INSERT INTO customer_instructions (sender_id, instructions, apply_to_all, created_at, updated_at) "
+                "VALUES (NULL, ?, 1, ?, ?)",
+                (instructions, now, now),
+            )
+    db.commit()
+    print(f"[Dashboard] Instructions saved for {sender_id} global={apply_to_all}", flush=True)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/conversations/<sender_id>/instructions")
+@_dash_require
+def api_get_instructions(sender_id):
+    db  = get_db()
+    row = db.execute(
+        "SELECT instructions, apply_to_all FROM customer_instructions WHERE sender_id=?",
+        (sender_id,),
+    ).fetchone()
+    if row:
+        return jsonify({"instructions": row["instructions"], "apply_to_all": bool(row["apply_to_all"])})
+    return jsonify({"instructions": "", "apply_to_all": False})
+
+
+@app.route("/api/products")
+@_dash_require
+def api_products():
+    products = load_active_products(None)
+    return jsonify({"products": [
+        {
+            "product_id":   p.get("product_id"),
+            "product_name": p.get("product_name"),
+            "price":        p.get("price"),
+            "stock":        p.get("stock"),
+            "sizes":        p.get("sizes"),
+            "colors":       p.get("colors"),
+            "delivery":     p.get("delivery"),
+            "image_url":    p.get("image_url"),
+            "image_urls":   product_image_urls(p),
+        }
+        for p in products
+    ]})
 
 
 def _product_from_request(data, existing=None):
@@ -5844,32 +5923,10 @@ def api_manage_products():
     return jsonify({"products": [product_payload(p) for p in products]})
 
 
-@app.route("/api/products/analyze", methods=["POST"])
-@_dash_require
-def api_analyze_products():
-    products = load_active_products(None)
-    text, source = analyze_products_for_ai(products)
-    temp_path = PRODUCT_KNOWLEDGE_FILE + ".tmp"
-    with open(temp_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(temp_path, PRODUCT_KNOWLEDGE_FILE)
-    exists = os.path.exists(PRODUCT_KNOWLEDGE_FILE)
-    stat = os.stat(PRODUCT_KNOWLEDGE_FILE) if exists else None
-    return jsonify({
-        "ok": True,
-        "source": source,
-        "count": len(products),
-        "summary": _load_file_text(PRODUCT_KNOWLEDGE_FILE) or text,
-        "path": os.path.basename(PRODUCT_KNOWLEDGE_FILE),
-        "size": stat.st_size if stat else 0,
-        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
-    })
-
-
 @app.route("/api/products/manage", methods=["POST"])
 @_dash_require
 def api_create_product():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     product = _product_from_request(data)
     if not product.get("product_id") or not product.get("product_name"):
         return jsonify({"error": "product_id and product_name required"}), 400
@@ -5886,7 +5943,7 @@ def api_create_product():
 @app.route("/api/products/manage/<product_id>", methods=["PUT"])
 @_dash_require
 def api_update_product(product_id):
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     product_id = str(product_id or "").strip()
     if not product_id:
         return jsonify({"error": "product_id required"}), 400
@@ -5925,7 +5982,7 @@ def api_delete_product(product_id):
 @app.route("/api/conversations/<sender_id>/link_product", methods=["POST"])
 @_dash_require
 def api_link_product(sender_id):
-    data       = request.get_json(force=True) or {}
+    data       = request.get_json(silent=True) or {}
     product_ids = data.get("product_ids")
     if not isinstance(product_ids, list):
         product_ids = [data.get("product_id")]
@@ -5999,26 +6056,8 @@ def api_upload_image():
     file.save(os.path.join(uploads_dir, filename))
 
     image_url = build_public_image_url(f"/product_image/uploads/{filename}")
-    send_ready = is_public_https_url(image_url)
-    warning = "" if send_ready else (
-        "تم حفظ الصورة، لكن رابطها غير عام HTTPS. اضبط PUBLIC_URL في Railway حتى يستطيع ManyChat إرسالها."
-    )
-    print(f"[Dashboard] Image uploaded: {filename} send_ready={send_ready} url={image_url}", flush=True)
-    return jsonify({
-        "image_url": image_url,
-        "filename": filename,
-        "send_ready": send_ready,
-        "warning": warning,
-    })
-
-
-def _resolve_catalog_image_path():
-    path = str(CATALOG_IMAGE_PATH or "").strip()
-    if not path:
-        return os.path.join(os.path.dirname(__file__), "catalog_image.png")
-    if os.path.isabs(path):
-        return path
-    return os.path.join(os.path.dirname(__file__), path)
+    print(f"[Dashboard] Image uploaded: {filename}", flush=True)
+    return jsonify({"image_url": image_url, "filename": filename})
 
 
 @app.route("/api/catalog_image", methods=["GET", "POST"])
@@ -6031,7 +6070,7 @@ def api_catalog_image():
         return jsonify({
             "ok": True,
             "exists": exists,
-            "path": os.path.basename(path),
+            "path": os.path.basename(path) if path else "",
             "size": stat.st_size if stat else 0,
             "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
             "catalog_match_enabled": CATALOG_MATCH_ENABLED,
@@ -6057,7 +6096,7 @@ def api_catalog_image():
         stat = os.stat(path)
         if stat.st_size <= 0:
             return jsonify({"ok": False, "error": "Uploaded file is empty", "message": "فشل رفع صورة الكتالوج"}), 400
-        print(f"[CatalogImage] uploaded path={os.path.basename(path)} size={stat.st_size}", flush=True)
+        image_flow("catalog_image_uploaded", path=os.path.basename(path), size=stat.st_size)
         return jsonify({
             "ok": True,
             "message": "تم رفع صورة الكتالوج بنجاح",
@@ -6067,6 +6106,7 @@ def api_catalog_image():
             "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat(),
         })
     except Exception as exc:
+        image_flow("catalog_image_upload_failed", error=str(exc))
         return jsonify({"ok": False, "error": str(exc), "message": "فشل رفع صورة الكتالوج"}), 500
 
 
@@ -6077,8 +6117,8 @@ def api_manychat_diag():
     candidates = [
         "MANYCHAT_API_KEY", "MANYCHAT_KEY", "MC_API_KEY",
         "MANYCHAT_MESSAGE_TAG", "OPENROUTER_API_KEY", "PUBLIC_URL",
-        "DASHBOARD_PASSWORD", "API_SECRET_KEY",
-        "CATALOG_MATCH_MODEL", "CATALOG_MATCH_ENABLED", "CATALOG_IMAGE_PATH",
+        "DASHBOARD_PASSWORD", "API_SECRET_KEY", "TELEGRAM_CHAT_ID", "TELEGRAM_ORDERS_CHAT_ID",
+        "TELEGRAM_NOTIFICATION_HEADER", "CATALOG_MATCH_MODEL", "CATALOG_MATCH_ENABLED", "CATALOG_IMAGE_PATH",
     ]
     seen = {}
     for name in candidates:
@@ -6170,7 +6210,7 @@ def api_dashboard_stats():
 @app.route("/api/settings/ai", methods=["POST"])
 @_dash_require
 def api_set_ai_enabled():
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     enabled = bool(data.get("enabled"))
     db = get_db()
     set_setting(db, "ai_enabled", "1" if enabled else "0")
@@ -6181,7 +6221,7 @@ def api_set_ai_enabled():
 @app.route("/api/conversations/<sender_id>/ai", methods=["POST"])
 @_dash_require
 def api_set_conversation_ai(sender_id):
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     enabled = bool(data.get("enabled"))
     db = get_db()
     set_customer_ai_enabled(db, sender_id, enabled)
@@ -6217,7 +6257,7 @@ def api_send_catalog(sender_id):
 @app.route("/api/conversations/<sender_id>/customer", methods=["POST"])
 @_dash_require
 def api_update_customer(sender_id):
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     db   = get_db()
     now  = now_baghdad_iso()
     raw_gender = (data.get("gender") or "").strip().lower()
@@ -6244,7 +6284,7 @@ def api_update_customer(sender_id):
 @app.route("/api/conversations/<sender_id>/gender", methods=["POST"])
 @_dash_require
 def api_set_customer_gender(sender_id):
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     raw_gender = (data.get("gender") or "").strip().lower()
     if raw_gender in {"male", "m", "ذكر"}:
         gender_value = "male"
@@ -6261,7 +6301,7 @@ def api_set_customer_gender(sender_id):
 @app.route("/api/conversations/<sender_id>/create_order", methods=["POST"])
 @_dash_require
 def api_create_order(sender_id):
-    data = request.get_json(force=True) or {}
+    data = request.get_json(silent=True) or {}
     db   = get_db()
     now  = now_baghdad_iso()
     product_ids = data.get("product_ids")
@@ -6274,31 +6314,26 @@ def api_create_order(sender_id):
     product_names = [str(name or "").strip() for name in product_names if str(name or "").strip()]
     product_id_text = ", ".join(product_ids)
     product_name_text = ", ".join(product_names) or str(data.get("product_name") or "")
-    phone    = str(data.get("phone") or "").strip()
-    province = str(data.get("province") or "").strip()
-    address  = str(data.get("address") or "").strip()
-    color    = str(data.get("color") or "").strip()
-    size     = str(data.get("size") or "").strip()
-    notes    = str(data.get("notes") or "").strip()
+    if not product_id_text and not product_name_text.strip():
+        return jsonify({"ok": False, "error": "اختر منتجاً قبل تثبيت الطلب"}), 400
 
     duplicate = find_duplicate_order(
-        db, sender_id, phone, province, address,
-        product_id_text, product_name_text, color, size, notes,
+        db,
+        sender_id,
+        data.get("phone"),
+        product_id_text,
+        data.get("address"),
     )
     if duplicate:
-        print(f"[Dashboard] Duplicate manual order skipped for {sender_id}: {product_name_text}", flush=True)
-        return jsonify({"ok": False, "duplicate": True, "message": "Duplicate order detected."}), 409
+        print(f"[Dashboard] Duplicate manual order skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
+        return jsonify({
+            "ok": True,
+            "duplicate": True,
+            "existing_order_id": duplicate.get("id"),
+            "telegram_sent": False,
+            "message": "هذا الطلب مثبت مسبقاً ولم يتم تكراره",
+        })
 
-    db.execute(
-        "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
-        "product_id, product_name, color, size, notes, status, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?)",
-        (sender_id, data.get("customer_name"), phone,
-         province, address, product_id_text,
-         product_name_text, color, size,
-         notes, now),
-    )
-    db.commit()
     order_info = {
         "created_at": now,
         "sender_id": sender_id,
@@ -6313,8 +6348,19 @@ def api_create_order(sender_id):
         "notes": data.get("notes"),
         "status": "new",
     }
+
+    db.execute(
+        "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
+        "product_id, product_name, color, size, notes, status, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?)",
+        (sender_id, data.get("customer_name"), data.get("phone"),
+         data.get("province"), data.get("address"), product_id_text,
+         product_name_text, data.get("color"), data.get("size"),
+         data.get("notes"), now),
+    )
+    db.commit()
     save_booking_to_file(order_info)
-    send_order_telegram_message(order_info)
+    telegram_sent = send_order_to_telegram(order_info)
     confirm = ORDER_CONFIRMATION_TEXT
     save_message(db, sender_id, "outgoing", "text", confirm, None, None, None, {"manual_order": True})
     customer = db.execute(
@@ -6327,8 +6373,12 @@ def api_create_order(sender_id):
         customer["page_id"] if customer else "",
         customer["platform"] if customer else "facebook",
     )
-    print(f"[Dashboard] Manual order created for {sender_id}: {product_name_text}", flush=True)
-    return jsonify({"ok": True})
+    print(f"[Dashboard] Manual order created for {sender_id}: {product_name_text} | telegram_sent={telegram_sent}", flush=True)
+    return jsonify({
+        "ok": True,
+        "telegram_sent": telegram_sent,
+        "telegram_error": "" if telegram_sent else "تعذر إرسال الطلب إلى تلغرام. تأكد من TELEGRAM_BOT_TOKEN و TELEGRAM_ORDERS_CHAT_ID.",
+    })
 
 
 @app.route("/api/conversations/<sender_id>/mark_reviewed", methods=["POST"])

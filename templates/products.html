@@ -23,6 +23,9 @@
       <a class="btn btn-outline-light btn-sm" href="/orders?key={{ request.args.get('key','') }}">
         <i class="bi bi-receipt me-1"></i>الطلبات
       </a>
+      <a class="btn btn-outline-light btn-sm" href="/instructions?key={{ request.args.get('key','') }}">
+        <i class="bi bi-sliders2-vertical me-1"></i>التعليمات
+      </a>
       <input type="file" id="productsImportInput" accept="application/json,.json" style="display:none" onchange="importProductsFile(this)">
       <input type="file" id="databaseImportInput" accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/octet-stream" style="display:none" onchange="importDatabaseFile(this)">
       <div class="btn-group btn-group-sm data-tools" role="group" aria-label="استيراد وتصدير">

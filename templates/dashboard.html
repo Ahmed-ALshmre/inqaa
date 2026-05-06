@@ -42,6 +42,10 @@
       <i class="bi bi-receipt"></i>
       <span>الطلبات</span>
     </a>
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/instructions?key={{ request.args.get('key','') }}">
+      <i class="bi bi-sliders2-vertical"></i>
+      <span>التعليمات</span>
+    </a>
     <input type="file" id="catalogImageInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadCatalogImage(this)">
     <button class="btn btn-outline-light btn-sm py-0" id="catalogImageBtn" onclick="document.getElementById('catalogImageInput').click()" title="تحديث صورة الكتالوج">
       <i class="bi bi-image"></i>
