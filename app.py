@@ -10,7 +10,7 @@ import tempfile
 import threading
 import time
 import unicodedata
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -2906,7 +2906,7 @@ def match_customer_image_with_catalog(customer_image_url, products):
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
-        selected = _clean_catalog_product_id(raw, products)
+        selected = _extract_product_id_only(raw, products) or _clean_catalog_product_id(raw, products)
         image_flow(
             "catalog_match_response",
             status_code=resp.status_code,
@@ -3701,6 +3701,42 @@ def check_reply(
 
 # ── Order creation ────────────────────────────────────────────────────────────
 
+def _parse_order_timestamp(value):
+    try:
+        return datetime.fromisoformat(str(value or ""))
+    except Exception:
+        return None
+
+
+def find_duplicate_order(db, sender_id, phone, province, address, product_id, product_name, color, size, notes, window_minutes=30):
+    if not sender_id:
+        return None
+
+    rows = db.execute(
+        """SELECT * FROM orders
+           WHERE sender_id = ?
+             AND phone = ?
+             AND province = ?
+             AND address = ?
+             AND product_id = ?
+             AND product_name = ?
+             AND color = ?
+             AND size = ?
+             AND notes = ?
+             AND status = 'new'""",
+        (sender_id, phone, province, address, product_id, product_name, color, size, notes),
+    ).fetchall()
+    if not rows:
+        return None
+
+    cutoff = datetime.now(BAGHDAD_TZ) - timedelta(minutes=window_minutes)
+    for row in rows:
+        created_at = _parse_order_timestamp(row["created_at"])
+        if created_at is None or created_at >= cutoff:
+            return dict(row)
+    return None
+
+
 def create_order_if_valid(db, sender_id, ai_result, matched_product):
     order_data = ai_result.get("order") or {}
     phone   = (order_data.get("phone")   or "").strip()
@@ -3711,8 +3747,20 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         return None, "لو سمحتِ أرسلي رقم هاتفك وعنوانك الكامل لإتمام الطلب 🌸"
 
     now          = now_baghdad_iso()
-    product_id   = order_data.get("product_id")   or (matched_product or {}).get("product_id",   "")
-    product_name = order_data.get("product_name") or (matched_product or {}).get("product_name", "")
+    product_id   = (order_data.get("product_id") or (matched_product or {}).get("product_id", "") or "").strip()
+    product_name = (order_data.get("product_name") or (matched_product or {}).get("product_name", "") or "").strip()
+    color        = (order_data.get("color") or "").strip()
+    size         = (order_data.get("size") or "").strip()
+    notes        = (order_data.get("notes") or "").strip()
+    province     = (order_data.get("province") or "").strip()
+
+    duplicate = find_duplicate_order(
+        db, sender_id, phone, province, address,
+        product_id, product_name, color, size, notes,
+    )
+    if duplicate:
+        print(f"[Order] Duplicate order ignored for {sender_id}: {product_name}", flush=True)
+        return None, None
 
     db.execute(
         """INSERT INTO orders
@@ -3723,13 +3771,13 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
             sender_id,
             order_data.get("customer_name", ""),
             phone,
-            order_data.get("province", ""),
+            province,
             address,
             product_id,
             product_name,
-            order_data.get("color", ""),
-            order_data.get("size",  ""),
-            order_data.get("notes", ""),
+            color,
+            size,
+            notes,
             "new",
             now,
         ),
@@ -6226,14 +6274,29 @@ def api_create_order(sender_id):
     product_names = [str(name or "").strip() for name in product_names if str(name or "").strip()]
     product_id_text = ", ".join(product_ids)
     product_name_text = ", ".join(product_names) or str(data.get("product_name") or "")
+    phone    = str(data.get("phone") or "").strip()
+    province = str(data.get("province") or "").strip()
+    address  = str(data.get("address") or "").strip()
+    color    = str(data.get("color") or "").strip()
+    size     = str(data.get("size") or "").strip()
+    notes    = str(data.get("notes") or "").strip()
+
+    duplicate = find_duplicate_order(
+        db, sender_id, phone, province, address,
+        product_id_text, product_name_text, color, size, notes,
+    )
+    if duplicate:
+        print(f"[Dashboard] Duplicate manual order skipped for {sender_id}: {product_name_text}", flush=True)
+        return jsonify({"ok": False, "duplicate": True, "message": "Duplicate order detected."}), 409
+
     db.execute(
         "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
         "product_id, product_name, color, size, notes, status, created_at) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?)",
-        (sender_id, data.get("customer_name"), data.get("phone"),
-         data.get("province"), data.get("address"), product_id_text,
-         product_name_text, data.get("color"), data.get("size"),
-         data.get("notes"), now),
+        (sender_id, data.get("customer_name"), phone,
+         province, address, product_id_text,
+         product_name_text, color, size,
+         notes, now),
     )
     db.commit()
     order_info = {
