@@ -34,6 +34,11 @@ function apiFetch(url, opts = {}) {
   return fetch(url, opts);
 }
 
+function downloadUrl(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}key=${encodeURIComponent(DASH_KEY)}`;
+}
+
 async function loadProducts() {
   try {
     const res = await apiFetch('/api/products/manage');
@@ -154,6 +159,60 @@ async function deleteCurrentProduct() {
     newProduct();
   } catch (err) {
     showToast(err.message || 'فشل حذف المنتج', 'danger');
+  }
+}
+
+async function exportProducts() {
+  window.location.href = downloadUrl('/api/export/products');
+}
+
+async function exportDatabase() {
+  window.location.href = downloadUrl('/api/export/database');
+}
+
+async function importProductsFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!confirm('استيراد المنتجات سيستبدل ملف products.json الحالي. هل تريد المتابعة؟')) {
+    input.value = '';
+    return;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    showToast('جاري استيراد المنتجات...', 'warning');
+    const res = await apiFetch('/api/import/products', { method: 'POST', body: form });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل استيراد المنتجات');
+    showToast(`تم استيراد ${data.count || 0} منتج`, 'success');
+    currentProductId = null;
+    await loadProducts();
+  } catch (err) {
+    showToast(err.message || 'فشل استيراد المنتجات', 'danger');
+  } finally {
+    input.value = '';
+  }
+}
+
+async function importDatabaseFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!confirm('استيراد قاعدة البيانات سيستبدل بيانات الداشبورد الحالية بعد إنشاء نسخة احتياطية. هل تريد المتابعة؟')) {
+    input.value = '';
+    return;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    showToast('جاري استيراد قاعدة البيانات...', 'warning');
+    const res = await apiFetch('/api/import/database', { method: 'POST', body: form });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل استيراد قاعدة البيانات');
+    showToast(data.message || 'تم استيراد قاعدة البيانات', 'success');
+  } catch (err) {
+    showToast(err.message || 'فشل استيراد قاعدة البيانات', 'danger');
+  } finally {
+    input.value = '';
   }
 }
 

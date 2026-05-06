@@ -1,5 +1,5 @@
-/* Minimal service worker - needed for installability + offline fallback */
-const CACHE_NAME = 'sales-dashboard-v2';
+/* Minimal service worker — needed for installability + offline fallback */
+const CACHE_NAME = 'sales-dashboard-v1';
 const APP_SHELL = [
   '/static/css/dashboard.css',
   '/static/js/dashboard.js',

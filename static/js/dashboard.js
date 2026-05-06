@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadConversations();
   loadStats();
   loadProducts();
+  loadCommandFile(false);
   pollConvTimer = setInterval(() => { loadConversations(false); loadStats(); }, 8000);
 });
 
@@ -742,6 +743,47 @@ async function testManyChat() {
 }
 
 // ══ Ask AI ═════════════════════════════════════════════════════════════════
+async function uploadCatalogImage(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const btn = document.getElementById('catalogImageBtn');
+  const status = document.getElementById('catalogUploadStatus');
+  const oldHtml = btn ? btn.innerHTML : '';
+  const form = new FormData();
+  form.append('image', file);
+  if (status) {
+    status.textContent = 'جاري رفع الكتالوج...';
+    status.className = 'catalog-upload-status small text-warning';
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span class="install-label ms-1">رفع</span>';
+  }
+  try {
+    const res = await apiFetch('/api/catalog_image', { method: 'POST', body: form });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.message || data.error || 'فشل رفع صورة الكتالوج');
+    if (status) {
+      status.textContent = 'تم تحديث الكتالوج';
+      status.className = 'catalog-upload-status small text-success';
+    }
+    showToast(data.message || 'تم رفع صورة الكتالوج بنجاح', 'success');
+  } catch (e) {
+    if (status) {
+      status.textContent = 'فشل رفع الكتالوج';
+      status.className = 'catalog-upload-status small text-danger';
+    }
+    showToast(e.message || 'فشل رفع صورة الكتالوج', 'danger');
+  } finally {
+    input.value = '';
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
+    if (status) setTimeout(() => { status.textContent = ''; }, 5000);
+  }
+}
+
 async function askAI() {
   if (!currentSenderId) return;
   if (_isAskingAI) { showToast('جاري تجهيز اقتراح AI...', 'warning'); return; }
@@ -1026,6 +1068,59 @@ async function saveInstructions() {
 }
 
 // ══ Stats ══════════════════════════════════════════════════════════════════
+async function loadCommandFile(showToastOnSuccess = false) {
+  const textarea = document.getElementById('commandFileText');
+  if (!textarea) return;
+  const meta = document.getElementById('commandFileMeta');
+  try {
+    const res = await apiFetch('/api/settings/instructions_file');
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تحميل ملف الأوامر');
+    textarea.value = data.content || '';
+    if (meta) {
+      const size = Number(data.size || 0).toLocaleString('ar');
+      meta.textContent = `${data.path || 'instructions.txt'} - ${size} بايت`;
+    }
+    if (showToastOnSuccess) showToast('تم تحديث ملف الأوامر من الخادم', 'success');
+  } catch (e) {
+    if (meta) meta.textContent = 'تعذر تحميل ملف الأوامر';
+    showToast(e.message || 'تعذر تحميل ملف الأوامر', 'danger');
+  }
+}
+
+async function saveCommandFile() {
+  const textarea = document.getElementById('commandFileText');
+  const btn = document.getElementById('saveCommandFileBtn');
+  if (!textarea) return;
+  const oldHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span class="ms-1">حفظ</span>';
+  }
+  try {
+    const res = await apiFetch('/api/settings/instructions_file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: textarea.value }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حفظ ملف الأوامر');
+    const meta = document.getElementById('commandFileMeta');
+    if (meta) {
+      const size = Number(data.size || 0).toLocaleString('ar');
+      meta.textContent = `${data.path || 'instructions.txt'} - ${size} بايت`;
+    }
+    showToast('تم حفظ ملف الأوامر', 'success');
+  } catch (e) {
+    showToast(e.message || 'فشل حفظ ملف الأوامر', 'danger');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
+  }
+}
+
 async function loadStats() {
   try {
     const res  = await apiFetch('/api/dashboard_stats');

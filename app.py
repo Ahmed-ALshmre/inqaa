@@ -1,9 +1,12 @@
+import base64
 import io
 import json
+import mimetypes
 import os
 import re
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 import unicodedata
@@ -13,7 +16,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Flask, g, jsonify, redirect, render_template, request, send_from_directory
+from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory
 
 # تحميل .env المبكر حتى يمكن تعطيل مكتبات ML الثقيلة قبل استيرادها
 _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -188,6 +191,8 @@ CHECKER_MODEL   = os.environ.get("CHECKER_MODEL", "google/gemini-3.1-pro-preview
 VISION_MODEL    = os.environ.get("VISION_MODEL",  "google/gemini-3.1-pro-preview")
 CHECKER_ENABLED = os.environ.get("CHECKER_ENABLED", "0") == "1"
 VISION_ENABLED  = os.environ.get("VISION_ENABLED", "1") == "1"
+CATALOG_MATCH_MODEL = os.environ.get("CATALOG_MATCH_MODEL", VISION_MODEL)
+CATALOG_MATCH_ENABLED = os.environ.get("CATALOG_MATCH_ENABLED", "1") != "0"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 ORDER_TELEGRAM_CHAT_ID = os.environ.get("ORDER_TELEGRAM_CHAT_ID", "-1003959669538")
@@ -214,10 +219,14 @@ DB_PATH           = os.path.join(os.path.dirname(__file__), "sales.db")
 PRODUCTS_FILE     = os.path.join(os.path.dirname(__file__), "products.json")
 PRODUCT_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "product_image")
 AUD_DIR           = os.path.join(os.path.dirname(__file__), "aud")
+CATALOG_IMAGE_PATH = os.environ.get(
+    "CATALOG_IMAGE_PATH",
+    os.path.join(os.path.dirname(__file__), "Gemini_Generated_Image_efqo6zefqo6zefqo.png"),
+)
 BOOKINGS_FILE     = os.path.join(os.path.dirname(__file__), "bookings.jsonl")
-INCOMING_REQUESTS_FILE = os.environ.get(
-    "INCOMING_REQUESTS_FILE",
-    os.path.join(os.path.dirname(__file__), "incoming_requests.jsonl"),
+INCOMING_REQUESTS_FILE = os.environ.get("INCOMING_REQUESTS_FILE") or os.path.join(
+    os.path.dirname(__file__),
+    "incoming_requests.jsonl",
 )
 AD_TRACKING_FILE = os.path.join(os.path.dirname(__file__), "ad_tracking.jsonl")
 MAX_HISTORY  = 20
@@ -225,7 +234,7 @@ FALLBACK_REPLY = (
     "حبيبتي ممكن توضحين أكثر شنو الموديل المطلوب؟ "
     "حتى أتأكدلج من التوفر والسعر 🌸"
 )
-FIXED_DELIVERY_TEXT = "أجور التوصيل ثابتة: بغداد 5 آلاف، باقي المحافظات 6 آلاف"
+FIXED_DELIVERY_TEXT = "أجور التوصيل بغداد 5 آلاف، باقي المحافظات 6 آلاف"
 
 app = Flask(__name__)
 _request_log_lock = threading.Lock()
@@ -236,6 +245,20 @@ BAGHDAD_TZ = ZoneInfo("Asia/Baghdad")
 
 def now_baghdad_iso():
     return datetime.now(BAGHDAD_TZ).replace(microsecond=0).isoformat()
+
+
+def image_flow(stage, **data):
+    record = {
+        "time": datetime.now(BAGHDAD_TZ).replace(microsecond=0).isoformat(),
+        "stage": stage,
+    }
+    for key, value in data.items():
+        if isinstance(value, str):
+            value = value.replace("\n", " ").strip()
+            if len(value) > 220:
+                value = value[:217] + "..."
+        record[key] = value
+    print("[ImageFlow] " + json.dumps(record, ensure_ascii=False, default=str), flush=True)
 
 
 # ── HTTP request/response logging ─────────────────────────────────────────────
@@ -823,6 +846,36 @@ def remember_customer_product(db, sender_id, product, match_method, confidence=0
     )
 
 
+def complete_customer_product_link(db, sender_id, product, match_method, confidence=100, source=""):
+    if not sender_id or not product or not product.get("product_id"):
+        return {"linked": False, "closed_reviews": 0, "reason": "missing_sender_or_product"}
+
+    remember_customer_product(db, sender_id, product, match_method, confidence=confidence)
+    now = now_baghdad_iso()
+    cur = db.execute(
+        "UPDATE human_reviews SET status='linked', replied_at=? "
+        "WHERE sender_id=? AND status='pending'",
+        (now, sender_id),
+    )
+    db.commit()
+    try:
+        set_customer_ai_enabled(db, sender_id, True)
+    except Exception as exc:
+        print(f"[CustomerProduct] Could not re-enable AI after catalog link: {exc}", flush=True)
+
+    closed = cur.rowcount if cur.rowcount is not None else 0
+    image_flow(
+        "product_link_completed",
+        sender_id=sender_id,
+        product_id=product.get("product_id"),
+        match_method=match_method,
+        confidence=confidence,
+        closed_pending_reviews=closed,
+        source=source,
+    )
+    return {"linked": True, "closed_reviews": closed}
+
+
 def load_customer_products(db, sender_id, limit=5):
     rows = db.execute(
         """SELECT product_id, product_name, match_method, confidence, last_seen_at
@@ -1173,7 +1226,7 @@ def build_safe_fallback_reply(matched_product, customer_text=""):
         if stock_state == "unknown":
             return f"حبيبتي هذا هو {name}، بس حالة التوفر مو واضحة عندي حالياً. أراجعها إلج وأرجعلج 🌸"
 
-        if _text_has_any(customer_text, ("قياس", "مقاس", "سايز", "عمر", "سنة", "سنوات", "يلبس")):
+        if _text_has_any(customer_text, ("قياس", "مقاس", "سايز", "وزن", "الوزن", "كيلو")):
             size_part = f"قياساته {sizes}" if sizes else "القياسات مو محددة عندي حالياً"
             return f"حبيبتي {name} متوفر، {size_part} 🌸"
 
@@ -2604,6 +2657,186 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
         }
 
 
+def _file_to_data_url(path):
+    if not path or not os.path.isfile(path):
+        raise FileNotFoundError(path or "missing image path")
+    with open(path, "rb") as f:
+        content = f.read()
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        mime_type = "image/png"
+    elif content.startswith(b"\xff\xd8\xff"):
+        mime_type = "image/jpeg"
+    elif content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        mime_type = "image/webp"
+    else:
+        mime_type = mimetypes.guess_type(path)[0] or "image/png"
+    encoded = base64.b64encode(content).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _download_image_to_data_url(url):
+    resp = requests.get(url, timeout=25)
+    resp.raise_for_status()
+    mime_type = (resp.headers.get("Content-Type") or "").split(";", 1)[0].strip()
+    if not mime_type.startswith("image/"):
+        mime_type = mimetypes.guess_type(urlparse(url).path)[0] or "image/jpeg"
+    encoded = base64.b64encode(resp.content).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _local_image_path_from_reference(image_ref):
+    image_ref = str(image_ref or "").strip()
+    if not image_ref:
+        return ""
+    parsed = urlparse(image_ref)
+    path = parsed.path if parsed.scheme and parsed.netloc else image_ref
+    normalized = path.replace("\\", "/")
+    if "/product_image/" in normalized:
+        rel = normalized.split("/product_image/", 1)[1].lstrip("/")
+        return os.path.join(PRODUCT_IMAGE_DIR, rel)
+    if os.path.isabs(image_ref):
+        return image_ref
+    return os.path.join(os.path.dirname(__file__), image_ref.lstrip("/"))
+
+
+def _image_ref_for_openrouter(image_ref):
+    image_ref = str(image_ref or "").strip()
+    if not image_ref:
+        raise ValueError("missing image url")
+    if image_ref.startswith("data:"):
+        return image_ref
+    if image_ref.startswith("https://"):
+        return image_ref
+    if image_ref.startswith("http://"):
+        return _download_image_to_data_url(image_ref)
+    return _file_to_data_url(_local_image_path_from_reference(image_ref))
+
+
+def _clean_catalog_product_id(raw, products):
+    product_ids = {str(p.get("product_id") or "").strip() for p in products if p.get("product_id")}
+    text = re.sub(r"```(?:json)?|```", "", str(raw or ""), flags=re.IGNORECASE).strip().strip('"\'')
+    first_line = (text.splitlines() or [""])[0].strip().strip('"\'')
+    if first_line.upper() in {"NONE", "NO", "NO_MATCH", "NULL", "FALSE", ""}:
+        return ""
+    if first_line in product_ids:
+        return first_line
+    for pid in product_ids:
+        if re.fullmatch(re.escape(pid), first_line):
+            return pid
+    return ""
+
+
+def match_customer_image_with_catalog(customer_image_url, products):
+    catalog_path = _resolve_catalog_image_path()
+    image_flow(
+        "catalog_match_start",
+        customer_image_url=customer_image_url,
+        products_count=len(products or []),
+        enabled=CATALOG_MATCH_ENABLED,
+        model=CATALOG_MATCH_MODEL,
+        catalog_image_path=os.path.basename(catalog_path),
+    )
+    if not CATALOG_MATCH_ENABLED:
+        return {
+            "product_found": False,
+            "product_id": "",
+            "confidence": 0,
+            "reason": "Catalog match disabled",
+        }
+    if not OPENROUTER_KEY:
+        return {
+            "product_found": False,
+            "product_id": "",
+            "confidence": 0,
+            "reason": "No API key",
+        }
+    if not products:
+        return {
+            "product_found": False,
+            "product_id": "",
+            "confidence": 0,
+            "reason": "No products",
+        }
+
+    try:
+        catalog_image_url = _file_to_data_url(catalog_path)
+        customer_openrouter_url = _image_ref_for_openrouter(customer_image_url)
+        product_ids = ", ".join(
+            str(p.get("product_id") or "").strip()
+            for p in products
+            if p.get("product_id")
+        )
+        prompt = (
+            "You are matching a customer image to a catalog image for an abaya and women's suits store. "
+            "Compare the clothing item in the first image with the catalog/models in the second image. "
+            "Return only the exact product_id printed in the catalog when there is a clear visual match. "
+            "A clear match means the same abaya/suit model, cut, color family, embroidery/details, sleeves, fabric look, and overall design. "
+            "If the image is only similar, unclear, cropped too much, or not one of the catalog models, return NONE. "
+            f"Valid product_id values are: {product_ids}. "
+            "Do not explain. Output one line only: product_id or NONE."
+        )
+        image_flow(
+            "catalog_match_request",
+            model=CATALOG_MATCH_MODEL,
+            customer_image_mode="url" if str(customer_openrouter_url).startswith("https://") else "data_url",
+            catalog_image_mode="data_url",
+        )
+        resp = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": CATALOG_MATCH_MODEL,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": customer_openrouter_url}},
+                            {"type": "image_url", "image_url": {"url": catalog_image_url}},
+                        ],
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 20,
+            },
+            timeout=45,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+        selected = _clean_catalog_product_id(raw, products)
+        image_flow(
+            "catalog_match_response",
+            status_code=resp.status_code,
+            raw=raw,
+            selected=selected or "NONE",
+        )
+        if not selected:
+            return {
+                "product_found": False,
+                "product_id": "",
+                "confidence": 0,
+                "reason": "Catalog returned NONE or unknown product_id",
+                "raw": raw,
+            }
+        return {
+            "product_found": True,
+            "product_id": selected,
+            "confidence": 100,
+            "reason": "Matched by OpenRouter catalog",
+        }
+    except Exception as exc:
+        image_flow("catalog_match_error", error=str(exc))
+        return {
+            "product_found": False,
+            "product_id": "",
+            "confidence": 0,
+            "reason": str(exc),
+        }
+
+
 def match_product(db, ev, products):
     ref       = ev.get("ref")
     ad_id     = ev.get("ad_id")
@@ -2664,6 +2897,30 @@ def match_product(db, ev, products):
                     "confidence": remembered_products[0].get("confidence") or 70,
                     "reason": "Matched from customer's recent product memory",
                 }
+
+    if not matched and image_url and products and CATALOG_MATCH_ENABLED:
+        candidates = build_product_vision_candidates(products, limit=20)
+        catalog_result = match_customer_image_with_catalog(image_url, products)
+        image_result = dict(catalog_result or {})
+        if catalog_result.get("product_found"):
+            pid = catalog_result.get("product_id")
+            matched = next((p for p in products if p.get("product_id") == pid), None)
+            if matched:
+                match_method = "openrouter_catalog"
+                image_result["available"] = _stock_state(matched) == "available"
+                image_result["stock"] = matched.get("stock")
+                image_result["price"] = matched.get("price")
+                complete_customer_product_link(
+                    db,
+                    sender_id,
+                    matched,
+                    "openrouter_catalog",
+                    confidence=100,
+                    source="match_product_openrouter_catalog",
+                )
+                print(f"[CatalogVision] matched product {pid}", flush=True)
+                return matched, match_method, image_result
+        image_result["human_review_candidates"] = candidates
 
     if not matched and image_url and products and VISION_ENABLED:
         # ── Vision product-id pipeline ────────────────────────────────────────
@@ -2880,19 +3137,21 @@ def load_ai_config(db, sender_id=None):
     rules = db.execute(
         "SELECT rule FROM forbidden_rules WHERE active=1"
     ).fetchall()
-    instructions_text = "\n".join(r["content"] for r in instructions)
+    db_instructions = "\n".join(r["content"] for r in instructions).strip()
     rules_list        = [r["rule"] for r in rules]
 
-    # If DB has no instructions, fall back to instructions.txt then playbook
-    if not instructions_text.strip():
-        file_instructions = _load_file_text(_INSTRUCTIONS_FILE)
-        playbook          = _load_file_text(_PLAYBOOK_FILE)
-        if file_instructions:
-            instructions_text = file_instructions
-            print("[Config] Loaded instructions from instructions.txt (DB was empty)", flush=True)
-        if playbook:
-            instructions_text = (instructions_text + "\n\n---\n\n" + playbook).strip()
-            print("[Config] Appended gemini_sales_playbook.md to instructions", flush=True)
+    file_instructions = _load_file_text(_INSTRUCTIONS_FILE)
+    playbook          = _load_file_text(_PLAYBOOK_FILE)
+    instruction_parts = []
+    if file_instructions:
+        instruction_parts.append(file_instructions)
+        print("[Config] Loaded instructions from instructions.txt", flush=True)
+    if db_instructions:
+        instruction_parts.append(db_instructions)
+    instructions_text = "\n\n---\n\n".join(instruction_parts).strip()
+    if playbook:
+        instructions_text = (instructions_text + "\n\n---\n\n" + playbook).strip()
+        print("[Config] Appended gemini_sales_playbook.md to instructions", flush=True)
 
     instructions_text = (brand_identity_rule + "\n\n" + instructions_text).strip()
 
@@ -3478,6 +3737,30 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         reason = "ai_globally_disabled" if not is_ai_enabled(db) else "ai_disabled_for_conversation"
         log(5, "AI DISABLED", f"AI disabled ({reason}). Incoming message saved; no automatic reply.")
 
+        if message_type == "image" and HUMAN_REVIEW_ALL_IMAGES:
+            products_for_match = load_active_products(db)
+            matched_product, match_method, image_result = match_product(db, ev, products_for_match)
+            if matched_product:
+                log(5, "CATALOG VISION", "Customer image linked while AI was disabled; no human review created", {
+                    "product_id": matched_product.get("product_id"),
+                    "match_method": match_method,
+                    "ai_disabled_reason": reason,
+                })
+                return {
+                    "sender_id": ev["sender_id"],
+                    "page_id": ev["page_id"],
+                    "platform": ev["platform"],
+                    "reply": "",
+                    "send_image": False,
+                    "debug": {
+                        "skipped": True,
+                        "reason": reason,
+                        "catalog_match": True,
+                        "product_id": matched_product.get("product_id"),
+                        "match_method": match_method,
+                    },
+                }
+
         # صمام أمان: لو لا توجد مراجعة بشرية معلقة، أنشئ واحدة لكي لا تختفي المحادثة عن لوحة التدخل
         try:
             existing_review = has_pending_human_review(db, ev["sender_id"])
@@ -3522,17 +3805,24 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         if newer:
             if message_type == "image" and HUMAN_REVIEW_ALL_IMAGES:
                 products_for_review = load_active_products(db)
-                review_id = create_human_review(
-                    db,
-                    ev,
-                    "Customer image arrived before newer text; routed to human review without customer reply",
-                    build_product_vision_candidates(products_for_review, limit=20),
-                )
-                log(
-                    5,
-                    "DEBOUNCE/IMAGE",
-                    f"Image sent to Telegram review #{review_id} before skipping older event.",
-                )
+                matched_product, match_method, image_result = match_product(db, ev, products_for_review)
+                if matched_product:
+                    log(5, "DEBOUNCE/IMAGE", "Older image auto-linked before newer event processing", {
+                        "product_id": matched_product.get("product_id"),
+                        "match_method": match_method,
+                    })
+                else:
+                    review_id = create_human_review(
+                        db,
+                        ev,
+                        "Customer image arrived before newer text; routed to human review without customer reply",
+                        (image_result or {}).get("human_review_candidates") or build_product_vision_candidates(products_for_review, limit=20),
+                    )
+                    log(
+                        5,
+                        "DEBOUNCE/IMAGE",
+                        f"Image sent to Telegram review #{review_id} before skipping older event.",
+                    )
             log(5, "DEBOUNCE", "Newer message detected — skipping this one, will process with the latest.")
             return {
                 "sender_id": ev["sender_id"],
@@ -3593,9 +3883,39 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         }
 
     if message_type == "image" and HUMAN_REVIEW_ALL_IMAGES:
+        image_flow("before_image_matching", sender_id=ev["sender_id"], image_url=ev.get("image_url"))
+        matched_product, match_method, image_result = match_product(db, ev, products)
+        if matched_product:
+            log(8, "CATALOG VISION", "Customer image linked automatically; no human review created", {
+                "product_id": matched_product.get("product_id"),
+                "match_method": match_method,
+            })
+            auto_reply = auto_reply_after_product_link(db, ev["sender_id"], matched_product)
+            image_flow(
+                "auto_reply_after_catalog_match",
+                sender_id=ev["sender_id"],
+                product_id=matched_product.get("product_id"),
+                sent=(auto_reply or {}).get("sent"),
+                reason=(auto_reply or {}).get("reason"),
+            )
+            return {
+                "sender_id": ev["sender_id"],
+                "page_id": ev["page_id"],
+                "platform": ev["platform"],
+                "reply": "",
+                "send_image": False,
+                "debug": {
+                    "message_type": message_type,
+                    "catalog_match": True,
+                    "product_id": matched_product.get("product_id"),
+                    "match_method": match_method,
+                    "auto_reply": auto_reply,
+                },
+            }
+
         existing_review = has_pending_image_review(db, ev["sender_id"]) or has_pending_human_review(db, ev["sender_id"])
         if existing_review and has_sent_pending_image_reply(db, ev["sender_id"], existing_review):
-            log(8, "HUMAN REVIEW", f"Image already has pending review #{existing_review}; customer was asked size/age before.")
+            log(8, "HUMAN REVIEW", f"Image already has pending review #{existing_review}; customer was asked size/weight before.")
             return {
                 "sender_id": ev["sender_id"],
                 "page_id": ev["page_id"],
@@ -3609,7 +3929,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                     "human_review_id": existing_review,
                 },
             }
-        candidates = build_product_vision_candidates(products, limit=20)
+        candidates = (image_result or {}).get("human_review_candidates") or build_product_vision_candidates(products, limit=20)
         review_id = create_human_review(
             db,
             ev,
@@ -3766,7 +4086,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             "product_id": matched_product.get("product_id"),
         })
 
-    # ربط حتمي للسياق: "شكد سعره/هذا متوفر/يلبس 2 سنة/ارجعه" تعني آخر منتج محفوظ.
+    # ربط حتمي للسياق: "شكد سعره/هذا متوفر/ارجعه" تعني آخر منتج محفوظ.
     if (
         not matched_product
         and customer_products
@@ -4481,12 +4801,35 @@ def import_forbidden_rules():
     return jsonify({"status": "ok", "count": len(data)}), 200
 
 
+def _orders_payload(db, limit=500):
+    rows = db.execute(
+        """SELECT
+             o.*,
+             c.name AS customer_display_name,
+             c.page_id,
+             COALESCE(c.platform, 'facebook') AS platform
+           FROM orders o
+           LEFT JOIN customers c ON c.sender_id = o.sender_id
+           ORDER BY o.id DESC
+           LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    orders = [dict(r) for r in rows]
+    return {
+        "orders": orders,
+        "total": len(orders),
+        "new_count": sum(1 for o in orders if (o.get("status") or "new") == "new"),
+    }
+
+
 @app.route("/orders", methods=["GET"])
-@require_api_key
 def list_orders():
-    db   = get_db()
-    rows = db.execute("SELECT * FROM orders ORDER BY id DESC").fetchall()
-    return jsonify([dict(r) for r in rows]), 200
+    db = get_db()
+    if _dash_auth():
+        return render_template("orders.html")
+    if API_SECRET_KEY and request.headers.get("X-API-Key") == API_SECRET_KEY:
+        return jsonify(_orders_payload(db)["orders"]), 200
+    return jsonify({"error": "Unauthorized"}), 403
 
 
 @app.route("/customers", methods=["GET"])
@@ -4736,6 +5079,57 @@ def pwa_service_worker():
     return response
 
 
+@app.route("/api/settings/instructions_file", methods=["GET", "POST"])
+@_dash_require
+def api_settings_instructions_file():
+    path = os.path.abspath(_INSTRUCTIONS_FILE)
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+    if not path.startswith(base_dir):
+        return jsonify({"ok": False, "error": "invalid instructions path"}), 500
+
+    if request.method == "GET":
+        content = _load_file_text(path)
+        exists = os.path.exists(path)
+        stat = os.stat(path) if exists else None
+        return jsonify({
+            "ok": True,
+            "path": os.path.basename(path),
+            "content": content,
+            "exists": exists,
+            "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
+            "size": stat.st_size if stat else 0,
+        })
+
+    data = request.get_json(silent=True) or {}
+    content = data.get("content")
+    if not isinstance(content, str):
+        return jsonify({"ok": False, "error": "content must be a string"}), 400
+    if len(content.encode("utf-8")) > 250_000:
+        return jsonify({"ok": False, "error": "instructions file is too large"}), 400
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.exists(path):
+        backup_path = path + ".bak"
+        try:
+            with open(path, "rb") as src, open(backup_path, "wb") as dst:
+                dst.write(src.read())
+        except Exception as exc:
+            print(f"[Settings] Could not write instructions backup: {exc}", flush=True)
+
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(content.rstrip() + "\n")
+    os.replace(tmp_path, path)
+    stat = os.stat(path)
+    print(f"[Settings] instructions.txt updated size={stat.st_size}", flush=True)
+    return jsonify({
+        "ok": True,
+        "path": os.path.basename(path),
+        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat(),
+        "size": stat.st_size,
+    })
+
+
 @app.route("/products")
 def products_page():
     if not _dash_auth():
@@ -4963,13 +5357,6 @@ def api_send_message(sender_id):
     warning = None
     if not manychat_key and not sent:
         warning = "MANYCHAT_API_KEY غير مُهيّأ — تم حفظ الرسالة في القاعدة فقط"
-    elif image_result and not image_result.get("ok"):
-        status = image_result.get("status") or "unknown"
-        message = image_result.get("message") or ""
-        http_code = image_result.get("status_code")
-        warning = f"تم إرسال النص إن وجد، لكن الصورة لم تُرسل (status={status}, http={http_code})"
-        if message:
-            warning += f"\nالتفاصيل: {message}"
     elif not sent:
         status = primary.get("status") or "unknown"
         message = primary.get("message") or ""
@@ -5118,11 +5505,150 @@ def api_products():
 @app.route("/api/orders")
 @_dash_require
 def api_orders():
-    db = get_db()
-    rows = db.execute(
-        "SELECT * FROM orders ORDER BY id DESC LIMIT 500"
-    ).fetchall()
-    return jsonify({"orders": [dict(r) for r in rows]})
+    try:
+        limit = max(1, min(int(request.args.get("limit", "500")), 2000))
+    except ValueError:
+        limit = 500
+    return jsonify(_orders_payload(get_db(), limit=limit))
+
+
+def _backup_sqlite_file_to_bytes(path):
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
+            tmp_path = tmp.name
+        src = sqlite3.connect(path)
+        dst = sqlite3.connect(tmp_path)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        with open(tmp_path, "rb") as f:
+            data = f.read()
+        bio = io.BytesIO(data)
+        bio.seek(0)
+        return bio
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+
+@app.route("/api/export/products")
+@_dash_require
+def api_export_products():
+    if not os.path.exists(PRODUCTS_FILE):
+        return jsonify({"error": "products.json not found"}), 404
+    return send_file(
+        PRODUCTS_FILE,
+        mimetype="application/json",
+        as_attachment=True,
+        download_name=f"products-{datetime.now(BAGHDAD_TZ).strftime('%Y%m%d-%H%M%S')}.json",
+    )
+
+
+@app.route("/api/import/products", methods=["POST"])
+@_dash_require
+def api_import_products():
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"error": "اختر ملف products.json أولاً"}), 400
+    try:
+        data = json.load(upload.stream)
+    except Exception as exc:
+        return jsonify({"error": f"ملف المنتجات ليس JSON صالحاً: {exc}"}), 400
+    if not isinstance(data, list):
+        return jsonify({"error": "ملف المنتجات يجب أن يحتوي قائمة JSON"}), 400
+    normalized = []
+    seen = set()
+    for idx, item in enumerate(data, 1):
+        if not isinstance(item, dict):
+            return jsonify({"error": f"المنتج رقم {idx} ليس object"}), 400
+        product = _normalize_product(item)
+        if not product.get("product_id") or not product.get("product_name"):
+            return jsonify({"error": f"المنتج رقم {idx} يحتاج product_id و product_name"}), 400
+        if product["product_id"] in seen:
+            return jsonify({"error": f"كود المنتج مكرر في الملف: {product['product_id']}"}), 400
+        seen.add(product["product_id"])
+        normalized.append(product)
+    with _products_file_lock:
+        save_products_to_file(normalized)
+    return jsonify({"ok": True, "count": len(normalized)})
+
+
+@app.route("/api/export/database")
+@_dash_require
+def api_export_database():
+    if not os.path.exists(DB_PATH):
+        return jsonify({"error": "sales.db not found"}), 404
+    bio = _backup_sqlite_file_to_bytes(DB_PATH)
+    return send_file(
+        bio,
+        mimetype="application/vnd.sqlite3",
+        as_attachment=True,
+        download_name=f"sales-{datetime.now(BAGHDAD_TZ).strftime('%Y%m%d-%H%M%S')}.db",
+    )
+
+
+@app.route("/api/import/database", methods=["POST"])
+@_dash_require
+def api_import_database():
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"error": "اختر ملف قاعدة البيانات أولاً"}), 400
+
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
+            tmp_path = tmp.name
+            upload.save(tmp)
+
+        src = sqlite3.connect(tmp_path)
+        try:
+            integrity = src.execute("PRAGMA integrity_check").fetchone()[0]
+            if integrity != "ok":
+                return jsonify({"error": f"فحص قاعدة البيانات فشل: {integrity}"}), 400
+            tables = {
+                row[0]
+                for row in src.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            }
+            required = {"customers", "messages", "orders", "app_settings"}
+            missing = sorted(required - tables)
+            if missing:
+                return jsonify({"error": "قاعدة البيانات لا تحتوي الجداول المطلوبة: " + ", ".join(missing)}), 400
+
+            backups_dir = os.path.join(os.path.dirname(__file__), "backups")
+            os.makedirs(backups_dir, exist_ok=True)
+            backup_path = os.path.join(
+                backups_dir,
+                f"sales-before-import-{datetime.now(BAGHDAD_TZ).strftime('%Y%m%d-%H%M%S')}.db",
+            )
+            current = sqlite3.connect(DB_PATH)
+            backup = sqlite3.connect(backup_path)
+            try:
+                current.backup(backup)
+            finally:
+                backup.close()
+                current.close()
+
+            dst = get_db()
+            src.backup(dst)
+            dst.commit()
+        finally:
+            src.close()
+    except Exception as exc:
+        return jsonify({"error": f"فشل استيراد قاعدة البيانات: {exc}"}), 500
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+    return jsonify({"ok": True, "message": "تم استيراد قاعدة البيانات بنجاح"})
 
 
 @app.route("/api/orders/<int:order_id>/send_telegram", methods=["POST"])
@@ -5311,6 +5837,64 @@ def api_upload_image():
     })
 
 
+def _resolve_catalog_image_path():
+    path = str(CATALOG_IMAGE_PATH or "").strip()
+    if not path:
+        return os.path.join(os.path.dirname(__file__), "catalog_image.png")
+    if os.path.isabs(path):
+        return path
+    return os.path.join(os.path.dirname(__file__), path)
+
+
+@app.route("/api/catalog_image", methods=["GET", "POST"])
+@_dash_require
+def api_catalog_image():
+    path = _resolve_catalog_image_path()
+    if request.method == "GET":
+        exists = os.path.isfile(path)
+        stat = os.stat(path) if exists else None
+        return jsonify({
+            "ok": True,
+            "exists": exists,
+            "path": os.path.basename(path),
+            "size": stat.st_size if stat else 0,
+            "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
+            "catalog_match_enabled": CATALOG_MATCH_ENABLED,
+            "catalog_match_model": CATALOG_MATCH_MODEL,
+        })
+
+    if "image" not in request.files:
+        return jsonify({"ok": False, "error": "No image file", "message": "فشل رفع صورة الكتالوج"}), 400
+    file = request.files["image"]
+    if not file.filename:
+        return jsonify({"ok": False, "error": "Empty filename", "message": "فشل رفع صورة الكتالوج"}), 400
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp"}:
+        return jsonify({
+            "ok": False,
+            "error": "Only PNG, JPG, JPEG, or WEBP images are supported",
+            "message": "فشل رفع صورة الكتالوج",
+        }), 400
+
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        file.save(path)
+        stat = os.stat(path)
+        if stat.st_size <= 0:
+            return jsonify({"ok": False, "error": "Uploaded file is empty", "message": "فشل رفع صورة الكتالوج"}), 400
+        print(f"[CatalogImage] uploaded path={os.path.basename(path)} size={stat.st_size}", flush=True)
+        return jsonify({
+            "ok": True,
+            "message": "تم رفع صورة الكتالوج بنجاح",
+            "exists": True,
+            "path": os.path.basename(path),
+            "size": stat.st_size,
+            "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat(),
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc), "message": "فشل رفع صورة الكتالوج"}), 500
+
+
 @app.route("/api/manychat/diag", methods=["GET"])
 @_dash_require
 def api_manychat_diag():
@@ -5319,6 +5903,7 @@ def api_manychat_diag():
         "MANYCHAT_API_KEY", "MANYCHAT_KEY", "MC_API_KEY",
         "MANYCHAT_MESSAGE_TAG", "OPENROUTER_API_KEY", "PUBLIC_URL",
         "DASHBOARD_PASSWORD", "API_SECRET_KEY",
+        "CATALOG_MATCH_MODEL", "CATALOG_MATCH_ENABLED", "CATALOG_IMAGE_PATH",
     ]
     seen = {}
     for name in candidates:

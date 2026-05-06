@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#1f2937">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="مبيعات">
+  <meta name="apple-mobile-web-app-title" content="أنيقة">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>لوحة إدارة المبيعات</title>
+  <title>أنيقة</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
@@ -26,7 +26,7 @@
       <i class="bi bi-list"></i>
     </button>
     <span class="navbar-brand fw-bold fs-6 mb-0">
-      <i class="bi bi-chat-dots-fill me-2"></i>لوحة المبيعات
+      <i class="bi bi-chat-dots-fill me-2"></i>أنيقة
     </span>
   </div>
   <div class="nav-actions d-flex align-items-center gap-2">
@@ -38,10 +38,16 @@
       <i class="bi bi-box-seam"></i>
       <span>المنتجات</span>
     </a>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/orders/view?key={{ request.args.get('key','') }}">
-      <i class="bi bi-bag-check"></i>
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/orders?key={{ request.args.get('key','') }}">
+      <i class="bi bi-receipt"></i>
       <span>الطلبات</span>
     </a>
+    <input type="file" id="catalogImageInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadCatalogImage(this)">
+    <button class="btn btn-outline-light btn-sm py-0" id="catalogImageBtn" onclick="document.getElementById('catalogImageInput').click()" title="تحديث صورة الكتالوج">
+      <i class="bi bi-image"></i>
+      <span class="install-label">الكتالوج</span>
+    </button>
+    <span class="catalog-upload-status small" id="catalogUploadStatus" aria-live="polite"></span>
     <div class="nav-stats d-flex align-items-center gap-1">
       <span class="badge bg-danger fs-7" id="statPending">0 مراجعة</span>
       <span class="badge bg-success fs-7" id="statOrders">0 طلب</span>
@@ -290,6 +296,30 @@
           <button class="btn btn-warning btn-sm w-100 mt-2" id="resolveAIBtn" onclick="resolveWithAI()">
             <i class="bi bi-tools me-1"></i>حل المشكلة بالـ AI
           </button>
+        </div>
+      </div>
+
+      <!-- [4] Commands File -->
+      <div class="ctrl-section">
+        <div class="ctrl-header" onclick="toggleSection('secCommands')">
+          <span><i class="bi bi-file-earmark-text me-1" style="color:var(--warning)"></i>ملف الأوامر</span>
+          <i class="bi bi-chevron-down" style="color:var(--text-muted)"></i>
+        </div>
+        <div id="secCommands" style="display:none;">
+          <div class="small mb-2" style="color:var(--text-muted)">
+            تعديل محتوى <code>instructions.txt</code> المستخدم كتعليمات عامة للذكاء الاصطناعي.
+          </div>
+          <textarea class="form-control form-control-sm mb-2 command-file-editor" id="commandFileText" rows="8"
+            placeholder="جاري تحميل ملف الأوامر..."></textarea>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm flex-grow-1" id="saveCommandFileBtn" onclick="saveCommandFile()">
+              <i class="bi bi-save me-1"></i>حفظ الملف
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="loadCommandFile(true)" title="إعادة تحميل">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <div class="small mt-2" id="commandFileMeta" style="color:var(--text-muted)"></div>
         </div>
       </div>
 

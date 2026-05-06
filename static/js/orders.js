@@ -1,198 +1,96 @@
-const DASH_KEY = new URLSearchParams(window.location.search).get('key') || '';
 let allOrders = [];
 
-const STATUS_LABEL = {
-  new: 'جديد',
-};
+const orderKey = new URLSearchParams(location.search).get('key') || '';
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadOrders();
-});
-
-function apiFetch(url, opts = {}) {
-  opts.headers = { ...(opts.headers || {}), 'X-Dashboard-Key': DASH_KEY };
-  return fetch(url, opts);
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[ch]));
 }
 
-function statusLabel(status) {
-  const s = (status || '').trim().toLowerCase();
-  return STATUS_LABEL[s] || esc(status || '—');
+function orderApi(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}key=${encodeURIComponent(orderKey)}`;
 }
 
-function fillStatusFilter() {
-  const sel = document.getElementById('orderStatusFilter');
-  const prev = sel.value;
-  const seen = new Set();
-  for (const o of allOrders) {
-    const raw = String(o.status ?? '').trim();
-    if (raw) seen.add(raw);
-  }
-  const sorted = [...seen].sort((a, b) => a.localeCompare(b, 'ar'));
-  sel.innerHTML =
-    '<option value="">كل الحالات</option>' +
-    sorted
-      .map((raw) => {
-        const v = escAttr(raw);
-        const lab = statusLabel(raw);
-        return `<option value="${v}">${lab}</option>`;
-      })
-      .join('');
-  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+function formatTime(value) {
+  if (!value) return '-';
+  const text = String(value).replace('T', ' ');
+  return text.slice(0, 16);
 }
 
-function statusBadgeClass(status) {
-  const s = (status || '').trim().toLowerCase();
-  if (s === 'new') return 'bg-primary';
-  return 'bg-secondary';
+function orderSearchText(order) {
+  return [
+    order.id,
+    order.sender_id,
+    order.customer_name,
+    order.customer_display_name,
+    order.phone,
+    order.province,
+    order.address,
+    order.product_id,
+    order.product_name,
+    order.color,
+    order.size,
+    order.notes,
+    order.status
+  ].join(' ').toLowerCase();
 }
 
 async function loadOrders() {
-  const el = document.getElementById('ordersList');
-  el.innerHTML =
-    '<div class="text-center py-5" style="color:var(--text-muted)">' +
-    '<div class="spinner-border spinner-border-sm mb-2"></div>' +
-    '<div class="small">جاري التحميل...</div></div>';
-  try {
-    const res = await apiFetch('/api/orders');
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'فشل تحميل الطلبات');
-    allOrders = data.orders || [];
-    fillStatusFilter();
-    renderOrders();
-  } catch (err) {
-    showToast(err.message || 'فشل تحميل الطلبات', 'danger');
-    el.innerHTML =
-      '<div class="text-center py-5 small" style="color:var(--text-muted)">تعذر تحميل الطلبات</div>';
+  const body = document.getElementById('ordersBody');
+  body.innerHTML = `
+    <tr>
+      <td colspan="9" class="text-center py-5" style="color:var(--text-muted)">
+        <div class="spinner-border spinner-border-sm mb-2"></div>
+        <div class="small">جاري تحميل الطلبات...</div>
+      </td>
+    </tr>`;
+  const res = await fetch(orderApi('/api/orders'));
+  if (!res.ok) {
+    body.innerHTML = `<tr><td colspan="9" class="text-center py-5 text-danger">فشل تحميل الطلبات</td></tr>`;
+    return;
   }
+  const data = await res.json();
+  allOrders = data.orders || [];
+  document.getElementById('ordersTotal').textContent = data.total ?? allOrders.length;
+  document.getElementById('ordersNew').textContent = data.new_count ?? allOrders.filter(o => (o.status || 'new') === 'new').length;
+  renderOrders();
 }
 
 function renderOrders() {
-  const q = (document.getElementById('orderSearch').value || '').trim().toLowerCase();
-  const st = (document.getElementById('orderStatusFilter').value || '').trim().toLowerCase();
+  const body = document.getElementById('ordersBody');
+  const query = (document.getElementById('orderSearch').value || '').trim().toLowerCase();
+  const orders = query ? allOrders.filter(order => orderSearchText(order).includes(query)) : allOrders;
 
-  const list = allOrders.filter((o) => {
-    if (st && String(o.status || '').trim().toLowerCase() !== st) return false;
-    if (!q) return true;
-    const hay = [
-      o.customer_name,
-      o.phone,
-      o.province,
-      o.address,
-      o.product_name,
-      o.product_id,
-      o.color,
-      o.size,
-      o.notes,
-      o.sender_id,
-      o.status,
-      o.created_at,
-    ]
-      .map((x) => String(x ?? '').toLowerCase())
-      .join(' ');
-    return hay.includes(q);
-  });
-
-  document.getElementById('ordersCount').textContent = `${list.length} من ${allOrders.length} طلب`;
-
-  const el = document.getElementById('ordersList');
-  if (!list.length) {
-    el.innerHTML =
-      '<div class="text-center py-5 small" style="color:var(--text-muted)">لا توجد طلبات مطابقة</div>';
+  if (!orders.length) {
+    body.innerHTML = `<tr><td colspan="9" class="text-center py-5" style="color:var(--text-muted)">لا توجد طلبات مطابقة</td></tr>`;
     return;
   }
 
-  el.innerHTML = list
-    .map((o) => {
-      const id = o.id != null ? esc(String(o.id)) : '—';
-      const created = esc(o.created_at || '—');
-      const badgeClass = statusBadgeClass(o.status);
-      const stHtml = statusLabel(o.status);
-      return `
-        <article class="order-card">
-          <div class="order-card-top">
-            <div>
-              <div class="order-card-title">طلب #${id} — ${esc(o.customer_name || 'بدون اسم')}</div>
-              <div class="order-card-meta">${created}</div>
-            </div>
-            <div class="order-card-actions">
-              <span class="badge ${badgeClass} flex-shrink-0">${stHtml}</span>
-              <button class="btn btn-sm btn-telegram" type="button" onclick="sendOrderTelegram(${Number(o.id) || 0}, this)" title="إرسال الطلب إلى التليكرام">
-                <i class="bi bi-telegram"></i>
-                <span>إرسال</span>
-              </button>
-            </div>
-          </div>
-          <dl class="order-card-body mb-0">
-            <div><dt>الهاتف</dt><dd>${esc(o.phone || '—')}</dd></div>
-            <div><dt>المحافظة</dt><dd>${esc(o.province || '—')}</dd></div>
-            <div style="grid-column:1/-1"><dt>العنوان</dt><dd>${esc(o.address || '—')}</dd></div>
-            <div><dt>المنتج</dt><dd>${esc(o.product_name || '—')}</dd></div>
-            <div><dt>كود المنتج</dt><dd>${esc(o.product_id || '—')}</dd></div>
-            <div><dt>اللون</dt><dd>${esc(o.color || '—')}</dd></div>
-            <div><dt>المقاس</dt><dd>${esc(o.size || '—')}</dd></div>
-            <div style="grid-column:1/-1"><dt>ملاحظات</dt><dd>${esc(o.notes || '—')}</dd></div>
-            <div style="grid-column:1/-1"><dt>معرّف المحادثة</dt><dd><code class="small user-select-all">${esc(
-              o.sender_id || '—',
-            )}</code></dd></div>
-          </dl>
-        </article>`;
-    })
-    .join('');
+  body.innerHTML = orders.map(order => {
+    const customer = order.customer_name || order.customer_display_name || order.sender_id || '-';
+    const product = [order.product_name, order.product_id ? `(${order.product_id})` : ''].filter(Boolean).join(' ');
+    return `
+      <tr>
+        <td class="text-muted">#${esc(order.id)}</td>
+        <td>${esc(formatTime(order.created_at))}</td>
+        <td>
+          <div class="fw-semibold">${esc(customer)}</div>
+          <div class="small" style="color:var(--text-muted)">${esc(order.sender_id || '')}</div>
+        </td>
+        <td dir="ltr">${esc(order.phone || '-')}</td>
+        <td>${esc(product || '-')}</td>
+        <td>${esc(order.province || '-')}</td>
+        <td class="orders-address">${esc(order.address || '-')}</td>
+        <td>${esc(order.size || '-')}</td>
+        <td><span class="badge bg-success">${esc(order.status || 'new')}</span></td>
+      </tr>`;
+  }).join('');
 }
 
-async function sendOrderTelegram(orderId, btn) {
-  if (!orderId) return;
-  const oldHtml = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:12px;height:12px;"></span><span>جاري</span>';
-  }
-  try {
-    const res = await apiFetch(`/api/orders/${orderId}/send_telegram`, { method: 'POST' });
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل إرسال الطلب إلى التليكرام');
-    showToast('تم إرسال الطلب إلى التليكرام', 'success');
-  } catch (err) {
-    showToast(err.message || 'فشل إرسال الطلب إلى التليكرام', 'danger');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = oldHtml;
-    }
-  }
-}
-
-function showToast(msg, type = 'success') {
-  const container = document.getElementById('toastContainer');
-  const id = 't' + Date.now();
-  container.insertAdjacentHTML(
-    'beforeend',
-    `
-    <div id="${id}" class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert">
-      <div class="d-flex">
-        <div class="toast-body">${esc(msg)}</div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-      </div>
-    </div>`,
-  );
-  const toastEl = document.getElementById(id);
-  const toast = new bootstrap.Toast(toastEl, { delay: 2600 });
-  toast.show();
-  toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) =>
-    ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;',
-    })[c],
-  );
-}
-
-function escAttr(s) {
-  return esc(s).replace(/`/g, '&#096;');
-}
+document.addEventListener('DOMContentLoaded', loadOrders);

@@ -3,12 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0f766e">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>الطلبات</title>
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <title>طلبات أنيقة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -18,7 +13,7 @@
   <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
     <div class="nav-main d-flex align-items-center gap-2">
       <span class="navbar-brand fw-bold fs-6 mb-0">
-        <i class="bi bi-bag-check-fill me-2"></i>الطلبات
+        <i class="bi bi-receipt-cutoff me-2"></i>طلبات أنيقة
       </span>
     </div>
     <div class="nav-actions d-flex align-items-center gap-2">
@@ -28,44 +23,67 @@
       <a class="btn btn-outline-light btn-sm" href="/products?key={{ request.args.get('key','') }}">
         <i class="bi bi-box-seam me-1"></i>المنتجات
       </a>
-      <button class="btn btn-outline-light btn-sm" type="button" onclick="loadOrders()" title="تحديث">
+      <button class="btn btn-outline-light btn-sm" onclick="loadOrders()">
         <i class="bi bi-arrow-clockwise"></i>
       </button>
     </div>
   </nav>
 
   <main class="orders-layout">
-    <section class="orders-panel">
-      <div class="orders-toolbar">
-        <div>
-          <div class="fw-bold">كل الطلبات</div>
-          <div class="small" style="color:var(--text-muted)" id="ordersCount">—</div>
+    <section class="orders-header">
+      <div>
+        <div class="fw-bold fs-5">كل الطلبات</div>
+        <div class="small" style="color:var(--text-muted)">الطلبات المثبتة من AI أو من الداشبورد تظهر هنا</div>
+      </div>
+      <div class="orders-stats">
+        <div class="orders-stat">
+          <span id="ordersTotal">0</span>
+          <small>إجمالي</small>
         </div>
-        <div class="orders-filters flex-grow-1 justify-content-end">
-          <div class="input-group input-group-sm" style="max-width:280px;min-width:160px;">
-            <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
-            <input type="text" class="form-control border-0" id="orderSearch"
-              placeholder="بحث بالاسم، الهاتف، المنتج، العنوان..."
-              oninput="renderOrders()">
-          </div>
-          <select class="form-select form-select-sm" id="orderStatusFilter" onchange="renderOrders()">
-            <option value="">كل الحالات</option>
-          </select>
+        <div class="orders-stat">
+          <span id="ordersNew">0</span>
+          <small>جديد</small>
         </div>
       </div>
-      <div class="p-2 border-bottom" style="border-color:var(--border)!important;background:var(--sidebar-bg);">
-        <div class="small" style="color:var(--text-muted)">أحدث 500 طلب محفوظ في النظام</div>
+    </section>
+
+    <section class="orders-toolbar">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
+        <input type="text" class="form-control border-0" id="orderSearch"
+          placeholder="بحث بالاسم، الهاتف، المنتج، المحافظة..." oninput="renderOrders()">
       </div>
-      <div class="orders-list" id="ordersList">
-        <div class="text-center py-5" style="color:var(--text-muted)">
-          <div class="spinner-border spinner-border-sm mb-2"></div>
-          <div class="small">جاري التحميل...</div>
-        </div>
+    </section>
+
+    <section class="orders-table-wrap">
+      <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle orders-table mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>الوقت</th>
+              <th>الزبون</th>
+              <th>الهاتف</th>
+              <th>المنتج</th>
+              <th>المحافظة</th>
+              <th>العنوان</th>
+              <th>القياس</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody">
+            <tr>
+              <td colspan="9" class="text-center py-5" style="color:var(--text-muted)">
+                <div class="spinner-border spinner-border-sm mb-2"></div>
+                <div class="small">جاري تحميل الطلبات...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
   </main>
 
-  <div class="toast-container position-fixed bottom-0 start-0 p-3" id="toastContainer"></div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/static/js/orders.js"></script>
 </body>

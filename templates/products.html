@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>إدارة المنتجات</title>
+  <title>منتجات أنيقة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,16 +13,32 @@
   <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
     <div class="nav-main d-flex align-items-center gap-2">
       <span class="navbar-brand fw-bold fs-6 mb-0">
-        <i class="bi bi-box-seam-fill me-2"></i>إدارة المنتجات
+        <i class="bi bi-box-seam-fill me-2"></i>منتجات أنيقة
       </span>
     </div>
     <div class="nav-actions d-flex align-items-center gap-2">
       <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ request.args.get('key','') }}">
         <i class="bi bi-chat-dots me-1"></i>الداشبورد
       </a>
-      <a class="btn btn-outline-light btn-sm" href="/orders/view?key={{ request.args.get('key','') }}">
-        <i class="bi bi-bag-check me-1"></i>الطلبات
+      <a class="btn btn-outline-light btn-sm" href="/orders?key={{ request.args.get('key','') }}">
+        <i class="bi bi-receipt me-1"></i>الطلبات
       </a>
+      <input type="file" id="productsImportInput" accept="application/json,.json" style="display:none" onchange="importProductsFile(this)">
+      <input type="file" id="databaseImportInput" accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/octet-stream" style="display:none" onchange="importDatabaseFile(this)">
+      <div class="btn-group btn-group-sm data-tools" role="group" aria-label="استيراد وتصدير">
+        <button class="btn btn-outline-light" type="button" onclick="exportProducts()" title="تصدير المنتجات">
+          <i class="bi bi-box-arrow-up"></i><span>منتجات</span>
+        </button>
+        <button class="btn btn-outline-light" type="button" onclick="document.getElementById('productsImportInput').click()" title="استيراد المنتجات">
+          <i class="bi bi-box-arrow-in-down"></i><span>منتجات</span>
+        </button>
+        <button class="btn btn-outline-light" type="button" onclick="exportDatabase()" title="تصدير قاعدة البيانات">
+          <i class="bi bi-database-up"></i><span>DB</span>
+        </button>
+        <button class="btn btn-outline-light" type="button" onclick="document.getElementById('databaseImportInput').click()" title="استيراد قاعدة البيانات">
+          <i class="bi bi-database-down"></i><span>DB</span>
+        </button>
+      </div>
       <button class="btn btn-outline-light btn-sm" onclick="loadProducts()">
         <i class="bi bi-arrow-clockwise"></i>
       </button>
@@ -97,7 +113,7 @@
           </div>
           <div class="col-md-6">
             <label class="form-label">الألوان</label>
-            <input class="form-control" id="productColors" placeholder="أسود، بيج، زيتي...">
+            <input class="form-control" id="productColors" placeholder="وردي، أزرق...">
           </div>
           <div class="col-md-4">
             <label class="form-label">Ref</label>
@@ -109,7 +125,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">التصنيف</label>
-            <input class="form-control" id="productCategory" placeholder="عبايات">
+            <input class="form-control" id="productCategory" placeholder="عبايات / سوتات">
           </div>
           <div class="col-12">
             <label class="form-label">روابط الصور</label>
