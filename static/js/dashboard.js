@@ -1068,6 +1068,125 @@ async function saveInstructions() {
 }
 
 // ══ Stats ══════════════════════════════════════════════════════════════════
+const STRICT_FIELDS_BEGIN = '### DASHBOARD_STRICT_FIELDS_BEGIN';
+const STRICT_FIELDS_END = '### DASHBOARD_STRICT_FIELDS_END';
+
+function escapeRegex(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripStrictInstructionSection(text) {
+  const pattern = new RegExp(`\\n?${escapeRegex(STRICT_FIELDS_BEGIN)}[\\s\\S]*?${escapeRegex(STRICT_FIELDS_END)}\\n?`, 'm');
+  return String(text || '').replace(pattern, '\n').trim();
+}
+
+function parseStrictInstructionFields(text) {
+  const source = String(text || '');
+  const start = source.indexOf(STRICT_FIELDS_BEGIN);
+  const end = source.indexOf(STRICT_FIELDS_END);
+  if (start < 0 || end <= start) return [];
+  const section = source.slice(start + STRICT_FIELDS_BEGIN.length, end);
+  const fields = [];
+  const re = /#### اسم الحقل:\s*([^\n]+)\n([\s\S]*?)(?=\n#### اسم الحقل:|\s*$)/g;
+  let match;
+  while ((match = re.exec(section)) !== null) {
+    const name = (match[1] || '').trim();
+    let content = (match[2] || '').trim();
+    content = content.replace(/^المحتوى الإلزامي:\s*/m, '').trim();
+    if (name || content) fields.push({ name, content });
+  }
+  return fields;
+}
+
+function buildStrictInstructionSection(fields) {
+  const clean = (fields || [])
+    .map((field) => ({
+      name: String(field.name || '').trim(),
+      content: String(field.content || '').trim(),
+    }))
+    .filter((field) => field.name && field.content);
+
+  if (!clean.length) return '';
+
+  const blocks = clean.map((field) => (
+    `#### اسم الحقل: ${field.name}\n` +
+    `المحتوى الإلزامي:\n${field.content}`
+  ));
+
+  return [
+    STRICT_FIELDS_BEGIN,
+    'هذه تعليمات صارمة مضافة من لوحة التحكم. يجب على الذكاء الاصطناعي الالتزام بها التزامًا حرفيًا وعدم مخالفتها أو تجاهلها.',
+    ...blocks,
+    STRICT_FIELDS_END,
+  ].join('\n\n');
+}
+
+function collectStrictInstructionFields() {
+  return Array.from(document.querySelectorAll('.strict-field-item')).map((item) => ({
+    name: item.querySelector('.strict-field-name')?.value || '',
+    content: item.querySelector('.strict-field-content')?.value || '',
+  }));
+}
+
+function renderStrictInstructionFields(fields = []) {
+  const list = document.getElementById('strictFieldsList');
+  if (!list) return;
+  list.innerHTML = '';
+  const items = fields.length ? fields : [{ name: '', content: '' }];
+  items.forEach((field) => addStrictInstructionField(field.name, field.content));
+}
+
+function addStrictInstructionField(name = '', content = '') {
+  const list = document.getElementById('strictFieldsList');
+  if (!list) return;
+  const item = document.createElement('div');
+  item.className = 'strict-field-item';
+  item.innerHTML = `
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <input class="form-control form-control-sm strict-field-name" type="text" placeholder="اسم الحقل" value="">
+      <button class="btn btn-outline-danger btn-sm strict-field-remove" type="button" title="حذف الحقل" onclick="removeStrictInstructionField(this)">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+    <textarea class="form-control form-control-sm strict-field-content" rows="3" placeholder="المحتوى الذي يجب الالتزام به التزام صارم"></textarea>
+  `;
+  item.querySelector('.strict-field-name').value = name || '';
+  item.querySelector('.strict-field-content').value = content || '';
+  list.appendChild(item);
+}
+
+function removeStrictInstructionField(button) {
+  const item = button?.closest('.strict-field-item');
+  if (item) item.remove();
+  const list = document.getElementById('strictFieldsList');
+  if (list && !list.children.length) addStrictInstructionField();
+}
+
+function reloadStrictFieldsFromEditor() {
+  const textarea = document.getElementById('commandFileText');
+  if (!textarea) return;
+  renderStrictInstructionFields(parseStrictInstructionFields(textarea.value));
+  showToast('تمت قراءة الحقول من ملف الأوامر', 'success');
+}
+
+async function saveStrictInstructionFields() {
+  const textarea = document.getElementById('commandFileText');
+  if (!textarea) return;
+  const fields = collectStrictInstructionFields();
+  const validFields = fields.filter((field) => field.name.trim() && field.content.trim());
+  const missing = fields.some((field) => field.name.trim() || field.content.trim()) && validFields.length !== fields.filter((field) => field.name.trim() || field.content.trim()).length;
+  if (missing) {
+    showToast('كل حقل صارم يحتاج اسم ومحتوى معًا', 'warning');
+    return;
+  }
+
+  const base = stripStrictInstructionSection(textarea.value);
+  const section = buildStrictInstructionSection(validFields);
+  textarea.value = section ? `${base ? `${base}\n\n` : ''}${section}` : base;
+  const saved = await saveCommandFile();
+  if (saved) showToast('تم حفظ الحقول الصارمة داخل ملف الأوامر', 'success');
+}
+
 async function loadCommandFile(showToastOnSuccess = false) {
   const textarea = document.getElementById('commandFileText');
   if (!textarea) return;
@@ -1077,6 +1196,7 @@ async function loadCommandFile(showToastOnSuccess = false) {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تحميل ملف الأوامر');
     textarea.value = data.content || '';
+    renderStrictInstructionFields(parseStrictInstructionFields(textarea.value));
     if (meta) {
       const size = Number(data.size || 0).toLocaleString('ar');
       meta.textContent = `${data.path || 'instructions.txt'} - ${size} بايت`;
@@ -1111,8 +1231,10 @@ async function saveCommandFile() {
       meta.textContent = `${data.path || 'instructions.txt'} - ${size} بايت`;
     }
     showToast('تم حفظ ملف الأوامر', 'success');
+    return true;
   } catch (e) {
     showToast(e.message || 'فشل حفظ ملف الأوامر', 'danger');
+    return false;
   } finally {
     if (btn) {
       btn.disabled = false;

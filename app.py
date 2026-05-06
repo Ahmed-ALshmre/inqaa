@@ -217,6 +217,7 @@ ASYNC_WEBHOOK      = os.environ.get("ASYNC_WEBHOOK", "1") == "1"
 
 DB_PATH           = os.path.join(os.path.dirname(__file__), "sales.db")
 PRODUCTS_FILE     = os.path.join(os.path.dirname(__file__), "products.json")
+PRODUCT_KNOWLEDGE_FILE = os.path.join(os.path.dirname(__file__), "product_ai_summary.txt")
 PRODUCT_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "product_image")
 AUD_DIR           = os.path.join(os.path.dirname(__file__), "aud")
 CATALOG_IMAGE_PATH = os.environ.get(
@@ -651,6 +652,104 @@ def save_products_to_file(products):
         json.dump(products, f, ensure_ascii=False, indent=2)
         f.write("\n")
     os.replace(temp_path, PRODUCTS_FILE)
+    sync_product_knowledge(products)
+
+
+def _product_knowledge_item(product):
+    return {
+        "product_id": product.get("product_id"),
+        "name": product.get("product_name"),
+        "category": product.get("category"),
+        "price": product.get("price"),
+        "colors": product.get("colors"),
+        "sizes": product.get("sizes"),
+        "stock": product.get("stock"),
+        "description": product.get("description"),
+        "visual_description": product.get("visual_description"),
+        "keywords": product.get("keywords"),
+        "notes": product.get("notes"),
+    }
+
+
+def build_product_knowledge_text(products, analysis_text=""):
+    active = [p for p in (products or []) if _stock_state(p) == "available"]
+    inactive = [p for p in (products or []) if _stock_state(p) != "available"]
+    lines = [
+        "معرفة المنتجات الحالية لمتجر أنيقة:",
+        "هذه المعرفة مولدة من products.json وتُحدَّث تلقائياً عند حفظ أو استيراد أو حذف المنتجات.",
+        "المتجر لا يُحصر بكلمة عباية أو باللون الأسود؛ تعامل مع كل منتج حسب اسمه وتصنيفه وبياناته الفعلية.",
+        "عند سؤال الزبون عن منتج غير محدد قل: شنو الموديل اللي تقصدينه؟ أو دزيلي صورة الموديل، ولا تقل شنو العباية إلا إذا المنتج نفسه عباية.",
+        "ممنوع اختراع لون أو سعر أو قياس غير مذكور في بيانات المنتج. إذا اللون غير مكتوب قل: اللون حسب الصورة أو أحتاج أتأكدلج.",
+        f"عدد المنتجات النشطة: {len(active)}",
+        f"عدد المنتجات غير النشطة/غير المتوفرة: {len(inactive)}",
+    ]
+    if analysis_text:
+        lines.extend(["", "تحليل الذكاء الاصطناعي للمنتجات:", analysis_text.strip()])
+    if active:
+        lines.append("")
+        lines.append("قائمة المنتجات النشطة:")
+        for product in active:
+            item = _product_knowledge_item(product)
+            lines.append("- " + json.dumps(item, ensure_ascii=False))
+    return "\n".join(lines).strip() + "\n"
+
+
+def sync_product_knowledge(products=None, analysis_text=""):
+    try:
+        if products is None:
+            products = load_products_from_file()
+        text = build_product_knowledge_text(products, analysis_text=analysis_text)
+        temp_path = PRODUCT_KNOWLEDGE_FILE + ".tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(temp_path, PRODUCT_KNOWLEDGE_FILE)
+        print(f"[ProductsKnowledge] Synced {len(products or [])} product(s)", flush=True)
+        return text
+    except Exception as exc:
+        print(f"[ProductsKnowledge] Sync failed: {exc}", flush=True)
+        return ""
+
+
+def analyze_products_for_ai(products):
+    products = products or []
+    fallback = build_product_knowledge_text(products)
+    if not products:
+        return fallback, "empty"
+    if not OPENROUTER_KEY:
+        return fallback, "local_sync"
+
+    compact_products = [_product_knowledge_item(p) for p in products]
+    prompt = (
+        "حلل منتجات متجر أنيقة من البيانات التالية واكتب معرفة مختصرة وواضحة لمندوب المبيعات.\n"
+        "المطلوب: ما هي الموديلات المتوفرة، التصنيفات، الألوان الفعلية، القياسات، الأسعار، ونقاط البيع.\n"
+        "مهم جداً: لا تحصر المتجر بالعبايات ولا باللون الأسود. اعتمد على بيانات كل منتج فقط.\n"
+        "إذا حقل اللون أو القياس فارغ، اذكر أنه غير محدد ولا تخترع قيمة.\n"
+        "اكتب بالعربية فقط، بدون JSON، وبصيغة تعليمات عملية قصيرة يقرأها الذكاء الاصطناعي قبل الرد على الزبائن.\n\n"
+        f"المنتجات:\n{json.dumps(compact_products, ensure_ascii=False, indent=2)}"
+    )
+    try:
+        resp = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": IMPROVE_MODEL or MAIN_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1800,
+                "temperature": 0.2,
+            },
+            timeout=45,
+        )
+        resp.raise_for_status()
+        text = (resp.json()["choices"][0]["message"]["content"] or "").strip()
+        if not text:
+            return fallback, "local_sync_empty_ai"
+        return build_product_knowledge_text(products, analysis_text=text), "ai"
+    except Exception as exc:
+        print(f"[ProductsKnowledge] AI analysis failed: {exc}", flush=True)
+        return fallback, f"local_sync_error:{type(exc).__name__}"
 
 
 def get_setting(db, key, default=""):
@@ -1080,12 +1179,12 @@ PENDING_IMAGE_REPLY = (
 )
 
 FIRST_MESSAGE_REPLY = (
-    "يا هلا بيج عيني 🌸 دزيلي صورة العباية اللي عجبتج أو كوليلي الموديل المطلوب حتى أتأكدلج من التوفر."
+    "يا هلا بيج عيني 🌸 دزيلي صورة الموديل اللي عجبج أو كوليلي شنو الموديل المطلوب حتى أتأكدلج من التوفر."
 )
 
 
 def _legacy_store_context(text: str) -> str:
-    """Compatibility shim for older saved flows; abaya store does not need this context."""
+    """Compatibility shim for older saved flows; Aniqah uses product data instead."""
     return "unknown"
 
 
@@ -1118,7 +1217,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
     صياغة رد ديناميكي على أول رسالة من الزبون:
     - يتفاعل مع ما قاله الزبون.
     - الموديل يقرر صيغة الترحيب المناسبة ولا يُلزَم بصيغة محددة.
-    - يطلب صورة العباية أو القياس/الوزن عند الحاجة.
+    - يطلب صورة الموديل أو القياس/الوزن عند الحاجة.
     - لا يلتزم بمنتج معين (لأن المنتج سيُربط من الإدارة).
     """
     customer_text = (ev.get("text") or "").strip()
@@ -1152,7 +1251,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         )
 
     system_prompt = (
-        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر عبايات عراقي اسمه أنيقة.\n"
+        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب الكتالوج الحالي.\n"
         "هذا أول تواصل من الزبون. هدفك من هذا الرد: ترحيب خفيف + سؤال قصير يفتح المحادثة ويوصلنا للحجز.\n\n"
         f"{name_context}\n"
         f"{gender_rule}\n\n"
@@ -1162,11 +1261,11 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         "3) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد.\n"
         "4) لا تذكر اسم منتج معين أو سعر أو قياس (المنتج لم يُحدد بعد).\n"
         "5) لو الزبون سأل عن شيء، تفاعل معه بإيجاز ودون ادعاء.\n"
-        "6) اسأل فقط عن صورة العباية أو القياس/الوزن أو اللون إذا كان ضرورياً. ممنوع السؤال عن منتجات خارج العبايات.\n"
-        "7) إذا الزبون سأل عن غير العبايات، اعتبره خارج نطاق متجر أنيقة وحوّله للإدارة بلطف.\n"
+        "6) اسأل فقط عن صورة الموديل أو القياس/الوزن أو اللون إذا كان ضرورياً. لا تحصر السؤال بكلمة عباية.\n"
+        "7) إذا الزبون سأل عن موديل غير واضح، اسأله: شنو الموديل اللي تقصدينه؟ أو دزيلي صورة الموديل.\n"
         "8) ⚠️ ممنوع الأدعية أو المجاملات الزائدة (تسلمين، فدوة لعمرج، يرزقج، تدللين بأي وقت...). كلمة ودّ واحدة خفيفة فقط (تأمرين/من عيوني/تفضّل) ضمن نفس الجملة.\n"
-        "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: دزّيلي صورة العباية أو شكد الوزن؟).\n\n"
-        "هوية المتجر: متجر أنيقة للعبايات فقط.\n\n"
+        "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: دزّيلي صورة الموديل أو شنو الموديل اللي تقصدينه؟).\n\n"
+        "هوية المتجر: متجر أنيقة للموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية.\n\n"
         "تعليمات الإدارة:\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
@@ -2606,9 +2705,9 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
     })
 
     system_prompt = (
-        "أنت خبير تطابق صور منتجات عبايات وأزياء محتشمة لمتجر أنيقة.\n"
+        "أنت خبير تطابق صور منتجات وموديلات نسائية محتشمة لمتجر أنيقة.\n"
         "ستستلم صورة الزبون ثم مجموعة منتجات، كل منتج معه product_id وvisual_description وصورته.\n"
-        "قارن بصرياً بدقة عالية جداً: نوع العباية، اللون، القصة، الأكمام، التطريز، القماش، الفتحات، الحزام، والملحقات.\n"
+        "قارن بصرياً بدقة عالية جداً: نوع الموديل، اللون، القصة، الأكمام، التطريز، القماش، الفتحات، الحزام، والملحقات.\n"
         "إذا صورة الزبون ليست نفس المنتج تماماً أو تشبهه فقط، أجب NONE.\n"
         "لا تشرح ولا ترجع JSON. أجب بسطر واحد فقط: product_id أو NONE."
     )
@@ -2767,10 +2866,11 @@ def match_customer_image_with_catalog(customer_image_url, products):
             if p.get("product_id")
         )
         prompt = (
-            "You are matching a customer image to a catalog image for an abaya and women's suits store. "
+            "You are matching a customer image to a catalog image for a modest women's fashion store. "
             "Compare the clothing item in the first image with the catalog/models in the second image. "
             "Return only the exact product_id printed in the catalog when there is a clear visual match. "
-            "A clear match means the same abaya/suit model, cut, color family, embroidery/details, sleeves, fabric look, and overall design. "
+            "A clear match means the same model/item, cut, color family, embroidery/details, sleeves, fabric look, and overall design. "
+            "Do not assume every product is an abaya or black; use the catalog and product data only. "
             "If the image is only similar, unclear, cropped too much, or not one of the catalog models, return NONE. "
             f"Valid product_id values are: {product_ids}. "
             "Do not explain. Output one line only: product_id or NONE."
@@ -3128,8 +3228,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
 
 def load_ai_config(db, sender_id=None):
     brand_identity_rule = (
-        "تعليمة هوية ثابتة لا يمكن تجاوزها: هذا النظام خاص بمتجر عبايات عراقي اسمه \"أنيقة\" فقط. "
-        "يُمنع ربط الردود أو المنتجات أو الأسئلة بمتجر أطفال أو أي نشاط خارج بيع العبايات."
+        "تعليمة هوية ثابتة لا يمكن تجاوزها: هذا النظام خاص بمتجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب المنتجات الموجودة في products.json. "
+        "لا تحصر المتجر بالعبايات أو باللون الأسود، ولا تذكر نوع قطعة إلا إذا كان موجوداً في اسم/تصنيف/وصف المنتج. "
+        "يُمنع ربط الردود أو المنتجات أو الأسئلة بمتجر أطفال أو أي نشاط غير موجود ضمن منتجات أنيقة الحالية."
     )
     instructions = db.execute(
         "SELECT content FROM ai_instructions WHERE active=1"
@@ -3141,11 +3242,15 @@ def load_ai_config(db, sender_id=None):
     rules_list        = [r["rule"] for r in rules]
 
     file_instructions = _load_file_text(_INSTRUCTIONS_FILE)
+    product_knowledge = _load_file_text(PRODUCT_KNOWLEDGE_FILE)
     playbook          = _load_file_text(_PLAYBOOK_FILE)
     instruction_parts = []
     if file_instructions:
         instruction_parts.append(file_instructions)
         print("[Config] Loaded instructions from instructions.txt", flush=True)
+    if product_knowledge:
+        instruction_parts.append("معرفة المنتجات المتزامنة من products.json:\n" + product_knowledge)
+        print("[Config] Loaded synced product knowledge", flush=True)
     if db_instructions:
         instruction_parts.append(db_instructions)
     instructions_text = "\n\n---\n\n".join(instruction_parts).strip()
@@ -3364,7 +3469,7 @@ def call_main_ai(
         )
 
     system_prompt = (
-        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر عبايات عراقي اسمه أنيقة.\n"
+        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية.\n"
         "هدفك الوحيد في كل رد: تقريب الزبون خطوة واحدة من الحجز.\n"
         "أسلوبك: قصير + جذاب + محفّز على المتابعة. تجنب الإطالة لأنها تُطفئ الزبون.\n\n"
         "قواعد عامة صارمة:\n"
@@ -3386,7 +3491,7 @@ def call_main_ai(
         "   - فارغ أو غير محدد → استخدم صياغة محايدة قدر الإمكان ولا تفترض الجنس ولا تسأل عنه.\n"
         "   لا تخلط الصيغ في نفس الرد، والتزم بالجنس المحدد طوال الرد.\n"
         "13) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد. خاطبه بصيغ عامة فقط (عيني، حبيبتي، يا هلا، تأمرين).\n"
-        "14) ممنوع منعاً باتاً ربط المتجر بأي نشاط خارج العبايات. المتجر عبايات فقط باسم أنيقة.\n"
+        "14) ممنوع حصر المتجر بالعبايات أو باللون الأسود. استخدم كلمة الموديل/القطعة عند السؤال العام، ولا تقل عباية إلا إذا المنتج نفسه عباية في البيانات.\n"
         "15) ⚠️ ممنوع تكرار تفاصيل المنتج (السعر، القياسات، الألوان، الوصف، اسم المنتج الكامل) في كل رد. اذكر فقط ما طلبه الزبون في رسالته الحالية:\n"
         "   - سأل عن السعر فقط؟ → رد بالسعر فقط بدون قياسات أو ألوان.\n"
         "   - سأل عن المقاس فقط؟ → رد بالمقاسات فقط بدون السعر أو الألوان.\n"
@@ -5245,7 +5350,7 @@ def api_improve_message():
     rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
 
     system_prompt = (
-        "أنت محرر رسائل لمتجر عبايات عراقي اسمه أنيقة يتحدث باللهجة العراقية الودودة.\n"
+        "أنت محرر رسائل لمتجر أنيقة للموديلات والقطع النسائية المحتشمة يتحدث باللهجة العراقية الودودة.\n"
         "مهمتك الوحيدة: إعادة صياغة النص الذي يكتبه الموظف ليكون احترافياً ومقنعاً وقصيراً.\n\n"
         "قواعد صارمة:\n"
         "- لا تضف معلومات (سعر/قياس/لون/منتج) لم يذكرها الموظف.\n"
@@ -5689,6 +5794,28 @@ def api_manage_products():
     include_inactive = request.args.get("all", "1") != "0"
     products = load_products_from_file() if include_inactive else load_active_products(None)
     return jsonify({"products": [product_payload(p) for p in products]})
+
+
+@app.route("/api/products/analyze", methods=["POST"])
+@_dash_require
+def api_analyze_products():
+    products = load_active_products(None)
+    text, source = analyze_products_for_ai(products)
+    temp_path = PRODUCT_KNOWLEDGE_FILE + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(temp_path, PRODUCT_KNOWLEDGE_FILE)
+    exists = os.path.exists(PRODUCT_KNOWLEDGE_FILE)
+    stat = os.stat(PRODUCT_KNOWLEDGE_FILE) if exists else None
+    return jsonify({
+        "ok": True,
+        "source": source,
+        "count": len(products),
+        "summary": _load_file_text(PRODUCT_KNOWLEDGE_FILE) or text,
+        "path": os.path.basename(PRODUCT_KNOWLEDGE_FILE),
+        "size": stat.st_size if stat else 0,
+        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
+    })
 
 
 @app.route("/api/products/manage", methods=["POST"])

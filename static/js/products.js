@@ -216,6 +216,30 @@ async function importDatabaseFile(input) {
   }
 }
 
+async function analyzeProducts() {
+  const btn = document.getElementById('analyzeProductsBtn');
+  const oldHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>تحليل';
+  }
+  try {
+    showToast('جاري تحليل المنتجات ومزامنة معرفة الذكاء الاصطناعي...', 'warning');
+    const res = await apiFetch('/api/products/analyze', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تحليل المنتجات');
+    const sourceText = data.source === 'ai' ? 'بالذكاء الاصطناعي' : 'بالمزامنة المحلية';
+    showToast(`تم تحليل ${data.count || 0} منتج ${sourceText}`, 'success');
+  } catch (err) {
+    showToast(err.message || 'فشل تحليل المنتجات', 'danger');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
+  }
+}
+
 function collectPayload() {
   const payload = {};
   for (const [key, id] of Object.entries(fields)) {
