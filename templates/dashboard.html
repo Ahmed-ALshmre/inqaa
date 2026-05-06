@@ -34,15 +34,15 @@
       <i class="bi bi-robot"></i>
       <span id="aiToggleText">AI يعمل</span>
     </button>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/products?key={{ request.args.get('key','') }}">
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/products?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
       <i class="bi bi-box-seam"></i>
       <span>المنتجات</span>
     </a>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/orders?key={{ request.args.get('key','') }}">
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/orders?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
       <i class="bi bi-receipt"></i>
       <span>الطلبات</span>
     </a>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/instructions?key={{ request.args.get('key','') }}">
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/instructions?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
       <i class="bi bi-sliders2-vertical"></i>
       <span>التعليمات</span>
     </a>

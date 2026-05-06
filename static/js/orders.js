@@ -1,6 +1,12 @@
 let allOrders = [];
 
-const orderKey = new URLSearchParams(location.search).get('key') || '';
+function getDashboardKey() {
+  const fromUrl = new URLSearchParams(window.location.search).get('key') || '';
+  const fromCookie = document.cookie.split('; ').find(row => row.startsWith('dashboard_key='))?.split('=')[1] || '';
+  return fromUrl || decodeURIComponent(fromCookie);
+}
+
+const orderKey = getDashboardKey();
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({

@@ -17,7 +17,7 @@ from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory
+from flask import Flask, g, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory
 
 _ORIGINAL_PRINT = builtins.print
 
@@ -5009,14 +5009,10 @@ def _orders_payload(db, limit=500):
 def orders_page_or_legacy_api():
     db = get_db()
     if _dash_auth():
-        return render_template("orders.html")
+        return _render_dash_template("orders.html")
     if API_SECRET_KEY and request.headers.get("X-API-Key") == API_SECRET_KEY:
         return jsonify(_orders_payload(db)["orders"]), 200
-    return (
-        "<h1>403 — Unauthorized</h1>"
-        "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط أو استخدم X-API-Key للـ API.</p>",
-        403,
-    )
+    return _dash_redirect_with_key("/orders")
 
 
 @app.route("/customers", methods=["GET"])
@@ -5229,9 +5225,28 @@ def health():
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+def _dash_key_from_request():
+    return (
+        request.args.get("key")
+        or request.headers.get("X-Dashboard-Key", "")
+        or request.cookies.get("dashboard_key", "")
+    ).strip()
+
+
 def _dash_auth():
-    key = request.args.get("key") or request.headers.get("X-Dashboard-Key", "")
-    return key == DASHBOARD_PASSWORD
+    key = _dash_key_from_request()
+    return bool(DASHBOARD_PASSWORD) and key == DASHBOARD_PASSWORD
+
+
+def _render_dash_template(template_name):
+    key = _dash_key_from_request()
+    response = make_response(render_template(template_name, dashboard_key=key))
+    response.set_cookie("dashboard_key", key, max_age=60 * 60 * 24 * 30, samesite="Lax")
+    return response
+
+
+def _dash_redirect_with_key(path):
+    return redirect(f"{path}?{urlencode({'key': DASHBOARD_PASSWORD})}", code=302)
 
 
 def _dash_require(fn):
@@ -5246,23 +5261,15 @@ def _dash_require(fn):
 @app.route("/dashboard")
 def dashboard():
     if not _dash_auth():
-        return (
-            "<h1>403 — Unauthorized</h1>"
-            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
-            403,
-        )
-    return render_template("dashboard.html")
+        return _dash_redirect_with_key("/dashboard")
+    return _render_dash_template("dashboard.html")
 
 
 @app.route("/instructions")
 def instructions_page():
     if not _dash_auth():
-        return (
-            "<h1>403 — Unauthorized</h1>"
-            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
-            403,
-        )
-    return render_template("instructions.html")
+        return _dash_redirect_with_key("/instructions")
+    return _render_dash_template("instructions.html")
 
 
 @app.route("/manifest.webmanifest")
@@ -5283,12 +5290,8 @@ def pwa_service_worker():
 @app.route("/products")
 def products_page():
     if not _dash_auth():
-        return (
-            "<h1>403 — Unauthorized</h1>"
-            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
-            403,
-        )
-    return render_template("products.html")
+        return _dash_redirect_with_key("/products")
+    return _render_dash_template("products.html")
 
 
 @app.route("/api/orders")

@@ -17,13 +17,13 @@
       </span>
     </div>
     <div class="nav-actions d-flex align-items-center gap-2">
-      <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ request.args.get('key','') }}">
+      <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
         <i class="bi bi-chat-dots me-1"></i>الداشبورد
       </a>
-      <a class="btn btn-outline-light btn-sm" href="/orders?key={{ request.args.get('key','') }}">
+      <a class="btn btn-outline-light btn-sm" href="/orders?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
         <i class="bi bi-receipt me-1"></i>الطلبات
       </a>
-      <a class="btn btn-outline-light btn-sm" href="/instructions?key={{ request.args.get('key','') }}">
+      <a class="btn btn-outline-light btn-sm" href="/instructions?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
         <i class="bi bi-sliders2-vertical me-1"></i>التعليمات
       </a>
       <input type="file" id="productsImportInput" accept="application/json,.json" style="display:none" onchange="importProductsFile(this)">
