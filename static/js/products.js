@@ -30,6 +30,54 @@ const fields = {
 document.addEventListener('DOMContentLoaded', () => {
   loadProducts();
   document.getElementById('productImages').addEventListener('input', renderImagePreview);
+  switchProductTab('list');
+});
+
+function isMobileViewport() {
+  return window.matchMedia('(max-width: 992px)').matches;
+}
+
+function switchProductTab(tab) {
+  const listPanel = document.getElementById('productsListPanel');
+  const formPanel = document.getElementById('productFormPanel');
+  const listTab = document.getElementById('ptabList');
+  const formTab = document.getElementById('ptabForm');
+  if (!listPanel || !formPanel) return;
+
+  if (!isMobileViewport()) {
+    listPanel.classList.remove('hidden-mobile');
+    formPanel.classList.remove('hidden-mobile');
+    listTab && listTab.classList.remove('active');
+    formTab && formTab.classList.remove('active');
+    return;
+  }
+
+  if (tab === 'form') {
+    listPanel.classList.add('hidden-mobile');
+    formPanel.classList.remove('hidden-mobile');
+    listTab && listTab.classList.remove('active');
+    formTab && formTab.classList.add('active');
+    listTab && listTab.setAttribute('aria-selected', 'false');
+    formTab && formTab.setAttribute('aria-selected', 'true');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    formPanel.classList.add('hidden-mobile');
+    listPanel.classList.remove('hidden-mobile');
+    formTab && formTab.classList.remove('active');
+    listTab && listTab.classList.add('active');
+    formTab && formTab.setAttribute('aria-selected', 'false');
+    listTab && listTab.setAttribute('aria-selected', 'true');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+window.addEventListener('resize', () => {
+  if (!isMobileViewport()) {
+    const listPanel = document.getElementById('productsListPanel');
+    const formPanel = document.getElementById('productFormPanel');
+    listPanel && listPanel.classList.remove('hidden-mobile');
+    formPanel && formPanel.classList.remove('hidden-mobile');
+  }
 });
 
 function apiFetch(url, opts = {}) {
@@ -99,6 +147,7 @@ function newProduct(rerender = true) {
   document.getElementById('deleteProductBtn').style.display = 'none';
   renderImagePreview();
   if (rerender) renderProducts();
+  if (isMobileViewport()) switchProductTab('form');
 }
 
 function editProduct(productId) {
@@ -114,6 +163,7 @@ function editProduct(productId) {
   document.getElementById('deleteProductBtn').style.display = '';
   renderImagePreview();
   renderProducts();
+  if (isMobileViewport()) switchProductTab('form');
 }
 
 async function saveProduct(event) {

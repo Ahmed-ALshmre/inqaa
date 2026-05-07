@@ -83,18 +83,18 @@ function renderOrders() {
     const product = [order.product_name, order.product_id ? `(${order.product_id})` : ''].filter(Boolean).join(' ');
     return `
       <tr>
-        <td class="text-muted">#${esc(order.id)}</td>
-        <td>${esc(formatTime(order.created_at))}</td>
-        <td>
+        <td class="text-muted" data-label="#">#${esc(order.id)}</td>
+        <td data-label="الوقت">${esc(formatTime(order.created_at))}</td>
+        <td data-label="الزبون">
           <div class="fw-semibold">${esc(customer)}</div>
           <div class="small" style="color:var(--text-muted)">${esc(order.sender_id || '')}</div>
         </td>
-        <td dir="ltr">${esc(order.phone || '-')}</td>
-        <td>${esc(product || '-')}</td>
-        <td>${esc(order.province || '-')}</td>
-        <td class="orders-address">${esc(order.address || '-')}</td>
-        <td>${esc(order.size || '-')}</td>
-        <td><span class="badge bg-success">${esc(order.status || 'new')}</span></td>
+        <td dir="ltr" data-label="الهاتف">${esc(order.phone || '-')}</td>
+        <td data-label="المنتج">${esc(product || '-')}</td>
+        <td data-label="المحافظة">${esc(order.province || '-')}</td>
+        <td class="orders-address" data-label="العنوان">${esc(order.address || '-')}</td>
+        <td data-label="القياس">${esc(order.size || '-')}</td>
+        <td data-label="الحالة"><span class="badge bg-success">${esc(order.status || 'new')}</span></td>
       </tr>`;
   }).join('');
 }
