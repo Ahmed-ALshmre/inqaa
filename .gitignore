@@ -1,0 +1,31 @@
+# Environment
+.env
+*.env.local
+
+# Database
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Logs & data
+*.jsonl
+*.log
+
+# Uploaded images (user data)
+account_app/product_image/uploads/
+account_app/catalog_images/
+account_app/aud/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
