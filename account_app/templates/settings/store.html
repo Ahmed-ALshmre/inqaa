@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}إعدادات المتجر{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">الإعدادات</p>
+    <h1>المتجر</h1>
+    <p>معلومات المتجر ونصوص التوصيل والفحص.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <form id="storeSettingsForm" class="admin-form">
+    <label class="form-label">اسم المتجر</label>
+    <input class="form-control" id="storeName">
+    <label class="form-label">رقم الهاتف</label>
+    <input class="form-control" id="storePhone">
+    <label class="form-label">سياسة التوصيل</label>
+    <textarea class="form-control" id="deliveryPolicy" rows="3"></textarea>
+    <label class="form-label">المحافظات</label>
+    <textarea class="form-control" id="storeProvinces" rows="2"></textarea>
+    <label class="form-label">رسالة الفحص قبل الدفع</label>
+    <textarea class="form-control" id="inspectionMessage" rows="4"></textarea>
+    <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> حفظ</button>
+    <span class="admin-status" id="storeSettingsStatus"></span>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/settings_pages.js?v=3"></script>
+<script>initStoreSettingsPage();</script>
+{% endblock %}

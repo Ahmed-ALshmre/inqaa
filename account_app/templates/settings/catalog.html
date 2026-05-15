@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}إعدادات صور الكتالوج{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">الإعدادات</p>
+    <h1>صور الكتالوج</h1>
+    <p>هذه الصور تُرسل مع صورة الزبون إلى الـ AI حتى يتعرف على الموديل المطابق من الكتالوج.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <form id="catalogImagesForm" class="admin-form">
+    <div>
+      <label class="form-label">إضافة صور للكتالوج</label>
+      <input class="form-control" type="file" id="catalogImagesInput" accept="image/png,image/jpeg,image/webp" multiple>
+      <div class="form-text">يمكنك اختيار أكثر من صورة دفعة واحدة. الصيغ المدعومة: PNG و JPG و WEBP.</div>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <button class="btn btn-primary" type="submit">
+        <i class="bi bi-cloud-arrow-up"></i>
+        رفع الصور
+      </button>
+      <button class="btn btn-outline-secondary" type="button" onclick="loadCatalogImages()">
+        <i class="bi bi-arrow-clockwise"></i>
+        تحديث
+      </button>
+      <span class="admin-status" id="catalogImagesStatus"></span>
+    </div>
+  </form>
+</section>
+
+<section class="admin-panel mt-3">
+  <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-3">
+    <div>
+      <h2 class="admin-section-title">الصور الحالية</h2>
+      <div class="small text-muted" id="catalogImagesMeta">جاري التحميل...</div>
+    </div>
+  </div>
+  <div class="catalog-images-grid" id="catalogImagesGrid"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/catalog_settings.js?v=1"></script>
+<script>initCatalogImagesPage();</script>
+{% endblock %}

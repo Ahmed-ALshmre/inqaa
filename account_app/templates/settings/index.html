@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}الإعدادات{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">مركز التحكم</p>
+    <h1>الإعدادات</h1>
+    <p>إدارة الإعدادات المهمة من صفحات منفصلة وواضحة.</p>
+  </div>
+</section>
+
+<section class="admin-card-grid">
+  <a class="admin-link-card" href="/settings/ai?key={{ request.args.get('key','') }}">
+    <i class="bi bi-robot"></i><h2>الذكاء الاصطناعي</h2><p>حالة التشغيل والموديلات والمفاتيح.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/auto-product?key={{ request.args.get('key','') }}">
+    <i class="bi bi-magic"></i><h2>المنتج التلقائي</h2><p>تفعيل المنتج الافتراضي واختيار المنتج.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/catalog?key={{ request.args.get('key','') }}">
+    <i class="bi bi-images"></i><h2>صور الكتالوج</h2><p>رفع أكثر من صورة للكتالوج وحذف الصور التي لا تريد إرسالها للـ AI.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/followup?key={{ request.args.get('key','') }}">
+    <i class="bi bi-send"></i><h2>المتابعة التلقائية</h2><p>تشغيل أو إيقاف المتابعات وضبط حدود الإرسال.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/channels?key={{ request.args.get('key','') }}">
+    <i class="bi bi-broadcast"></i><h2>قنوات التواصل</h2><p>ManyChat وTelegram وحالة الروابط.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/store?key={{ request.args.get('key','') }}">
+    <i class="bi bi-shop-window"></i><h2>المتجر</h2><p>اسم المتجر والتوصيل ورسائل الفحص.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/maintenance?key={{ request.args.get('key','') }}">
+    <i class="bi bi-tools"></i><h2>الصيانة</h2><p>حذف الكاش ومعلومات قاعدة البيانات.</p>
+  </a>
+  <a class="admin-link-card" href="/analytics?key={{ request.args.get('key','') }}">
+    <i class="bi bi-graph-up"></i><h2>التحليلات</h2><p>أداء الرسائل والطلبات والمنتجات.</p>
+  </a>
+  <a class="admin-link-card" href="/evaluation?key={{ request.args.get('key','') }}">
+    <i class="bi bi-clipboard2-data"></i><h2>التقييم والاقتراحات</h2><p>تحليل التحويلات ومراجعة اقتراحات الردود قبل تفعيلها.</p>
+  </a>
+</section>
+{% endblock %}

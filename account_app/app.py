@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import builtins
 import io
 import json
@@ -11,13 +11,14 @@ import tempfile
 import threading
 import time
 import unicodedata
-from datetime import UTC, datetime
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Flask, g, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory
+from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory
 
 _ORIGINAL_PRINT = builtins.print
 
@@ -65,7 +66,7 @@ for _k, _v in {
     "CHECKER_ENABLED":         "0",
     "VISION_ENABLED":          "0",
     "DISABLE_CLIP":            "1",
-    "DEBOUNCE_DELAY":          "60",
+    "DEBOUNCE_DELAY":          "35",
     "HUMAN_REVIEW_ALL_IMAGES": "1",
 }.items():
     if not os.environ.get(_k):
@@ -230,10 +231,14 @@ CATALOG_IMAGE_PATH = os.environ.get(
     "CATALOG_IMAGE_PATH",
     os.path.join(os.path.dirname(__file__), "Gemini_Generated_Image_efqo6zefqo6zefqo.png")
 )
-CATALOG_IMAGES_DIR = os.path.join(os.path.dirname(__file__), "catalog_images")
+CATALOG_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-TELEGRAM_ORDERS_CHAT_ID = os.environ.get("TELEGRAM_ORDERS_CHAT_ID", "").strip()
+TELEGRAM_ORDERS_CHAT_ID = (
+    os.environ.get("TELEGRAM_ORDERS_CHAT_ID", "")
+    or os.environ.get("ORDER_TELEGRAM_CHAT_ID", "")
+).strip()
+TELEGRAM_PROBLEMS_CHAT_ID = os.environ.get("TELEGRAM_PROBLEMS_CHAT_ID", "").strip()
 TELEGRAM_NOTIFICATION_HEADER = os.environ.get("TELEGRAM_NOTIFICATION_HEADER", "أنيقة").strip()
 MANYCHAT_API_KEY = _manychat_key_from_environ()
 MANYCHAT_API_URL = "https://api.manychat.com"
@@ -249,13 +254,15 @@ if PUBLIC_URL:
 else:
     print("[Config] ⚠️  PUBLIC_URL not set — image URLs may resolve to localhost", flush=True)
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
-DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "60"))   # ثواني انتظار قبل الرد (لجمع كل رسائل الزبون قبل تشغيل الموديل)
+DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "35"))   # ثواني انتظار قبل الرد (لجمع كل رسائل الزبون قبل تشغيل الموديل)
 ASYNC_WEBHOOK      = os.environ.get("ASYNC_WEBHOOK", "1") == "1"
 
 DB_PATH           = os.path.join(os.path.dirname(__file__), "sales.db")
 PRODUCTS_FILE     = os.path.join(os.path.dirname(__file__), "products.json")
-PRODUCT_KNOWLEDGE_FILE = os.path.join(os.path.dirname(__file__), "product_ai_summary.txt")
 PRODUCT_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "product_image")
+CATALOG_IMAGE_DIR = os.environ.get("CATALOG_IMAGE_DIR", os.path.join(PRODUCT_IMAGE_DIR, "catalog"))
+if not os.path.isabs(CATALOG_IMAGE_DIR):
+    CATALOG_IMAGE_DIR = os.path.join(os.path.dirname(__file__), CATALOG_IMAGE_DIR)
 AUD_DIR           = os.path.join(os.path.dirname(__file__), "aud")
 BOOKINGS_FILE     = os.path.join(os.path.dirname(__file__), "bookings.jsonl")
 INCOMING_REQUESTS_FILE = os.environ.get(
@@ -268,12 +275,13 @@ FALLBACK_REPLY = (
     "حبيبتي ممكن توضحين أكثر شنو الموديل المطلوب؟ "
     "حتى أتأكدلج من التوفر والسعر 🌸"
 )
-FIXED_DELIVERY_TEXT = "أجور التوصيل ثابتة: بغداد 5 آلاف، باقي المحافظات 6 آلاف"
+FIXED_DELIVERY_TEXT = "أجور التوصيل ثابتة: 4 آلاف لكل محافظات العراق"
 
 app = Flask(__name__)
 _request_log_lock = threading.Lock()
 _ad_tracking_lock = threading.Lock()
 _products_file_lock = threading.Lock()
+_catalog_image_lock = threading.Lock()
 BAGHDAD_TZ = ZoneInfo("Asia/Baghdad")
 
 
@@ -488,6 +496,17 @@ def init_db():
             created_at   TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS conversation_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+            content TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conv_memory_sender
+        ON conversation_memory(sender_id, timestamp DESC);
+
         CREATE TABLE IF NOT EXISTS products (
             id                 INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id         TEXT UNIQUE NOT NULL,
@@ -572,10 +591,129 @@ def init_db():
             value      TEXT,
             updated_at TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS followups (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id      TEXT NOT NULL,
+            stage          TEXT,
+            message_text   TEXT,
+            status         TEXT DEFAULT 'pending',
+            scheduled_at   TEXT,
+            sent_at        TEXT,
+            created_at     TEXT,
+            order_after_id INTEGER,
+            meta_json      TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_followups_due
+        ON followups(status, scheduled_at);
+
+        CREATE INDEX IF NOT EXISTS idx_followups_sender_day
+        ON followups(sender_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS customer_followup_messages (
+            sender_id        TEXT PRIMARY KEY,
+            message_template TEXT,
+            updated_at       TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS problem_reports (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_id     TEXT,
+            customer_name TEXT,
+            message_text  TEXT,
+            reason        TEXT,
+            product_id    TEXT,
+            product_name  TEXT,
+            status        TEXT DEFAULT 'open',
+            created_at    TEXT,
+            updated_at    TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_problem_reports_status
+        ON problem_reports(status, created_at);
+
+        CREATE TABLE IF NOT EXISTS evaluation_suggestions (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            suggestion_type          TEXT,
+            title                    TEXT NOT NULL,
+            content                  TEXT NOT NULL,
+            metric_name              TEXT,
+            metric_value             TEXT,
+            conversion_rate          REAL,
+            reason                   TEXT,
+            status                   TEXT DEFAULT 'draft',
+            admin_notes              TEXT,
+            date_range_start         TEXT,
+            date_range_end           TEXT,
+            metrics_json             TEXT,
+            created_at               TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at               TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS active_ai_rules (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_suggestion_id INTEGER,
+            rule_type            TEXT,
+            rule_text            TEXT NOT NULL,
+            priority             INTEGER DEFAULT 5,
+            active               INTEGER DEFAULT 1,
+            created_at           TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at           TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS daily_learning_runs (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            date_range_start     TEXT,
+            date_range_end       TEXT,
+            metrics_json         TEXT,
+            report_text          TEXT,
+            suggestions_count    INTEGER DEFAULT 0,
+            status               TEXT DEFAULT 'completed',
+            error_text           TEXT,
+            created_at           TEXT DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     db.commit()
 
+    for key, value in (
+        ("followup_enabled", "0"),
+        ("followup_max_per_day", "2"),
+        ("followup_stop_on_order", "1"),
+        ("followup_stop_on_rejection", "1"),
+        ("followup_default_delay_minutes", "20"),
+        ("followup_message_template", ""),
+    ):
+        db.execute(
+            "INSERT OR IGNORE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, value, now_baghdad_iso()),
+        )
+    db.commit()
+
     # Migration: أضف العمود إذا لم يكن موجوداً (للقواعد القديمة)
+    def _add_column_if_missing(table, column, definition):
+        columns = {
+            row[1]
+            for row in db.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column in columns:
+            return
+        db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        db.commit()
+        print(f"[DB] Migration: added {table}.{column} column.", flush=True)
+
+    for column, definition in (
+        ("source", "TEXT DEFAULT 'unknown'"),
+        ("status", "TEXT DEFAULT 'active'"),
+        ("rejected_at", "DATETIME"),
+        ("notes", "TEXT"),
+        ("image_sent", "INTEGER DEFAULT 0"),
+    ):
+        try:
+            _add_column_if_missing("customer_product_interests", column, definition)
+        except Exception as exc:
+            print(f"[DB] Could not add customer_product_interests.{column}: {exc}", flush=True)
+
     try:
         db.execute("ALTER TABLE products ADD COLUMN image_embedding TEXT")
         db.commit()
@@ -693,6 +831,294 @@ def set_setting(db, key, value):
     db.commit()
 
 
+def _setting_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on", "enabled"}
+
+
+def _setting_int(value, default=0, minimum=None, maximum=None):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    if minimum is not None:
+        number = max(minimum, number)
+    if maximum is not None:
+        number = min(maximum, number)
+    return number
+
+
+def get_followup_settings(db=None):
+    db = db or get_db()
+    return {
+        "enabled": _setting_bool(get_setting(db, "followup_enabled", "0")),
+        "max_per_day": _setting_int(get_setting(db, "followup_max_per_day", "2"), 2, 1, 10),
+        "stop_on_order": _setting_bool(get_setting(db, "followup_stop_on_order", "1"), True),
+        "stop_on_rejection": _setting_bool(get_setting(db, "followup_stop_on_rejection", "1"), True),
+        "default_delay_minutes": _setting_int(
+            get_setting(db, "followup_default_delay_minutes", "20"),
+            20,
+            1,
+            10080,
+        ),
+        "message_template": get_setting(db, "followup_message_template", ""),
+    }
+
+
+def save_followup_settings(db, data):
+    enabled = bool(data.get("enabled"))
+    max_per_day = _setting_int(data.get("max_per_day"), 2, 1, 10)
+    stop_on_order = bool(data.get("stop_on_order", True))
+    stop_on_rejection = bool(data.get("stop_on_rejection", True))
+    delay = _setting_int(data.get("default_delay_minutes"), 20, 1, 10080)
+    message_template = str(data.get("message_template") or "")
+    for key, value in (
+        ("followup_enabled", "1" if enabled else "0"),
+        ("followup_max_per_day", str(max_per_day)),
+        ("followup_stop_on_order", "1" if stop_on_order else "0"),
+        ("followup_stop_on_rejection", "1" if stop_on_rejection else "0"),
+        ("followup_default_delay_minutes", str(delay)),
+        ("followup_message_template", message_template),
+    ):
+        set_setting(db, key, value)
+    return get_followup_settings(db)
+
+
+def _format_followup_message_template(template, customer_name, product_name, stage):
+    if not template or not template.strip():
+        return None
+    result = str(template)
+    result = result.replace("{customer_name}", customer_name or "حبيبتي")
+    result = result.replace("{product_name}", product_name or "الموديل")
+    result = result.replace("{stage}", stage or "")
+    return result.strip()
+
+
+def get_customer_followup_template(db, sender_id):
+    if not sender_id:
+        return ""
+    try:
+        row = db.execute(
+            "SELECT message_template FROM customer_followup_messages WHERE sender_id=?",
+            (sender_id,),
+        ).fetchone()
+        return (row["message_template"] or "").strip() if row else ""
+    except Exception as exc:
+        print(f"[FollowUp] customer template fetch error for {sender_id}: {exc}", flush=True)
+        return ""
+
+
+def build_followup_message(db, sender_id, stage, product=None):
+    customer_name = _customer_name_from_db(db, sender_id) or "حبيبتي"
+    product_name = (product or {}).get("product_name") or "الموديل"
+    for template in (
+        get_customer_followup_template(db, sender_id),
+        get_setting(db, "followup_message_template", "").strip(),
+    ):
+        custom_message = _format_followup_message_template(template, customer_name, product_name, stage)
+        if custom_message:
+            return custom_message
+    if stage in {"price", "asked_price"}:
+        return f"حبيبتي بعدج مهتمة بـ {product_name}؟ أكدر أحجزه إلج إذا تحبين."
+    if stage in {"availability", "asked_availability"}:
+        return f"حبيبتي أتابع وياج بخصوص {product_name}، تحبين أحجزه قبل ما يخلص؟"
+    if stage in {"order", "waiting_for_customer_info"}:
+        return "حبيبتي بقي بس ترسلين العنوان ورقم الهاتف حتى أثبت الحجز."
+    return f"حبيت أتابع وياج بخصوص {product_name}، تحبين أكمل وياج الحجز؟"
+
+
+def _followup_day_bounds():
+    today = datetime.now(BAGHDAD_TZ).date()
+    start = datetime.combine(today, datetime.min.time(), tzinfo=BAGHDAD_TZ).isoformat()
+    end = (datetime.combine(today, datetime.min.time(), tzinfo=BAGHDAD_TZ) + timedelta(days=1)).isoformat()
+    return start, end
+
+
+def schedule_followup_if_needed(db, sender_id, stage="conversation", product=None, delay_minutes=None, meta=None):
+    settings = get_followup_settings(db)
+    if not settings["enabled"]:
+        print(f"[FollowUp] Disabled; not scheduling for {sender_id}", flush=True)
+        return None
+    if not sender_id:
+        return None
+    day_start, day_end = _followup_day_bounds()
+    today_count = db.execute(
+        """SELECT COUNT(*) FROM followups
+           WHERE sender_id=? AND created_at >= ? AND created_at < ?
+             AND status IN ('pending', 'sent')""",
+        (sender_id, day_start, day_end),
+    ).fetchone()[0]
+    if today_count >= settings["max_per_day"]:
+        return None
+    pending = db.execute(
+        "SELECT id FROM followups WHERE sender_id=? AND status='pending' ORDER BY id DESC LIMIT 1",
+        (sender_id,),
+    ).fetchone()
+    if pending:
+        return pending["id"]
+    delay = delay_minutes if delay_minutes is not None else settings["default_delay_minutes"]
+    scheduled_at = (datetime.now(BAGHDAD_TZ) + timedelta(minutes=max(1, int(delay)))).isoformat()
+    now = now_baghdad_iso()
+    message = build_followup_message(db, sender_id, stage, product)
+    cur = db.execute(
+        """INSERT INTO followups
+           (sender_id, stage, message_text, status, scheduled_at, created_at, meta_json)
+           VALUES (?, ?, ?, 'pending', ?, ?, ?)""",
+        (
+            sender_id,
+            stage,
+            message,
+            scheduled_at,
+            now,
+            json.dumps(meta or {}, ensure_ascii=False),
+        ),
+    )
+    db.commit()
+    return cur.lastrowid
+
+
+def cancel_followups_for_sender(db, sender_id, reason="cancelled"):
+    now = now_baghdad_iso()
+    cur = db.execute(
+        """UPDATE followups
+           SET status='cancelled', sent_at=?, meta_json=COALESCE(meta_json, '') || ?
+           WHERE sender_id=? AND status='pending'""",
+        (now, f"\n{reason}", sender_id),
+    )
+    db.commit()
+    return cur.rowcount
+
+
+def list_customer_followup_messages(db, limit=500):
+    rows = db.execute(
+        """SELECT
+               c.sender_id,
+               c.name,
+               c.phone,
+               c.province,
+               c.last_seen_at,
+               COALESCE(cfm.message_template, '') AS message_template,
+               cfm.updated_at AS template_updated_at,
+               lf.id AS pending_followup_id,
+               lf.message_text AS pending_message_text,
+               lf.stage AS pending_stage,
+               lf.scheduled_at AS pending_scheduled_at,
+               lm.text AS last_message,
+               lm.created_at AS last_message_at
+           FROM customers c
+           LEFT JOIN customer_followup_messages cfm ON cfm.sender_id = c.sender_id
+           LEFT JOIN followups lf ON lf.id = (
+               SELECT id FROM followups
+               WHERE sender_id = c.sender_id AND status='pending'
+               ORDER BY scheduled_at ASC, id ASC LIMIT 1
+           )
+           LEFT JOIN messages lm ON lm.id = (
+               SELECT id FROM messages
+               WHERE sender_id = c.sender_id
+               ORDER BY id DESC LIMIT 1
+           )
+           ORDER BY COALESCE(lf.scheduled_at, c.last_seen_at, lm.created_at, '') DESC
+           LIMIT ?""",
+        (int(limit),),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def save_customer_followup_template(db, sender_id, message_template, update_pending=True):
+    sender_id = str(sender_id or "").strip()
+    message_template = str(message_template or "").strip()
+    if not sender_id:
+        return {"ok": False, "error": "sender_id required"}
+
+    exists = db.execute("SELECT sender_id FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
+    if not exists:
+        return {"ok": False, "error": "customer not found"}
+
+    now = now_baghdad_iso()
+    if message_template:
+        db.execute(
+            """INSERT INTO customer_followup_messages (sender_id, message_template, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(sender_id) DO UPDATE SET
+                   message_template=excluded.message_template,
+                   updated_at=excluded.updated_at""",
+            (sender_id, message_template, now),
+        )
+    else:
+        db.execute("DELETE FROM customer_followup_messages WHERE sender_id=?", (sender_id,))
+
+    updated_pending = 0
+    if update_pending:
+        pending_rows = db.execute(
+            "SELECT id, stage FROM followups WHERE sender_id=? AND status='pending'",
+            (sender_id,),
+        ).fetchall()
+        product = db.execute(
+            """SELECT product_id, product_name FROM customer_product_interests
+               WHERE sender_id=? AND COALESCE(status, 'active')='active'
+               ORDER BY last_seen_at DESC LIMIT 1""",
+            (sender_id,),
+        ).fetchone()
+        product_payload = dict(product) if product else None
+        for row in pending_rows:
+            refreshed_message = build_followup_message(db, sender_id, row["stage"] or "conversation", product_payload)
+            db.execute(
+                "UPDATE followups SET message_text=? WHERE id=?",
+                (refreshed_message, row["id"]),
+            )
+            updated_pending += 1
+    db.commit()
+    return {"ok": True, "sender_id": sender_id, "updated_pending": updated_pending}
+
+
+def send_due_followups(db=None, limit=25):
+    db = db or get_db()
+    settings = get_followup_settings(db)
+    if not settings["enabled"]:
+        return {"sent": 0, "skipped": 0, "reason": "followup_disabled"}
+    now = now_baghdad_iso()
+    rows = db.execute(
+        """SELECT f.*, COALESCE(c.platform, 'facebook') AS platform, c.page_id
+           FROM followups f
+           LEFT JOIN customers c ON c.sender_id=f.sender_id
+           WHERE f.status='pending' AND f.scheduled_at <= ?
+           ORDER BY f.scheduled_at ASC
+           LIMIT ?""",
+        (now, int(limit)),
+    ).fetchall()
+    sent = 0
+    skipped = 0
+    for row in rows:
+        sender_id = row["sender_id"]
+        if settings["stop_on_order"]:
+            order = db.execute(
+                "SELECT id FROM orders WHERE sender_id=? AND created_at >= ? ORDER BY id DESC LIMIT 1",
+                (sender_id, row["created_at"]),
+            ).fetchone()
+            if order:
+                db.execute(
+                    "UPDATE followups SET status='cancelled', order_after_id=? WHERE id=?",
+                    (order["id"], row["id"]),
+                )
+                skipped += 1
+                continue
+        ok = send_reply_via_manychat(sender_id, row["message_text"], row["platform"] or "facebook", page_id=row["page_id"])
+        if ok:
+            save_message(
+                db, sender_id, "outgoing", "text",
+                row["message_text"], None, None, None,
+                {"followup_id": row["id"], "automatic_followup": True},
+            )
+            save_conversation_message(db, sender_id, "assistant", row["message_text"])
+            db.execute("UPDATE followups SET status='sent', sent_at=? WHERE id=?", (now, row["id"]))
+            sent += 1
+        else:
+            skipped += 1
+    db.commit()
+    return {"sent": sent, "skipped": skipped, "reason": None}
+
+
 def is_ai_enabled(db):
     return get_setting(db, "ai_enabled", "1") != "0"
 
@@ -731,6 +1157,25 @@ def find_product_by_id(product_id, include_inactive=False):
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
+
+def get_auto_product_settings(db):
+    enabled = str(get_setting(db, "auto_product_enabled", "0")).strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    product_id = str(get_setting(db, "auto_product_id", "") or "").strip()
+    send_image = str(get_setting(db, "auto_product_send_image", "0")).strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    product = find_product_by_id(product_id) if enabled and product_id else None
+    if enabled and product_id and not product:
+        print(f"[AutoProduct] Configured product is missing or inactive: {product_id}", flush=True)
+    return {
+        "enabled": enabled and bool(product),
+        "product_id": product_id,
+        "send_image": send_image,
+        "product": product,
+    }
+
 
 def require_api_key(f):
     @wraps(f)
@@ -838,20 +1283,28 @@ def get_or_create_customer(db, sender_id, page_id, platform=None):
     return dict(row)
 
 
-def remember_customer_product(db, sender_id, product, match_method, confidence=0):
+def remember_customer_product(
+    db, sender_id, product, match_method, confidence=0,
+    source=None, status="active", notes=None,
+):
     """حفظ كل موديل تعرّف عليه النظام لهذا الزبون كقائمة اهتمامات."""
     if not product:
         return
     now = now_baghdad_iso()
+    binding_source = source or match_method or "unknown"
     db.execute(
         """INSERT INTO customer_product_interests
-           (sender_id, product_id, product_name, match_method, confidence, last_seen_at)
-           VALUES (?,?,?,?,?,?)
+           (sender_id, product_id, product_name, match_method, confidence, last_seen_at, source, status, notes)
+           VALUES (?,?,?,?,?,?,?,?,?)
            ON CONFLICT(sender_id, product_id) DO UPDATE SET
              product_name=excluded.product_name,
              match_method=excluded.match_method,
              confidence=excluded.confidence,
-             last_seen_at=excluded.last_seen_at""",
+             last_seen_at=excluded.last_seen_at,
+             source=excluded.source,
+             status=excluded.status,
+             rejected_at=NULL,
+             notes=COALESCE(excluded.notes, notes)""",
         (
             sender_id,
             product.get("product_id", ""),
@@ -859,6 +1312,9 @@ def remember_customer_product(db, sender_id, product, match_method, confidence=0
             match_method or "",
             confidence or 0,
             now,
+            binding_source,
+            status or "active",
+            notes,
         ),
     )
     db.commit()
@@ -875,16 +1331,34 @@ def complete_customer_product_link(db, sender_id, product, match_method, confide
     now = now_baghdad_iso()
     product_id = product.get("product_id")
     existing = db.execute(
-        """SELECT match_method FROM customer_product_interests
+        """SELECT match_method, source FROM customer_product_interests
            WHERE sender_id=? AND product_id=?""",
         (sender_id, product_id),
     ).fetchone()
     existing_method = existing["match_method"] if existing else ""
+    existing_source = existing["source"] if existing and "source" in existing.keys() else ""
     weak_methods = {"auto_product_link", "matched_product_context", ""}
     effective_method = match_method or existing_method or ""
     if existing_method and effective_method in weak_methods:
         effective_method = existing_method
-    remember_customer_product(db, sender_id, product, effective_method, confidence=confidence)
+    valid_sources = {"auto_default_product", "image_recognition", "ad_ref", "manual_admin", "unknown"}
+    requested_source = source if source in valid_sources else ""
+    effective_source = requested_source or existing_source or effective_method or "unknown"
+    if effective_source not in valid_sources:
+        if effective_method in {"ref", "ad_id"}:
+            effective_source = "ad_ref"
+        elif effective_method in {"manual", "telegram_human"}:
+            effective_source = "manual_admin"
+        elif effective_method in {"image_recognition", "openrouter_catalog", "vision_product_id"}:
+            effective_source = "image_recognition"
+        elif effective_method == "auto_default_product":
+            effective_source = "auto_default_product"
+        else:
+            effective_source = "unknown"
+    remember_customer_product(
+        db, sender_id, product, effective_method,
+        confidence=confidence, source=effective_source, status="active",
+    )
     cur = db.execute(
         "UPDATE human_reviews SET status='linked', replied_at=? "
         "WHERE sender_id=? AND status='pending'",
@@ -907,10 +1381,12 @@ def complete_customer_product_link(db, sender_id, product, match_method, confide
 
 def load_customer_products(db, sender_id, limit=5):
     rows = db.execute(
-        """SELECT product_id, product_name, match_method, confidence, last_seen_at
+        """SELECT product_id, product_name, match_method, confidence, last_seen_at,
+                  source, status, rejected_at, notes, image_sent
            FROM customer_product_interests
            WHERE sender_id=?
-           ORDER BY last_seen_at DESC
+             AND COALESCE(status, 'active')='active'
+           ORDER BY last_seen_at DESC, id DESC
            LIMIT ?""",
         (sender_id, limit),
     ).fetchall()
@@ -929,9 +1405,101 @@ def load_customer_products(db, sender_id, limit=5):
             "match_method": memory.get("match_method"),
             "confidence": memory.get("confidence"),
             "last_seen_at": memory.get("last_seen_at"),
+            "source": memory.get("source") or memory.get("match_method") or "unknown",
+            "status": memory.get("status") or "active",
+            "rejected_at": memory.get("rejected_at"),
+            "binding_notes": memory.get("notes"),
+            "image_sent": memory.get("image_sent") or 0,
         })
         result.append(product)
     return result
+
+
+def get_active_product_binding(db, sender_id):
+    row = db.execute(
+        """SELECT *
+           FROM customer_product_interests
+           WHERE sender_id=? AND COALESCE(status, 'active')='active'
+           ORDER BY last_seen_at DESC, id DESC
+           LIMIT 1""",
+        (sender_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def bind_customer_to_product(
+    db, sender_id, product, source="unknown", confidence=100, notes=None,
+    match_method=None,
+):
+    if not product or not product.get("product_id"):
+        return None
+    method = match_method or source or "unknown"
+    remember_customer_product(
+        db, sender_id, product, method,
+        confidence=confidence, source=source or method,
+        status="active", notes=notes,
+    )
+    return get_active_product_binding(db, sender_id)
+
+
+def reject_current_binding(db, sender_id, reason=""):
+    binding = get_active_product_binding(db, sender_id)
+    if not binding or (binding.get("source") or binding.get("match_method")) != "auto_default_product":
+        return False
+    now = now_baghdad_iso()
+    note = str(reason or "").strip()
+    db.execute(
+        """UPDATE customer_product_interests
+           SET status='rejected', rejected_at=?, notes=?
+           WHERE id=?""",
+        (now, note, binding["id"]),
+    )
+    db.commit()
+    print(f"[AutoProduct] Rejected auto binding for {sender_id}: {binding.get('product_id')}", flush=True)
+    return True
+
+
+_PRODUCT_OBJECTION_KEYWORDS = (
+    "لا مو هذا",
+    "مو هذا",
+    "مو هاذا",
+    "مو نفس",
+    "هذا غير",
+    "هاذا غير",
+    "اريد غيره",
+    "أريد غيره",
+    "اقصد هذا",
+    "أقصد هذا",
+    "عندي صورة",
+    "اريد مثل الصورة",
+    "أريد مثل الصورة",
+    "ارسلت صورة",
+    "أرسلت صورة",
+    "مو المطلوب",
+    "المنتج غير",
+)
+
+
+def is_product_objection(text):
+    normalized = str(text or "").strip().lower()
+    if not normalized:
+        return False
+    if normalized in {"لا", "لاا", "كلا", "no"}:
+        return True
+    return any(keyword in normalized for keyword in _PRODUCT_OBJECTION_KEYWORDS)
+
+
+def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
+    if message_type == "image" or ev.get("image_url"):
+        return False
+    if customer_products or get_active_product_binding(db, sender_id):
+        return False
+    if ev.get("ref") or ev.get("ad_id"):
+        return False
+    text = (ev.get("text") or "").strip()
+    if not text or is_product_objection(text):
+        return False
+    return bool(get_auto_product_settings(db).get("enabled"))
 
 
 def _is_contextual_product_question(text):
@@ -1121,16 +1689,16 @@ def _text_has_any(text, terms):
 
 PENDING_IMAGE_REPLY = (
     "هلا حبيبتي 🌸 وصلتني الصورة، حتى أتأكدلج من الموديل والتوفر. "
-    "شنو اللون أو القياس/الوزن المطلوب؟"
+    "شنو القياس أو اللون المطلوب؟"
 )
 
 FIRST_MESSAGE_REPLY = (
-    "يا هلا بيج عيني 🌸 دزيلي صورة الموديل اللي عجبج أو كوليلي شنو الموديل المطلوب حتى أتأكدلج من التوفر."
+    "يا هلا بيج عيني 🌸 دزيلي صورة الموديل أو القياس حتى أتأكدلج."
 )
 
 
-def _legacy_store_context(text: str) -> str:
-    """Compatibility shim for older saved flows; Aniqah uses product data instead."""
+def _detect_child_gender(text: str) -> str:
+    """حقل قديم للتوافق؛ متجر أنيقة لا يستخدم تصنيف أطفال هنا."""
     return "unknown"
 
 
@@ -1163,16 +1731,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
     صياغة رد ديناميكي على أول رسالة من الزبون:
     - يتفاعل مع ما قاله الزبون.
     - الموديل يقرر صيغة الترحيب المناسبة ولا يُلزَم بصيغة محددة.
-    - يطلب صورة الموديل أو القياس/الوزن عند الحاجة.
+    - يسأل عن العمر/القياس وسياق الموديل (ولد/بنت) إذا لم يذكر.
     - لا يلتزم بمنتج معين (لأن المنتج سيُربط من الإدارة).
     """
     customer_text = (ev.get("text") or "").strip()
-    legacy_context = _legacy_store_context(customer_text)
+    detected_child = _detect_child_gender(customer_text)
     customer_name = _customer_name_from_db(db, ev["sender_id"])
     customer_gender = _customer_gender_from_db(db, ev["sender_id"])  # 'male' | 'female' | ''
 
     if not OPENROUTER_KEY:
-        return FIRST_MESSAGE_REPLY, legacy_context
+        return FIRST_MESSAGE_REPLY, detected_child
 
     rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
 
@@ -1197,7 +1765,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         )
 
     system_prompt = (
-        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية.\n"
+        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة للموديلات والقطع النسائية المحتشمة.\n"
         "هذا أول تواصل من الزبون. هدفك من هذا الرد: ترحيب خفيف + سؤال قصير يفتح المحادثة ويوصلنا للحجز.\n\n"
         f"{name_context}\n"
         f"{gender_rule}\n\n"
@@ -1207,16 +1775,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         "3) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد.\n"
         "4) لا تذكر اسم منتج معين أو سعر أو قياس (المنتج لم يُحدد بعد).\n"
         "5) لو الزبون سأل عن شيء، تفاعل معه بإيجاز ودون ادعاء.\n"
-        "6) اسأل فقط عن صورة الموديل أو القياس/الوزن أو اللون إذا كان ضرورياً. لا تحصر السؤال بكلمة عباية.\n"
-        "7) إذا الزبون سأل عن موديل غير واضح، اسأله: شنو الموديل اللي تقصدينه؟ أو دزيلي صورة الموديل.\n"
+        "6) اسأل فقط عن صورة الموديل أو القياس أو اطلب الصورة. ممنوع منعاً باتاً السؤال عن سياق الموديل.\n"
+        "7) إذا الزبون ذكر سياق الموديل من نفسه، استخدمه طبيعياً.\n"
         "8) ⚠️ ممنوع الأدعية أو المجاملات الزائدة (تسلمين، فدوة لعمرج، يرزقج، تدللين بأي وقت...). كلمة ودّ واحدة خفيفة فقط (تأمرين/من عيوني/تفضّل) ضمن نفس الجملة.\n"
-        "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: دزّيلي صورة الموديل أو شنو الموديل اللي تقصدينه؟).\n\n"
-        "هوية المتجر: متجر أنيقة للموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية. تعليمات instructions.txt هي المرجع الأساسي لتوجيه الرد.\n\n"
+        "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: شنو القياس؟ أو دزّيلي صورة الموديل).\n\n"
+        f"سياق الموديل المستنتج من رسالة الزبون: {detected_child} (لا تسأل عنه، فقط استخدمه في الصياغة لو كان معروفاً).\n\n"
         "تعليمات الإدارة:\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
         f"{rules_text}\n\n"
-        "أخرج JSON فقط: {\"reply\":\"النص\", \"gender\":\"unknown\"}"
+        "أخرج JSON فقط: {\"reply\":\"النص\", \"gender\":\"boy|girl|unknown\"}"
     )
 
     user_content = (
@@ -1247,13 +1815,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         raw = resp.json()["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         reply = (parsed.get("reply") or "").strip()
+        gender = (parsed.get("gender") or detected_child or "unknown").strip().lower()
+        if gender not in ("boy", "girl", "unknown"):
+            gender = detected_child
         if not reply:
-            return FIRST_MESSAGE_REPLY, legacy_context
-        print(f"[FirstMsgAI] name={customer_name!r} reply={reply[:80]}", flush=True)
-        return reply, legacy_context
+            return FIRST_MESSAGE_REPLY, detected_child
+        print(f"[FirstMsgAI] name={customer_name!r} child={gender} | reply={reply[:80]}", flush=True)
+        return reply, gender
     except Exception as exc:
         print(f"[FirstMsgAI] Error: {exc} → falling back to default greeting.", flush=True)
-        return FIRST_MESSAGE_REPLY, legacy_context
+        return FIRST_MESSAGE_REPLY, detected_child
 
 
 def build_safe_fallback_reply(matched_product, customer_text=""):
@@ -1270,7 +1841,7 @@ def build_safe_fallback_reply(matched_product, customer_text=""):
         if stock_state == "unknown":
             return f"حبيبتي هذا هو {name}، بس حالة التوفر مو واضحة عندي حالياً. أراجعها إلج وأرجعلج 🌸"
 
-        if _text_has_any(customer_text, ("قياس", "مقاس", "سايز", "وزن", "الوزن", "كيلو")):
+        if _text_has_any(customer_text, ("قياس", "مقاس", "سايز", "عمر", "سنة", "سنوات", "يلبس")):
             size_part = f"قياساته {sizes}" if sizes else "القياسات مو محددة عندي حالياً"
             return f"حبيبتي {name} متوفر، {size_part} 🌸"
 
@@ -1348,8 +1919,9 @@ ORDER_CONFIRMATION_TEXT = (
 
 
 def format_order_for_telegram(order):
+    store_name = TELEGRAM_NOTIFICATION_HEADER or "أنيقة"
     return (
-        "🧾 طلب جديد\n"
+        f"🧾 طلب جديد - {store_name}\n"
         f"الوقت: {order.get('created_at') or '-'}\n"
         f"Sender: {order.get('sender_id') or '-'}\n"
         f"الاسم: {order.get('customer_name') or '-'}\n"
@@ -1366,11 +1938,99 @@ def format_order_for_telegram(order):
 
 
 def send_order_to_telegram(order):
-    return send_telegram_message(
+    chat_id = TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID
+    sent = send_telegram_message(
         format_order_for_telegram(order),
-        chat_id=TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID,
+        chat_id=chat_id,
         label="order",
     )
+    try:
+        product = find_product_by_id(order.get("product_id")) if order.get("product_id") else None
+        image_urls = product_image_urls(product) if product else []
+        if image_urls:
+            caption = (
+                f"صور موديل الطلب - {TELEGRAM_NOTIFICATION_HEADER or 'أنيقة'}\n"
+                f"المنتج: {order.get('product_name') or order.get('product_id') or '-'}\n"
+                f"اللون: {order.get('color') or (product or {}).get('colors') or '-'}\n"
+                f"القياس: {order.get('size') or '-'}"
+            )
+            for image_url in image_urls:
+                send_telegram_photo(image_url, caption=caption, chat_id=chat_id, label="order_photo")
+    except Exception as exc:
+        print(f"[Telegram] Could not send order product images: {exc}", flush=True)
+    return sent
+
+
+def create_problem_report(db, ev, reason, matched_product=None):
+    customer_name = None
+    try:
+        row = db.execute("SELECT name FROM customers WHERE sender_id=?", (ev.get("sender_id"),)).fetchone()
+        customer_name = row["name"] if row else None
+    except Exception:
+        customer_name = None
+
+    product_id = None
+    product_name = None
+    if matched_product:
+        product_id = matched_product.get("product_id")
+        product_name = matched_product.get("product_name")
+
+    now = now_baghdad_iso()
+    existing = db.execute(
+        """SELECT id FROM problem_reports
+           WHERE sender_id=? AND status='open' AND message_text=? AND reason=?
+           ORDER BY id DESC LIMIT 1""",
+        (ev.get("sender_id"), ev.get("text") or "", reason),
+    ).fetchone()
+    if existing:
+        return existing["id"], False
+
+    db.execute(
+        "INSERT INTO problem_reports (sender_id, customer_name, message_text, reason, product_id, product_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)",
+        (
+            ev.get("sender_id"),
+            customer_name,
+            ev.get("text") or "",
+            reason,
+            product_id,
+            product_name,
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    return db.execute("SELECT last_insert_rowid()").fetchone()[0], True
+
+
+def send_problem_to_telegram(problem):
+    chat_id = TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_PROBLEMS_CHAT_ID or TELEGRAM_CHAT_ID
+    if not chat_id:
+        print("[Telegram] No problems chat configured. Problem message skipped.", flush=True)
+        return False
+
+    text = (
+        "🚨 مشكلة جديدة\n"
+        f"الزبون: {problem.get('customer_name') or problem.get('sender_id') or '-'}\n"
+        f"Sender ID: {problem.get('sender_id') or '-'}\n"
+        f"سبب المشكلة: {problem.get('reason') or '-'}\n"
+        f"الرسالة: {problem.get('message_text') or '-'}\n"
+    )
+    if problem.get('product_name') or problem.get('product_id'):
+        text += f"\nالمنتج: {problem.get('product_name') or problem.get('product_id')}"
+
+    return send_telegram_message(text, chat_id=chat_id, label="problem")
+
+
+def get_problem_reports(db, status=None, limit=200):
+    query = "SELECT * FROM problem_reports"
+    params = []
+    if status:
+        query += " WHERE status=?"
+        params.append(status)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    rows = db.execute(query, params).fetchall()
+    return [dict(r) for r in rows]
 
 
 def _norm_order_value(value):
@@ -1515,6 +2175,7 @@ def handle_human_product_selection(db, review_id, product_id):
             selected_product,
             "telegram_human",
             100,
+            source="manual_admin",
         )
         reply = f"Linked image review to product {selected_product.get('product_id')}"
         status = "product_selected"
@@ -1661,6 +2322,14 @@ def _should_send_image(db, sender_id: str, product: dict, ev: dict) -> bool:
         return False
 
     # طلب صريح للصورة/التفاصيل
+    binding = get_active_product_binding(db, sender_id)
+    if (
+        binding
+        and binding.get("source") == "auto_default_product"
+        and int(binding.get("image_sent") or 0) == 1
+    ):
+        return False
+
     if _is_product_info_request(ev.get("text", "")):
         return True
 
@@ -1687,6 +2356,36 @@ def attach_product_image_payload(final, product, reply):
     final["debug"]["product_image_urls"] = image_payload["product_image_urls"]
     final["debug"]["send_image"] = image_payload["send_image"]
     return final
+
+
+def send_product_image_if_available(db, sender_id, page_id, platform, product, binding=None):
+    settings = get_auto_product_settings(db)
+    if not settings.get("send_image") or not product:
+        return False
+    active_binding = binding or get_active_product_binding(db, sender_id)
+    if active_binding and int(active_binding.get("image_sent") or 0) == 1:
+        return False
+    image_urls = product_image_urls(product)
+    if not image_urls:
+        return False
+
+    sent_any = False
+    for image_url in image_urls:
+        sent = send_image_to_facebook(sender_id, image_url, page_id, platform)
+        sent_any = sent_any or sent
+        save_message(
+            db, sender_id, "outgoing", "image",
+            None, image_url, None, None,
+            {"auto_default_product_image": True, "sent": sent},
+        )
+
+    if active_binding and sent_any:
+        db.execute(
+            "UPDATE customer_product_interests SET image_sent=1 WHERE id=?",
+            (active_binding["id"],),
+        )
+        db.commit()
+    return sent_any
 
 
 def build_public_image_url(image_url):
@@ -2168,8 +2867,20 @@ def get_subscriber_info(subscriber_id: str, page_id: str = "") -> dict:
 
 # ── Messages ──────────────────────────────────────────────────────────────────
 
-def save_message(db, sender_id, direction, message_type, text,
-                 image_url, ad_id, ref, raw_payload):
+def save_message(db, sender_id=None, direction=None, message_type=None, text=None,
+                 image_url=None, ad_id=None, ref=None, raw_payload=None):
+    if not hasattr(db, "execute"):
+        try:
+            memory_db = get_db()
+            return save_conversation_message(memory_db, db, sender_id, direction)
+        except RuntimeError:
+            memory_db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
+            memory_db.row_factory = sqlite3.Row
+            try:
+                return save_conversation_message(memory_db, db, sender_id, direction)
+            finally:
+                memory_db.close()
+
     now = now_baghdad_iso()
     db.execute(
         """INSERT INTO messages
@@ -2191,6 +2902,48 @@ def load_history(db, sender_id, limit=MAX_HISTORY):
         (sender_id, limit),
     ).fetchall()
     return [dict(r) for r in reversed(rows)]
+
+
+def get_conversation_history(db, sender_id, limit=10):
+    """
+    Return the latest messages from the same customer in AI message format.
+    Uses the existing SQLite connection style.
+    """
+    rows = db.execute(
+        "SELECT role, content "
+        "FROM conversation_memory "
+        "WHERE sender_id=? "
+        "ORDER BY timestamp DESC, id DESC "
+        "LIMIT ?",
+        (sender_id, limit),
+    ).fetchall()
+    history = []
+    for row in reversed(rows):
+        try:
+            role = row["role"]
+            content = row["content"]
+        except (TypeError, KeyError, IndexError):
+            role = row[0]
+            content = row[1]
+        history.append({"role": role, "content": content})
+    return history
+
+
+def save_conversation_message(db, sender_id, role, content):
+    """
+    Save a user or assistant message inside conversation_memory.
+    """
+    if role not in {"user", "assistant"}:
+        return False
+    text = str(content or "").strip()
+    if not sender_id or not text:
+        return False
+    db.execute(
+        "INSERT INTO conversation_memory (sender_id, role, content) VALUES (?, ?, ?)",
+        (sender_id, role, text),
+    )
+    db.commit()
+    return True
 
 
 def latest_incoming_message(db, sender_id):
@@ -2347,6 +3100,313 @@ def _text_match_product(text, products):
         if score > best_score:
             best_score, best_product = score, p
     return best_product if best_score > 0 else None
+
+
+_ARABIC_DIGIT_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+_AGE_WORDS = {
+    "سنة": 1, "سنه": 1, "واحد": 1, "واحدة": 1, "وحدة": 1,
+    "سنتين": 2, "اثنين": 2, "اثنان": 2, "ثنين": 2, "ثنتين": 2,
+    "ثلاث": 3, "ثلاثة": 3, "اربعة": 4, "أربعة": 4, "اربع": 4, "أربع": 4,
+    "خمسة": 5, "خمس": 5, "ستة": 6, "ست": 6, "سبعة": 7, "سبع": 7,
+    "ثمانية": 8, "ثمان": 8, "تسعة": 9, "تسع": 9, "عشرة": 10, "عشر": 10,
+    "احدعش": 11, "احد عشر": 11, "إحدى عشر": 11, "اثنعش": 12, "اثنا عشر": 12,
+}
+
+_PRODUCT_TYPE_TERMS = {
+    "طقم", "قميص", "بدلة", "بدله", "فستان", "تراك", "تلبيسة", "تلبيسه",
+    "قاط", "رسمي", "كاجوال", "صيفي", "شتوي", "بنطلون", "شورت", "ملابس",
+}
+
+_GENERIC_PRODUCT_TERMS = {"ملابس", "موديل", "موديلات", "منتج", "منتجات"}
+
+_COLOR_TERMS = {
+    "اسود", "أسود", "ابيض", "أبيض", "احمر", "أحمر", "ازرق", "أزرق",
+    "وردي", "بنفسجي", "اصفر", "أصفر", "رصاصي", "كحلي", "اخضر", "أخضر",
+}
+
+_PRODUCT_SEARCH_WORDS = {
+    "اريد", "أريد", "اكو", "أكو", "عندكم", "عندج", "متوفر", "متوفرة",
+    "موجود", "موجودة", "قياس", "مقاس", "مقاسات", "عمر", "سنوات", "سنة",
+    "ولادي", "بناتي", "ولد", "بنت", "ملابس", "موديل", "موديلات", "منتج",
+}
+
+_ORDINAL_WORDS = {
+    1: ("الاول", "الأول", "اول", "أول", "واحد", "1"),
+    2: ("الثاني", "ثاني", "اثنين", "اثنان", "2"),
+    3: ("الثالث", "ثالث", "ثلاثة", "3"),
+    4: ("الرابع", "رابع", "اربعة", "أربعة", "4"),
+    5: ("الخامس", "خامس", "خمسة", "5"),
+}
+
+
+def _catalog_text(value):
+    text = str(value or "").translate(_ARABIC_DIGIT_TRANS)
+    text = unicodedata.normalize("NFKC", text)
+    text = re.sub(r"[\u064B-\u065F\u0670]", "", text)
+    return text.strip()
+
+
+def _catalog_words(text):
+    text = _catalog_text(text).lower()
+    words = re.findall(r"[A-Za-z0-9_\u0621-\u064A]+", text)
+    expanded = set(words)
+    expanded.update(_strip_arabic_prefix(w) for w in words)
+    return {w for w in expanded if w}
+
+
+def _product_search_haystack(product):
+    return _catalog_text(" ".join(str(product.get(field) or "") for field in (
+        "product_name", "keywords", "category", "description",
+        "visual_description", "colors", "sizes", "notes",
+    ))).lower()
+
+
+def _extract_age_years(text):
+    normalized = _catalog_text(text).lower()
+    matches = re.findall(r"(\d{1,2})\s*(?:سن(?:ة|ه|وات|ين)?|سنه|سنوات|عمر|اعوام|أعوام|عام)", normalized)
+    if matches:
+        return int(matches[0])
+    matches = re.findall(r"(?:عمر|قياس|مقاس)\s*(\d{1,2})", normalized)
+    if matches:
+        return int(matches[0])
+    for phrase, value in sorted(_AGE_WORDS.items(), key=lambda item: len(item[0]), reverse=True):
+        if re.search(rf"(?:عمر|قياس|مقاس)?\s*{re.escape(phrase)}\s*(?:سن(?:ة|ه|وات)?|اعوام|أعوام|عام)?", normalized):
+            return value
+    return None
+
+
+def _extract_size_age_range(sizes_text):
+    normalized = _catalog_text(sizes_text).lower()
+    values = []
+    for match in re.finditer(r"(\d{1,2})\s*(اشهر|أشهر|شهر|سن(?:ة|ه|وات|ين)?|سنه|سنوات|اعوام|أعوام|عام)", normalized):
+        num = int(match.group(1))
+        unit = match.group(2)
+        values.append(num / 12 if "شهر" in unit or "اشهر" in unit or "أشهر" in unit else float(num))
+    if any(unit in normalized for unit in ("سنة", "سنه", "سنوات", "سنين", "عام", "اعوام", "أعوام")):
+        for match in re.finditer(r"(\d{1,2})(?!\s*(?:اشهر|أشهر|شهر))", normalized):
+            values.append(float(match.group(1)))
+    for phrase, value in _AGE_WORDS.items():
+        if phrase in normalized and any(unit in normalized for unit in ("سنة", "سنه", "سنوات", "عام", "اعوام", "أعوام")):
+            values.append(float(value))
+    if not values:
+        return None
+    return min(values), max(values)
+
+
+def _age_fits_product(age_years, product):
+    if age_years is None:
+        return True, ""
+    age_range = _extract_size_age_range(product.get("sizes") or "")
+    if not age_range:
+        return False, "no_size_range"
+    low, high = age_range
+    if low <= float(age_years) <= high:
+        return True, f"age:{low:g}-{high:g}"
+    return False, f"age_mismatch:{low:g}-{high:g}"
+
+
+def _product_gender(product):
+    haystack = _product_search_haystack(product)
+    girl_terms = ("بناتي", "بنات", "بنت", "فستان", "بنوتة", "بنوت")
+    boy_terms = ("ولادي", "اولاد", "أولاد", "ولد", "صبي", "قاط")
+    has_girl = any(term in haystack for term in girl_terms)
+    has_boy = any(term in haystack for term in boy_terms)
+    if has_girl and not has_boy:
+        return "girl"
+    if has_boy and not has_girl:
+        return "boy"
+    return "unknown"
+
+
+def _request_gender(text):
+    normalized = _catalog_text(text).lower()
+    words = _catalog_words(text)
+    girl_terms = {"بناتي", "بنات", "بنت", "بنوتة", "بنوت", "فستان"}
+    boy_terms = {"ولادي", "اولاد", "أولاد", "ولد", "صبي", "قاط"}
+    has_girl = bool(words & girl_terms) or any(term in normalized for term in girl_terms)
+    has_boy = bool(words & boy_terms) or any(term in normalized for term in boy_terms)
+    if has_girl and not has_boy:
+        return "girl"
+    if has_boy and not has_girl:
+        return "boy"
+    return "unknown"
+
+
+def _extract_product_request(text):
+    words = _catalog_words(text)
+    gender = _request_gender(text)
+    age_years = _extract_age_years(text)
+    product_terms = sorted(words & _PRODUCT_TYPE_TERMS)
+    color_terms = sorted(words & _COLOR_TERMS)
+    has_search_language = bool(words & _PRODUCT_SEARCH_WORDS)
+    has_specific_filter = bool(age_years or gender != "unknown" or product_terms or color_terms)
+    has_catalog_phrase = any(term in _catalog_text(text).lower() for term in (
+        "كتالوج", "كاتالوج", "كل الموديلات", "كل البضاعة", "شنو الموجود", "شنو موجود",
+    ))
+    return {
+        "age_years": age_years,
+        "gender": gender,
+        "product_terms": product_terms,
+        "color_terms": color_terms,
+        "has_search_language": has_search_language,
+        "has_specific_filter": has_specific_filter,
+        "is_search": has_specific_filter or has_catalog_phrase or (has_search_language and bool(product_terms)),
+    }
+
+
+def _product_matches_request(product, request_info):
+    if _stock_state(product) != "available":
+        return None
+    score = 0
+    reasons = []
+    age_ok, age_reason = _age_fits_product(request_info.get("age_years"), product)
+    if not age_ok:
+        return None
+    if request_info.get("age_years") is not None:
+        score += 40
+        reasons.append(age_reason)
+
+    requested_gender = request_info.get("gender") or "unknown"
+    product_gender = _product_gender(product)
+    if requested_gender != "unknown":
+        if product_gender != "unknown" and product_gender != requested_gender:
+            return None
+        score += 25 if product_gender == requested_gender else 6
+        reasons.append(f"gender:{product_gender}")
+
+    haystack = _product_search_haystack(product)
+    specific_terms = [term for term in (request_info.get("product_terms") or []) if term not in _GENERIC_PRODUCT_TERMS]
+    if specific_terms and not any(term in haystack for term in specific_terms):
+        return None
+    for term in request_info.get("product_terms") or []:
+        if term in haystack:
+            score += 8
+            reasons.append(f"type:{term}")
+    for term in request_info.get("color_terms") or []:
+        if term in haystack:
+            score += 6
+            reasons.append(f"color:{term}")
+
+    if not request_info.get("has_specific_filter"):
+        score += 1
+    return {"product": product, "score": score, "reasons": reasons}
+
+
+def search_available_products_for_request(text, products, limit=5):
+    request_info = _extract_product_request(text)
+    if not request_info.get("is_search"):
+        return {"request": request_info, "matches": []}
+    matches = []
+    for product in products or []:
+        match = _product_matches_request(product, request_info)
+        if match:
+            matches.append(match)
+    matches.sort(key=lambda item: (
+        item["score"],
+        1 if product_image_urls(item["product"]) else 0,
+        item["product"].get("product_id") or "",
+    ), reverse=True)
+    return {"request": request_info, "matches": matches[:limit]}
+
+
+def _product_search_summary(request_info):
+    parts = []
+    if request_info.get("age_years") is not None:
+        parts.append(f"للقياس المطلوب")
+    if request_info.get("gender") == "boy":
+        parts.append("ولادي")
+    elif request_info.get("gender") == "girl":
+        parts.append("بناتي")
+    product_terms = [term for term in (request_info.get("product_terms") or []) if term not in _GENERIC_PRODUCT_TERMS]
+    if product_terms:
+        parts.append(" / ".join(product_terms))
+    if request_info.get("color_terms"):
+        parts.append("لون " + " / ".join(request_info["color_terms"]))
+    return " ".join(parts) or "حسب طلبك"
+
+
+def build_product_recommendation_reply(matches, request_info):
+    products = [item["product"] for item in matches]
+    summary = _product_search_summary(request_info)
+    if not products:
+        return f"ما لقيت حالياً موديل متوفر مطابق لـ {summary}. ممكن ترسلين عمر/قياس ثاني حتى أبحث لك؟"
+    lines = [f"لقيت لك {len(products)} موديل متوفر {summary}:"]
+    for idx, product in enumerate(products, 1):
+        name = product.get("product_name") or "موديل"
+        price = product.get("price") or "السعر غير محدد"
+        sizes = product.get("sizes") or "المقاسات غير محددة"
+        colors = product.get("colors") or "الألوان حسب الصورة"
+        lines.append(f"{idx}. {name} - السعر: {price} - القياسات: {sizes} - الألوان: {colors}")
+    lines.append("أرسل لك الصور بالترتيب، اختاري الرقم اللي يعجبك وأحجزه لك.")
+    return "\n".join(lines)
+
+
+def build_product_recommendation_image_messages(matches, max_images_per_product=1):
+    messages = []
+    for item in matches:
+        product = item["product"]
+        for image_url in product_image_urls(product)[:max_images_per_product]:
+            messages.append({"type": "image", "url": image_url})
+    return messages
+
+
+def remember_product_search_results(db, sender_id, matches, request_info):
+    summary = _product_search_summary(request_info)
+    for rank, item in reversed(list(enumerate(matches, 1))):
+        remember_customer_product(
+            db,
+            sender_id,
+            item["product"],
+            "catalog_search",
+            confidence=item.get("score") or 70,
+            source="catalog_search",
+            status="active",
+            notes=f"catalog_search_rank={rank}; query={summary}; reasons={','.join(item.get('reasons') or [])}",
+        )
+
+
+def _catalog_search_rank(product):
+    notes = str((product or {}).get("binding_notes") or "")
+    match = re.search(r"catalog_search_rank=(\d+)", notes)
+    return int(match.group(1)) if match else 999
+
+
+def _customer_products_display_order(customer_products):
+    return sorted(
+        customer_products or [],
+        key=lambda product: (_catalog_search_rank(product), product.get("last_seen_at") or ""),
+    )
+
+
+def select_customer_context_product(text, customer_products):
+    if not customer_products:
+        return None
+    ordered = _customer_products_display_order(customer_products)
+    words = _catalog_words(text)
+    for index, aliases in _ORDINAL_WORDS.items():
+        if any(alias in words for alias in aliases) and len(ordered) >= index:
+            return ordered[index - 1]
+
+    normalized = _catalog_text(text).lower()
+    for product in ordered:
+        if product.get("product_id") and str(product.get("product_id")).lower() in normalized:
+            return product
+        name = _catalog_text(product.get("product_name") or "").lower()
+        if name and name in normalized:
+            return product
+
+    request_info = _extract_product_request(text)
+    if request_info.get("has_specific_filter"):
+        matches = []
+        for product in ordered:
+            match = _product_matches_request(product, request_info)
+            if match:
+                matches.append(match)
+        if matches:
+            matches.sort(key=lambda item: item["score"], reverse=True)
+            return matches[0]["product"]
+    return None
 
 
 def analyze_image_with_ai(image_url, candidate_products):
@@ -2623,7 +3683,7 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
     })
 
     system_prompt = (
-        "أنت خبير تطابق صور منتجات وموديلات نسائية محتشمة لمتجر أنيقة.\n"
+        "أنت خبير تطابق صور منتجات موديلات وقطع نسائية محتشمة لمتجر.\n"
         "ستستلم صورة الزبون ثم مجموعة منتجات، كل منتج معه product_id وvisual_description وصورته.\n"
         "قارن بصرياً بدقة عالية جداً: نوع القطعة، اللون، القصة، الأكمام، الياقة، البنطال/الشورت، الجيوب، الأزرار، الإكسسوارات.\n"
         "إذا صورة الزبون ليست نفس المنتج تماماً أو تشبهه فقط، أجب NONE.\n"
@@ -2681,6 +3741,77 @@ def _resolve_catalog_image_path():
     if os.path.isabs(path):
         return path
     return os.path.join(os.path.dirname(__file__), path)
+
+
+def _is_catalog_image_file(filename):
+    return os.path.splitext(str(filename or "").strip())[1].lower() in CATALOG_IMAGE_EXTENSIONS
+
+
+def _catalog_image_paths_from_dir():
+    if not os.path.isdir(CATALOG_IMAGE_DIR):
+        return []
+    paths = []
+    for name in os.listdir(CATALOG_IMAGE_DIR):
+        path = os.path.join(CATALOG_IMAGE_DIR, name)
+        if os.path.isfile(path) and _is_catalog_image_file(name):
+            paths.append(path)
+    return sorted(paths, key=lambda item: (os.path.getmtime(item), os.path.basename(item).lower()))
+
+
+def _resolve_catalog_image_paths():
+    paths = []
+    seen = set()
+    legacy_path = _resolve_catalog_image_path()
+    for path in [legacy_path, *_catalog_image_paths_from_dir()]:
+        if not path or not os.path.isfile(path):
+            continue
+        real = os.path.realpath(path)
+        if real in seen:
+            continue
+        seen.add(real)
+        paths.append(path)
+    return paths
+
+
+def _catalog_image_id(path):
+    real_path = os.path.realpath(path)
+    legacy_path = _resolve_catalog_image_path()
+    if legacy_path and os.path.realpath(legacy_path) == real_path:
+        return "__legacy__"
+    return os.path.basename(path)
+
+
+def _catalog_image_public_url(path):
+    try:
+        rel = os.path.relpath(path, PRODUCT_IMAGE_DIR).replace("\\", "/")
+    except ValueError:
+        return ""
+    if rel.startswith(".."):
+        return ""
+    return build_public_image_url(f"/product_image/{rel}")
+
+
+def _catalog_image_meta(path):
+    stat = os.stat(path)
+    return {
+        "id": _catalog_image_id(path),
+        "filename": os.path.basename(path),
+        "managed": _catalog_image_id(path) != "__legacy__",
+        "url": _catalog_image_public_url(path),
+        "size": stat.st_size,
+        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat(),
+    }
+
+
+def _safe_catalog_filename(filename):
+    base = os.path.basename(str(filename or "").replace("\\", "/")).strip()
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
+    stem, ext = os.path.splitext(base)
+    ext = ext.lower()
+    if ext not in CATALOG_IMAGE_EXTENSIONS:
+        return ""
+    stem = stem.strip("._-") or "catalog"
+    return f"{stem[:80]}_{int(time.time() * 1000)}{ext}"
 
 
 def _file_to_data_url(path):
@@ -2759,7 +3890,7 @@ def match_customer_image_with_catalog(customer_image_url, products):
         products_count=len(products or []),
         enabled=CATALOG_MATCH_ENABLED,
         model=CATALOG_MATCH_MODEL,
-        catalog_image_path=os.path.basename(_resolve_catalog_image_path()),
+        catalog_images_count=len(_resolve_catalog_image_paths()),
     )
     if not CATALOG_MATCH_ENABLED:
         image_flow("04_catalog_match_skipped", reason="disabled")
@@ -2790,46 +3921,33 @@ def match_customer_image_with_catalog(customer_image_url, products):
         }
 
     try:
-        catalog_paths = _resolve_all_catalog_image_paths()
-        if not catalog_paths:
+        catalog_image_urls = [
+            _file_to_data_url(path)
+            for path in _resolve_catalog_image_paths()
+        ]
+        if not catalog_image_urls:
             image_flow("04_catalog_match_skipped", reason="no_catalog_images")
-            print("[CatalogVision] No catalog images found", flush=True)
+            print("[CatalogVision] returned NONE, no catalog images configured", flush=True)
             return {
                 "product_found": False,
                 "product_id": "",
                 "confidence": 0,
-                "reason": "No catalog images uploaded",
+                "reason": "No catalog images",
             }
-
-        catalog_data_urls = [_file_to_data_url(p) for p in catalog_paths]
         customer_openrouter_url = _image_ref_for_openrouter(customer_image_url)
         image_flow(
             "05_openrouter_catalog_request",
             model=CATALOG_MATCH_MODEL,
             customer_image_mode="url" if str(customer_openrouter_url).startswith("https://") else "data_url",
-            catalog_image_count=len(catalog_data_urls),
+            catalog_image_mode="data_url",
+            catalog_images_count=len(catalog_image_urls),
         )
-        if len(catalog_data_urls) == 1:
-            prompt = (
-                "أنت خبير في مطابقة المنتجات. قارن قطعة الملابس في الصورة الأولى مع الموديلات الموجودة في الصورة الثانية (الكتالوج). "
-                "استخرج رقم المعرف product_id للموديل المطابق تماماً. أرجع رقم الـ ID فقط دون أي شرح. "
-                "إذا لم تجد تطابقاً واضحاً أرجع NONE فقط."
-            )
-        else:
-            prompt = (
-                f"أنت خبير في مطابقة المنتجات. قارن قطعة الملابس في الصورة الأولى مع الموديلات الموجودة في صور الكتالوج التالية ({len(catalog_data_urls)} صورة). "
-                "استخرج رقم المعرف product_id للموديل المطابق تماماً من أي صورة كتالوج. أرجع رقم الـ ID فقط دون أي شرح. "
-                "إذا لم تجد تطابقاً واضحاً أرجع NONE فقط."
-            )
-
-        content_parts = [
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": customer_openrouter_url}},
-        ]
-        for cat_url in catalog_data_urls:
-            content_parts.append({"type": "image_url", "image_url": {"url": cat_url}})
-
-        print(f"[CatalogVision] sending customer image + {len(catalog_data_urls)} catalog image(s) to OpenRouter", flush=True)
+        prompt = (
+            "أنت خبير في مطابقة المنتجات. قارن قطعة الملابس في صورة الزبون الأولى مع الموديلات الموجودة في صور الكتالوج التالية. "
+            "استخرج رقم المعرف product_id للموديل المطابق تماماً. أرجع رقم الـ ID فقط دون أي شرح. "
+            "إذا لم تجد تطابقاً واضحاً أرجع NONE فقط."
+        )
+        print("[CatalogVision] sending customer image to OpenRouter", flush=True)
         resp = requests.post(
             OPENROUTER_URL,
             headers={
@@ -2838,7 +3956,19 @@ def match_customer_image_with_catalog(customer_image_url, products):
             },
             json={
                 "model": CATALOG_MATCH_MODEL,
-                "messages": [{"role": "user", "content": content_parts}],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": customer_openrouter_url}},
+                            *[
+                                {"type": "image_url", "image_url": {"url": catalog_image_url}}
+                                for catalog_image_url in catalog_image_urls
+                            ],
+                        ],
+                    }
+                ],
                 "temperature": 0.1,
                 "max_tokens": 20,
             },
@@ -2958,7 +4088,7 @@ def match_product(db, ev, products):
             pid = catalog_result.get("product_id")
             matched = next((p for p in products if p.get("product_id") == pid), None)
             if matched:
-                match_method = "openrouter_catalog"
+                match_method = "image_recognition"
                 image_result["available"] = _stock_state(matched) == "available"
                 image_result["stock"] = matched.get("stock")
                 image_result["price"] = matched.get("price")
@@ -2966,9 +4096,9 @@ def match_product(db, ev, products):
                     db,
                     sender_id,
                     matched,
-                    "openrouter_catalog",
+                    match_method,
                     confidence=100,
-                    source="match_product_openrouter_catalog",
+                    source="image_recognition",
                 )
                 print(f"[CatalogVision] matched product {pid}", flush=True)
                 image_flow(
@@ -3032,7 +4162,7 @@ def match_product(db, ev, products):
         if pid:
             matched = next((p for p in products if p.get("product_id") == pid), None)
             if matched:
-                match_method = "vision_product_id"
+                match_method = "image_recognition"
         else:
             print("[Product] Vision returned NONE; no product match.", flush=True)
             image_result["human_review_candidates"] = candidates
@@ -3071,30 +4201,6 @@ def _load_file_text(path):
             return f.read().strip()
     except Exception:
         return ""
-
-
-def _write_file_text_atomic(path, content):
-    """Write UTF-8 text atomically inside the application folder."""
-    app_root = os.path.abspath(os.path.dirname(__file__))
-    abs_path = os.path.abspath(path)
-    if not (abs_path == app_root or abs_path.startswith(app_root + os.sep)):
-        raise ValueError("Refusing to write outside application folder")
-    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-    tmp_path = abs_path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(str(content or "").rstrip() + "\n")
-    os.replace(tmp_path, abs_path)
-
-
-def _text_file_payload(path):
-    exists = os.path.exists(path)
-    stat = os.stat(path) if exists else None
-    return {
-        "content": _load_file_text(path),
-        "path": os.path.basename(path),
-        "size": stat.st_size if stat else 0,
-        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
-    }
 
 
 def send_text_to_facebook(sender_id: str, text: str, page_id: str = "", platform: str = "facebook") -> bool:
@@ -3136,7 +4242,7 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
     return sent
 
 
-def auto_reply_after_product_link(db, sender_id, matched_product):
+def auto_reply_after_product_link(db, sender_id, matched_product, conversation_history=None):
     """Generate and send the first AI reply as soon as a human links a product."""
     if not matched_product:
         return {"sent": False, "reply": "", "reason": "missing_product"}
@@ -3155,19 +4261,21 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
     latest = latest_incoming_message(db, sender_id)
     customer_products = load_customer_products(db, sender_id)
     history = load_history(db, sender_id, limit=100)
+    history_loaded_after_latest = conversation_history is None
+    if conversation_history is None:
+        conversation_history = get_conversation_history(db, sender_id, limit=10)
     products = load_active_products(db)
     instructions_text, rules_list = load_ai_config(db, sender_id=sender_id)
     link_instruction = (
-        "تنبيه إداري: تم تحديد المنتج المطلوب للزبونة. "
-        "مهمتك: قراءة آخر رسالة بدقة والرد عليها مباشرة بلهجة عراقية بيضاء ودية وبدون وصف عام ممل. "
-        "قاعدة الذاكرة: استخدمي أي معلومة (قياس، وزن، لون، محافظة) ذكرتها الزبونة سابقاً ويُمنع سؤالها عنها مجدداً. "
-        "قاعدة الاستدراج المريح (التدرج بالأسئلة): يُمنع منعاً باتاً تكرار عبارة (أحجزه إلج؟) أو طلب الحجز في كل رسالة! هذا أسلوب مزعج للزبونة. "
-        "يجب أن تنتهي رسالتك بسؤال (خطاف)، لكن اختاريه بذكاء حسب النواقص في المحادثة: "
-        "- إذا لم تذكر القياس -> اسألي عن القياس فقط (مثال: شكد تلبسين قياس عيني حتى أتأكدلج؟). "
-        "- إذا ذكرت القياس ولم تذكر المحافظة -> اسألي عن المحافظة فقط (مثال: من يا محافظة إنتي قلبي حتى أشوفلج التوصيل؟). "
-        "- **فقط** إذا اكتملت المعلومات (القياس والمحافظة والسعر معروف للزبونة) -> هنا استخدمي سؤال الإغلاق والندرة (مثال: الكمية الباقية كلش قليلة، دزيلي عنوانج ورقمج حتى أثبتلج الحجز). "
-        "ممنوع طلب اسم الزبونة نهائياً؛ الاسم اختياري. "
-        "ممنوع استخدام قوالب روبوتية مثل (شنو تحبين تعرفين عن المنتج؟)."
+        "تم ربط الصورة/المحادثة الآن بهذا المنتج من قبل الإدارة. "
+        "راجع سجل المحادثة بالكامل واستخرج آخر سؤال أو طلب واضح من الزبون قبل الرد. "
+        "يجب أن يكون الرد جواباً مباشراً على سؤال الزبون بالتحديد، وليس وصفاً عاماً للمنتج. "
+        "إذا الزبون ذكر العمر أو القياس أو اللون أو أي معلومة سابقاً، استخدمها ولا تسأل عنها مرة ثانية. "
+        "إذا كان آخر رد من الزبون مجرد قياس/عمر بعد الصورة، فجاوبه بتأكيد التوفر للقياس إن كان ضمن بيانات المنتج "
+        "ثم رغّبه بالحجز بلطف واطلب رقم الموبايل والمحافظة والعنوان عند الرغبة. "
+        "ممنوع طلب اسم الزبون للحجز؛ الاسم اختياري ولا نوقف الحجز عليه. "
+        "ممنوع تكرار قالب مثل: المنتج متوفر وسعره كذا والقياسات كذا شنو تحبين تعرفين عنه. "
+        "لا تختم بسؤال عام مثل: شنو تحبين تعرفين عنه؟ اختم بسؤال بيع واضح مثل: أحجزه إلج؟"
     )
     instructions_text = f"{instructions_text}\n\n{link_instruction}".strip()
 
@@ -3187,10 +4295,20 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
         "platform": customer.get("platform") or "facebook",
     }
     message_type = latest.get("message_type") or "text"
+    latest_text = (ev.get("text") or "").strip()
+    if (
+        history_loaded_after_latest
+        and latest_text
+        and conversation_history
+        and conversation_history[-1].get("role") == "user"
+        and conversation_history[-1].get("content") == latest_text
+    ):
+        conversation_history = conversation_history[:-1]
     ai_result = call_main_ai(
         ev, message_type, customer, history, products,
         matched_product, None, instructions_text, rules_list,
         customer_products=customer_products,
+        conversation_history=conversation_history,
     )
     if ai_result.get("failed"):
         try:
@@ -3213,8 +4331,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
             print(f"[ProductLink] Could not pause AI on empty/handoff reply: {exc}", flush=True)
         return {"sent": False, "reply": "", "reason": "empty_or_handoff_reply"}
 
+    order_created = False
     if ai_result.get("create_order"):
-        _, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
+        order_created, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
         if order_reply:
             reply = order_reply
 
@@ -3223,45 +4342,43 @@ def auto_reply_after_product_link(db, sender_id, matched_product):
         reply, None, None, None,
         {"auto_after_product_link": True, "product_id": matched_product.get("product_id")},
     )
+    save_conversation_message(db, sender_id, "assistant", reply)
+    if not order_created:
+        try:
+            schedule_followup_if_needed(
+                db,
+                sender_id,
+                stage=ai_result.get("intent") or "conversation",
+                product=matched_product,
+                meta={"source": "auto_reply_after_product_link", "reply": reply[:160]},
+            )
+        except Exception as exc:
+            print(f"[FollowUp] Could not schedule after product link: {exc}", flush=True)
     sent = send_text_to_facebook(sender_id, reply, ev["page_id"], ev["platform"])
     print(f"[ProductLink] Auto reply sent={sent} to {sender_id}", flush=True)
     return {"sent": sent, "reply": reply, "reason": None if sent else "manychat_send_failed"}
 
 
 def load_ai_config(db, sender_id=None):
-    brand_identity_rule = (
-        "تعليمة هوية ثابتة لا يمكن تجاوزها: هذا النظام خاص بمتجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب المنتجات الموجودة في products.json. "
-        "ملف instructions.txt هو المصدر الأساسي لتوجيه أسلوب الذكاء الاصطناعي وسياسة الردود، وأي تعديل فيه يجب أن يظهر في كل رد جديد. "
-        "لا تحصر المتجر بالعبايات أو باللون الأسود، ولا تذكر نوع قطعة إلا إذا كان موجوداً في اسم/تصنيف/وصف المنتج. "
-        "يُمنع ربط الردود أو المنتجات أو الأسئلة بأي نشاط غير موجود ضمن منتجات أنيقة الحالية."
-    )
     instructions = db.execute(
         "SELECT content FROM ai_instructions WHERE active=1"
     ).fetchall()
     rules = db.execute(
         "SELECT rule FROM forbidden_rules WHERE active=1"
     ).fetchall()
-    db_instructions = "\n".join(r["content"] for r in instructions).strip()
+    instructions_text = "\n".join(r["content"] for r in instructions)
     rules_list        = [r["rule"] for r in rules]
 
-    file_instructions = _load_file_text(_INSTRUCTIONS_FILE)
-    product_knowledge = _load_file_text(PRODUCT_KNOWLEDGE_FILE)
-    playbook          = _load_file_text(_PLAYBOOK_FILE)
-    instruction_parts = []
-    if file_instructions:
-        instruction_parts.append("تعليمات instructions.txt الأساسية:\n" + file_instructions)
-        print("[Config] Loaded instructions from instructions.txt", flush=True)
-    if product_knowledge:
-        instruction_parts.append("معرفة المنتجات المتزامنة من products.json:\n" + product_knowledge)
-        print("[Config] Loaded synced product knowledge", flush=True)
-    if db_instructions:
-        instruction_parts.append("تعليمات لوحة التحكم الإضافية:\n" + db_instructions)
-    instructions_text = "\n\n---\n\n".join(instruction_parts).strip()
-    if playbook:
-        instructions_text = (instructions_text + "\n\n---\n\n" + playbook).strip()
-        print("[Config] Appended gemini_sales_playbook.md to instructions", flush=True)
-
-    instructions_text = (brand_identity_rule + "\n\n" + instructions_text).strip()
+    # If DB has no instructions, fall back to instructions.txt then playbook
+    if not instructions_text.strip():
+        file_instructions = _load_file_text(_INSTRUCTIONS_FILE)
+        playbook          = _load_file_text(_PLAYBOOK_FILE)
+        if file_instructions:
+            instructions_text = file_instructions
+            print("[Config] Loaded instructions from instructions.txt (DB was empty)", flush=True)
+        if playbook:
+            instructions_text = (instructions_text + "\n\n---\n\n" + playbook).strip()
+            print("[Config] Appended gemini_sales_playbook.md to instructions", flush=True)
 
     # Append customer-specific and global supervisor instructions
     try:
@@ -3281,6 +4398,21 @@ def load_ai_config(db, sender_id=None):
             instructions_text += f"\n\nتعليمات المشرف الخاصة:\n{custom_text}"
     except Exception as exc:
         print(f"[Config] customer_instructions fetch error: {exc}", flush=True)
+
+    try:
+        active_rules = get_active_ai_rules(db)
+        active_rules_text = "\n".join(
+            f"- {row['rule_text']}" for row in active_rules if (row.get("rule_text") or "").strip()
+        )
+        if active_rules_text:
+            instructions_text += (
+                "\n\nقواعد مبيعات مفعلة من الأدمن:\n"
+                f"{active_rules_text}\n"
+                "التزم بهذه القواعد، لكن لا تخترع معلومات غير موجودة في بيانات المنتج. "
+                "إذا تعارضت القواعد مع بيانات المنتج أو سياسة النظام، اتبع بيانات المنتج وسياسة النظام."
+            )
+    except Exception as exc:
+        print(f"[Config] active_ai_rules fetch error: {exc}", flush=True)
 
     delivery_rule = (
         f"قاعدة ثابتة لأجور التوصيل: {FIXED_DELIVERY_TEXT}. "
@@ -3305,6 +4437,32 @@ _HUMAN_HANDOFF_KEYWORDS = (
 )
 
 
+_PROBLEM_DELAY_KEYWORDS = (
+    "تاخر الطلب", "تأخر الطلب", "الطلب متاخر", "الطلب متأخر",
+    "طلب متاخر", "طلب متأخر", "ما وصل الطلب", "ماوصل الطلب",
+    "ما وصلني", "ماوصلني", "ما اجاني", "ماجاني", "لم يصل",
+    "وين الطلب", "وين طلبي", "بعده ما واصل", "بعد ما واصل",
+    "صارله هواية", "صار له هواية", "تأخير", "تاخير",
+)
+
+_PROBLEM_DISSATISFACTION_KEYWORDS = (
+    "غير راضي", "مو راضي", "مو راضية", "غير راضية",
+    "ما عجبني", "ماعجبني", "مو عاجبني", "مو عاجبني",
+    "ما طلع", "ماطلع", "مو نفس", "مختلف", "مو مثل الصورة",
+    "مو نفس الصورة", "خربان", "تالف", "متضرر", "مكسور",
+    "رديء", "سيء", "مو حلو", "خامة سيئة", "الخامة مو",
+    "قياس غلط", "المقاس غلط", "لون غلط", "ناقص", "ارجاع",
+    "أرجاع", "اريد ارجع", "أريد أرجع", "استبدال", "بدلولي",
+)
+
+_PROBLEM_OBJECTION_KEYWORDS = (
+    "اعتراض", "معترض", "معترضة", "اغلى", "أغلى", "غالي",
+    "السعر عالي", "سعره عالي", "ليش غالي", "مو مناسب",
+    "ما اقبل", "ما أقبل", "ما اثق", "ما أثق", "مو مضمون",
+    "اخاف مو نفس", "خاف مو نفس", "ما مطمئن", "مو مطمئن",
+)
+
+
 def _text_contains_any(text: str, keywords) -> bool:
     if not text:
         return False
@@ -3312,20 +4470,42 @@ def _text_contains_any(text: str, keywords) -> bool:
     return any(k in lowered for k in keywords)
 
 
+def classify_customer_problem(text: str):
+    normalized = re.sub(r"\s+", " ", str(text or "").strip().lower())
+    if not normalized:
+        return None
+    if _text_contains_any(normalized, _PROBLEM_DELAY_KEYWORDS):
+        return "تأخر الطلب أو لم يصل للزبون"
+    if (
+        ("وصل الطلب" in normalized or "استلمت" in normalized or "وصلني" in normalized)
+        and _text_contains_any(normalized, _PROBLEM_DISSATISFACTION_KEYWORDS)
+    ):
+        return "عدم رضا بعد استلام الطلب"
+    if _text_contains_any(normalized, _PROBLEM_DISSATISFACTION_KEYWORDS):
+        return "مشكلة في المنتج أو رغبة بإرجاع/استبدال"
+    if _text_contains_any(normalized, _PROBLEM_OBJECTION_KEYWORDS):
+        return "اعتراض أو تردد من الزبون"
+    if _text_contains_any(normalized, _HUMAN_HANDOFF_KEYWORDS):
+        return "شكوى أو طلب تدخل بشري"
+    return None
+
+
 def determine_intent(ev, customer_products, matched_product):
     """يقرر النية بدون استدعاء AI خارجي. يحاكي المخرج القديم لـ call_router_ai."""
     text = (ev.get("text") or "").strip()
     has_context = bool(matched_product or customer_products)
-    catalog_hint = _text_contains_any(text, _CATALOG_KEYWORDS)
-    needs_human = _text_contains_any(text, _HUMAN_HANDOFF_KEYWORDS)
+    wants_catalog = _text_contains_any(text, _CATALOG_KEYWORDS)
+    problem_reason = classify_customer_problem(text)
+    needs_human = bool(problem_reason and problem_reason != "اعتراض أو تردد من الزبون")
     return {
-        "intent": "catalog_hint" if catalog_hint else ("complaint" if needs_human else "other"),
+        "intent": "catalog_request" if wants_catalog else ("complaint" if problem_reason else "other"),
         "has_product_context": has_context,
-        "catalog_hint": catalog_hint,
+        "wants_catalog": wants_catalog,
         "wants_image": False,
         "needs_human": needs_human,
-        "should_reply": True,
-        "reason": "local_keyword_router",
+        "should_reply": not wants_catalog,
+        "reason": problem_reason or "local_keyword_router",
+        "problem_reason": problem_reason,
     }
 
 
@@ -3334,7 +4514,8 @@ def determine_intent(ev, customer_products, matched_product):
 def call_main_ai(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
-    fix_instruction=None, customer_products=None, catalog_hint=False,
+    fix_instruction=None, customer_products=None, conversation_history=None,
+    catalog_search_context=None,
 ):
     if image_result and image_result.get("unmatched_customer_image"):
         review_id = image_result.get("human_review_id")
@@ -3455,7 +4636,11 @@ def call_main_ai(
 
     matched_short = _short_product(matched_product, full=True) if matched_product else None
     customer_products_short = [_short_product(p) for p in customer_products if p]
-    products_short = [_short_product(p) for p in (products or [])[:8]]
+    products_short = [
+        _short_product(p)
+        for p in (products or [])
+        if _stock_state(p) == "available"
+    ][:30]
 
     rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
 
@@ -3472,7 +4657,7 @@ def call_main_ai(
         )
 
     system_prompt = (
-        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة في العراق لبيع الموديلات والقطع النسائية المحتشمة حسب المنتجات الحالية.\n"
+        "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في متجر أنيقة للموديلات والقطع النسائية المحتشمة.\n"
         "هدفك الوحيد في كل رد: تقريب الزبون خطوة واحدة من الحجز.\n"
         "أسلوبك: قصير + جذاب + محفّز على المتابعة. تجنب الإطالة لأنها تُطفئ الزبون.\n\n"
         "قواعد عامة صارمة:\n"
@@ -3494,7 +4679,7 @@ def call_main_ai(
         "   - فارغ أو غير محدد → استخدم صياغة محايدة قدر الإمكان ولا تفترض الجنس ولا تسأل عنه.\n"
         "   لا تخلط الصيغ في نفس الرد، والتزم بالجنس المحدد طوال الرد.\n"
         "13) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد. خاطبه بصيغ عامة فقط (عيني، حبيبتي، يا هلا، تأمرين).\n"
-        "14) ممنوع حصر المتجر بالعبايات أو باللون الأسود. استخدم كلمة الموديل/القطعة عند السؤال العام، ولا تقل عباية إلا إذا المنتج نفسه عباية في البيانات.\n"
+        "14) ممنوع حصر المتجر بالعبايات أو اللون الأسود. استخدم كلمة الموديل/القطعة عند السؤال العام.\n"
         "15) ⚠️ ممنوع تكرار تفاصيل المنتج (السعر، القياسات، الألوان، الوصف، اسم المنتج الكامل) في كل رد. اذكر فقط ما طلبه الزبون في رسالته الحالية:\n"
         "   - سأل عن السعر فقط؟ → رد بالسعر فقط بدون قياسات أو ألوان.\n"
         "   - سأل عن المقاس فقط؟ → رد بالمقاسات فقط بدون السعر أو الألوان.\n"
@@ -3503,35 +4688,24 @@ def call_main_ai(
         "   - لم يسأل عن أي تفاصيل؟ → لا تعرض أي تفاصيل، فقط استمر بالحوار وحفّزه للحجز.\n"
         "   اعرض كل التفاصيل دفعة واحدة فقط عند أول طلب صريح من الزبون لها أو عند تأكيد الحجز.\n"
         "16) ⚠️ ممنوع الردود العاطفية الطويلة أو الأدعية أو المجاملات الزائدة (مثل: 'تسلمين يا طيبة'، 'فدوة لعمرج'، 'أجمعين يا رب'، 'يرزقج كل الخير'، 'تدللين بأي وقت'). يُسمح بكلمة ودّ خفيفة واحدة فقط مثل 'تأمرين' أو 'من عيوني' ضمن نفس الجملة.\n"
-        "17) ⚠️ ممنوع إعادة الترحيب عند كل معلومة يقدّمها الزبون (مثل لما يذكر المحافظة أو القياس أو الاسم). لا تقل 'يا هلا بأهل الناصرية' أو 'نورتينا'. تعامل مع المعلومة مباشرة بدون احتفال.\n"
+        "17) ⚠️ ممنوع إعادة الترحيب عند كل معلومة يقدّمها الزبون (مثل لما يذكر المحافظة أو العمر أو الاسم). لا تقل 'يا هلا بأهل الناصرية' أو 'نورتينا'. تعامل مع المعلومة مباشرة بدون احتفال.\n"
         "18) كل رد لازم يدفع المحادثة للأمام نحو الحجز: إما يطلب معلومة ناقصة (موبايل/عنوان) أو يستفز الرغبة (مثل 'الموديل قاعد ينتظرج، أحجزه؟'). تجنب الردود الميتة التي لا تجلب رد من الزبون.\n"
-        "19) ⚠️⚠️ ممنوع منعاً باتاً سرد أو عرض قائمة منتجات متعددة في الرد:\n"
-        "   - ممنوع كتابة قائمة مرقمة من المنتجات (مثل: 1. منتج أ  2. منتج ب  3. منتج ج).\n"
-        "   - ممنوع عرض أكثر من منتج واحد في نفس الرد مهما كان السبب.\n"
-        "   - إذا الزبون سأل سؤال عام مثل 'شكد يلبس عمر سنة' أو 'شنو عندكم أطفال' أو 'أريد ملابس بناتي':\n"
-        "     → اسأل أولاً عن نوع القطعة (بدلة؟ فستان؟ تلبيسة؟) ولا تعرض كل شيء.\n"
-        "   - إذا الزبون لم يحدد منتج بعينه ← اسأل 'يا موديل عجبج؟' أو 'شنو نوع القطعة اللي تدورينها؟'.\n"
-        "   - تحدث فقط عن المنتج المرتبط حالياً (matched_product) أو آخر منتج محفوظ. لا تبحث في كل المنتجات وتعرضها.\n"
-        "   - حتى لو عدة منتجات تطابق طلب الزبون، اعرض واحد فقط أو اسأل الزبون يحدد أكثر.\n\n"
+        "19) ⚠️⚠️ ممنوع منعاً باتاً إرسال قائمة منتجات أو موديلات أو صور إلا إذا الزبون طلب ذلك صراحةً. حلّل المحادثة كاملة أولاً:\n"
+        "   - إذا الزبونة سألت سؤالاً عاماً بدون تحديد موديل → اسأليها عن صورة الموديل أو القياس المطلوب، لا تعرضي قائمة إلا إذا طلبت ذلك صراحة.\n"
+        "   - إذا الزبون طلب صراحةً ('ورّيني الموديلات' / 'شنو عندكم' / 'عرضي') → اقترح 1-2 موديل فقط بأسلوب طبيعي.\n"
+        "   - ممنوع إرسال رسائل مثبتة جاهزة مثل 'لقيت لك X موديل'. كل رد يجب أن يكون مخصصاً لسياق المحادثة.\n"
+        "   - ممنوع عرض قائمة مرقّمة بالمنتجات (1. اسم - سعر - قياس). اذكر الموديل بشكل طبيعي ضمن الجملة.\n"
+        "20) ⚠️ ممنوع إرسال صور المنتجات إلا إذا الزبون طلب الصورة صراحةً أو وافق على الاقتراح. لا ترسل صورة مع أول اقتراح.\n\n"
         f"قاعدة الترحيب: {greeting_rule}\n\n"
         "تعليمات الإدارة (الأولوية الأعلى بعد القواعد):\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
         f"{rules_text}\n\n"
-        "20) ⚠️ قاعدة إرسال الكتالوج/الموديلات صارمة:\n"
-        "   - ممنوع منعاً باتاً إرسال الكتالوج أو كل الموديلات إلا إذا الزبون طلب ذلك بشكل صريح وواضح 100%.\n"
-        "   - حلل المحادثة كاملة قبل أن تقرر: هل الزبون طلب فعلاً رؤية كل الموديلات/المنتجات/الكتالوج؟\n"
-        "   - أمثلة على طلب صريح: 'وريني كل الموديلات'، 'دزيلي الكتالوج'، 'شنو عندكم من موديلات'، 'أرسلي كل البضاعة'.\n"
-        "   - أمثلة على ما ليس طلباً: تحية عادية، سؤال عن منتج واحد، سؤال عن السعر، إرسال صورة، رسالة عامة.\n"
-        "   - إذا الزبون سأل 'شنو الموجود؟' أو 'شو عندكم؟' بشكل عام بدون سياق واضح يطلب الكتالوج كامل، اسأله أولاً عن نوع الموديل اللي يدوره بدل ما تدزله كل شي.\n"
-        "   - اجعل send_catalog=true فقط عند التأكد 100% أن الزبون يريد رؤية كل المنتجات.\n"
-        "   - عند send_catalog=true، اكتب reply شخصي ودود مبني على سياق المحادثة (ليس رسالة ثابتة).\n\n"
         "أجب بـ JSON فقط بدون أي نص آخر:\n"
         "{\n"
         '  "reply": "نص الرد للزبون",\n'
-        '  "intent": "question|price|availability|order|image_check|catalog_request|unknown",\n'
+        '  "intent": "question|price|availability|order|image_check|unknown",\n'
         '  "create_order": false,\n'
-        '  "send_catalog": false,\n'
         '  "order": {"customer_name":"","phone":"","province":"","address":"","product_id":"","product_name":"","color":"","size":"","notes":""},\n'
         '  "confidence": 0\n'
         "}"
@@ -3567,10 +4741,50 @@ def call_main_ai(
             "[الموديلات المحفوظة لهذا الزبون — الأحدث أولاً]\n"
             + json.dumps(customer_products_short, ensure_ascii=False, indent=2)
         )
+    if products_short:
+        sections.append(
+            "[AVAILABLE_PRODUCT_CATALOG_ONLY]\n"
+            "Use this list only when the customer asks for new product suggestions. "
+            "Pick products that match age/size/gender/type/color and never suggest unavailable products or products outside this list.\n"
+            + json.dumps(products_short, ensure_ascii=False, indent=2)
+        )
+    binding_source = (matched_product or {}).get("source") or (matched_product or {}).get("match_method")
+    if binding_source == "auto_default_product":
+        sections.append(
+            "[تنبيه داخلي عن الربط التلقائي]\n"
+            "هذا المنتج تم ربطه تلقائيا لأنه المنتج الافتراضي الحالي للحملة. "
+            "إذا اعترض الزبون أو قال إنه يقصد منتجا آخر، لا تصر على نفس المنتج واطلب منه إرسال صورة المنتج المطلوب."
+        )
+    elif binding_source == "image_recognition":
+        sections.append(
+            "[تنبيه داخلي عن التعرف بالصورة]\n"
+            "هذا المنتج تم تحديده من صورة أرسلها الزبون. رد بثقة لكن لا تخترع معلومات غير موجودة في بيانات المنتج."
+        )
     if not matched_product and customer_products_short:
         sections.append(
             "[تنبيه]\n"
             "لا يوجد منتج مطابق للرسالة الحالية. ممنوع ذكر سعر أو قياس أو لون أي منتج قبل ربط منتج واضح."
+        )
+    if catalog_search_context and catalog_search_context.get("matches"):
+        search_products = []
+        for item in catalog_search_context["matches"]:
+            p = item["product"]
+            search_products.append({
+                "product_id": p.get("product_id"),
+                "product_name": p.get("product_name"),
+                "price": p.get("price"),
+                "sizes": p.get("sizes"),
+                "colors": p.get("colors"),
+            })
+        sections.append(
+            "[نتائج بحث المنتجات — للاستخدام الذكي فقط]\n"
+            "وجدت هذه المنتجات المطابقة لطلب الزبون. قواعد صارمة:\n"
+            "- ⚠️ ممنوع إرسال قائمة كاملة بالمنتجات والأسعار دفعة واحدة.\n"
+            "- ⚠️ ممنوع إرسال رسالة مثبتة جاهزة مثل 'لقيت لك 5 موديلات'.\n"
+            "- بدلاً من ذلك: حلّل المحادثة واسأل الزبون ما يفضّل بالضبط (العمر؟ اللون؟ النوع؟) ثم اقترح 1-2 موديل فقط بشكل طبيعي ومخصص.\n"
+            "- إذا الزبون لم يطلب صراحةً عرض موديلات، لا تعرض أي شيء — فقط تابع الحوار.\n"
+            "- إذا الزبون طلب صراحةً ('ورّيني'، 'عرضي'، 'شنو عندكم')، اقترح 1-2 موديل بأسلوب طبيعي محادثاتي قصير.\n"
+            + json.dumps(search_products, ensure_ascii=False, indent=2)
         )
     sections.append(
         "[ملف الزبون]\n" + json.dumps(customer_profile, ensure_ascii=False, indent=2)
@@ -3595,18 +4809,15 @@ def call_main_ai(
         "- إذا كانت الإجابة تحتاج بيانات الزبون الناقصة (هاتف/محافظة/عنوان) اطلب الناقص فقط بأسلوب ودود، ولا تطلب الاسم.\n"
         f"- التزم بقاعدة الترحيب أعلاه: {'لك حرية اختيار صيغة الترحيب المناسبة لرسالة الزبون.' if is_first_reply else 'لا ترحيب في بداية الرد، ابدأ مباشرة بالإجابة.'}"
     )
-    if catalog_hint:
-        sections.append(
-            "[⚠️ تنبيه كتالوج]\n"
-            "رسالة الزبون تحتوي كلمات قد تشير لطلب الكتالوج.\n"
-            "حلل المحادثة كاملة وقرر: هل الزبون يطلب فعلاً رؤية كل الموديلات؟\n"
-            "- إذا نعم بنسبة 100% → اجعل send_catalog=true واكتب رد شخصي ودود مناسب للزبون.\n"
-            "- إذا غير متأكد أو السؤال عام → اسأله عن نوع الموديل اللي يدوره واجعل send_catalog=false."
-        )
     if fix_instruction:
         sections.append("[⚠️ تعليمات تصحيح من المدقق]\n" + fix_instruction)
 
     user_content = "\n\n".join(sections)
+    ai_messages = (
+        [{"role": "system", "content": system_prompt}]
+        + (conversation_history or [])
+        + [{"role": "user", "content": user_content}]
+    )
 
     try:
         if ev.get("image_url") or image_result or matched_product:
@@ -3626,10 +4837,7 @@ def call_main_ai(
             },
             json={
                 "model": MAIN_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_content},
-                ],
+                "messages": ai_messages,
                 "max_tokens": 1500,
                 "temperature": 0.7,
             },
@@ -3700,7 +4908,6 @@ def check_reply(
 5. يتجاوز 80 كلمة.
 6. يتجاهل المنتج المطابق أو آخر موديل محفوظ عندما تكون رسالة الزبون مثل: "هذا موجود؟"، "الموديل متوفر؟"، "أريده".
 7. يرد بتوفر عام للمنتجات بدل حالة المنتج المطابق.
-8. يسرد أو يعرض قائمة من عدة منتجات (مثل: 1. منتج أ  2. منتج ب) بدون أن يطلب الزبون ذلك صراحة. الرد يجب أن يتحدث عن منتج واحد فقط أو يسأل الزبون عن تفضيله.
 
 ملاحظات مهمة — لا ترفض الرد إذا:
 - رسالة الزبون مجرد تحية (سلام، أهلاً، مرحبا) والرد عبارة عن ترحيب وسؤال عن الخدمة.
@@ -3826,6 +5033,12 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
     )
     db.commit()
 
+    try:
+        if get_followup_settings(db).get("stop_on_order"):
+            cancel_followups_for_sender(db, sender_id, "order_created")
+    except Exception as exc:
+        print(f"[FollowUp] Could not cancel followups after order: {exc}", flush=True)
+
     save_booking_to_file(booking_data)
     telegram_sent = send_order_to_telegram(booking_data)
 
@@ -3900,10 +5113,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     # ── STEP 05: Save incoming message ────────────────────────────────────────
     log(5, "SAVE MSG", "Saving incoming message to database...")
+    conversation_history = get_conversation_history(db, ev["sender_id"], limit=10)
     save_message(
         db, ev["sender_id"], "incoming", message_type,
         ev["text"], ev["image_url"], ev["ad_id"], ev["ref"], body,
     )
+    save_conversation_message(db, ev["sender_id"], "user", ev["text"])
     log(5, "SAVE MSG", "Incoming message saved")
     if message_type == "image":
         image_flow(
@@ -3928,7 +5143,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                     "match_method": match_method,
                     "ai_disabled_reason": reason,
                 })
-                auto_reply = auto_reply_after_product_link(db, ev["sender_id"], matched_product)
+                auto_reply = auto_reply_after_product_link(
+                    db, ev["sender_id"], matched_product,
+                    conversation_history=conversation_history,
+                )
                 return {
                     "sender_id": ev["sender_id"],
                     "page_id": ev["page_id"],
@@ -3974,7 +5192,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 05.5: Debounce — انتظر حتى ينتهي الزبون من إرسال رسائله ────────
     # نهدف إلى جمع كل ما يرسله الزبون (نص + صورة + رسائل متفرقة) قبل تشغيل الموديل
     # حتى يفهم السياق كاملاً ويعطي رداً واحداً دقيقاً بدلاً من ردود مكررة.
-    if use_debounce and DEBOUNCE_DELAY > 0:
+    if use_debounce and DEBOUNCE_DELAY > 0 and message_type != "image":
         saved_at = now_baghdad_iso()
         log(5, "DEBOUNCE", f"Waiting {DEBOUNCE_DELAY}s to collect all customer messages before AI...")
         time.sleep(DEBOUNCE_DELAY)
@@ -4029,6 +5247,86 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     customer_products = load_customer_products(db, ev["sender_id"])
     first_incoming = incoming_message_count(db, ev["sender_id"]) == 1
+    active_binding = get_active_product_binding(db, ev["sender_id"])
+
+    if message_type == "image" and active_binding and active_binding.get("source") == "auto_default_product":
+        reject_current_binding(db, ev["sender_id"], "customer_sent_image_after_auto_default")
+        customer_products = load_customer_products(db, ev["sender_id"])
+        active_binding = get_active_product_binding(db, ev["sender_id"])
+
+    if (
+        message_type != "image"
+        and active_binding
+        and active_binding.get("source") == "auto_default_product"
+        and is_product_objection(ev.get("text"))
+    ):
+        reject_current_binding(db, ev["sender_id"], ev.get("text"))
+        reply = "تمام حبيبتي، حتى أحددلج نفس الموديل بالضبط أرسلي صورة المنتج اللي تقصدينه."
+        save_message(
+            db, ev["sender_id"], "outgoing", "text",
+            reply, None, None, None,
+            {"auto_default_product_rejected": True},
+        )
+        save_conversation_message(db, ev["sender_id"], "assistant", reply)
+        return {
+            "sender_id": ev["sender_id"],
+            "page_id": ev["page_id"],
+            "platform": ev["platform"],
+            "reply": reply,
+            "send_image": False,
+            "debug": {
+                "skipped": True,
+                "reason": "auto_default_product_rejected",
+            },
+        }
+
+    # بحث المنتجات المتاحة — النتائج تُحفظ كسياق يُمرر للـ AI لاحقاً
+    # لا يتم إرسال أي قائمة أو صور تلقائياً هنا
+    _catalog_search_matches = []
+    _catalog_search_request_info = {}
+    if message_type != "image" and ev.get("text"):
+        search_result = search_available_products_for_request(ev.get("text"), products, limit=5)
+        request_info = search_result.get("request") or {}
+        matches = search_result.get("matches") or []
+        skip_search_for_current_context = bool(
+            customer_products and _is_contextual_product_question(ev.get("text", ""))
+        )
+        if request_info.get("is_search") and not skip_search_for_current_context and matches:
+            remember_product_search_results(db, ev["sender_id"], matches, request_info)
+            customer_products = load_customer_products(db, ev["sender_id"])
+            _catalog_search_matches = matches
+            _catalog_search_request_info = request_info
+            log(8, "PRODUCT SEARCH", "Found matching products — will pass to AI for personalized response", {
+                "query": ev.get("text"),
+                "request": request_info,
+                "product_ids": [item["product"].get("product_id") for item in matches],
+            })
+        elif request_info.get("is_search") and not matches:
+            log(8, "PRODUCT SEARCH", "No available products matched customer request", {
+                "query": ev.get("text"),
+                "request": request_info,
+            })
+
+    if should_use_auto_product(db, ev["sender_id"], ev, message_type, customer_products):
+        auto_settings = get_auto_product_settings(db)
+        auto_product = auto_settings.get("product")
+        active_binding = bind_customer_to_product(
+            db,
+            ev["sender_id"],
+            auto_product,
+            source="auto_default_product",
+            confidence=100,
+            notes="Automatically linked from auto_product_id setting",
+        )
+        customer_products = load_customer_products(db, ev["sender_id"])
+        send_product_image_if_available(
+            db,
+            ev["sender_id"],
+            ev["page_id"],
+            ev["platform"],
+            auto_product,
+            binding=active_binding,
+        )
 
     if first_incoming and not customer_products and message_type != "image":
         # نحمّل التعليمات والقواعد مبكراً للترحيب الديناميكي بأول رسالة
@@ -4048,10 +5346,22 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             {
                 "human_review_id": review_id,
                 "first_message_reply": True,
-                "store_context": detected_gender,
+                "detected_gender": detected_gender,
             },
         )
-        log(8, "FIRST MESSAGE", f"First message routed to review #{review_id}; AI greeting sent.")
+        save_conversation_message(db, ev["sender_id"], "assistant", first_reply_text)
+        # نخزّن الجنس المكتشف في profile الزبون لاستخدامه في الردود اللاحقة
+        try:
+            if detected_gender in ("boy", "girl"):
+                db.execute(
+                    "UPDATE customers SET notes = COALESCE(notes,'') || ? WHERE sender_id=?",
+                    (f" | child_gender={detected_gender}",
+                     ev["sender_id"]),
+                )
+                db.commit()
+        except Exception as exc:
+            print(f"[FirstMsg] Could not save detected gender: {exc}", flush=True)
+        log(8, "FIRST MESSAGE", f"First message routed to review #{review_id}; AI greeting (gender={detected_gender}) sent.")
         return {
             "sender_id": ev["sender_id"],
             "page_id": ev["page_id"],
@@ -4062,7 +5372,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "skipped": True,
                 "reason": "first_message_waiting_for_human_product",
                 "human_review_id": review_id,
-                "store_context": detected_gender,
+                "detected_gender": detected_gender,
             },
         }
 
@@ -4080,7 +5390,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "product_id": matched_product.get("product_id"),
                 "match_method": match_method,
             })
-            auto_reply = auto_reply_after_product_link(db, ev["sender_id"], matched_product)
+            auto_reply = auto_reply_after_product_link(
+                db, ev["sender_id"], matched_product,
+                conversation_history=conversation_history,
+            )
             image_flow(
                 "12_auto_reply_finished",
                 sender_id=ev["sender_id"],
@@ -4223,7 +5536,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     match_method = None
     image_result = None
     if customer_products:
-        matched_product = customer_products[0]
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
         match_method = matched_product.get("match_method") or "manual"
         log(8, "MANUAL PRODUCT", "Using manually linked product", {
             "product_id"  : matched_product.get("product_id"),
@@ -4278,18 +5591,18 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # إذا طلب الزبون صورة/تفاصيل، ربط المنتج من الذاكرة إن لم يكن محدداً
     _image_requested = _is_product_info_request(ev.get("text", ""))
     if not matched_product and _image_requested and customer_products:
-        matched_product = customer_products[0]
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
         log(10, "PRODUCT INFO", "Using remembered product for image/details request", {
             "product_id": matched_product.get("product_id"),
         })
 
-    # ربط حتمي للسياق: "شكد سعره/هذا متوفر/ارجعه" تعني آخر منتج محفوظ.
+    # ربط حتمي للسياق: "شكد سعره/هذا متوفر/يلبس 2 سنة/ارجعه" تعني آخر منتج محفوظ.
     if (
         not matched_product
         and customer_products
         and _is_contextual_product_question(ev.get("text", ""))
     ):
-        matched_product = customer_products[0]
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
         log(10, "PRODUCT CONTEXT", "Using remembered product for contextual question", {
             "product_id": matched_product.get("product_id"),
             "text": ev.get("text"),
@@ -4299,9 +5612,23 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     routing = determine_intent(ev, customer_products, matched_product)
     log(9, "INTENT", "Local intent decision", routing)
 
+    if routing.get("intent") == "complaint":
+        try:
+            problem_id, problem_created = create_problem_report(
+                db,
+                ev,
+                routing.get("problem_reason") or routing.get("reason") or "مشكلة من الزبون",
+                matched_product=matched_product,
+            )
+            problem = db.execute("SELECT * FROM problem_reports WHERE id=?", (problem_id,)).fetchone()
+            if problem and problem_created:
+                send_problem_to_telegram(dict(problem))
+        except Exception as exc:
+            print(f"[Problems] Could not create/send problem report: {exc}", flush=True)
+
     # إذا الزبون لديه سياق منتج → ربط أقوى من الذاكرة
     if routing.get("has_product_context") and not matched_product and customer_products:
-        matched_product = customer_products[0]
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
         log(9, "ROUTER", f"Router confirmed product context → using {matched_product.get('product_id')}")
 
     # إذا طلب الكتالوج → سيتولاه الـ Main AI بناءً على routing
@@ -4325,22 +5652,47 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             },
         }
 
-    if routing.get("catalog_hint"):
-        log(9, "CATALOG", "Catalog keywords detected — passing to Main AI for verification instead of auto-sending.")
+    if routing.get("wants_catalog"):
+        image_messages = build_catalog_image_messages(products)
+        image_urls = [m["url"] for m in image_messages]
+        for image_url in image_urls:
+            save_message(
+                db, ev["sender_id"], "outgoing", "image",
+                None, image_url, None, None,
+                {"catalog": True, "image_url": image_url},
+            )
+        log(9, "CATALOG", f"Catalog requested; prepared {len(image_urls)} images.")
+        return {
+            "sender_id": ev["sender_id"],
+            "page_id": ev["page_id"],
+            "platform": ev["platform"],
+            "reply": "",
+            "image_url": image_urls[0] if image_urls else "",
+            "product_image_url": image_urls[0] if image_urls else "",
+            "image_urls": image_urls,
+            "product_image_urls": image_urls,
+            "send_image": bool(image_urls),
+            "attachments": image_messages,
+            "messages": image_messages,
+            "debug": {"catalog": True, "image_count": len(image_urls), "routing": routing},
+        }
 
     # ── STEP 10: Main AI call ────────────────────────────────────────────────
     log(10, "MAIN AI", f"Sending request to {MAIN_MODEL}...")
     t_ai = time.time()
+    _search_ctx = None
+    if _catalog_search_matches:
+        _search_ctx = {"matches": _catalog_search_matches, "request": _catalog_search_request_info}
     ai_result = call_main_ai(
         ev, message_type, customer, history, products,
         matched_product, image_result, instructions_text, rules_list,
         customer_products=customer_products,
-        catalog_hint=bool(routing.get("catalog_hint")),
+        conversation_history=conversation_history,
+        catalog_search_context=_search_ctx,
     )
     log(10, "MAIN AI", f"Model responded in {time.time()-t_ai:.1f}s", {
         "intent"      : ai_result.get("intent"),
         "create_order": ai_result.get("create_order"),
-        "send_catalog": ai_result.get("send_catalog"),
         "confidence"  : ai_result.get("confidence"),
         "reply"       : ai_result.get("reply"),
         "failed"      : ai_result.get("failed"),
@@ -4377,13 +5729,20 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         }
 
     if matched_product:
+        link_source = (matched_product or {}).get("source") or ""
+        if match_method == "image_recognition":
+            link_source = "image_recognition"
+        elif match_method in {"ref", "ad_id"}:
+            link_source = "ad_ref"
+        elif match_method == "manual":
+            link_source = "manual_admin"
         complete_customer_product_link(
             db,
             ev["sender_id"],
             matched_product,
             match_method or matched_product.get("match_method") or "matched_product_context",
             confidence=matched_product.get("confidence") or (image_result or {}).get("confidence") or 100,
-            source="process_webhook_after_main_ai",
+            source=link_source or "process_webhook_after_main_ai",
         )
 
     reply = ai_result.get("reply") or FALLBACK_REPLY
@@ -4450,6 +5809,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             ev, message_type, customer, history, products,
             matched_product, image_result, instructions_text, rules_list,
             fix_instruction=fix, customer_products=customer_products,
+            conversation_history=conversation_history,
+            catalog_search_context=_search_ctx,
         )
         if ai_result.get("failed"):
             failure_reason = ai_result.get("failure_reason") or "ai_failed_on_retry"
@@ -4548,9 +5909,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         log(12, "RETRY", "Reply accepted. No retry needed.")
 
     # ── STEP 13: Create order when requested ─────────────────────────────────
+    order_created = False
     if ai_result.get("create_order"):
         log(13, "ORDER", "AI requested creating a new order...")
-        _, order_reply = create_order_if_valid(
+        order_created, order_reply = create_order_if_valid(
             db, ev["sender_id"], ai_result, matched_product
         )
         if order_reply:
@@ -4558,42 +5920,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             log(13, "ORDER", "Order created and outgoing reply updated", {"reply": reply})
     else:
         log(13, "ORDER", "No purchase order requested in this message")
-
-    # ── STEP 13.5: Send catalog if AI confirmed ────────────────────────────
-    ai_wants_catalog = ai_result.get("send_catalog", False)
-    if ai_wants_catalog:
-        log(13, "CATALOG AI", "AI confirmed customer wants catalog — sending personalized reply + catalog images.")
-        catalog_image_messages = build_catalog_image_messages(products)
-        catalog_image_urls = [m["url"] for m in catalog_image_messages]
-        for image_url in catalog_image_urls:
-            save_message(
-                db, ev["sender_id"], "outgoing", "image",
-                None, image_url, None, None,
-                {"catalog": True, "image_url": image_url},
-            )
-        save_message(
-            db, ev["sender_id"], "outgoing", "text",
-            reply, None, None, None,
-            {"reply": reply, "catalog_reply": True},
-        )
-        log(13, "CATALOG AI", f"Catalog confirmed; {len(catalog_image_urls)} images + personalized reply.", {
-            "reply": reply,
-            "image_count": len(catalog_image_urls),
-        })
-        return {
-            "sender_id": ev["sender_id"],
-            "page_id": ev["page_id"],
-            "platform": ev["platform"],
-            "reply": reply,
-            "image_url": catalog_image_urls[0] if catalog_image_urls else "",
-            "product_image_url": catalog_image_urls[0] if catalog_image_urls else "",
-            "image_urls": catalog_image_urls,
-            "product_image_urls": catalog_image_urls,
-            "send_image": bool(catalog_image_urls),
-            "attachments": catalog_image_messages,
-            "messages": [{"type": "text", "text": reply}] + catalog_image_messages,
-            "debug": {"catalog": True, "ai_confirmed": True, "image_count": len(catalog_image_urls)},
-        }
 
     # قرار الصورة قبل حفظ الرد حتى لا تظهر "صورة" في الداشبورد مع كل رد نصي.
     send_img = _should_send_image(db, ev["sender_id"], matched_product, ev)
@@ -4607,12 +5933,24 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         reply, None, None, None,
         {"reply": reply, "product_image_url": outgoing_image_url},
     )
+    save_conversation_message(db, ev["sender_id"], "assistant", reply)
     for img_url in outgoing_image_urls:
         save_message(
             db, ev["sender_id"], "outgoing", "image",
             None, img_url, None, None,
             {"reply_image": True, "product_image_url": img_url},
         )
+    if not order_created:
+        try:
+            schedule_followup_if_needed(
+                db,
+                ev["sender_id"],
+                stage=ai_result.get("intent") or routing.get("intent") or "conversation",
+                product=matched_product,
+                meta={"source": "process_webhook", "reply": reply[:160]},
+            )
+        except Exception as exc:
+            print(f"[FollowUp] Could not schedule followup: {exc}", flush=True)
     log(14, "SAVE REPLY", "Outgoing reply saved", {
         "reply": reply,
         "product_image_urls": outgoing_image_urls,
@@ -5070,10 +6408,52 @@ def _orders_payload(db, limit=500):
 def orders_page_or_legacy_api():
     db = get_db()
     if _dash_auth():
-        return _render_dash_template("orders.html")
+        return render_template("orders.html")
     if API_SECRET_KEY and request.headers.get("X-API-Key") == API_SECRET_KEY:
         return jsonify(_orders_payload(db)["orders"]), 200
-    return _dash_redirect_with_key("/orders")
+    return (
+        "<h1>403 — Unauthorized</h1>"
+        "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط أو استخدم X-API-Key للـ API.</p>",
+        403,
+    )
+
+
+@app.route("/problems")
+def problems_page():
+    return _admin_page("problems.html")
+
+
+@app.route("/api/problems")
+def api_problems():
+    if not _dash_auth():
+        return jsonify({"error": "Unauthorized"}), 403
+    db = get_db()
+    limit = request.args.get("limit", "500")
+    status = request.args.get("status")
+    try:
+        limit = max(1, min(int(limit), 2000))
+    except ValueError:
+        limit = 500
+    problems = get_problem_reports(db, status=status, limit=limit)
+    return jsonify({"problems": problems, "total": len(problems)}), 200
+
+
+@app.route("/api/problems/<int:problem_id>/status", methods=["POST"])
+def api_problem_update_status(problem_id):
+    if not _dash_auth():
+        return jsonify({"error": "Unauthorized"}), 403
+    data = request.get_json(silent=True) or {}
+    status = (data.get("status") or "closed").strip()
+    if status not in {"open", "closed", "resolved", "needs_attention"}:
+        return jsonify({"error": "invalid status"}), 400
+    db = get_db()
+    now = now_baghdad_iso()
+    db.execute(
+        "UPDATE problem_reports SET status=?, updated_at=? WHERE id=?",
+        (status, now, problem_id),
+    )
+    db.commit()
+    return jsonify({"ok": True, "problem_id": problem_id, "status": status}), 200
 
 
 @app.route("/customers", methods=["GET"])
@@ -5279,36 +6659,17 @@ def health():
         "clip_available": CLIP_AVAILABLE,
         "catalog_match_enabled": CATALOG_MATCH_ENABLED,
         "catalog_match_model": CATALOG_MATCH_MODEL,
-        "catalog_image_exists": os.path.isfile(_resolve_catalog_image_path()),
-        "catalog_images_count": len(_resolve_all_catalog_image_paths()),
+        "catalog_image_exists": bool(_resolve_catalog_image_paths()),
+        "catalog_images_count": len(_resolve_catalog_image_paths()),
         "openrouter_key_present": bool(OPENROUTER_KEY),
     }), 200
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
-def _dash_key_from_request():
-    return (
-        request.args.get("key")
-        or request.headers.get("X-Dashboard-Key", "")
-        or request.cookies.get("dashboard_key", "")
-    ).strip()
-
-
 def _dash_auth():
-    key = _dash_key_from_request()
-    return bool(DASHBOARD_PASSWORD) and key == DASHBOARD_PASSWORD
-
-
-def _render_dash_template(template_name):
-    key = _dash_key_from_request()
-    response = make_response(render_template(template_name, dashboard_key=key))
-    response.set_cookie("dashboard_key", key, max_age=60 * 60 * 24 * 30, samesite="Lax")
-    return response
-
-
-def _dash_redirect_with_key(path):
-    return redirect(f"{path}?{urlencode({'key': DASHBOARD_PASSWORD})}", code=302)
+    key = request.args.get("key") or request.headers.get("X-Dashboard-Key", "")
+    return key == DASHBOARD_PASSWORD
 
 
 def _dash_require(fn):
@@ -5323,15 +6684,72 @@ def _dash_require(fn):
 @app.route("/dashboard")
 def dashboard():
     if not _dash_auth():
-        return _dash_redirect_with_key("/dashboard")
-    return _render_dash_template("dashboard.html")
+        return (
+            "<h1>403 — Unauthorized</h1>"
+            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
+            403,
+        )
+    return render_template("dashboard.html")
 
 
-@app.route("/instructions")
-def instructions_page():
+def _admin_page(template_name, **context):
     if not _dash_auth():
-        return _dash_redirect_with_key("/instructions")
-    return _render_dash_template("instructions.html")
+        return (
+            "<h1>403 — Unauthorized</h1>"
+            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
+            403,
+        )
+    return render_template(template_name, **context)
+
+
+@app.route("/settings")
+def settings_index_page():
+    return _admin_page("settings/index.html")
+
+
+@app.route("/settings/ai")
+def settings_ai_page():
+    return _admin_page("settings/ai.html")
+
+
+@app.route("/settings/auto-product")
+def settings_auto_product_page():
+    return _admin_page("settings/auto_product.html")
+
+
+@app.route("/settings/catalog")
+def settings_catalog_page():
+    return _admin_page("settings/catalog.html")
+
+
+@app.route("/settings/followup")
+def settings_followup_page():
+    return _admin_page("settings/followup.html")
+
+
+@app.route("/settings/channels")
+def settings_channels_page():
+    return _admin_page("settings/channels.html")
+
+
+@app.route("/settings/store")
+def settings_store_page():
+    return _admin_page("settings/store.html")
+
+
+@app.route("/settings/maintenance")
+def settings_maintenance_page():
+    return _admin_page("settings/maintenance.html")
+
+
+@app.route("/analytics")
+def analytics_page():
+    return _admin_page("analytics.html")
+
+
+@app.route("/evaluation")
+def evaluation_page():
+    return _admin_page("evaluation.html")
 
 
 @app.route("/manifest.webmanifest")
@@ -5352,8 +6770,12 @@ def pwa_service_worker():
 @app.route("/products")
 def products_page():
     if not _dash_auth():
-        return _dash_redirect_with_key("/products")
-    return _render_dash_template("products.html")
+        return (
+            "<h1>403 — Unauthorized</h1>"
+            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
+            403,
+        )
+    return render_template("products.html")
 
 
 @app.route("/api/orders")
@@ -5506,127 +6928,6 @@ def api_import_database():
     return jsonify({"ok": True, "message": "تم استيراد قاعدة البيانات بنجاح"})
 
 
-INSTRUCTION_FILE_MAP = {
-    "instructions": {
-        "title": "instructions.txt",
-        "description": "التعليمات الأساسية التي يعتمد عليها الذكاء الاصطناعي في كل رد.",
-        "path": _INSTRUCTIONS_FILE,
-    },
-    "forbidden_rules": {
-        "title": "forbidden_rules.txt",
-        "description": "قواعد المنع والحدود الحمراء التي تمنع الأخطاء.",
-        "path": os.path.join(os.path.dirname(__file__), "forbidden_rules.txt"),
-    },
-    "playbook": {
-        "title": "gemini_sales_playbook.md",
-        "description": "دليل أسلوب البيع المختصر الذي يضاف بعد التعليمات الأساسية.",
-        "path": _PLAYBOOK_FILE,
-    },
-    "product_summary": {
-        "title": "product_ai_summary.txt",
-        "description": "ملخص معرفة المنتجات المتزامن، ويستفيد منه الذكاء الاصطناعي عند الرد.",
-        "path": PRODUCT_KNOWLEDGE_FILE,
-    },
-}
-
-
-def _global_customer_instruction_row(db):
-    return db.execute(
-        "SELECT instructions FROM customer_instructions "
-        "WHERE sender_id IS NULL AND apply_to_all=1 "
-        "ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-
-
-@app.route("/api/settings/instructions_file", methods=["GET", "POST"])
-@_dash_require
-def api_settings_instructions_file():
-    if request.method == "GET":
-        payload = _text_file_payload(_INSTRUCTIONS_FILE)
-        payload["ok"] = True
-        return jsonify(payload)
-
-    data = request.get_json(silent=True) or {}
-    _write_file_text_atomic(_INSTRUCTIONS_FILE, data.get("content") or "")
-    payload = _text_file_payload(_INSTRUCTIONS_FILE)
-    payload["ok"] = True
-    return jsonify(payload)
-
-
-@app.route("/api/settings/ai_commands", methods=["GET", "POST"])
-@_dash_require
-def api_settings_ai_commands():
-    db = get_db()
-    if request.method == "GET":
-        files = {}
-        for key, meta in INSTRUCTION_FILE_MAP.items():
-            files[key] = {
-                **{k: v for k, v in meta.items() if k != "path"},
-                **_text_file_payload(meta["path"]),
-            }
-        ai_rows = db.execute(
-            "SELECT title, content FROM ai_instructions WHERE active=1 ORDER BY id"
-        ).fetchall()
-        rule_rows = db.execute(
-            "SELECT rule FROM forbidden_rules WHERE active=1 ORDER BY id"
-        ).fetchall()
-        global_row = _global_customer_instruction_row(db)
-        return jsonify({
-            "ok": True,
-            "files": files,
-            "db_ai_instructions": "\n\n---\n\n".join(
-                (r["content"] or "").strip() for r in ai_rows if (r["content"] or "").strip()
-            ),
-            "db_forbidden_rules": "\n".join(
-                (r["rule"] or "").strip() for r in rule_rows if (r["rule"] or "").strip()
-            ),
-            "global_supervisor_instructions": (global_row["instructions"] or "") if global_row else "",
-        })
-
-    data = request.get_json(silent=True) or {}
-    files = data.get("files") or {}
-    for key, content in files.items():
-        meta = INSTRUCTION_FILE_MAP.get(key)
-        if meta is None:
-            continue
-        _write_file_text_atomic(meta["path"], content or "")
-
-    now = now_baghdad_iso()
-    db_ai_text = str(data.get("db_ai_instructions") or "").strip()
-    db.execute("DELETE FROM ai_instructions")
-    if db_ai_text:
-        db.execute(
-            "INSERT INTO ai_instructions (title, content, active) VALUES (?,?,1)",
-            ("تعليمات إضافية من صفحة الأوامر", db_ai_text),
-        )
-
-    db_rules_text = str(data.get("db_forbidden_rules") or "").strip()
-    db.execute("DELETE FROM forbidden_rules")
-    for line in db_rules_text.splitlines():
-        rule = line.strip()
-        if rule:
-            db.execute("INSERT INTO forbidden_rules (rule, active) VALUES (?,1)", (rule,))
-
-    global_text = str(data.get("global_supervisor_instructions") or "").strip()
-    global_row = db.execute(
-        "SELECT id FROM customer_instructions WHERE sender_id IS NULL AND apply_to_all=1 "
-        "ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    if global_row:
-        db.execute(
-            "UPDATE customer_instructions SET instructions=?, updated_at=? WHERE id=?",
-            (global_text, now, global_row["id"]),
-        )
-    elif global_text:
-        db.execute(
-            "INSERT INTO customer_instructions (sender_id, instructions, apply_to_all, created_at, updated_at) "
-            "VALUES (NULL, ?, 1, ?, ?)",
-            (global_text, now, now),
-        )
-    db.commit()
-    return jsonify({"ok": True, "message": "تم حفظ جميع التعليمات والأوامر"})
-
-
 @app.route("/api/conversations")
 @_dash_require
 def api_conversations():
@@ -5655,6 +6956,11 @@ def api_conversations():
             END AS unanswered,
             (SELECT COUNT(*) FROM human_reviews hr
              WHERE hr.sender_id = c.sender_id AND hr.status = 'pending') AS pending_reviews_count,
+            (SELECT COUNT(*) FROM problem_reports pr
+             WHERE pr.sender_id = c.sender_id AND COALESCE(pr.status, 'open') IN ('open', 'needs_attention')) AS problem_count,
+            (SELECT reason FROM problem_reports pr
+             WHERE pr.sender_id = c.sender_id AND COALESCE(pr.status, 'open') IN ('open', 'needs_attention')
+             ORDER BY id DESC LIMIT 1) AS problem_reason,
             (SELECT COALESCE(MAX(id), 0) FROM messages
              WHERE sender_id = c.sender_id
                AND direction = 'incoming'
@@ -5680,7 +6986,9 @@ def api_conversations():
         )
         LEFT JOIN customer_product_interests cpi ON cpi.id = (
             SELECT id FROM customer_product_interests
-            WHERE sender_id = c.sender_id ORDER BY last_seen_at DESC LIMIT 1
+            WHERE sender_id = c.sender_id
+              AND COALESCE(status, 'active')='active'
+            ORDER BY last_seen_at DESC LIMIT 1
         )
         ORDER BY COALESCE(m.created_at, c.last_seen_at, '') DESC
     """).fetchall()
@@ -5697,6 +7005,37 @@ def api_conversation_messages(sender_id):
         (sender_id,),
     ).fetchall()
     return jsonify({"messages": list(reversed([dict(r) for r in rows]))})
+
+
+@app.route("/api/conversations/<sender_id>", methods=["DELETE"])
+@_dash_require
+def api_delete_conversation(sender_id):
+    sender_id = str(sender_id or "").strip()
+    if not sender_id:
+        return jsonify({"ok": False, "error": "sender_id required"}), 400
+
+    db = get_db()
+    deleted = {}
+    for table in (
+        "messages",
+        "conversation_memory",
+        "human_reviews",
+        "customer_product_interests",
+        "customer_instructions",
+        "customer_ai_settings",
+        "sender_processing_locks",
+    ):
+        cur = db.execute(f"DELETE FROM {table} WHERE sender_id=?", (sender_id,))
+        deleted[table] = cur.rowcount
+    cur = db.execute("DELETE FROM customers WHERE sender_id=?", (sender_id,))
+    deleted["customers"] = cur.rowcount
+    db.commit()
+    return jsonify({
+        "ok": True,
+        "sender_id": sender_id,
+        "deleted": deleted,
+        "orders_preserved": True,
+    })
 
 
 @app.route("/api/improve_message", methods=["POST"])
@@ -5845,22 +7184,45 @@ def api_ask_ai(sender_id):
     text               = (data.get("text")               or "").strip()
     extra_instructions = (data.get("extra_instructions") or "").strip()
     product_id         = (data.get("product_id")         or "").strip()
-    if not text:
-        return jsonify({
-            "reply": "",
-            "intent": "empty_text",
-            "confidence": 0,
-            "error": "text required",
-        }), 400
+    allow_empty        = bool(data.get("allow_empty"))
 
     db = get_db()
     if not is_ai_enabled(db):
         return jsonify({"reply": "", "intent": "disabled", "confidence": 0, "disabled": True}), 200
     customer         = get_or_create_customer(db, sender_id, None)
     history          = load_history(db, sender_id)
+    conversation_history = get_conversation_history(db, sender_id, limit=10)
     products         = load_active_products(None)
     customer_prods   = load_customer_products(db, sender_id)
     inst_text, rules = load_ai_config(db, sender_id=sender_id)
+
+    if not text and allow_empty:
+        latest_incoming = db.execute(
+            """SELECT text, message_type, image_url
+               FROM messages
+               WHERE sender_id=? AND direction='incoming'
+               ORDER BY id DESC LIMIT 1""",
+            (sender_id,),
+        ).fetchone()
+        if latest_incoming:
+            latest_text = (latest_incoming["text"] or "").strip()
+            latest_image = (latest_incoming["image_url"] or "").strip()
+            if latest_text and latest_text != latest_image:
+                text = latest_text
+            elif latest_image or latest_incoming["message_type"] == "image":
+                text = "الزبون أرسل صورة. حلل سياق المحادثة والمنتج المرتبط إن وجد واكتب الرد المناسب بدون اختراع تفاصيل."
+        if not text:
+            text = "حلل آخر رسائل المحادثة واكتب الرد المناسب للزبون بدون اختراع تفاصيل."
+        extra_instructions = (
+            (extra_instructions + "\n\n") if extra_instructions else ""
+        ) + "الحقل كان فارغاً عند المشرف؛ اعتمد على تاريخ المحادثة وسياق المنتج المرتبط إن وجد، ولا تخترع سعراً أو قياساً أو توفراً غير مؤكد."
+    elif not text:
+        return jsonify({
+            "reply": "",
+            "intent": "empty_text",
+            "confidence": 0,
+            "error": "text required",
+        }), 400
 
     if extra_instructions:
         inst_text += f"\n\nتعليمات إضافية من المشرف:\n{extra_instructions}"
@@ -5879,6 +7241,7 @@ def api_ask_ai(sender_id):
         ev, "text", customer, history, products,
         matched_product, None, inst_text, rules,
         customer_products=customer_prods,
+        conversation_history=conversation_history,
     )
     return jsonify({
         "reply":      ai_result.get("reply", ""),
@@ -6066,12 +7429,15 @@ def api_link_product(sender_id):
             return jsonify({"error": f"product not found: {product_id}"}), 404
         db.execute(
             """INSERT INTO customer_product_interests
-               (sender_id, product_id, product_name, match_method, confidence, last_seen_at)
-               VALUES (?, ?, ?, 'manual', 100, ?)
+               (sender_id, product_id, product_name, match_method, confidence, last_seen_at, source, status, rejected_at)
+               VALUES (?, ?, ?, 'manual', 100, ?, 'manual_admin', 'active', NULL)
                ON CONFLICT(sender_id, product_id) DO UPDATE SET
                    product_name=excluded.product_name,
                    match_method='manual', confidence=100,
-                   last_seen_at=excluded.last_seen_at""",
+                   last_seen_at=excluded.last_seen_at,
+                   source='manual_admin',
+                   status='active',
+                   rejected_at=NULL""",
             (sender_id, product_id, product.get("product_name"), now),
         )
         linked_products.append(product)
@@ -6128,20 +7494,18 @@ def api_upload_image():
 @app.route("/api/catalog_image", methods=["GET", "POST"])
 @_dash_require
 def api_catalog_image():
-    path = _resolve_catalog_image_path()
+    """Legacy endpoint — redirects to /api/settings/catalog_images."""
     if request.method == "GET":
-        exists = os.path.isfile(path)
-        stat = os.stat(path) if exists else None
+        images = [_catalog_image_meta(path) for path in _resolve_catalog_image_paths()]
         return jsonify({
             "ok": True,
-            "exists": exists,
-            "path": os.path.basename(path) if path else "",
-            "size": stat.st_size if stat else 0,
-            "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
+            "exists": len(images) > 0,
+            "images": images,
+            "images_count": len(images),
             "catalog_match_enabled": CATALOG_MATCH_ENABLED,
             "catalog_match_model": CATALOG_MATCH_MODEL,
         })
-
+    # POST: forward single image as multi-image upload
     if "image" not in request.files:
         return jsonify({"ok": False, "error": "No image file", "message": "فشل رفع صورة الكتالوج"}), 400
     file = request.files["image"]
@@ -6152,155 +7516,121 @@ def api_catalog_image():
         return jsonify({
             "ok": False,
             "error": "Only PNG, JPG, JPEG, or WEBP images are supported",
-            "message": "فشل رفع صورة الكتالوج",
+            "message": "فشل رفع صورة الكتالوج — استخدم صفحة /settings/catalog لرفع أكثر من صورة",
         }), 400
+    saved = []
+    with _catalog_image_lock:
+        os.makedirs(CATALOG_IMAGE_DIR, exist_ok=True)
+        filename = _safe_catalog_filename(file.filename)
+        if not filename:
+            return jsonify({"ok": False, "error": "Unsupported image type"}), 400
+        stem, fext = os.path.splitext(filename)
+        candidate = filename
+        counter = 1
+        while os.path.exists(os.path.join(CATALOG_IMAGE_DIR, candidate)):
+            candidate = f"{stem}_{counter}{fext}"
+            counter += 1
+        path = os.path.join(CATALOG_IMAGE_DIR, candidate)
+        try:
+            file.save(path)
+            if os.path.getsize(path) <= 0:
+                os.remove(path)
+                return jsonify({"ok": False, "error": "Uploaded file is empty"}), 400
+            saved.append(_catalog_image_meta(path))
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc), "message": "فشل رفع صورة الكتالوج"}), 500
+    image_flow("catalog_image_uploaded", path=candidate, size=os.path.getsize(path), action="uploaded")
+    return jsonify({
+        "ok": True,
+        "action": "uploaded",
+        "message": "تم رفع صورة الكتالوج — لإدارة جميع الصور استخدم /settings/catalog",
+        "saved": saved,
+        "images": [_catalog_image_meta(p) for p in _resolve_catalog_image_paths()],
+    })
 
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        file.save(path)
-        stat = os.stat(path)
-        if stat.st_size <= 0:
-            return jsonify({"ok": False, "error": "Uploaded file is empty", "message": "فشل رفع صورة الكتالوج"}), 400
-        image_flow("catalog_image_uploaded", path=os.path.basename(path), size=stat.st_size)
+
+@app.route("/api/settings/catalog_images", methods=["GET", "POST"])
+@_dash_require
+def api_settings_catalog_images():
+    if request.method == "GET":
+        images = [_catalog_image_meta(path) for path in _resolve_catalog_image_paths()]
         return jsonify({
             "ok": True,
-            "message": "تم رفع صورة الكتالوج بنجاح",
-            "exists": True,
-            "path": os.path.basename(path),
-            "size": stat.st_size,
-            "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat(),
+            "images": images,
+            "count": len(images),
+            "catalog_match_enabled": CATALOG_MATCH_ENABLED,
+            "catalog_match_model": CATALOG_MATCH_MODEL,
+            "upload_dir": os.path.basename(CATALOG_IMAGE_DIR),
         })
-    except Exception as exc:
-        image_flow("catalog_image_upload_failed", error=str(exc))
-        return jsonify({"ok": False, "error": str(exc), "message": "فشل رفع صورة الكتالوج"}), 500
 
-
-def _list_catalog_images():
-    os.makedirs(CATALOG_IMAGES_DIR, exist_ok=True)
-    valid_ext = {".png", ".jpg", ".jpeg", ".webp"}
-    images = []
-    for fname in sorted(os.listdir(CATALOG_IMAGES_DIR)):
-        ext = os.path.splitext(fname)[1].lower()
-        if ext not in valid_ext:
-            continue
-        fpath = os.path.join(CATALOG_IMAGES_DIR, fname)
-        if not os.path.isfile(fpath):
-            continue
-        st = os.stat(fpath)
-        images.append({
-            "filename": fname,
-            "size": st.st_size,
-            "updated_at": datetime.fromtimestamp(st.st_mtime, BAGHDAD_TZ).isoformat(),
-            "url": f"/catalog_image_file/{fname}",
-        })
-    return images
-
-
-def _resolve_all_catalog_image_paths():
-    images = _list_catalog_images()
-    if images:
-        return [os.path.join(CATALOG_IMAGES_DIR, img["filename"]) for img in images]
-    legacy = _resolve_catalog_image_path()
-    if legacy and os.path.isfile(legacy):
-        return [legacy]
-    return []
-
-
-@app.route("/catalog_image_file/<filename>")
-@_dash_require
-def serve_catalog_image(filename):
-    safe = os.path.basename(filename)
-    return send_from_directory(CATALOG_IMAGES_DIR, safe)
-
-
-@app.route("/api/catalog_images", methods=["GET"])
-@_dash_require
-def api_catalog_images_list():
-    images = _list_catalog_images()
-    return jsonify({
-        "ok": True,
-        "images": images,
-        "catalog_match_enabled": CATALOG_MATCH_ENABLED,
-        "catalog_match_model": CATALOG_MATCH_MODEL,
-    })
-
-
-@app.route("/api/catalog_images/upload", methods=["POST"])
-@_dash_require
-def api_catalog_images_upload():
-    files = request.files.getlist("images")
+    files = request.files.getlist("images") or request.files.getlist("image")
+    files = [file for file in files if file and file.filename]
     if not files:
-        return jsonify({"ok": False, "error": "لم يتم اختيار أي صورة"}), 400
+        return jsonify({"ok": False, "error": "No image files"}), 400
 
-    os.makedirs(CATALOG_IMAGES_DIR, exist_ok=True)
-    valid_ext = {".png", ".jpg", ".jpeg", ".webp"}
-    uploaded = []
+    saved = []
     errors = []
-    for file in files:
-        if not file.filename:
-            continue
-        ext = os.path.splitext(file.filename)[1].lower()
-        if ext not in valid_ext:
-            errors.append(f"{file.filename}: نوع غير مدعوم")
-            continue
-        fname = f"catalog_{int(time.time() * 1000)}_{len(uploaded)}{ext}"
-        fpath = os.path.join(CATALOG_IMAGES_DIR, fname)
-        file.save(fpath)
-        st = os.stat(fpath)
-        if st.st_size <= 0:
-            os.remove(fpath)
-            errors.append(f"{file.filename}: ملف فارغ")
-            continue
-        uploaded.append({
-            "filename": fname,
-            "size": st.st_size,
-            "updated_at": datetime.fromtimestamp(st.st_mtime, BAGHDAD_TZ).isoformat(),
-            "url": f"/catalog_image_file/{fname}",
-        })
-
-    print(f"[Catalog] Uploaded {len(uploaded)} images, {len(errors)} errors", flush=True)
-
-    # Also copy to legacy CATALOG_IMAGE_PATH for backward compat
-    all_imgs = _list_catalog_images()
-    if all_imgs:
-        first_path = os.path.join(CATALOG_IMAGES_DIR, all_imgs[0]["filename"])
-        legacy_path = _resolve_catalog_image_path()
-        if legacy_path and first_path != legacy_path:
+    with _catalog_image_lock:
+        os.makedirs(CATALOG_IMAGE_DIR, exist_ok=True)
+        for file in files:
+            filename = _safe_catalog_filename(file.filename)
+            if not filename:
+                errors.append({"filename": file.filename, "error": "Unsupported image type"})
+                continue
+            stem, ext = os.path.splitext(filename)
+            candidate = filename
+            counter = 1
+            while os.path.exists(os.path.join(CATALOG_IMAGE_DIR, candidate)):
+                candidate = f"{stem}_{counter}{ext}"
+                counter += 1
+            path = os.path.join(CATALOG_IMAGE_DIR, candidate)
             try:
-                import shutil
-                shutil.copy2(first_path, legacy_path)
-            except Exception:
-                pass
+                file.save(path)
+                if os.path.getsize(path) <= 0:
+                    os.remove(path)
+                    errors.append({"filename": file.filename, "error": "Uploaded file is empty"})
+                    continue
+                saved.append(_catalog_image_meta(path))
+            except Exception as exc:
+                errors.append({"filename": file.filename, "error": str(exc)})
 
+    image_flow("catalog_images_uploaded", count=len(saved), errors=len(errors))
+    status = 200 if saved else 400
     return jsonify({
-        "ok": True,
-        "uploaded": uploaded,
+        "ok": bool(saved),
+        "saved": saved,
         "errors": errors,
-        "total": len(_list_catalog_images()),
-        "message": f"تم رفع {len(uploaded)} صورة بنجاح" + (f" | {len(errors)} أخطاء" if errors else ""),
-    })
+        "images": [_catalog_image_meta(path) for path in _resolve_catalog_image_paths()],
+    }), status
 
 
-@app.route("/api/catalog_images/<filename>", methods=["DELETE"])
+@app.route("/api/settings/catalog_images/<image_id>", methods=["DELETE"])
 @_dash_require
-def api_catalog_images_delete(filename):
-    safe = os.path.basename(filename)
-    fpath = os.path.join(CATALOG_IMAGES_DIR, safe)
-    if not os.path.isfile(fpath):
-        return jsonify({"ok": False, "error": "الصورة غير موجودة"}), 404
-    try:
-        os.remove(fpath)
-        print(f"[Catalog] Deleted image: {safe}", flush=True)
-        return jsonify({"ok": True, "message": "تم حذف الصورة", "total": len(_list_catalog_images())})
-    except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+def api_delete_catalog_image(image_id):
+    image_id = str(image_id or "").strip()
+    if not image_id:
+        return jsonify({"ok": False, "error": "image_id required"}), 400
 
+    if image_id == "__legacy__":
+        path = _resolve_catalog_image_path()
+    else:
+        safe_name = os.path.basename(image_id.replace("\\", "/"))
+        if safe_name != image_id or not _is_catalog_image_file(safe_name):
+            return jsonify({"ok": False, "error": "invalid image_id"}), 400
+        path = os.path.join(CATALOG_IMAGE_DIR, safe_name)
 
-@app.route("/settings/catalog")
-def catalog_settings_page():
-    if not _dash_auth():
-        return _dash_redirect_with_key("/settings/catalog")
-    return _render_dash_template("catalog.html")
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "image not found"}), 404
+
+    with _catalog_image_lock:
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            return jsonify({"ok": False, "error": "image not found"}), 404
+
+    image_flow("catalog_image_deleted", image_id=image_id, filename=os.path.basename(path))
+    images = [_catalog_image_meta(item) for item in _resolve_catalog_image_paths()]
+    return jsonify({"ok": True, "deleted": image_id, "images": images})
 
 
 @app.route("/api/manychat/diag", methods=["GET"])
@@ -6386,29 +7716,821 @@ def api_manychat_test():
     })
 
 
+def _top_ordered_products(db, limit=5):
+    rows = db.execute(
+        """SELECT product_id, product_name
+           FROM orders
+           WHERE COALESCE(product_id, '') != '' OR COALESCE(product_name, '') != ''"""
+    ).fetchall()
+    counts = Counter()
+    labels = {}
+    for row in rows:
+        ids = [x.strip() for x in str(row["product_id"] or "").split(",") if x.strip()]
+        names = [x.strip() for x in str(row["product_name"] or "").split(",") if x.strip()]
+        if not ids and names:
+            ids = names
+        for idx, pid in enumerate(ids):
+            key = pid or (names[idx] if idx < len(names) else "")
+            if not key:
+                continue
+            name = names[idx] if idx < len(names) and names[idx] else key
+            counts[key] += 1
+            labels.setdefault(key, name)
+    return [
+        {"product_id": key, "product_name": labels.get(key, key), "orders": count}
+        for key, count in counts.most_common(limit)
+    ]
+
+
 @app.route("/api/dashboard_stats")
 @_dash_require
 def api_dashboard_stats():
     db    = get_db()
     today = datetime.now(BAGHDAD_TZ).date().isoformat()
+    total_messages = db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+    total_orders = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+    total_conversations = db.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
+    incoming_messages = db.execute("SELECT COUNT(*) FROM messages WHERE direction='incoming'").fetchone()[0]
+    outgoing_messages = db.execute("SELECT COUNT(*) FROM messages WHERE direction='outgoing'").fetchone()[0]
+    conversion_rate = round((total_orders / total_messages) * 100, 2) if total_messages else 0
+    conversation_conversion_rate = round((total_orders / total_conversations) * 100, 2) if total_conversations else 0
     return jsonify({
-        "total_conversations": db.execute("SELECT COUNT(*) FROM customers").fetchone()[0],
+        "total_conversations": total_conversations,
         "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0],
         "orders_today":        db.execute("SELECT COUNT(*) FROM orders WHERE created_at >= ?", (today,)).fetchone()[0],
         "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?", (today,)).fetchone()[0],
+        "messages_total":      total_messages,
+        "incoming_messages":   incoming_messages,
+        "outgoing_messages":   outgoing_messages,
+        "orders_total":        total_orders,
+        "message_to_order_conversion": conversion_rate,
+        "conversation_to_order_conversion": conversation_conversion_rate,
+        "top_products":        _top_ordered_products(db),
         "ai_enabled":          is_ai_enabled(db),
     })
 
 
-@app.route("/api/settings/ai", methods=["POST"])
+def _analytics_range():
+    period = (request.args.get("period") or "today").strip()
+    today = datetime.now(BAGHDAD_TZ).date()
+    if period == "yesterday":
+        date_from = datetime.fromordinal(today.toordinal() - 1).date()
+        date_to = today
+    elif period == "7d":
+        date_from = datetime.fromordinal(today.toordinal() - 6).date()
+        date_to = datetime.fromordinal(today.toordinal() + 1).date()
+    elif period == "30d":
+        date_from = datetime.fromordinal(today.toordinal() - 29).date()
+        date_to = datetime.fromordinal(today.toordinal() + 1).date()
+    elif period == "custom":
+        raw_from = request.args.get("from") or today.isoformat()
+        raw_to = request.args.get("to") or raw_from
+        try:
+            date_from = datetime.fromisoformat(raw_from).date()
+            date_to = datetime.fromordinal(datetime.fromisoformat(raw_to).date().toordinal() + 1).date()
+        except ValueError:
+            date_from = today
+            date_to = datetime.fromordinal(today.toordinal() + 1).date()
+    else:
+        date_from = today
+        date_to = datetime.fromordinal(today.toordinal() + 1).date()
+    return period, date_from.isoformat(), date_to.isoformat()
+
+
+@app.route("/api/analytics")
+@_dash_require
+def api_analytics():
+    db = get_db()
+    period, date_from, date_to = _analytics_range()
+    params = (date_from, date_to)
+    messages = db.execute(
+        "SELECT COUNT(*) FROM messages WHERE created_at >= ? AND created_at < ?",
+        params,
+    ).fetchone()[0]
+    incoming = db.execute(
+        "SELECT COUNT(*) FROM messages WHERE direction='incoming' AND created_at >= ? AND created_at < ?",
+        params,
+    ).fetchone()[0]
+    outgoing = db.execute(
+        "SELECT COUNT(*) FROM messages WHERE direction='outgoing' AND created_at >= ? AND created_at < ?",
+        params,
+    ).fetchone()[0]
+    orders = db.execute(
+        "SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ?",
+        params,
+    ).fetchone()[0]
+    new_customers = db.execute(
+        "SELECT COUNT(*) FROM customers WHERE first_seen_at >= ? AND first_seen_at < ?",
+        params,
+    ).fetchone()[0]
+    human_reviews = db.execute(
+        "SELECT COUNT(*) FROM human_reviews WHERE created_at >= ? AND created_at < ?",
+        params,
+    ).fetchone()[0]
+    pending_reviews = db.execute(
+        "SELECT COUNT(*) FROM human_reviews WHERE status='pending'",
+    ).fetchone()[0]
+    unanswered = db.execute(
+        """SELECT COUNT(*) FROM customers c
+           JOIN messages m ON m.id = (
+             SELECT id FROM messages WHERE sender_id=c.sender_id ORDER BY id DESC LIMIT 1
+           )
+           WHERE m.direction='incoming'""",
+    ).fetchone()[0]
+    interests = db.execute(
+        """SELECT product_id, product_name, COUNT(*) AS count
+           FROM customer_product_interests
+           WHERE COALESCE(status, 'active')='active'
+           GROUP BY product_id, product_name
+           ORDER BY count DESC
+           LIMIT 8""",
+    ).fetchall()
+    objections = db.execute(
+        """SELECT COALESCE(NULLIF(TRIM(notes), ''), 'اعتراض بدون نص') AS text, COUNT(*) AS count
+           FROM customer_product_interests
+           WHERE status='rejected'
+           GROUP BY text
+           ORDER BY count DESC
+           LIMIT 8""",
+    ).fetchall()
+    return jsonify({
+        "period": period,
+        "date_from": date_from,
+        "date_to": date_to,
+        "cards": {
+            "messages": messages,
+            "incoming_messages": incoming,
+            "outgoing_messages": outgoing,
+            "orders": orders,
+            "message_to_order_conversion": round((orders / messages) * 100, 2) if messages else 0,
+            "new_customers": new_customers,
+            "human_reviews": human_reviews,
+            "pending_reviews": pending_reviews,
+            "unanswered_conversations": unanswered,
+        },
+        "top_ordered_products": _top_ordered_products(db, limit=8),
+        "top_interested_products": [dict(row) for row in interests],
+        "top_objections": [dict(row) for row in objections],
+        "ai": {
+            "enabled": is_ai_enabled(db),
+            "auto_product": get_auto_product_settings(db),
+        },
+    })
+
+
+def _request_date_range(default_period="today"):
+    period = (request.args.get("period") or default_period).strip()
+    today = datetime.now(BAGHDAD_TZ).date()
+    if period == "yesterday":
+        start = today - timedelta(days=1)
+        end = today
+    elif period == "7d":
+        start = today - timedelta(days=6)
+        end = today + timedelta(days=1)
+    elif period == "30d":
+        start = today - timedelta(days=29)
+        end = today + timedelta(days=1)
+    elif period == "custom":
+        try:
+            start = datetime.fromisoformat(request.args.get("from") or today.isoformat()).date()
+            end = datetime.fromisoformat(request.args.get("to") or today.isoformat()).date() + timedelta(days=1)
+        except ValueError:
+            start = today
+            end = today + timedelta(days=1)
+    else:
+        period = "today"
+        start = today
+        end = today + timedelta(days=1)
+    return period, start.isoformat(), end.isoformat()
+
+
+def _percent(part, whole):
+    return round((part / whole) * 100, 2) if whole else 0
+
+
+def _infer_sales_stage(text, has_order=False, rejected=False):
+    text = (text or "").strip().lower()
+    if has_order:
+        return "booked"
+    if rejected:
+        return "lost"
+    if any(word in text for word in ("سعر", "السعر", "بكم", "شكد", "كم")):
+        return "asked_price"
+    if any(word in text for word in ("قياس", "مقاس", "سايز", "عمر")):
+        return "asked_size"
+    if any(word in text for word in ("غالي", "تخفيض", "خصم", "ليش")):
+        return "price_objection"
+    if any(word in text for word in ("عنوان", "موبايل", "هاتف", "رقم")):
+        return "waiting_for_customer_info"
+    return "conversation"
+
+
+def calculate_message_to_order_conversion(db, start_date, end_date):
+    total_messages = db.execute(
+        "SELECT COUNT(*) FROM messages WHERE created_at >= ? AND created_at < ?",
+        (start_date, end_date),
+    ).fetchone()[0]
+    total_conversations = db.execute(
+        """SELECT COUNT(DISTINCT sender_id) FROM messages
+           WHERE direction='incoming' AND created_at >= ? AND created_at < ?""",
+        (start_date, end_date),
+    ).fetchone()[0]
+    total_orders = db.execute(
+        "SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ?",
+        (start_date, end_date),
+    ).fetchone()[0]
+    return {
+        "total_messages": total_messages,
+        "total_conversations": total_conversations,
+        "total_orders": total_orders,
+        "conversation_conversion_rate": _percent(total_orders, total_conversations),
+        "message_conversion_rate": _percent(total_orders, total_messages),
+    }
+
+
+def get_stage_breakdown(db, start_date, end_date):
+    rows = db.execute(
+        """SELECT m.sender_id, m.text,
+                  EXISTS(SELECT 1 FROM orders o WHERE o.sender_id=m.sender_id AND o.created_at >= ? AND o.created_at < ?) AS has_order,
+                  EXISTS(SELECT 1 FROM customer_product_interests cpi WHERE cpi.sender_id=m.sender_id AND cpi.status='rejected') AS rejected
+           FROM messages m
+           JOIN (
+             SELECT sender_id, MAX(id) AS max_id
+             FROM messages
+             WHERE direction='incoming' AND created_at >= ? AND created_at < ?
+             GROUP BY sender_id
+           ) latest ON latest.max_id=m.id""",
+        (start_date, end_date, start_date, end_date),
+    ).fetchall()
+    counts = Counter()
+    for row in rows:
+        counts[_infer_sales_stage(row["text"], bool(row["has_order"]), bool(row["rejected"]))] += 1
+    total = sum(counts.values())
+    return [
+        {
+            "stage": stage,
+            "count": count,
+            "percentage": _percent(count, total),
+            "evaluation": "high_dropoff" if total and count / total >= 0.35 and stage not in {"booked"} else "normal",
+            "suggestion": _stage_suggestion(stage),
+        }
+        for stage, count in counts.most_common()
+    ]
+
+
+def _stage_suggestion(stage):
+    return {
+        "asked_price": "حسن رد السعر بإضافة فحص عند الاستلام وسؤال حجز واضح.",
+        "asked_size": "اختصر إجابة القياس واختم بسؤال يطلب العمر أو تأكيد الحجز.",
+        "price_objection": "أضف رد اعتراض يوضح القيمة والتبديل والفحص بدون إطالة.",
+        "waiting_for_customer_info": "اجعل طلب الهاتف والعنوان مباشرًا وبخطوة واحدة.",
+        "conversation": "أضف CTA أوضح في الردود العامة حتى لا تتوقف المحادثة.",
+        "lost": "راجع أسباب الرفض المتكررة قبل تغيير قواعد الرد.",
+        "booked": "حافظ على النمط الحالي لأنه وصل إلى طلب.",
+    }.get(stage, "راجع الرسائل في هذه المرحلة وأضف خطوة بيع أوضح.")
+
+
+def get_dropoff_analysis(db, start_date, end_date):
+    breakdown = get_stage_breakdown(db, start_date, end_date)
+    return [row for row in breakdown if row["stage"] not in {"booked"}]
+
+
+def get_followup_performance(db, start_date, end_date):
+    rows = db.execute(
+        """SELECT stage,
+                  COUNT(*) AS sent,
+                  SUM(CASE WHEN EXISTS(
+                    SELECT 1 FROM messages m
+                    WHERE m.sender_id=followups.sender_id
+                      AND m.direction='incoming'
+                      AND m.created_at > followups.sent_at
+                  ) THEN 1 ELSE 0 END) AS replies,
+                  SUM(CASE WHEN EXISTS(
+                    SELECT 1 FROM orders o
+                    WHERE o.sender_id=followups.sender_id
+                      AND o.created_at > followups.sent_at
+                  ) THEN 1 ELSE 0 END) AS orders_after
+           FROM followups
+           WHERE status='sent' AND sent_at >= ? AND sent_at < ?
+           GROUP BY stage
+           ORDER BY sent DESC""",
+        (start_date, end_date),
+    ).fetchall()
+    return [
+        {
+            "stage": row["stage"] or "conversation",
+            "sent": row["sent"] or 0,
+            "replies": row["replies"] or 0,
+            "orders_after": row["orders_after"] or 0,
+            "success_rate": _percent(row["orders_after"] or 0, row["sent"] or 0),
+        }
+        for row in rows
+    ]
+
+
+def get_evaluation_metrics(db, start_date, end_date):
+    conversion = calculate_message_to_order_conversion(db, start_date, end_date)
+    followups_sent = db.execute(
+        "SELECT COUNT(*) FROM followups WHERE status='sent' AND sent_at >= ? AND sent_at < ?",
+        (start_date, end_date),
+    ).fetchone()[0]
+    orders_after_followup = db.execute(
+        """SELECT COUNT(DISTINCT o.id)
+           FROM orders o
+           JOIN followups f ON f.sender_id=o.sender_id
+           WHERE f.status='sent' AND o.created_at > f.sent_at
+             AND o.created_at >= ? AND o.created_at < ?""",
+        (start_date, end_date),
+    ).fetchone()[0]
+    human_review_count = db.execute(
+        "SELECT COUNT(*) FROM human_reviews WHERE created_at >= ? AND created_at < ?",
+        (start_date, end_date),
+    ).fetchone()[0]
+    stages = get_stage_breakdown(db, start_date, end_date)
+    objections = db.execute(
+        """SELECT COALESCE(NULLIF(TRIM(notes), ''), 'اعتراض بدون نص') AS text, COUNT(*) AS count
+           FROM customer_product_interests
+           WHERE status='rejected'
+           GROUP BY text
+           ORDER BY count DESC
+           LIMIT 1"""
+    ).fetchone()
+    top_dropoff = next((row for row in stages if row["stage"] != "booked"), None)
+    return {
+        **conversion,
+        "followups_sent": followups_sent,
+        "orders_after_followup": orders_after_followup,
+        "human_review_count": human_review_count,
+        "top_dropoff_stage": (top_dropoff or {}).get("stage") or "",
+        "top_objection": objections["text"] if objections else "",
+    }
+
+
+def _build_suggestions_from_metrics(metrics, stages, followups):
+    suggestions = []
+    if metrics.get("top_dropoff_stage"):
+        stage = metrics["top_dropoff_stage"]
+        suggestions.append({
+            "suggestion_type": "reply_rule",
+            "title": f"تحسين رد مرحلة {stage}",
+            "content": _stage_suggestion(stage),
+            "metric_name": "top_dropoff_stage",
+            "metric_value": stage,
+            "conversion_rate": metrics.get("conversation_conversion_rate", 0),
+            "reason": f"أعلى نقطة توقف حالية هي {stage}.",
+        })
+    if metrics.get("conversation_conversion_rate", 0) < 15 and metrics.get("total_conversations", 0) >= 5:
+        suggestions.append({
+            "suggestion_type": "reply_rule",
+            "title": "رفع وضوح دعوة الحجز",
+            "content": "اختم الردود المهمة بسؤال حجز مباشر مثل: أحجزه إلج؟ أو ترسلين العنوان والموبايل؟",
+            "metric_name": "conversation_conversion_rate",
+            "metric_value": str(metrics.get("conversation_conversion_rate", 0)),
+            "conversion_rate": metrics.get("conversation_conversion_rate", 0),
+            "reason": "نسبة تحويل المحادثات إلى طلبات منخفضة ضمن الفترة المختارة.",
+        })
+    weak_followup = next((row for row in followups if row.get("sent") and row.get("success_rate", 0) < 10), None)
+    if weak_followup:
+        suggestions.append({
+            "suggestion_type": "followup_rule",
+            "title": f"تحسين متابعة {weak_followup['stage']}",
+            "content": "اجعل رسالة المتابعة أقصر وفيها سبب واضح للرجوع للحجز بدل التذكير العام فقط.",
+            "metric_name": "followup_success_rate",
+            "metric_value": str(weak_followup.get("success_rate", 0)),
+            "conversion_rate": weak_followup.get("success_rate", 0),
+            "reason": "طلبات ما بعد المتابعة قليلة مقارنة بعدد المتابعات المرسلة.",
+        })
+    if not suggestions:
+        suggestions.append({
+            "suggestion_type": "review_note",
+            "title": "مراجعة دورية للردود",
+            "content": "لا توجد مشكلة واضحة في البيانات الحالية. راجع المحادثات يدويًا قبل اعتماد قواعد جديدة.",
+            "metric_name": "data_volume",
+            "metric_value": str(metrics.get("total_conversations", 0)),
+            "conversion_rate": metrics.get("conversation_conversion_rate", 0),
+            "reason": "البيانات الحالية لا تكفي لاستخراج توصية قوية أو لا تظهر هبوطًا واضحًا.",
+        })
+    return suggestions
+
+
+def save_evaluation_suggestions(db, suggestions, date_range, metrics):
+    now = now_baghdad_iso()
+    saved = []
+    for item in suggestions:
+        cur = db.execute(
+            """INSERT INTO evaluation_suggestions
+               (suggestion_type, title, content, metric_name, metric_value, conversion_rate,
+                reason, status, date_range_start, date_range_end, metrics_json, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)""",
+            (
+                item.get("suggestion_type") or "reply_rule",
+                item.get("title") or "اقتراح تحسين",
+                item.get("content") or "",
+                item.get("metric_name") or "",
+                str(item.get("metric_value") or ""),
+                float(item.get("conversion_rate") or 0),
+                item.get("reason") or "",
+                date_range[0],
+                date_range[1],
+                json.dumps(metrics, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+        saved.append(cur.lastrowid)
+    db.commit()
+    return saved
+
+
+def get_evaluation_suggestions(db, status=None, limit=100):
+    params = []
+    where = ""
+    if status:
+        where = "WHERE status=?"
+        params.append(status)
+    params.append(int(limit))
+    return [
+        dict(row)
+        for row in db.execute(
+            f"SELECT * FROM evaluation_suggestions {where} ORDER BY id DESC LIMIT ?",
+            params,
+        ).fetchall()
+    ]
+
+
+def update_evaluation_suggestion(db, suggestion_id, title=None, content=None, status=None, admin_notes=None):
+    row = db.execute("SELECT * FROM evaluation_suggestions WHERE id=?", (suggestion_id,)).fetchone()
+    if not row:
+        return None
+    db.execute(
+        """UPDATE evaluation_suggestions
+           SET title=?, content=?, status=?, admin_notes=?, updated_at=?
+           WHERE id=?""",
+        (
+            title if title is not None else row["title"],
+            content if content is not None else row["content"],
+            status if status is not None else row["status"],
+            admin_notes if admin_notes is not None else row["admin_notes"],
+            now_baghdad_iso(),
+            suggestion_id,
+        ),
+    )
+    db.commit()
+    return dict(db.execute("SELECT * FROM evaluation_suggestions WHERE id=?", (suggestion_id,)).fetchone())
+
+
+def approve_suggestion_as_rule(db, suggestion_id, priority=5):
+    suggestion = db.execute(
+        "SELECT * FROM evaluation_suggestions WHERE id=?",
+        (suggestion_id,),
+    ).fetchone()
+    if not suggestion:
+        return None
+    now = now_baghdad_iso()
+    cur = db.execute(
+        """INSERT INTO active_ai_rules
+           (source_suggestion_id, rule_type, rule_text, priority, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, ?)""",
+        (
+            suggestion_id,
+            suggestion["suggestion_type"] or "reply_rule",
+            suggestion["content"],
+            _setting_int(priority, 5, 1, 10),
+            now,
+            now,
+        ),
+    )
+    db.execute(
+        "UPDATE evaluation_suggestions SET status='active', updated_at=? WHERE id=?",
+        (now, suggestion_id),
+    )
+    db.commit()
+    return dict(db.execute("SELECT * FROM active_ai_rules WHERE id=?", (cur.lastrowid,)).fetchone())
+
+
+def get_active_ai_rules(db):
+    return [
+        dict(row)
+        for row in db.execute(
+            "SELECT * FROM active_ai_rules WHERE active=1 ORDER BY priority ASC, id DESC"
+        ).fetchall()
+    ]
+
+
+def run_daily_learning(db=None, start_date=None, end_date=None):
+    db = db or get_db()
+    today = datetime.now(BAGHDAD_TZ).date()
+    start_date = start_date or (today - timedelta(days=1)).isoformat()
+    end_date = end_date or today.isoformat()
+    try:
+        metrics = get_evaluation_metrics(db, start_date, end_date)
+        stages = get_stage_breakdown(db, start_date, end_date)
+        followups = get_followup_performance(db, start_date, end_date)
+        suggestions = _build_suggestions_from_metrics(metrics, stages, followups)
+        ids = save_evaluation_suggestions(db, suggestions, (start_date, end_date), metrics)
+        report = (
+            f"Daily learning {start_date} -> {end_date}: "
+            f"messages={metrics.get('total_messages', 0)}, "
+            f"conversations={metrics.get('total_conversations', 0)}, "
+            f"orders={metrics.get('total_orders', 0)}, "
+            f"conversion={metrics.get('conversation_conversion_rate', 0)}%"
+        )
+        db.execute(
+            """INSERT INTO daily_learning_runs
+               (date_range_start, date_range_end, metrics_json, report_text, suggestions_count, status)
+               VALUES (?, ?, ?, ?, ?, 'completed')""",
+            (start_date, end_date, json.dumps(metrics, ensure_ascii=False), report, len(ids)),
+        )
+        db.commit()
+        return {"ok": True, "suggestions_count": len(ids), "suggestion_ids": ids, "report": report}
+    except Exception as exc:
+        db.execute(
+            """INSERT INTO daily_learning_runs
+               (date_range_start, date_range_end, status, error_text)
+               VALUES (?, ?, 'failed', ?)""",
+            (start_date, end_date, f"{type(exc).__name__}: {exc}"),
+        )
+        db.commit()
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+@app.route("/api/evaluation")
+@_dash_require
+def api_evaluation():
+    db = get_db()
+    period, start_date, end_date = _request_date_range()
+    metrics = get_evaluation_metrics(db, start_date, end_date)
+    stages = get_stage_breakdown(db, start_date, end_date)
+    followups = get_followup_performance(db, start_date, end_date)
+    return jsonify({
+        "ok": True,
+        "period": period,
+        "date_from": start_date,
+        "date_to": end_date,
+        "metrics": metrics,
+        "stage_breakdown": stages,
+        "dropoff_analysis": get_dropoff_analysis(db, start_date, end_date),
+        "followup_performance": followups,
+        "suggestions": get_evaluation_suggestions(db, limit=50),
+        "active_rules": get_active_ai_rules(db),
+    })
+
+
+@app.route("/api/evaluation/generate_suggestions", methods=["POST"])
+@_dash_require
+def api_generate_evaluation_suggestions():
+    db = get_db()
+    data = request.get_json(silent=True) or {}
+    start_date = data.get("date_from")
+    end_date = data.get("date_to")
+    if not start_date or not end_date:
+        _, start_date, end_date = _request_date_range()
+    metrics = get_evaluation_metrics(db, start_date, end_date)
+    stages = get_stage_breakdown(db, start_date, end_date)
+    followups = get_followup_performance(db, start_date, end_date)
+    suggestions = _build_suggestions_from_metrics(metrics, stages, followups)
+    ids = save_evaluation_suggestions(db, suggestions, (start_date, end_date), metrics)
+    return jsonify({"ok": True, "created": len(ids), "ids": ids})
+
+
+@app.route("/api/evaluation/run_daily_learning", methods=["POST"])
+@_dash_require
+def api_run_daily_learning():
+    data = request.get_json(silent=True) or {}
+    return jsonify(run_daily_learning(get_db(), data.get("date_from"), data.get("date_to")))
+
+
+@app.route("/api/evaluation/suggestions/<int:suggestion_id>", methods=["PUT"])
+@_dash_require
+def api_update_evaluation_suggestion(suggestion_id):
+    data = request.get_json(silent=True) or {}
+    updated = update_evaluation_suggestion(
+        get_db(),
+        suggestion_id,
+        title=data.get("title"),
+        content=data.get("content"),
+        status=data.get("status"),
+        admin_notes=data.get("admin_notes"),
+    )
+    if not updated:
+        return jsonify({"ok": False, "error": "suggestion not found"}), 404
+    return jsonify({"ok": True, "suggestion": updated})
+
+
+@app.route("/api/evaluation/suggestions/<int:suggestion_id>/approve", methods=["POST"])
+@_dash_require
+def api_approve_evaluation_suggestion(suggestion_id):
+    data = request.get_json(silent=True) or {}
+    rule = approve_suggestion_as_rule(get_db(), suggestion_id, priority=data.get("priority", 5))
+    if not rule:
+        return jsonify({"ok": False, "error": "suggestion not found"}), 404
+    return jsonify({"ok": True, "rule": rule})
+
+
+@app.route("/api/evaluation/rules/<int:rule_id>", methods=["PUT"])
+@_dash_require
+def api_update_active_rule(rule_id):
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    row = db.execute("SELECT * FROM active_ai_rules WHERE id=?", (rule_id,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": "rule not found"}), 404
+    db.execute(
+        """UPDATE active_ai_rules
+           SET rule_text=?, rule_type=?, priority=?, active=?, updated_at=?
+           WHERE id=?""",
+        (
+            data.get("rule_text", row["rule_text"]),
+            data.get("rule_type", row["rule_type"]),
+            _setting_int(data.get("priority", row["priority"]), row["priority"] or 5, 1, 10),
+            1 if data.get("active", bool(row["active"])) else 0,
+            now_baghdad_iso(),
+            rule_id,
+        ),
+    )
+    db.commit()
+    return jsonify({"ok": True, "rule": dict(db.execute("SELECT * FROM active_ai_rules WHERE id=?", (rule_id,)).fetchone())})
+
+
+@app.route("/api/settings/overview")
+@_dash_require
+def api_settings_overview():
+    db = get_db()
+    return jsonify({
+        "ok": True,
+        "ai": {
+            "enabled": is_ai_enabled(db),
+            "main_model": MAIN_MODEL,
+            "improve_model": IMPROVE_MODEL,
+            "checker_enabled": CHECKER_ENABLED,
+            "checker_model": CHECKER_MODEL,
+            "openrouter_key_present": bool(OPENROUTER_KEY),
+        },
+        "channels": {
+            "manychat_key_present": bool(current_manychat_api_key()),
+            "manychat_api_url": MANYCHAT_API_URL,
+            "telegram_bot_present": bool(TELEGRAM_BOT_TOKEN),
+            "telegram_chat_present": bool(TELEGRAM_CHAT_ID),
+            "telegram_orders_chat_present": bool(TELEGRAM_ORDERS_CHAT_ID),
+            "telegram_problems_chat_present": bool(TELEGRAM_PROBLEMS_CHAT_ID),
+            "public_url": PUBLIC_URL,
+            "human_reply_webhook_url": HUMAN_REPLY_WEBHOOK_URL,
+        },
+        "store": {
+            "name": get_setting(db, "store_name", TELEGRAM_NOTIFICATION_HEADER),
+            "phone": get_setting(db, "store_phone", ""),
+            "delivery_policy": get_setting(db, "delivery_policy", FIXED_DELIVERY_TEXT),
+            "provinces": get_setting(db, "store_provinces", ""),
+            "inspection_message": get_setting(db, "inspection_message", ORDER_CONFIRMATION_TEXT),
+        },
+        "auto_product": get_auto_product_settings(db),
+        "maintenance": {
+            "database_path": os.path.basename(DB_PATH),
+            "database_size": os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0,
+            "products_count": len(load_products_from_file()),
+        },
+    })
+
+
+@app.route("/api/settings/store", methods=["GET", "POST"])
+@_dash_require
+def api_store_settings():
+    db = get_db()
+    if request.method == "GET":
+        return jsonify({
+            "name": get_setting(db, "store_name", TELEGRAM_NOTIFICATION_HEADER),
+            "phone": get_setting(db, "store_phone", ""),
+            "delivery_policy": get_setting(db, "delivery_policy", FIXED_DELIVERY_TEXT),
+            "provinces": get_setting(db, "store_provinces", ""),
+            "inspection_message": get_setting(db, "inspection_message", ORDER_CONFIRMATION_TEXT),
+        })
+    data = request.get_json(silent=True) or {}
+    for key, setting_key in (
+        ("name", "store_name"),
+        ("phone", "store_phone"),
+        ("delivery_policy", "delivery_policy"),
+        ("provinces", "store_provinces"),
+        ("inspection_message", "inspection_message"),
+    ):
+        set_setting(db, setting_key, data.get(key, ""))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/settings/ai", methods=["GET", "POST"])
 @_dash_require
 def api_set_ai_enabled():
+    if request.method == "GET":
+        db = get_db()
+        return jsonify({
+            "ok": True,
+            "ai_enabled": is_ai_enabled(db),
+            "main_model": MAIN_MODEL,
+            "improve_model": IMPROVE_MODEL,
+            "checker_enabled": CHECKER_ENABLED,
+            "checker_model": CHECKER_MODEL,
+            "openrouter_key_present": bool(OPENROUTER_KEY),
+        })
     data = request.get_json(silent=True) or {}
     enabled = bool(data.get("enabled"))
     db = get_db()
     set_setting(db, "ai_enabled", "1" if enabled else "0")
     print(f"[Settings] AI enabled={enabled}", flush=True)
     return jsonify({"ok": True, "ai_enabled": enabled})
+
+
+@app.route("/api/settings/auto_product", methods=["GET", "POST"])
+@_dash_require
+def api_auto_product_settings():
+    db = get_db()
+    if request.method == "GET":
+        settings = get_auto_product_settings(db)
+        return jsonify({
+            "ok": True,
+            "auto_product_enabled": settings["enabled"],
+            "auto_product_id": settings["product_id"],
+            "auto_product_send_image": settings["send_image"],
+            "product": settings["product"],
+        })
+
+    data = request.get_json(silent=True) or {}
+    enabled = bool(data.get("enabled", data.get("auto_product_enabled", False)))
+    product_id = str(data.get("product_id") or data.get("auto_product_id") or "").strip()
+    send_image = bool(data.get("send_image", data.get("auto_product_send_image", False)))
+    if enabled:
+        product = find_product_by_id(product_id)
+        if not product:
+            return jsonify({
+                "ok": False,
+                "error": "auto_product_id must be an active product when enabled",
+            }), 400
+    set_setting(db, "auto_product_enabled", "1" if enabled else "0")
+    set_setting(db, "auto_product_id", product_id)
+    set_setting(db, "auto_product_send_image", "1" if send_image else "0")
+    settings = get_auto_product_settings(db)
+    print(
+        f"[Settings] Auto product enabled={enabled} product_id={product_id} send_image={send_image}",
+        flush=True,
+    )
+    return jsonify({
+        "ok": True,
+        "auto_product_enabled": settings["enabled"],
+        "auto_product_id": settings["product_id"],
+        "auto_product_send_image": settings["send_image"],
+        "product": settings["product"],
+    })
+
+
+@app.route("/api/settings/followup", methods=["GET", "POST"])
+@_dash_require
+def api_followup_settings():
+    db = get_db()
+    if request.method == "GET":
+        pending = db.execute("SELECT COUNT(*) FROM followups WHERE status='pending'").fetchone()[0]
+        return jsonify({"ok": True, "settings": get_followup_settings(db), "pending_count": pending})
+    settings = save_followup_settings(db, request.get_json(silent=True) or {})
+    return jsonify({"ok": True, "settings": settings})
+
+
+@app.route("/api/followups/customer_messages", methods=["GET", "POST"])
+@_dash_require
+def api_followup_customer_messages():
+    db = get_db()
+    if request.method == "GET":
+        limit = request.args.get("limit", "500")
+        try:
+            limit = max(1, min(int(limit), 2000))
+        except ValueError:
+            limit = 500
+        return jsonify({
+            "ok": True,
+            "customers": list_customer_followup_messages(db, limit=limit),
+        })
+
+    data = request.get_json(silent=True) or {}
+    result = save_customer_followup_template(
+        db,
+        data.get("sender_id"),
+        data.get("message_template") or "",
+        update_pending=bool(data.get("update_pending", True)),
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.route("/api/followups/send_due", methods=["POST"])
+@_dash_require
+def api_send_due_followups():
+    return jsonify({"ok": True, **send_due_followups(get_db())})
+
+
+@app.route("/api/followups/cancel_pending", methods=["POST"])
+@_dash_require
+def api_cancel_pending_followups():
+    db = get_db()
+    cur = db.execute("UPDATE followups SET status='cancelled', sent_at=? WHERE status='pending'", (now_baghdad_iso(),))
+    db.commit()
+    return jsonify({"ok": True, "cancelled": cur.rowcount})
 
 
 @app.route("/api/conversations/<sender_id>/ai", methods=["POST"])
@@ -6570,7 +8692,7 @@ def api_create_order(sender_id):
     return jsonify({
         "ok": True,
         "telegram_sent": telegram_sent,
-        "telegram_error": "" if telegram_sent else "تعذر إرسال الطلب إلى تلغرام. تأكد من TELEGRAM_BOT_TOKEN و TELEGRAM_ORDERS_CHAT_ID.",
+        "telegram_error": "" if telegram_sent else "تعذر إرسال الطلب إلى تلغرام. تأكد من TELEGRAM_BOT_TOKEN و TELEGRAM_ORDERS_CHAT_ID أو ORDER_TELEGRAM_CHAT_ID.",
     })
 
 

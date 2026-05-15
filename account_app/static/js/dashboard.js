@@ -1,11 +1,5 @@
 // ── State ──────────────────────────────────────────────────────────────────
-function getDashboardKey() {
-  const fromUrl = new URLSearchParams(window.location.search).get('key') || '';
-  const fromCookie = document.cookie.split('; ').find(row => row.startsWith('dashboard_key='))?.split('=')[1] || '';
-  return fromUrl || decodeURIComponent(fromCookie);
-}
-
-const DASH_KEY        = getDashboardKey();
+const DASH_KEY        = new URLSearchParams(window.location.search).get('key') || '';
 let currentSenderId   = null;
 let currentCustomer   = null;
 let allConversations  = [];
@@ -24,6 +18,7 @@ const reviewSound     = new Audio('/aud/young-rooster-cock-a-doodle-doo.mp3');
 const imageSound      = new Audio('/aud/young-rooster-cock-a-doodle-doo.mp3');
 const latestIncomingBySender = {};
 const pendingReviewsBySender = {};
+const openProblemsBySender = {};
 const latestConversationTimeBySender = {};
 const latestImageIdBySender = {};
 
@@ -41,10 +36,10 @@ function apiFetch(url, opts = {}) {
 // ── Boot ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', unlockAudioOnce, { once: true });
+  syncConversationFilterUI();
   loadConversations();
   loadStats();
   loadProducts();
-  loadCommandFile(false);
   pollConvTimer = setInterval(() => { loadConversations(false); loadStats(); }, 8000);
 });
 
@@ -116,6 +111,7 @@ async function loadConversations(showSpinner = true) {
   }
   try {
     const previousPending = new Map(allConversations.map(c => [c.sender_id, c.pending_reviews_count || 0]));
+    const previousProblems = new Map(allConversations.map(c => [c.sender_id, c.problem_count || 0]));
     const res  = await apiFetch('/api/conversations');
     const data = await res.json();
     allConversations = data.conversations || [];
@@ -123,6 +119,8 @@ async function loadConversations(showSpinner = true) {
       for (const c of allConversations) {
         const prev = previousPending.get(c.sender_id) || pendingReviewsBySender[c.sender_id] || 0;
         const next = c.pending_reviews_count || 0;
+        const prevProblems = previousProblems.get(c.sender_id) || openProblemsBySender[c.sender_id] || 0;
+        const nextProblems = c.problem_count || 0;
         const previousTime = latestConversationTimeBySender[c.sender_id] || '';
         const nextTime = c.last_time || '';
         const prevImageId = latestImageIdBySender[c.sender_id] || 0;
@@ -142,13 +140,19 @@ async function loadConversations(showSpinner = true) {
           if (!isCurrentlyOpen) playDashboardSound('review');
           else showHumanIntervention();
         }
+        if (nextProblems > prevProblems) {
+          flashConversation(c.sender_id);
+          if (!isCurrentlyOpen) playDashboardSound('review');
+        }
         pendingReviewsBySender[c.sender_id] = next;
+        openProblemsBySender[c.sender_id] = nextProblems;
         latestConversationTimeBySender[c.sender_id] = nextTime;
         latestImageIdBySender[c.sender_id] = nextImageId;
       }
     } else {
       allConversations.forEach(c => {
         pendingReviewsBySender[c.sender_id] = c.pending_reviews_count || 0;
+        openProblemsBySender[c.sender_id] = c.problem_count || 0;
         latestConversationTimeBySender[c.sender_id] = c.last_time || '';
         latestImageIdBySender[c.sender_id] = Number(c.last_image_id || 0);
       });
@@ -159,10 +163,20 @@ async function loadConversations(showSpinner = true) {
   }
 }
 
-function setFilter(f, btn) {
-  currentFilter = f;
-  document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+function syncConversationFilterUI() {
+  const group = document.getElementById('conversationFilters');
+  if (!group) return;
+  const validFilters = new Set(['all', 'human', 'pending', 'problems', 'unanswered', 'today']);
+  if (!validFilters.has(currentFilter)) currentFilter = 'all';
+  group.querySelectorAll('[data-filter]').forEach(button => {
+    button.classList.toggle('active', button.dataset.filter === currentFilter);
+  });
+}
+
+function setFilter(f, btn = null) {
+  const requested = String(f || btn?.dataset?.filter || 'all').trim();
+  currentFilter = requested || 'all';
+  syncConversationFilterUI();
   renderConversations();
 }
 
@@ -172,10 +186,14 @@ function filterCustomers() {
 }
 
 function renderConversations() {
+  syncConversationFilterUI();
   let list = allConversations;
 
   if (currentFilter === 'human' || currentFilter === 'pending') {
     list = list.filter(c => Number(c.pending_reviews_count || 0) > 0);
+  }
+  else if (currentFilter === 'problems') {
+    list = list.filter(c => Number(c.problem_count || 0) > 0);
   }
   else if (currentFilter === 'unanswered') {
     list = list.filter(c => Number(c.unanswered || 0) === 1 || c.last_direction === 'incoming');
@@ -197,6 +215,8 @@ function renderConversations() {
   if (!list.length) {
     const emptyText = currentFilter === 'human'
       ? 'لا توجد محادثات تحتاج تدخل بشري'
+      : currentFilter === 'problems'
+        ? 'لا توجد مشاكل مفتوحة'
       : currentFilter === 'unanswered'
         ? 'لا توجد رسائل بدون رد'
         : 'لا توجد محادثات';
@@ -210,6 +230,8 @@ function renderConversations() {
     const active  = c.sender_id === currentSenderId ? 'active' : '';
     const badge   = c.pending_reviews_count > 0
       ? `<span class="badge bg-danger" style="font-size:9px;">${c.pending_reviews_count}</span>` : '';
+    const problemBadge = c.problem_count > 0
+      ? `<span class="badge bg-warning text-dark" title="${esc(c.problem_reason || 'مشكلة مفتوحة')}" style="font-size:9px;"><i class="bi bi-exclamation-triangle-fill"></i> ${c.problem_count}</span>` : '';
     const adBadge = (c.ad_id || c.ref)
       ? `<span class="ad-badge"><i class="bi bi-megaphone-fill"></i></span>` : '';
     const sourceMeta = customerSourceMeta(c);
@@ -223,7 +245,7 @@ function renderConversations() {
           <div class="cust-preview">${preview}</div>
         </div>
         <div class="d-flex flex-column align-items-end gap-1">
-          <span class="cust-time">${time}</span>${badge}
+          <span class="cust-time">${time}</span>${badge}${problemBadge}
         </div>
       </div>`;
   }).join('');
@@ -339,9 +361,7 @@ function renderMessages(msgs, scroll = true) {
   area.innerHTML = msgs.map(m => {
     const dir  = m.direction === 'incoming' ? 'incoming' : 'outgoing';
     const time = fmtDatetime(m.created_at);
-    const mediaUrl = messageMediaUrl(m);
-    const mediaType = messageMediaType(m);
-    const imgUrl = mediaType === 'image' ? messageImageUrl(m) : '';
+    const imgUrl = messageImageUrl(m);
     let content = '';
 
     if (imgUrl) {
@@ -349,21 +369,8 @@ function renderMessages(msgs, scroll = true) {
         onclick="openLightbox(${esc(jsString(imgUrl))})"
         onerror="this.outerHTML='<div class=\\'msg-image-error\\'><i class=\\'bi bi-image\\' style=\\'font-size:24px\\'></i><br>تعذر عرض الصورة<br><a href=\\'${esc(imgUrl)}\\' target=\\'_blank\\' rel=\\'noopener\\'>فتح الصورة</a></div>'"
         alt="صورة" loading="lazy" referrerpolicy="no-referrer">`;
-    } else if (mediaType === 'video' && mediaUrl && /^https?:/i.test(mediaUrl) && !looksLikeReelUrl(mediaUrl)) {
-      content += `<video class="msg-video mb-1" controls preload="metadata" playsinline>
-        <source src="${esc(mediaUrl)}">
-      </video>`;
-    } else if (mediaType === 'reel' && mediaUrl) {
-      content += `<a class="msg-reel mb-1" href="${esc(mediaUrl)}" target="_blank" rel="noopener">
-        <span class="msg-reel-icon"><i class="bi bi-camera-reels-fill"></i></span>
-        <span class="msg-reel-copy">
-          <strong>Reel Instagram</strong>
-          <small>افتح المقطع</small>
-        </span>
-        <i class="bi bi-box-arrow-up-left"></i>
-      </a>`;
     }
-    if (m.text && m.text !== imgUrl && m.text !== mediaUrl) {
+    if (m.text && m.text !== imgUrl) {
       content += `<div class="msg-bubble">${esc(m.text)}</div>`;
     }
     if (!content) content = '<div class="msg-bubble" style="color:var(--text-muted)"><small>[رسالة فارغة]</small></div>';
@@ -380,7 +387,7 @@ let _hiModalInstance = null;
 
 function _hiSetBusy(busy, btnId = null) {
   _hiBusy = busy;
-  ['hiBtnLinkProduct', 'hiBtnUnavailable', 'hiBtnAskAI', 'hiBtnSendDirect', 'hiBtnCloseReview']
+  ['hiBtnLinkProduct', 'hiBtnUnavailable', 'hiBtnCloseImageReview', 'hiBtnAskAI', 'hiBtnSendDirect', 'hiBtnCloseReview']
     .forEach(id => {
       const b = document.getElementById(id);
       if (b) b.disabled = busy;
@@ -395,6 +402,7 @@ function _hiResetButtons() {
   const map = {
     hiBtnLinkProduct: '<i class="bi bi-link me-1"></i>ربط المنتج وإرسال رد',
     hiBtnUnavailable: '<i class="bi bi-x-circle me-1"></i>غير متوفر — أبلغ الزبون',
+    hiBtnCloseImageReview: '<i class="bi bi-check2-circle me-1"></i>إغلاق المراجع البشري',
     hiBtnAskAI: '<i class="bi bi-robot me-1"></i>أعد صياغة بالـ AI واعرض الاقتراح',
     hiBtnSendDirect: '<i class="bi bi-send me-1"></i>أرسل النص مباشرة',
     hiBtnCloseReview: '<i class="bi bi-check2-circle me-1"></i>أغلق المراجعة فقط',
@@ -490,7 +498,7 @@ function openInterventionDialog() {
     _hiPopulateProducts();
   } else {
     _hiPopulateTextProducts();
-    document.getElementById('hiUnifiedText').value = '';
+    document.getElementById('hiUnifiedText').value = document.getElementById('aiInstructions')?.value || '';
     setHIGenderUI((currentCustomer && currentCustomer.gender) || '');
   }
 
@@ -584,14 +592,28 @@ async function hiAskAI() {
   try {
     await _hiSyncGenderIfChosen();
     await _hiSilentLinkIfChosen();
-    document.getElementById('messageInput').value = text;
-    if (text) {
-      document.getElementById('aiInstructions').value = text;
-      await saveInstructions();
+    if (!currentConversationAIEnabled) {
+      const res = await apiFetch(`/api/conversations/${currentSenderId}/ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        currentConversationAIEnabled = true;
+        if (currentCustomer) currentCustomer.ai_enabled = 1;
+        renderConversationAIToggle();
+      }
     }
-    await askAI();
+    document.getElementById('messageInput').value = text;
+    await askAI({
+      text,
+      allowEmpty: true,
+      extraInstructions: text
+        ? 'مدخلات المشرف التالية هي مسودة أو توجيه للرد. أعد صياغتها باللهجة المناسبة للزبون، والتزم بسياق المحادثة ولا تضف معلومة غير مؤكدة.'
+        : 'لم يكتب المشرف أي نص. حلل آخر رسائل المحادثة وسياق المنتج المرتبط إن وجد، ثم اكتب الرد الصحيح والمختصر للزبون.',
+    });
     _hiCloseModal();
-    hideHumanIntervention();
   } catch (e) {
     showToast('خطأ AI: ' + e.message, 'danger');
   } finally {
@@ -609,10 +631,13 @@ async function hiSendDirect() {
     await _hiSyncGenderIfChosen();
     await _hiSilentLinkIfChosen();
     document.getElementById('messageInput').value = text;
-    await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
-    await sendMessage();
-    _hiCloseModal();
-    hideHumanIntervention();
+    const sent = await sendMessage();
+    if (sent) {
+      await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
+      _hiCloseModal();
+      hideHumanIntervention();
+      await loadConversations(false);
+    }
   } catch (e) {
     showToast('خطأ: ' + e.message, 'danger');
   } finally {
@@ -713,11 +738,10 @@ async function sendMessage(text = null, imgUrl = null) {
 
   _setSendingState(true);
   try {
-    const platform = (currentCustomer && currentCustomer.platform) || 'facebook';
     const res  = await apiFetch(`/api/conversations/${currentSenderId}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: txt, image_url: img, platform }),
+      body: JSON.stringify({ text: txt, image_url: img }),
     });
     const data = await res.json();
     if (data.ok) {
@@ -726,12 +750,14 @@ async function sendMessage(text = null, imgUrl = null) {
       if (data.warning) showToast(data.warning, 'warning');
       else showToast('تم الإرسال', 'success');
       await loadMessages(currentSenderId);
+      return true;
     } else {
       const detail = data.warning || data.error || 'ManyChat لم يؤكد الإرسال';
       console.warn('[ManualSend] failure', data);
       showToast('فشل الإرسال: ' + detail, 'danger');
+      return false;
     }
-  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
+  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); return false; }
   finally { _setSendingState(false); }
 }
 
@@ -749,8 +775,9 @@ async function testManyChat() {
 }
 
 // ══ Ask AI ═════════════════════════════════════════════════════════════════
+// Catalog image upload moved to /settings/catalog page
 
-async function askAI() {
+async function askAI(options = {}) {
   if (!currentSenderId) return;
   if (_isAskingAI) { showToast('جاري تجهيز اقتراح AI...', 'warning'); return; }
   if (!canUseAI()) {
@@ -762,10 +789,20 @@ async function askAI() {
     renderAIActionButtons();
     return;
   }
-  const text             = document.getElementById('messageInput').value.trim();
-  const textForAI        = text || 'اقترح رداً مناسباً باللهجة العراقية اعتماداً على آخر رسائل الزبون في المحادثة.';
-  const savedInstructions = document.getElementById('aiInstructions').value.trim();
-  const rewriteInstruction = 'قم بإعادة صياغة النص الموجود في رسالة المشرف فقط، مع الالتزام بباقي التعليمات والقواعد المحفوظة. لا تضف سؤالاً جديداً إذا كان الزبون أجاب عليه سابقاً.';
+  const text = options.text !== undefined
+    ? String(options.text || '').trim()
+    : document.getElementById('messageInput').value.trim();
+  const allowEmpty = Boolean(options.allowEmpty);
+  if (!text && !allowEmpty) {
+    showToast('اكتب نصاً في حقل الرسالة حتى يعيد AI صياغته', 'warning');
+    return;
+  }
+  const savedInstructions = options.extraInstructions !== undefined
+    ? String(options.extraInstructions || '').trim()
+    : document.getElementById('aiInstructions').value.trim();
+  const rewriteInstruction = text
+    ? 'قم بإعادة صياغة النص الموجود في رسالة المشرف فقط، مع الالتزام بباقي التعليمات والقواعد المحفوظة. لا تضف سؤالاً جديداً إذا كان الزبون أجاب عليه سابقاً.'
+    : 'لا توجد رسالة من المشرف. حلل آخر رسائل الزبون وسياق المحادثة والمنتج المرتبط إن وجد، ثم حضر الرد الأنسب بدون اختراع تفاصيل.';
   const extraInstructions = savedInstructions
     ? `${savedInstructions}\n\n${rewriteInstruction}`
     : rewriteInstruction;
@@ -780,7 +817,7 @@ async function askAI() {
     const res  = await apiFetch(`/api/conversations/${currentSenderId}/ask_ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: textForAI, extra_instructions: extraInstructions, product_id: productId }),
+      body: JSON.stringify({ text, extra_instructions: extraInstructions, product_id: productId, allow_empty: allowEmpty }),
     });
     const data = await res.json();
     if (data.reply) {
@@ -798,7 +835,26 @@ async function askAI() {
   }
 }
 
-function sendAIReply()    { if (aiPendingReply) { sendMessage(aiPendingReply); dismissAIPreview(); } }
+async function sendAIReply() {
+  if (!aiPendingReply) return;
+  const reply = aiPendingReply;
+  const sent = await sendMessage(reply);
+  if (!sent) return;
+  try {
+    const res = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      currentConversationAIEnabled = true;
+      if (currentCustomer) currentCustomer.ai_enabled = 1;
+      renderConversationAIToggle();
+      hideHumanIntervention();
+      await loadConversations(false);
+    }
+  } catch (e) {
+    showToast('تم إرسال الرد، لكن تعذر إغلاق المراجعة: ' + e.message, 'warning');
+  }
+  dismissAIPreview();
+}
 function editAIReply()    { if (aiPendingReply) { document.getElementById('messageInput').value = aiPendingReply; dismissAIPreview(); } }
 function dismissAIPreview() {
   aiPendingReply = null;
@@ -867,10 +923,7 @@ async function handleImageUpload(event) {
   try {
     const res  = await apiFetch('/api/upload_image', { method: 'POST', body: fd });
     const data = await res.json();
-    if (data.image_url) {
-      uploadedImageUrl = data.image_url;
-      showToast(data.warning || 'تم رفع الصورة، اضغط زر الإرسال لإرسالها', data.send_ready === false ? 'warning' : 'success');
-    }
+    if (data.image_url) { uploadedImageUrl = data.image_url; showToast('تم رفع الصورة', 'success'); }
     else showToast('فشل رفع الصورة', 'danger');
   } catch (e) { showToast('خطأ رفع: ' + e.message, 'danger'); }
 }
@@ -1034,181 +1087,6 @@ async function saveInstructions() {
 }
 
 // ══ Stats ══════════════════════════════════════════════════════════════════
-const STRICT_FIELDS_BEGIN = '### DASHBOARD_STRICT_FIELDS_BEGIN';
-const STRICT_FIELDS_END = '### DASHBOARD_STRICT_FIELDS_END';
-
-function escapeRegex(text) {
-  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function stripStrictInstructionSection(text) {
-  const pattern = new RegExp(`\\n?${escapeRegex(STRICT_FIELDS_BEGIN)}[\\s\\S]*?${escapeRegex(STRICT_FIELDS_END)}\\n?`, 'm');
-  return String(text || '').replace(pattern, '\n').trim();
-}
-
-function parseStrictInstructionFields(text) {
-  const source = String(text || '');
-  const start = source.indexOf(STRICT_FIELDS_BEGIN);
-  const end = source.indexOf(STRICT_FIELDS_END);
-  if (start < 0 || end <= start) return [];
-  const section = source.slice(start + STRICT_FIELDS_BEGIN.length, end);
-  const fields = [];
-  const re = /#### اسم الحقل:\s*([^\n]+)\n([\s\S]*?)(?=\n#### اسم الحقل:|\s*$)/g;
-  let match;
-  while ((match = re.exec(section)) !== null) {
-    const name = (match[1] || '').trim();
-    let content = (match[2] || '').trim();
-    content = content.replace(/^المحتوى الإلزامي:\s*/m, '').trim();
-    if (name || content) fields.push({ name, content });
-  }
-  return fields;
-}
-
-function buildStrictInstructionSection(fields) {
-  const clean = (fields || [])
-    .map((field) => ({
-      name: String(field.name || '').trim(),
-      content: String(field.content || '').trim(),
-    }))
-    .filter((field) => field.name && field.content);
-
-  if (!clean.length) return '';
-
-  const blocks = clean.map((field) => (
-    `#### اسم الحقل: ${field.name}\n` +
-    `المحتوى الإلزامي:\n${field.content}`
-  ));
-
-  return [
-    STRICT_FIELDS_BEGIN,
-    'هذه تعليمات صارمة مضافة من لوحة التحكم. يجب على الذكاء الاصطناعي الالتزام بها التزامًا حرفيًا وعدم مخالفتها أو تجاهلها.',
-    ...blocks,
-    STRICT_FIELDS_END,
-  ].join('\n\n');
-}
-
-function collectStrictInstructionFields() {
-  return Array.from(document.querySelectorAll('.strict-field-item')).map((item) => ({
-    name: item.querySelector('.strict-field-name')?.value || '',
-    content: item.querySelector('.strict-field-content')?.value || '',
-  }));
-}
-
-function renderStrictInstructionFields(fields = []) {
-  const list = document.getElementById('strictFieldsList');
-  if (!list) return;
-  list.innerHTML = '';
-  const items = fields.length ? fields : [{ name: '', content: '' }];
-  items.forEach((field) => addStrictInstructionField(field.name, field.content));
-}
-
-function addStrictInstructionField(name = '', content = '') {
-  const list = document.getElementById('strictFieldsList');
-  if (!list) return;
-  const item = document.createElement('div');
-  item.className = 'strict-field-item';
-  item.innerHTML = `
-    <div class="d-flex align-items-center gap-2 mb-2">
-      <input class="form-control form-control-sm strict-field-name" type="text" placeholder="اسم الحقل" value="">
-      <button class="btn btn-outline-danger btn-sm strict-field-remove" type="button" title="حذف الحقل" onclick="removeStrictInstructionField(this)">
-        <i class="bi bi-trash"></i>
-      </button>
-    </div>
-    <textarea class="form-control form-control-sm strict-field-content" rows="3" placeholder="المحتوى الذي يجب الالتزام به التزام صارم"></textarea>
-  `;
-  item.querySelector('.strict-field-name').value = name || '';
-  item.querySelector('.strict-field-content').value = content || '';
-  list.appendChild(item);
-}
-
-function removeStrictInstructionField(button) {
-  const item = button?.closest('.strict-field-item');
-  if (item) item.remove();
-  const list = document.getElementById('strictFieldsList');
-  if (list && !list.children.length) addStrictInstructionField();
-}
-
-function reloadStrictFieldsFromEditor() {
-  const textarea = document.getElementById('commandFileText');
-  if (!textarea) return;
-  renderStrictInstructionFields(parseStrictInstructionFields(textarea.value));
-  showToast('تمت قراءة الحقول من ملف الأوامر', 'success');
-}
-
-async function saveStrictInstructionFields() {
-  const textarea = document.getElementById('commandFileText');
-  if (!textarea) return;
-  const fields = collectStrictInstructionFields();
-  const validFields = fields.filter((field) => field.name.trim() && field.content.trim());
-  const missing = fields.some((field) => field.name.trim() || field.content.trim()) && validFields.length !== fields.filter((field) => field.name.trim() || field.content.trim()).length;
-  if (missing) {
-    showToast('كل حقل صارم يحتاج اسم ومحتوى معًا', 'warning');
-    return;
-  }
-
-  const base = stripStrictInstructionSection(textarea.value);
-  const section = buildStrictInstructionSection(validFields);
-  textarea.value = section ? `${base ? `${base}\n\n` : ''}${section}` : base;
-  const saved = await saveCommandFile();
-  if (saved) showToast('تم حفظ الحقول الصارمة داخل ملف الأوامر', 'success');
-}
-
-async function loadCommandFile(showToastOnSuccess = false) {
-  const textarea = document.getElementById('commandFileText');
-  if (!textarea) return;
-  const meta = document.getElementById('commandFileMeta');
-  try {
-    const res = await apiFetch('/api/settings/instructions_file');
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تحميل ملف الأوامر');
-    textarea.value = data.content || '';
-    renderStrictInstructionFields(parseStrictInstructionFields(textarea.value));
-    if (meta) {
-      const size = Number(data.size || 0).toLocaleString('ar');
-      meta.textContent = `${data.path || 'instructions.txt'} - ${size} بايت`;
-    }
-    if (showToastOnSuccess) showToast('تم تحديث ملف الأوامر من الخادم', 'success');
-  } catch (e) {
-    if (meta) meta.textContent = 'تعذر تحميل ملف الأوامر';
-    showToast(e.message || 'تعذر تحميل ملف الأوامر', 'danger');
-  }
-}
-
-async function saveCommandFile() {
-  const textarea = document.getElementById('commandFileText');
-  const btn = document.getElementById('saveCommandFileBtn');
-  if (!textarea) return;
-  const oldHtml = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span class="ms-1">حفظ</span>';
-  }
-  try {
-    const res = await apiFetch('/api/settings/instructions_file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: textarea.value }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حفظ ملف الأوامر');
-    const meta = document.getElementById('commandFileMeta');
-    if (meta) {
-      const size = Number(data.size || 0).toLocaleString('ar');
-      meta.textContent = `${data.path || 'instructions.txt'} - ${size} بايت`;
-    }
-    showToast('تم حفظ ملف الأوامر', 'success');
-    return true;
-  } catch (e) {
-    showToast(e.message || 'فشل حفظ ملف الأوامر', 'danger');
-    return false;
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = oldHtml;
-    }
-  }
-}
-
 async function loadStats() {
   try {
     const res  = await apiFetch('/api/dashboard_stats');
@@ -1216,9 +1094,44 @@ async function loadStats() {
     document.getElementById('statPending').textContent  = `${data.pending_reviews  || 0} مراجعة`;
     document.getElementById('statOrders').textContent   = `${data.orders_today    || 0} طلب`;
     document.getElementById('statMessages').textContent = `${data.messages_today  || 0} رسالة`;
+    setText('statTotalMessages', fmtNumber(data.messages_total || 0));
+    setText('statTotalOrders', fmtNumber(data.orders_total || 0));
+    setText('statConversion', `${Number(data.message_to_order_conversion || 0).toFixed(1)}%`);
+    const top = (data.top_products || [])[0];
+    setText('statTopProduct', top ? `${top.product_name || top.product_id} (${top.orders})` : 'لا يوجد');
+    renderTopProducts(data.top_products || []);
     globalAIEnabled = data.ai_enabled !== false;
     renderAIToggle();
   } catch (e) { console.error('loadStats', e); }
+}
+
+async function openStatsModal() {
+  await loadStats();
+  new bootstrap.Modal(document.getElementById('statsModal')).show();
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function fmtNumber(value) {
+  return Number(value || 0).toLocaleString('ar-IQ');
+}
+
+function renderTopProducts(products) {
+  const el = document.getElementById('topProductsList');
+  if (!el) return;
+  if (!products.length) {
+    el.innerHTML = '<div class="small" style="color:var(--text-muted)">لا توجد طلبات بعد</div>';
+    return;
+  }
+  el.innerHTML = products.slice(0, 5).map((p, idx) => `
+    <div class="top-product-row">
+      <span>${idx + 1}. ${esc(p.product_name || p.product_id || '-')}</span>
+      <strong>${fmtNumber(p.orders || 0)}</strong>
+    </div>
+  `).join('');
 }
 
 function renderAIToggle() {
@@ -1334,7 +1247,6 @@ async function toggleConversationAI() {
 function openOrderModal() {
   if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   if (currentCustomer) {
-    document.getElementById('orderName').value     = currentCustomer.name     || '';
     document.getElementById('orderPhone').value    = currentCustomer.phone    || '';
     document.getElementById('orderProvince').value = currentCustomer.province || '';
     document.getElementById('orderAddress').value  = currentCustomer.address  || '';
@@ -1347,7 +1259,7 @@ async function submitOrder() {
   const selEl = document.getElementById('orderProduct');
   const selectedOptions = [...selEl.selectedOptions].filter(o => o.value);
   const data  = {
-    customer_name: document.getElementById('orderName').value,
+    customer_name: currentCustomer?.name || '',
     phone:         document.getElementById('orderPhone').value,
     province:      document.getElementById('orderProvince').value,
     address:       document.getElementById('orderAddress').value,
@@ -1365,7 +1277,13 @@ async function submitOrder() {
     });
     const r = await res.json();
     if (r.ok) {
-      showToast('تم تثبيت الطلب', 'success');
+      if (r.duplicate) {
+        showToast(r.message || 'هذا الطلب مثبت مسبقاً ولم يتم تكراره', 'warning');
+      } else if (r.telegram_sent === false) {
+        showToast(r.telegram_error || 'تم تثبيت الطلب لكن لم يصل إلى تلغرام', 'warning');
+      } else {
+        showToast('تم تثبيت الطلب وإرساله إلى تلغرام', 'success');
+      }
       bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide();
     } else showToast('فشل تثبيت الطلب: ' + (r.error || ''), 'danger');
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
@@ -1394,6 +1312,33 @@ async function markHumanReview() {
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
+async function deleteConversation() {
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
+  const label = currentCustomer?.name || currentSenderId;
+  if (!confirm(`حذف محادثة ${label}؟ سيتم حذف الرسائل والمراجعات وربط المنتجات، ولن يتم حذف الطلبات المسجلة.`)) return;
+  const senderId = currentSenderId;
+  try {
+    const res = await apiFetch(`/api/conversations/${encodeURIComponent(senderId)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حذف المحادثة');
+    currentSenderId = null;
+    currentCustomer = null;
+    if (pollMsgTimer) {
+      clearInterval(pollMsgTimer);
+      pollMsgTimer = null;
+    }
+    document.getElementById('chatContent').style.display = 'none';
+    document.getElementById('chatPlaceholder').style.display = 'flex';
+    document.getElementById('controlContent').style.display = 'none';
+    document.getElementById('controlPlaceholder').style.display = 'block';
+    showToast('تم حذف المحادثة', 'success');
+    await loadConversations(false);
+    await loadStats();
+  } catch (e) {
+    showToast(e.message || 'فشل حذف المحادثة', 'danger');
+  }
+}
+
 // ══ Helpers ════════════════════════════════════════════════════════════════
 function handleKeyDown(e) {
   if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); sendMessage(); }
@@ -1413,69 +1358,13 @@ function jsString(s) {
   return JSON.stringify(String(s || ''));
 }
 
-function parseRawPayload(m) {
-  if (!m || !m.raw_payload) return null;
-  if (typeof m.raw_payload === 'object') return m.raw_payload;
-  try { return JSON.parse(m.raw_payload); } catch (_) { return null; }
-}
-
-function firstUrlFromValue(value) {
-  if (!value) return '';
-  if (typeof value === 'string') {
-    const direct = value.trim();
-    if (direct.startsWith('http')) return direct;
-    const match = direct.match(/https?:\/\/\S+/);
-    return match ? match[0].replace(/[).,؛،]+$/, '') : '';
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = firstUrlFromValue(item);
-      if (found) return found;
-    }
-  }
-  if (typeof value === 'object') {
-    for (const item of Object.values(value)) {
-      const found = firstUrlFromValue(item);
-      if (found) return found;
-    }
-  }
-  return '';
-}
-
-function looksLikeReelUrl(url) {
-  return /instagram\.com\/reels?\//i.test(String(url || '')) || /\/reels?\//i.test(String(url || ''));
-}
-
-function looksLikeVideoUrl(url) {
-  return /^https?:\/\/\S+\.(?:mp4|mov|m4v|webm)(?:\?\S*)?$/i.test(String(url || '')) ||
-    /(?:video|\/reels?\/)/i.test(String(url || ''));
-}
-
 function messageImageUrl(m) {
   const explicit = (m.image_url || '').trim();
-  if (explicit && !looksLikeVideoUrl(explicit) && !looksLikeReelUrl(explicit)) return explicit;
+  if (explicit) return explicit;
 
   const text = (m.text || '').trim();
   if (/^https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?$/i.test(text)) return text;
   if (/^https?:\/\/(?:scontent|.*\.fbcdn\.net|.*facebook).*$/i.test(text)) return text;
-  return '';
-}
-
-function messageMediaUrl(m) {
-  const explicit = (m.image_url || '').trim();
-  if (explicit) return explicit;
-  const fromText = firstUrlFromValue(m.text || '');
-  if (fromText) return fromText;
-  return firstUrlFromValue(parseRawPayload(m));
-}
-
-function messageMediaType(m) {
-  const type = String(m.message_type || '').toLowerCase();
-  if (type === 'reel' || type === 'video' || type === 'image') return type;
-  const url = messageMediaUrl(m);
-  if (looksLikeReelUrl(url)) return 'reel';
-  if (looksLikeVideoUrl(url)) return 'video';
-  if (messageImageUrl(m)) return 'image';
   return '';
 }
 

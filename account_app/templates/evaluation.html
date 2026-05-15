@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}التقييم{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">Evaluation</p>
+    <h1>تقييم وتحليل أداء المبيعات والردود</h1>
+    <p>صفحة مستقلة للمؤشرات، مراحل الزبائن، أداء المتابعات، والاقتراحات التي لا تُفعّل إلا بموافقة الأدمن.</p>
+  </div>
+  <div class="analytics-filters evaluation-filters mobile-stack">
+    <select class="form-select" id="evaluationPeriod">
+      <option value="today">اليوم</option>
+      <option value="yesterday">أمس</option>
+      <option value="7d">آخر 7 أيام</option>
+      <option value="30d">آخر 30 يوم</option>
+      <option value="custom">تاريخ مخصص</option>
+    </select>
+    <input class="form-control" type="date" id="evaluationFrom">
+    <input class="form-control" type="date" id="evaluationTo">
+    <button class="btn btn-primary" type="button" onclick="loadEvaluation()"><i class="bi bi-arrow-clockwise"></i> تطبيق</button>
+  </div>
+</section>
+
+<section class="stats-grid admin-stats-grid" id="evaluationCards"></section>
+
+<section class="admin-two-col">
+  <div class="admin-panel">
+    <h2>تحليل مراحل الزبائن</h2>
+    <div class="table-responsive">
+      <table class="table admin-table">
+        <thead><tr><th>المرحلة</th><th>العدد</th><th>النسبة</th><th>التقييم</th><th>الاقتراح</th></tr></thead>
+        <tbody id="stageBreakdown"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="admin-panel">
+    <h2>أداء المتابعات</h2>
+    <div class="table-responsive">
+      <table class="table admin-table">
+        <thead><tr><th>المرحلة</th><th>مرسلة</th><th>ردود</th><th>طلبات</th><th>النجاح</th></tr></thead>
+        <tbody id="followupPerformance"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <div class="admin-section-head">
+    <h2>الاقتراحات</h2>
+    <div>
+      <button class="btn btn-outline-primary btn-sm" type="button" id="generateSuggestions">
+        <i class="bi bi-stars"></i> توليد اقتراحات
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" type="button" id="runDailyLearning">
+        <i class="bi bi-calendar2-check"></i> تشغيل التحليل اليومي
+      </button>
+    </div>
+  </div>
+  <div id="evaluationSuggestions" class="suggestion-list"></div>
+</section>
+
+<section class="admin-panel">
+  <h2>القواعد المفعلة</h2>
+  <div class="table-responsive">
+    <table class="table admin-table">
+      <thead><tr><th>القاعدة</th><th>النوع</th><th>الأولوية</th><th>الحالة</th><th>إجراء</th></tr></thead>
+      <tbody id="activeRules"></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/evaluation.js?v=1"></script>
+{% endblock %}

@@ -1,9 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#1f2937">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>منتجات أنيقة</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -18,14 +17,17 @@
       </span>
     </div>
     <div class="nav-actions d-flex align-items-center gap-2">
-      <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
+      <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ request.args.get('key','') }}">
         <i class="bi bi-chat-dots me-1"></i>الداشبورد
       </a>
-      <a class="btn btn-outline-light btn-sm" href="/orders?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
+      <a class="btn btn-outline-light btn-sm" href="/orders?key={{ request.args.get('key','') }}">
         <i class="bi bi-receipt me-1"></i>الطلبات
       </a>
-      <a class="btn btn-outline-light btn-sm" href="/instructions?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
-        <i class="bi bi-sliders2-vertical me-1"></i>التعليمات
+      <a class="btn btn-outline-light btn-sm" href="/analytics?key={{ request.args.get('key','') }}" title="التحليلات">
+        <i class="bi bi-graph-up-arrow me-1"></i>التحليلات
+      </a>
+      <a class="btn btn-outline-light btn-sm" href="/settings?key={{ request.args.get('key','') }}" title="الإعدادات">
+        <i class="bi bi-gear me-1"></i>الإعدادات
       </a>
       <input type="file" id="productsImportInput" accept="application/json,.json" style="display:none" onchange="importProductsFile(this)">
       <input type="file" id="databaseImportInput" accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/octet-stream" style="display:none" onchange="importDatabaseFile(this)">
@@ -46,23 +48,11 @@
       <button class="btn btn-outline-light btn-sm" onclick="loadProducts()">
         <i class="bi bi-arrow-clockwise"></i>
       </button>
-      <button class="btn btn-warning btn-sm" id="analyzeProductsBtn" onclick="analyzeProducts()" title="تحليل المنتجات ومزامنة معرفة الذكاء الاصطناعي">
-        <i class="bi bi-stars me-1"></i>تحليل المنتجات
-      </button>
     </div>
   </nav>
 
-  <div class="products-mobile-tabs" role="tablist" aria-label="عرض المنتجات">
-    <button type="button" class="ptab active" id="ptabList" onclick="switchProductTab('list')" role="tab" aria-selected="true">
-      <i class="bi bi-list-ul"></i><span>القائمة</span>
-    </button>
-    <button type="button" class="ptab" id="ptabForm" onclick="switchProductTab('form')" role="tab" aria-selected="false">
-      <i class="bi bi-pencil-square"></i><span>النموذج</span>
-    </button>
-  </div>
-
   <main class="products-layout">
-    <section class="products-list-panel" id="productsListPanel">
+    <section class="products-list-panel">
       <div class="products-toolbar">
         <div>
           <div class="fw-bold">المنتجات</div>
@@ -87,7 +77,7 @@
       </div>
     </section>
 
-    <section class="product-form-panel" id="productFormPanel">
+    <section class="product-form-panel">
       <div class="product-form-header">
         <div>
           <div class="fw-bold" id="formTitle">إضافة منتج</div>
@@ -125,7 +115,7 @@
           </div>
           <div class="col-md-6">
             <label class="form-label">المقاسات</label>
-            <input class="form-control" id="productSizes" placeholder="مثلاً: وزن 50 إلى 100 كيلو / فري سايز">
+            <input class="form-control" id="productSizes" placeholder="S / M / L / XL">
           </div>
           <div class="col-md-6">
             <label class="form-label">الألوان</label>
@@ -133,7 +123,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Ref</label>
-            <input class="form-control" id="productRef" placeholder="model_01">
+            <input class="form-control" id="productRef" placeholder="kids_dress_03">
           </div>
           <div class="col-md-4">
             <label class="form-label">Ad ID</label>
@@ -141,7 +131,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">التصنيف</label>
-            <input class="form-control" id="productCategory" placeholder="موديلات / سوتات / قطع">
+            <input class="form-control" id="productCategory" placeholder="موديلات وقطع نسائية محتشمة">
           </div>
           <div class="col-12">
             <label class="form-label">روابط الصور</label>

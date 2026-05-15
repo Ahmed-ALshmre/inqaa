@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
@@ -34,22 +34,34 @@
       <i class="bi bi-robot"></i>
       <span id="aiToggleText">AI يعمل</span>
     </button>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/products?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/products?key={{ request.args.get('key','') }}">
       <i class="bi bi-box-seam"></i>
       <span>المنتجات</span>
     </a>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/orders?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/orders?key={{ request.args.get('key','') }}">
       <i class="bi bi-receipt"></i>
       <span>الطلبات</span>
     </a>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/instructions?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
-      <i class="bi bi-sliders2-vertical"></i>
-      <span>التعليمات</span>
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/problems?key={{ request.args.get('key','') }}" title="المشاكل">
+      <i class="bi bi-exclamation-triangle"></i>
+      <span>المشاكل</span>
     </a>
-    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/settings/catalog?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
-      <i class="bi bi-images"></i>
-      <span>الكتالوج</span>
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/analytics?key={{ request.args.get('key','') }}" title="التحليلات">
+      <i class="bi bi-graph-up-arrow"></i>
+      <span>التحليلات</span>
     </a>
+    <a class="btn btn-outline-light btn-sm py-0 nav-products-link" href="/settings?key={{ request.args.get('key','') }}" title="الإعدادات">
+      <i class="bi bi-gear"></i>
+      <span>الإعدادات</span>
+    </a>
+    <a class="btn btn-outline-light btn-sm py-0" href="/settings/catalog?key={{ request.args.get('key','') }}" title="إدارة صور الكتالوج">
+      <i class="bi bi-image"></i>
+      <span class="install-label">الكتالوج</span>
+    </a>
+    <button class="btn btn-outline-light btn-sm py-0" onclick="openStatsModal()" title="الإحصائيات">
+      <i class="bi bi-graph-up"></i>
+      <span class="install-label">إحصائيات</span>
+    </button>
     <div class="nav-stats d-flex align-items-center gap-1">
       <span class="badge bg-danger fs-7" id="statPending">0 مراجعة</span>
       <span class="badge bg-success fs-7" id="statOrders">0 طلب</span>
@@ -84,13 +96,16 @@
       </div>
     </div>
     <div class="px-2 py-1 border-bottom" style="border-color:var(--border)!important; background:var(--sidebar-bg);">
-      <div class="btn-group btn-group-sm w-100" role="group">
-        <button class="btn btn-outline-secondary active" onclick="setFilter('all',this)">الكل</button>
-        <button class="btn btn-outline-secondary" onclick="setFilter('human',this)">
+      <div class="btn-group btn-group-sm w-100" role="group" id="conversationFilters">
+        <button class="btn btn-outline-secondary active" data-filter="all" onclick="setFilter('all',this)">الكل</button>
+        <button class="btn btn-outline-secondary" data-filter="human" onclick="setFilter('human',this)">
           <i class="bi bi-person-exclamation me-1"></i>تدخل بشري
         </button>
-        <button class="btn btn-outline-secondary" onclick="setFilter('unanswered',this)">لم يتم الرد</button>
-        <button class="btn btn-outline-secondary" onclick="setFilter('today',this)">اليوم</button>
+        <button class="btn btn-outline-secondary" data-filter="problems" onclick="setFilter('problems',this)">
+          <i class="bi bi-exclamation-triangle me-1"></i>المشاكل
+        </button>
+        <button class="btn btn-outline-secondary" data-filter="unanswered" onclick="setFilter('unanswered',this)">لم يتم الرد</button>
+        <button class="btn btn-outline-secondary" data-filter="today" onclick="setFilter('today',this)">اليوم</button>
       </div>
     </div>
     <div class="customer-list" id="customerList">
@@ -116,9 +131,6 @@
       <!-- Header -->
       <div class="chat-header">
         <div class="d-flex align-items-center gap-2">
-          <button class="chat-back-btn" type="button" onclick="toggleSidebar()" title="عودة للمحادثات" aria-label="عودة للمحادثات">
-            <i class="bi bi-arrow-right"></i>
-          </button>
           <div class="avatar-circle fw-bold" id="chatAvatar">?</div>
           <div>
             <div class="fw-semibold lh-sm" id="chatName" style="color:var(--text)">—</div>
@@ -136,6 +148,9 @@
           </button>
           <button class="btn btn-sm btn-outline-secondary" onclick="loadMessages(currentSenderId)">
             <i class="bi bi-arrow-clockwise"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteConversation()" title="حذف المحادثة">
+            <i class="bi bi-trash"></i>
           </button>
         </div>
       </div>
@@ -207,52 +222,6 @@
 
   <!-- Column 3: Control Panel -->
   <div class="control-panel" id="controlPanel">
-    <!-- Global Commands File -->
-    <div class="ctrl-section commands-global-section">
-      <div class="ctrl-header" onclick="toggleSection('secCommands')">
-        <span><i class="bi bi-file-earmark-text me-1" style="color:var(--warning)"></i>ملف الأوامر</span>
-        <i class="bi bi-chevron-down" style="color:var(--text-muted)"></i>
-      </div>
-      <div id="secCommands">
-        <div class="small mb-2" style="color:var(--text-muted)">
-          تعديل محتوى <code>instructions.txt</code> المستخدم كتعليمات عامة للذكاء الاصطناعي.
-        </div>
-
-        <div class="strict-fields-panel mb-3">
-          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-            <div class="small fw-semibold" style="color:var(--text)">حقول التزام صارم</div>
-            <button class="btn btn-outline-primary btn-sm" type="button" onclick="addStrictInstructionField()">
-              <i class="bi bi-plus-lg me-1"></i>إضافة حقل
-            </button>
-          </div>
-          <div class="small mb-2" style="color:var(--text-muted)">
-            اكتب اسم الحقل والمحتوى الذي يجب على الذكاء الاصطناعي الالتزام به حرفيًا عند الرد.
-          </div>
-          <div id="strictFieldsList" class="strict-fields-list"></div>
-          <div class="d-flex gap-2 mt-2">
-            <button class="btn btn-warning btn-sm flex-grow-1" type="button" onclick="saveStrictInstructionFields()">
-              <i class="bi bi-shield-check me-1"></i>حفظ الحقول الصارمة
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="reloadStrictFieldsFromEditor()" title="قراءة الحقول من النص">
-              <i class="bi bi-arrow-repeat"></i>
-            </button>
-          </div>
-        </div>
-
-        <textarea class="form-control form-control-sm mb-2 command-file-editor" id="commandFileText" rows="8"
-          placeholder="جاري تحميل ملف الأوامر..."></textarea>
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary btn-sm flex-grow-1" id="saveCommandFileBtn" onclick="saveCommandFile()">
-            <i class="bi bi-save me-1"></i>حفظ الملف
-          </button>
-          <button class="btn btn-outline-secondary btn-sm" onclick="loadCommandFile(true)" title="إعادة تحميل">
-            <i class="bi bi-arrow-clockwise"></i>
-          </button>
-        </div>
-        <div class="small mt-2" id="commandFileMeta" style="color:var(--text-muted)"></div>
-      </div>
-    </div>
-
     <div id="controlPlaceholder" class="text-center p-5" style="color:var(--text-muted)">
       <i class="bi bi-sliders display-4 opacity-25"></i>
       <p class="mt-2 small">اختر محادثة</p>
@@ -350,30 +319,6 @@
         </div>
       </div>
 
-      <!-- [4] Commands File (legacy, kept hidden because the global editor is always visible) -->
-      <div class="ctrl-section d-none">
-        <div class="ctrl-header" onclick="toggleSection('secCommandsLegacy')">
-          <span><i class="bi bi-file-earmark-text me-1" style="color:var(--warning)"></i>ملف الأوامر</span>
-          <i class="bi bi-chevron-down" style="color:var(--text-muted)"></i>
-        </div>
-        <div id="secCommandsLegacy" style="display:none;">
-          <div class="small mb-2" style="color:var(--text-muted)">
-            تعديل محتوى <code>instructions.txt</code> المستخدم كتعليمات عامة للذكاء الاصطناعي.
-          </div>
-          <textarea class="form-control form-control-sm mb-2 command-file-editor" id="commandFileTextLegacy" rows="8"
-            placeholder="جاري تحميل ملف الأوامر..."></textarea>
-          <div class="d-flex gap-2">
-            <button class="btn btn-primary btn-sm flex-grow-1" id="saveCommandFileBtnLegacy" onclick="saveCommandFile()">
-              <i class="bi bi-save me-1"></i>حفظ الملف
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" onclick="loadCommandFile(true)" title="إعادة تحميل">
-              <i class="bi bi-arrow-clockwise"></i>
-            </button>
-          </div>
-          <div class="small mt-2" id="commandFileMetaLegacy" style="color:var(--text-muted)"></div>
-        </div>
-      </div>
-
       <!-- [4] Quick Actions -->
       <div class="ctrl-section">
         <div class="ctrl-header">
@@ -384,7 +329,7 @@
             <i class="bi bi-clipboard-plus me-1"></i>ثبّت طلب يدوياً
           </button>
           <button class="btn btn-outline-info btn-sm" onclick="sendCatalog()">
-            <i class="bi bi-grid me-1"></i>أرسل كتالوج المنتجات
+            <i class="bi bi-grid me-1"></i>أرسل كتالوج للزبون
           </button>
           <button class="btn btn-outline-warning btn-sm" onclick="markHumanReview()">
             <i class="bi bi-person-check me-1"></i>أغلق مراجعة بشرية
@@ -395,6 +340,41 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Stats Modal -->
+<div class="modal fade" id="statsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-graph-up me-2 text-info"></i>الإحصائيات
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="dashboard-metrics isolated-stats" id="dashboardMetrics">
+          <div class="metric-card">
+            <small>كل الرسائل</small>
+            <strong id="statTotalMessages">0</strong>
+          </div>
+          <div class="metric-card">
+            <small>كل الطلبات</small>
+            <strong id="statTotalOrders">0</strong>
+          </div>
+          <div class="metric-card">
+            <small>تحويل رسالة/طلب</small>
+            <strong id="statConversion">0%</strong>
+          </div>
+          <div class="metric-card metric-wide">
+            <small>الأكثر حجزاً</small>
+            <strong id="statTopProduct">لا يوجد</strong>
+          </div>
+          <div class="top-products-list metric-wide" id="topProductsList"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -416,7 +396,7 @@
         <!-- IMAGE MODE: link product -->
         <div id="hiModeImage" style="display:none;">
           <div class="small mb-2 text-muted">
-            <i class="bi bi-image me-1"></i>الزبون أرسل صورة. اختر المنتج المطابق ثم اضغط "ربط وإرسال رد"، أو "غير متوفر".
+            <i class="bi bi-image me-1"></i>الزبون أرسل صورة. اختر المنتج المطابق ثم اضغط "ربط وإرسال رد"، أو أغلق المراجع البشري لإلغاء التدخل.
           </div>
           <label class="form-label small mb-1">اختر المنتج المطابق</label>
           <select class="form-select form-select-sm mb-3" id="hiUnifiedProduct">
@@ -429,13 +409,16 @@
             <button class="btn btn-outline-danger" id="hiBtnUnavailable" onclick="hiMarkUnavailable()">
               <i class="bi bi-x-circle me-1"></i>غير متوفر — أبلغ الزبون
             </button>
+            <button class="btn btn-outline-secondary" id="hiBtnCloseImageReview" onclick="hiCloseReview()">
+              <i class="bi bi-check2-circle me-1"></i>إغلاق المراجع البشري
+            </button>
           </div>
         </div>
 
         <!-- TEXT MODE: parameters/instructions for AI -->
         <div id="hiModeText" style="display:none;">
           <div class="small mb-2 text-muted">
-            <i class="bi bi-robot me-1"></i>الزبون يحتاج رداً نصياً. اكتب التوجيه للـ AI أو الرد الذي تريد إرساله.
+            <i class="bi bi-robot me-1"></i>اترك الحقل فارغاً ليحلل AI المحادثة ويقترح الرد، أو اكتب توجيهاً/مسودة ليعيد صياغتها.
           </div>
 
           <label class="form-label small mb-1">جنس الزبون (لتحديد صياغة الرد)</label>
@@ -486,10 +469,6 @@
       <div class="modal-body">
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label fw-semibold small">اسم الزبون</label>
-            <input type="text" class="form-control" id="orderName" placeholder="الاسم الكامل">
-          </div>
-          <div class="col-md-6">
             <label class="form-label fw-semibold small">رقم الهاتف</label>
             <input type="text" class="form-control" id="orderPhone" placeholder="07xxxxxxxxx">
           </div>
@@ -534,7 +513,7 @@
 <div class="toast-container position-fixed bottom-0 start-0 p-3" id="toastContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/dashboard.js"></script>
+<script src="/static/js/dashboard.js?v=3"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

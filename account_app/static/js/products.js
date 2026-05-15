@@ -1,10 +1,4 @@
-function getDashboardKey() {
-  const fromUrl = new URLSearchParams(window.location.search).get('key') || '';
-  const fromCookie = document.cookie.split('; ').find(row => row.startsWith('dashboard_key='))?.split('=')[1] || '';
-  return fromUrl || decodeURIComponent(fromCookie);
-}
-
-const DASH_KEY = getDashboardKey();
+const DASH_KEY = new URLSearchParams(window.location.search).get('key') || '';
 let allProducts = [];
 let currentProductId = null;
 
@@ -30,54 +24,6 @@ const fields = {
 document.addEventListener('DOMContentLoaded', () => {
   loadProducts();
   document.getElementById('productImages').addEventListener('input', renderImagePreview);
-  switchProductTab('list');
-});
-
-function isMobileViewport() {
-  return window.matchMedia('(max-width: 992px)').matches;
-}
-
-function switchProductTab(tab) {
-  const listPanel = document.getElementById('productsListPanel');
-  const formPanel = document.getElementById('productFormPanel');
-  const listTab = document.getElementById('ptabList');
-  const formTab = document.getElementById('ptabForm');
-  if (!listPanel || !formPanel) return;
-
-  if (!isMobileViewport()) {
-    listPanel.classList.remove('hidden-mobile');
-    formPanel.classList.remove('hidden-mobile');
-    listTab && listTab.classList.remove('active');
-    formTab && formTab.classList.remove('active');
-    return;
-  }
-
-  if (tab === 'form') {
-    listPanel.classList.add('hidden-mobile');
-    formPanel.classList.remove('hidden-mobile');
-    listTab && listTab.classList.remove('active');
-    formTab && formTab.classList.add('active');
-    listTab && listTab.setAttribute('aria-selected', 'false');
-    formTab && formTab.setAttribute('aria-selected', 'true');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } else {
-    formPanel.classList.add('hidden-mobile');
-    listPanel.classList.remove('hidden-mobile');
-    formTab && formTab.classList.remove('active');
-    listTab && listTab.classList.add('active');
-    formTab && formTab.setAttribute('aria-selected', 'false');
-    listTab && listTab.setAttribute('aria-selected', 'true');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-}
-
-window.addEventListener('resize', () => {
-  if (!isMobileViewport()) {
-    const listPanel = document.getElementById('productsListPanel');
-    const formPanel = document.getElementById('productFormPanel');
-    listPanel && listPanel.classList.remove('hidden-mobile');
-    formPanel && formPanel.classList.remove('hidden-mobile');
-  }
 });
 
 function apiFetch(url, opts = {}) {
@@ -128,7 +74,7 @@ function renderProducts() {
     const statusClass = p.status === 'active' ? 'bg-success' : 'bg-secondary';
     return `
       <button class="product-row ${active}" onclick="editProduct('${escAttr(p.product_id)}')">
-        <div class="product-row-image">${img ? `<img src="${escAttr(img)}" alt="">` : '<i class="bi bi-image"></i>'}</div>
+        <div class="product-row-image">${img ? `<img src="${escAttr(img)}" alt="" loading="lazy">` : '<i class="bi bi-image"></i>'}</div>
         <div class="product-row-info">
           <div class="product-row-name">${esc(p.product_name || p.product_id)}</div>
           <div class="product-row-meta">${esc(p.product_id || '')} · ${esc(p.price || '-')}</div>
@@ -147,7 +93,6 @@ function newProduct(rerender = true) {
   document.getElementById('deleteProductBtn').style.display = 'none';
   renderImagePreview();
   if (rerender) renderProducts();
-  if (isMobileViewport()) switchProductTab('form');
 }
 
 function editProduct(productId) {
@@ -163,7 +108,6 @@ function editProduct(productId) {
   document.getElementById('deleteProductBtn').style.display = '';
   renderImagePreview();
   renderProducts();
-  if (isMobileViewport()) switchProductTab('form');
 }
 
 async function saveProduct(event) {
@@ -272,30 +216,6 @@ async function importDatabaseFile(input) {
   }
 }
 
-async function analyzeProducts() {
-  const btn = document.getElementById('analyzeProductsBtn');
-  const oldHtml = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>تحليل';
-  }
-  try {
-    showToast('جاري تحليل المنتجات ومزامنة معرفة الذكاء الاصطناعي...', 'warning');
-    const res = await apiFetch('/api/products/analyze', { method: 'POST' });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تحليل المنتجات');
-    const sourceText = data.source === 'ai' ? 'بالذكاء الاصطناعي' : 'بالمزامنة المحلية';
-    showToast(`تم تحليل ${data.count || 0} منتج ${sourceText}`, 'success');
-  } catch (err) {
-    showToast(err.message || 'فشل تحليل المنتجات', 'danger');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = oldHtml;
-    }
-  }
-}
-
 function collectPayload() {
   const payload = {};
   for (const [key, id] of Object.entries(fields)) {
@@ -324,7 +244,7 @@ function renderImagePreview() {
     el.innerHTML = '<span class="small" style="color:var(--text-muted)">لا توجد صور للمعاينة</span>';
     return;
   }
-  el.innerHTML = urls.map(url => `<img src="${escAttr(url)}" alt="صورة المنتج" onerror="this.style.display='none'">`).join('');
+  el.innerHTML = urls.map(url => `<img src="${escAttr(url)}" alt="صورة المنتج" loading="lazy" onerror="this.style.display='none'">`).join('');
 }
 
 function setSaving(saving) {

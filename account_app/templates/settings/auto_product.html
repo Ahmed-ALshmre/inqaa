@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}إعدادات المنتج التلقائي{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">الإعدادات</p>
+    <h1>المنتج التلقائي</h1>
+    <p>اختيار منتج افتراضي للحملات النصية بدون صورة أو ربط سابق.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <form id="autoProductForm" class="admin-form">
+    <label class="form-check form-switch admin-switch">
+      <input class="form-check-input" type="checkbox" id="autoProductEnabled">
+      <span>تفعيل المنتج التلقائي</span>
+    </label>
+    <label class="form-label" for="autoProductSelect">المنتج الافتراضي</label>
+    <select class="form-select" id="autoProductSelect"></select>
+    <label class="form-check form-switch admin-switch">
+      <input class="form-check-input" type="checkbox" id="autoProductSendImage">
+      <span>إرسال صورة المنتج تلقائياً عند أول ربط</span>
+    </label>
+    <div class="admin-selected-product" id="autoProductCurrent">لا يوجد منتج محدد.</div>
+    <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> حفظ</button>
+    <span class="admin-status" id="autoProductStatus"></span>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/settings_pages.js?v=3"></script>
+<script>initAutoProductPage();</script>
+{% endblock %}
