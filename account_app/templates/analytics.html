@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}التحليلات{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">لوحة مستقلة</p>
+    <h1>التحليلات</h1>
+    <p>قراءة سريعة لأداء الرسائل والطلبات والمنتجات.</p>
+  </div>
+  <div class="analytics-filters mobile-stack">
+    <select class="form-select" id="analyticsPeriod">
+      <option value="today">اليوم</option>
+      <option value="yesterday">أمس</option>
+      <option value="7d">آخر 7 أيام</option>
+      <option value="30d">آخر 30 يوم</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadAnalytics()"><i class="bi bi-arrow-clockwise"></i> تحديث</button>
+  </div>
+</section>
+
+<section class="stats-grid admin-stats-grid" id="analyticsCards"></section>
+
+<section class="admin-two-col">
+  <div class="admin-panel">
+    <h2>أداء المنتجات</h2>
+    <div class="table-responsive">
+      <table class="table admin-table">
+        <thead><tr><th>المنتج</th><th>الطلبات</th></tr></thead>
+        <tbody id="topOrderedProducts"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="admin-panel">
+    <h2>اهتمام العملاء</h2>
+    <div class="table-responsive">
+      <table class="table admin-table">
+        <thead><tr><th>المنتج</th><th>الاهتمام</th></tr></thead>
+        <tbody id="topInterestedProducts"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <h2>الاعتراضات المتكررة</h2>
+  <div id="topObjections" class="admin-list"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/analytics.js?v=3"></script>
+{% endblock %}

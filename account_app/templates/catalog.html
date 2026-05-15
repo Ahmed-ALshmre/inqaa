@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1f2937">
+  <title>إعدادات الكتالوج - أنيقة</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <style>
+    body.catalog-page { background: var(--chat-bg); color: var(--text); }
+    .catalog-layout {
+      padding: 74px 18px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .catalog-hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .catalog-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .catalog-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--sidebar-bg);
+    }
+    .catalog-drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      margin: 16px;
+      color: var(--text-muted);
+    }
+    .catalog-drop-zone:hover,
+    .catalog-drop-zone.drag-over {
+      border-color: var(--primary);
+      background: rgba(37, 99, 235, .06);
+      color: var(--text);
+    }
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+    .catalog-img-card {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--input-bg);
+      transition: box-shadow .15s;
+    }
+    .catalog-img-card:hover {
+      box-shadow: 0 2px 12px rgba(0,0,0,.15);
+    }
+    .catalog-img-card img {
+      width: 100%;
+      aspect-ratio: 3/4;
+      object-fit: cover;
+      display: block;
+    }
+    .catalog-img-card .card-actions {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      display: flex;
+      gap: 4px;
+    }
+    .catalog-img-card .card-meta {
+      padding: 6px 8px;
+      font-size: .75rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+    .catalog-empty {
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .catalog-toast {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 5000;
+      min-width: 260px;
+      display: none;
+    }
+    @media (max-width: 600px) {
+      .catalog-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+      .catalog-hero { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body class="catalog-page">
+  <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
+    <div class="nav-main d-flex align-items-center gap-2">
+      <span class="navbar-brand fw-bold fs-6 mb-0">
+        <i class="bi bi-images me-2"></i>إعدادات الكتالوج
+      </span>
+    </div>
+    <div class="nav-actions d-flex align-items-center gap-2">
+      <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
+        <i class="bi bi-chat-dots me-1"></i>الداشبورد
+      </a>
+      <a class="btn btn-outline-light btn-sm" href="/products?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
+        <i class="bi bi-box-seam me-1"></i>المنتجات
+      </a>
+      <a class="btn btn-outline-light btn-sm" href="/instructions?key={{ (dashboard_key or request.args.get('key',''))|urlencode }}">
+        <i class="bi bi-sliders2-vertical me-1"></i>التعليمات
+      </a>
+      <button class="btn btn-outline-light btn-sm" onclick="loadCatalogImages()" title="تحديث">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+  </nav>
+
+  <main class="catalog-layout">
+    <section class="catalog-hero">
+      <div>
+        <div class="fw-bold fs-5">صور الكتالوج</div>
+        <div class="small" style="color:var(--text-muted)">
+          ارفع صور الكتالوج التي يستخدمها الذكاء الاصطناعي لمطابقة صور الزبائن مع المنتجات. يمكنك رفع أكثر من صورة.
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-primary" id="imageCount">0 صورة</span>
+        <span class="small" id="matchStatus" style="color:var(--text-muted)"></span>
+      </div>
+    </section>
+
+    <section class="catalog-panel">
+      <div class="catalog-panel-header">
+        <div>
+          <div class="fw-bold">رفع صور جديدة</div>
+          <div class="small" style="color:var(--text-muted)">PNG, JPG, JPEG, WEBP — يمكنك اختيار عدة صور دفعة واحدة</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('catalogFileInput').click()">
+          <i class="bi bi-upload me-1"></i>اختر صور
+        </button>
+      </div>
+      <input type="file" id="catalogFileInput" accept="image/png,image/jpeg,image/webp" multiple style="display:none" onchange="uploadCatalogImages(this)">
+      <div class="catalog-drop-zone" id="dropZone"
+           ondragover="event.preventDefault(); this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)"
+           onclick="document.getElementById('catalogFileInput').click()">
+        <i class="bi bi-cloud-arrow-up" style="font-size: 2.5rem;"></i>
+        <div class="mt-2 fw-bold">اسحب الصور هنا أو اضغط للاختيار</div>
+        <div class="small mt-1">يمكنك رفع عدة صور مرة واحدة</div>
+      </div>
+      <div id="uploadProgress" style="display:none; padding: 0 16px 12px;">
+        <div class="progress" style="height: 6px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated" id="uploadBar" style="width: 0%"></div>
+        </div>
+        <div class="small mt-1 text-center" id="uploadText">جاري الرفع...</div>
+      </div>
+    </section>
+
+    <section class="catalog-panel mt-3">
+      <div class="catalog-panel-header">
+        <div class="fw-bold">الصور الحالية</div>
+        <button class="btn btn-outline-danger btn-sm" id="deleteAllBtn" onclick="deleteAllImages()" style="display:none">
+          <i class="bi bi-trash me-1"></i>حذف الكل
+        </button>
+      </div>
+      <div id="catalogImagesGrid"></div>
+    </section>
+  </main>
+
+  <div class="alert catalog-toast" id="catalogToast"></div>
+
+  <script>
+  const DASH_KEY = new URLSearchParams(location.search).get('key') || '';
+
+  function apiFetch(url, opts = {}) {
+    const sep = url.includes('?') ? '&' : '?';
+    return fetch(url + sep + 'key=' + encodeURIComponent(DASH_KEY), opts);
+  }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('catalogToast');
+    t.className = 'alert catalog-toast alert-' + (type || 'info');
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.style.display = 'none'; }, 4000);
+  }
+
+  async function loadCatalogImages() {
+    try {
+      const res = await apiFetch('/api/catalog_images');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'فشل تحميل الصور');
+      renderImages(data.images || []);
+      document.getElementById('imageCount').textContent = (data.images || []).length + ' صورة';
+      const status = document.getElementById('matchStatus');
+      status.textContent = data.catalog_match_enabled ? 'المطابقة مفعّلة' : 'المطابقة معطّلة';
+      status.style.color = data.catalog_match_enabled ? 'var(--bs-success)' : 'var(--text-muted)';
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  function renderImages(images) {
+    const grid = document.getElementById('catalogImagesGrid');
+    const deleteAllBtn = document.getElementById('deleteAllBtn');
+    if (!images.length) {
+      grid.innerHTML = '<div class="catalog-empty"><i class="bi bi-images" style="font-size:3rem;opacity:.3"></i><div class="mt-2">لا توجد صور في الكتالوج</div><div class="small">ارفع صور الكتالوج من الأعلى</div></div>';
+      deleteAllBtn.style.display = 'none';
+      return;
+    }
+    deleteAllBtn.style.display = '';
+    grid.className = 'catalog-grid';
+    grid.innerHTML = images.map(img => `
+      <div class="catalog-img-card" data-filename="${img.filename}">
+        <div class="card-actions">
+          <button class="btn btn-sm btn-danger" onclick="deleteImage('${img.filename}')" title="حذف">
+            <i class="bi bi-trash-fill"></i>
+          </button>
+        </div>
+        <img src="${img.url}?key=${encodeURIComponent(DASH_KEY)}" alt="${img.filename}" loading="lazy">
+        <div class="card-meta">${img.filename}<br>${formatSize(img.size)}</div>
+      </div>
+    `).join('');
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  async function uploadCatalogImages(input) {
+    const files = input.files;
+    if (!files || !files.length) return;
+    const form = new FormData();
+    for (const file of files) form.append('images', file);
+
+    const prog = document.getElementById('uploadProgress');
+    const bar = document.getElementById('uploadBar');
+    const txt = document.getElementById('uploadText');
+    prog.style.display = 'block';
+    bar.style.width = '30%';
+    txt.textContent = `جاري رفع ${files.length} صورة...`;
+
+    try {
+      bar.style.width = '60%';
+      const res = await apiFetch('/api/catalog_images/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      bar.style.width = '100%';
+      if (!data.ok) throw new Error(data.error || 'فشل رفع الصور');
+      showToast(data.message || 'تم رفع الصور بنجاح', 'success');
+      await loadCatalogImages();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      input.value = '';
+      setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 1500);
+    }
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (!files.length) return;
+    const input = document.getElementById('catalogFileInput');
+    input.files = files;
+    uploadCatalogImages(input);
+  }
+
+  async function deleteImage(filename) {
+    if (!confirm('حذف هذه الصورة من الكتالوج؟')) return;
+    try {
+      const res = await apiFetch('/api/catalog_images/' + encodeURIComponent(filename), { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'فشل حذف الصورة');
+      showToast(data.message || 'تم حذف الصورة', 'success');
+      const card = document.querySelector(`.catalog-img-card[data-filename="${filename}"]`);
+      if (card) card.remove();
+      await loadCatalogImages();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  async function deleteAllImages() {
+    if (!confirm('هل تريد حذف جميع صور الكتالوج؟ لا يمكن التراجع.')) return;
+    try {
+      const res = await apiFetch('/api/catalog_images');
+      const data = await res.json();
+      const images = data.images || [];
+      for (const img of images) {
+        await apiFetch('/api/catalog_images/' + encodeURIComponent(img.filename), { method: 'DELETE' });
+      }
+      showToast('تم حذف جميع الصور', 'success');
+      await loadCatalogImages();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  }
+
+  loadCatalogImages();
+  </script>
+</body>
+</html>

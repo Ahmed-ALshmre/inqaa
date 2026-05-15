@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}إعدادات المتابعة{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">Follow-up</p>
+    <h1>إعدادات المتابعة التلقائية</h1>
+    <p>تحكم كامل بتشغيل المتابعات. عند الإيقاف لن تتم جدولة أو إرسال أي متابعة جديدة.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <form class="admin-form" id="followupSettingsForm">
+    <label class="admin-switch">
+      <input class="form-check-input" type="checkbox" id="followupEnabled">
+      <span>تفعيل إرسال المتابعات التلقائية</span>
+    </label>
+
+    <label>
+      الحد الأقصى للمتابعات لكل زبون يوميًا
+      <input class="form-control" type="number" min="1" max="10" id="followupMaxPerDay">
+    </label>
+
+    <label class="admin-switch">
+      <input class="form-check-input" type="checkbox" id="followupStopOnOrder">
+      <span>إيقاف المتابعة عند إنشاء طلب</span>
+    </label>
+
+    <label class="admin-switch">
+      <input class="form-check-input" type="checkbox" id="followupStopOnRejection">
+      <span>إيقاف المتابعة عند رفض الزبون</span>
+    </label>
+
+    <label>
+      تأخير المتابعة الافتراضي بالدقائق
+      <input class="form-control" type="number" min="1" max="10080" id="followupDelay">
+    </label>
+
+    <label>
+      قالب رسالة المتابعة (يمكن استخدام {customer_name} و {product_name})
+      <textarea class="form-control" id="followupMessageTemplate" rows="4" placeholder="مثال: {customer_name}، حبيت أتابع وياج بخصوص {product_name}. هل تحبين أكمل الحجز؟"></textarea>
+    </label>
+
+    <div class="admin-note">
+      إذا كانت المتابعة متوقفة، فلن يتم إنشاء متابعات جديدة ولن يتم إرسال المتابعات المعلقة حتى يتم التفعيل.
+    </div>
+
+    <div class="admin-actions-row">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> حفظ</button>
+      <button class="btn btn-outline-secondary" type="button" id="sendDueFollowups">
+        <i class="bi bi-send"></i> إرسال المستحق الآن
+      </button>
+      <button class="btn btn-outline-danger" type="button" id="cancelPendingFollowups">
+        <i class="bi bi-x-circle"></i> إلغاء كل المتابعات المعلقة
+      </button>
+    </div>
+
+    <div class="admin-status" id="followupSettingsStatus"></div>
+  </form>
+</section>
+
+<section class="admin-panel mt-3">
+  <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+    <div>
+      <h2 class="h6 mb-1">رسائل مخصصة لكل زبون</h2>
+      <div class="small" style="color:var(--text-muted)">
+        اكتب رسالة مختلفة لأي زبون. إذا تركتها فارغة سيستخدم النظام القالب العام أعلاه.
+      </div>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" type="button" id="reloadCustomerFollowups">
+      <i class="bi bi-arrow-clockwise"></i> تحديث الزبائن
+    </button>
+  </div>
+
+  <div class="input-group input-group-sm mb-3">
+    <span class="input-group-text border-0"><i class="bi bi-search"></i></span>
+    <input class="form-control border-0" id="customerFollowupSearch"
+      placeholder="بحث باسم الزبون، الرقم، آخر رسالة أو نص المتابعة..." oninput="renderCustomerFollowups()">
+  </div>
+
+  <div class="admin-note mb-3">
+    المتغيرات المتاحة: {customer_name} و {product_name} و {stage}. عند الحفظ يتم تحديث المتابعة المعلقة للزبون إن وجدت.
+  </div>
+
+  <div id="customerFollowupList" class="followup-customer-list">
+    <div class="text-center py-4" style="color:var(--text-muted)">جاري تحميل الزبائن...</div>
+  </div>
+
+  <div class="admin-status" id="customerFollowupStatus"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/followup_settings.js?v=2"></script>
+{% endblock %}

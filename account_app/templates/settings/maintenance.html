@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}الصيانة{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">الإعدادات</p>
+    <h1>الصيانة</h1>
+    <p>تحديث الواجهة وحذف كاش المتصفح ومعلومات النظام.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <button class="btn btn-danger btn-lg" type="button" onclick="clearBrowserCacheAndReload()">
+    <i class="bi bi-arrow-clockwise"></i> تحديث النظام وحذف الكاش
+  </button>
+  <p class="admin-muted mt-3">يحذف Cache Storage وService Worker وsessionStorage. لا يستخدم النظام localStorage لبيانات مهمة حالياً.</p>
+  <div class="admin-info-grid mt-3" id="maintenanceGrid"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/settings_pages.js?v=3"></script>
+<script>initMaintenancePage();</script>
+{% endblock %}

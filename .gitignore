@@ -1,22 +1,43 @@
+# Environment
 .env
 .env.*
 !.env.example
+*.env.local
 Facebook → Python API Bridge.json
 
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-
+# Database
 sales.db
 *.sqlite
 *.sqlite3
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Logs & data
 incoming_requests.jsonl
 ad_tracking.jsonl
 bookings.jsonl
+*.jsonl
 *.log
-product_image/uploads/
 
+# Uploaded images (user data)
+product_image/uploads/
+account_app/product_image/uploads/
+account_app/catalog_images/
+account_app/aud/
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
 *.tmp
 .DS_Store
 Thumbs.db

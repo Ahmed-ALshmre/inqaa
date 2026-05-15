@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}إعدادات القنوات{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">الإعدادات</p>
+    <h1>قنوات التواصل</h1>
+    <p>حالة ManyChat وTelegram والروابط الحالية بدون تغيير التكاملات.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <div class="admin-info-grid" id="channelsGrid"></div>
+  <div class="d-flex gap-2 flex-wrap mt-3">
+    <a class="btn btn-outline-primary" href="/api/manychat/diag?key={{ request.args.get('key','') }}">تشخيص ManyChat</a>
+    <a class="btn btn-outline-primary" href="/api/manychat/test?key={{ request.args.get('key','') }}">اختبار ManyChat</a>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/settings_pages.js?v=3"></script>
+<script>initChannelsPage();</script>
+{% endblock %}
