@@ -1697,8 +1697,8 @@ FIRST_MESSAGE_REPLY = (
 )
 
 
-def _detect_child_gender(text: str) -> str:
-    """حقل قديم للتوافق؛ متجر أنيقة لا يستخدم تصنيف أطفال هنا."""
+def _detect_model_context(text: str) -> str:
+    """حقل توافق قديم؛ متجر أنيقة يعتمد على الموديل والقياس فقط."""
     return "unknown"
 
 
@@ -1731,16 +1731,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
     صياغة رد ديناميكي على أول رسالة من الزبون:
     - يتفاعل مع ما قاله الزبون.
     - الموديل يقرر صيغة الترحيب المناسبة ولا يُلزَم بصيغة محددة.
-    - يسأل عن العمر/القياس وسياق الموديل (ولد/بنت) إذا لم يذكر.
+    - يسأل عن صورة الموديل أو القياس فقط إذا لم يذكر.
     - لا يلتزم بمنتج معين (لأن المنتج سيُربط من الإدارة).
     """
     customer_text = (ev.get("text") or "").strip()
-    detected_child = _detect_child_gender(customer_text)
+    detected_context = _detect_model_context(customer_text)
     customer_name = _customer_name_from_db(db, ev["sender_id"])
     customer_gender = _customer_gender_from_db(db, ev["sender_id"])  # 'male' | 'female' | ''
 
     if not OPENROUTER_KEY:
-        return FIRST_MESSAGE_REPLY, detected_child
+        return FIRST_MESSAGE_REPLY, detected_context
 
     rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
 
@@ -1779,12 +1779,12 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         "7) إذا الزبون ذكر سياق الموديل من نفسه، استخدمه طبيعياً.\n"
         "8) ⚠️ ممنوع الأدعية أو المجاملات الزائدة (تسلمين، فدوة لعمرج، يرزقج، تدللين بأي وقت...). كلمة ودّ واحدة خفيفة فقط (تأمرين/من عيوني/تفضّل) ضمن نفس الجملة.\n"
         "9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: شنو القياس؟ أو دزّيلي صورة الموديل).\n\n"
-        f"سياق الموديل المستنتج من رسالة الزبون: {detected_child} (لا تسأل عنه، فقط استخدمه في الصياغة لو كان معروفاً).\n\n"
+        f"سياق الموديل أو القطعة المستنتج من رسالة الزبون: {detected_context} (لا تسأل عنه، فقط استخدمه في الصياغة لو كان معروفاً).\n\n"
         "تعليمات الإدارة:\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
         f"{rules_text}\n\n"
-        "أخرج JSON فقط: {\"reply\":\"النص\", \"gender\":\"boy|girl|unknown\"}"
+        "أخرج JSON فقط: {\"reply\":\"النص\", \"gender\":\"unknown\"}"
     )
 
     user_content = (
@@ -1815,16 +1815,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         raw = resp.json()["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         reply = (parsed.get("reply") or "").strip()
-        gender = (parsed.get("gender") or detected_child or "unknown").strip().lower()
-        if gender not in ("boy", "girl", "unknown"):
-            gender = detected_child
+        gender = (parsed.get("gender") or detected_context or "unknown").strip().lower()
+        if gender != "unknown":
+            gender = "unknown"
         if not reply:
-            return FIRST_MESSAGE_REPLY, detected_child
-        print(f"[FirstMsgAI] name={customer_name!r} child={gender} | reply={reply[:80]}", flush=True)
+            return FIRST_MESSAGE_REPLY, detected_context
+        print(f"[FirstMsgAI] name={customer_name!r} context={gender} | reply={reply[:80]}", flush=True)
         return reply, gender
     except Exception as exc:
         print(f"[FirstMsgAI] Error: {exc} → falling back to default greeting.", flush=True)
-        return FIRST_MESSAGE_REPLY, detected_child
+        return FIRST_MESSAGE_REPLY, detected_context
 
 
 def build_safe_fallback_reply(matched_product, customer_text=""):
@@ -3114,8 +3114,9 @@ _AGE_WORDS = {
 }
 
 _PRODUCT_TYPE_TERMS = {
-    "طقم", "قميص", "بدلة", "بدله", "فستان", "تراك", "تلبيسة", "تلبيسه",
+    "طقم", "سوت", "ست", "قميص", "بدلة", "بدله", "فستان", "تراك", "تلبيسة", "تلبيسه",
     "قاط", "رسمي", "كاجوال", "صيفي", "شتوي", "بنطلون", "شورت", "ملابس",
+    "عباية", "عبايه", "بلوزة", "بلوزه", "تنورة", "تنوره", "قطعة", "قطعه",
 }
 
 _GENERIC_PRODUCT_TERMS = {"ملابس", "موديل", "موديلات", "منتج", "منتجات"}
@@ -3127,8 +3128,9 @@ _COLOR_TERMS = {
 
 _PRODUCT_SEARCH_WORDS = {
     "اريد", "أريد", "اكو", "أكو", "عندكم", "عندج", "متوفر", "متوفرة",
-    "موجود", "موجودة", "قياس", "مقاس", "مقاسات", "عمر", "سنوات", "سنة",
-    "ولادي", "بناتي", "ولد", "بنت", "ملابس", "موديل", "موديلات", "منتج",
+    "موجود", "موجودة", "قياس", "مقاس", "مقاسات", "كيلو", "وزن",
+    "نسائي", "نسائية", "محتشم", "محتشمة", "بناتي", "بنت", "بنوتي",
+    "ملابس", "موديل", "موديلات", "قطعة", "قطعه", "منتج",
 }
 
 _ORDINAL_WORDS = {
@@ -3164,14 +3166,14 @@ def _product_search_haystack(product):
 
 def _extract_age_years(text):
     normalized = _catalog_text(text).lower()
-    matches = re.findall(r"(\d{1,2})\s*(?:سن(?:ة|ه|وات|ين)?|سنه|سنوات|عمر|اعوام|أعوام|عام)", normalized)
+    matches = re.findall(r"(?:قياس|مقاس|كيلو|وزن)\s*(\d{1,3})", normalized)
     if matches:
         return int(matches[0])
-    matches = re.findall(r"(?:عمر|قياس|مقاس)\s*(\d{1,2})", normalized)
+    matches = re.findall(r"(\d{1,3})\s*(?:كيلو|kg|كغم)", normalized)
     if matches:
         return int(matches[0])
     for phrase, value in sorted(_AGE_WORDS.items(), key=lambda item: len(item[0]), reverse=True):
-        if re.search(rf"(?:عمر|قياس|مقاس)?\s*{re.escape(phrase)}\s*(?:سن(?:ة|ه|وات)?|اعوام|أعوام|عام)?", normalized):
+        if re.search(rf"(?:قياس|مقاس|كيلو|وزن)\s*{re.escape(phrase)}", normalized):
             return value
     return None
 
@@ -3179,15 +3181,13 @@ def _extract_age_years(text):
 def _extract_size_age_range(sizes_text):
     normalized = _catalog_text(sizes_text).lower()
     values = []
-    for match in re.finditer(r"(\d{1,2})\s*(اشهر|أشهر|شهر|سن(?:ة|ه|وات|ين)?|سنه|سنوات|اعوام|أعوام|عام)", normalized):
-        num = int(match.group(1))
-        unit = match.group(2)
-        values.append(num / 12 if "شهر" in unit or "اشهر" in unit or "أشهر" in unit else float(num))
-    if any(unit in normalized for unit in ("سنة", "سنه", "سنوات", "سنين", "عام", "اعوام", "أعوام")):
-        for match in re.finditer(r"(\d{1,2})(?!\s*(?:اشهر|أشهر|شهر))", normalized):
+    for match in re.finditer(r"(?:من\s*)?(\d{1,3})\s*(?:الى|إلى|-|ل|لل|للـ)\s*(\d{1,3})\s*(?:كيلو|kg|كغم)?", normalized):
+        values.extend((float(match.group(1)), float(match.group(2))))
+    if not values and any(unit in normalized for unit in ("قياس", "مقاس", "كيلو", "kg", "كغم", "s", "m", "l", "xl")):
+        for match in re.finditer(r"(\d{1,3})", normalized):
             values.append(float(match.group(1)))
     for phrase, value in _AGE_WORDS.items():
-        if phrase in normalized and any(unit in normalized for unit in ("سنة", "سنه", "سنوات", "عام", "اعوام", "أعوام")):
+        if phrase in normalized and any(unit in normalized for unit in ("قياس", "مقاس", "كيلو", "وزن")):
             values.append(float(value))
     if not values:
         return None
@@ -3207,29 +3207,10 @@ def _age_fits_product(age_years, product):
 
 
 def _product_gender(product):
-    haystack = _product_search_haystack(product)
-    girl_terms = ("بناتي", "بنات", "بنت", "فستان", "بنوتة", "بنوت")
-    boy_terms = ("ولادي", "اولاد", "أولاد", "ولد", "صبي", "قاط")
-    has_girl = any(term in haystack for term in girl_terms)
-    has_boy = any(term in haystack for term in boy_terms)
-    if has_girl and not has_boy:
-        return "girl"
-    if has_boy and not has_girl:
-        return "boy"
     return "unknown"
 
 
 def _request_gender(text):
-    normalized = _catalog_text(text).lower()
-    words = _catalog_words(text)
-    girl_terms = {"بناتي", "بنات", "بنت", "بنوتة", "بنوت", "فستان"}
-    boy_terms = {"ولادي", "اولاد", "أولاد", "ولد", "صبي", "قاط"}
-    has_girl = bool(words & girl_terms) or any(term in normalized for term in girl_terms)
-    has_boy = bool(words & boy_terms) or any(term in normalized for term in boy_terms)
-    if has_girl and not has_boy:
-        return "girl"
-    if has_boy and not has_girl:
-        return "boy"
     return "unknown"
 
 
@@ -3314,10 +3295,6 @@ def _product_search_summary(request_info):
     parts = []
     if request_info.get("age_years") is not None:
         parts.append(f"للقياس المطلوب")
-    if request_info.get("gender") == "boy":
-        parts.append("ولادي")
-    elif request_info.get("gender") == "girl":
-        parts.append("بناتي")
     product_terms = [term for term in (request_info.get("product_terms") or []) if term not in _GENERIC_PRODUCT_TERMS]
     if product_terms:
         parts.append(" / ".join(product_terms))
@@ -3330,7 +3307,7 @@ def build_product_recommendation_reply(matches, request_info):
     products = [item["product"] for item in matches]
     summary = _product_search_summary(request_info)
     if not products:
-        return f"ما لقيت حالياً موديل متوفر مطابق لـ {summary}. ممكن ترسلين عمر/قياس ثاني حتى أبحث لك؟"
+        return f"ما لقيت حالياً موديل متوفر مطابق لـ {summary}. ممكن ترسلين قياس أو موديل ثاني حتى أبحث لك؟"
     lines = [f"لقيت لك {len(products)} موديل متوفر {summary}:"]
     for idx, product in enumerate(products, 1):
         name = product.get("product_name") or "موديل"
@@ -5350,17 +5327,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             },
         )
         save_conversation_message(db, ev["sender_id"], "assistant", first_reply_text)
-        # نخزّن الجنس المكتشف في profile الزبون لاستخدامه في الردود اللاحقة
-        try:
-            if detected_gender in ("boy", "girl"):
-                db.execute(
-                    "UPDATE customers SET notes = COALESCE(notes,'') || ? WHERE sender_id=?",
-                    (f" | child_gender={detected_gender}",
-                     ev["sender_id"]),
-                )
-                db.commit()
-        except Exception as exc:
-            print(f"[FirstMsg] Could not save detected gender: {exc}", flush=True)
         log(8, "FIRST MESSAGE", f"First message routed to review #{review_id}; AI greeting (gender={detected_gender}) sent.")
         return {
             "sender_id": ev["sender_id"],
