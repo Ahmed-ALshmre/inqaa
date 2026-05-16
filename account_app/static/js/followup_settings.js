@@ -10,7 +10,6 @@ async function loadFollowupSettings() {
   document.getElementById('followupStopOnOrder').checked = settings.stop_on_order !== false;
   document.getElementById('followupStopOnRejection').checked = settings.stop_on_rejection !== false;
   document.getElementById('followupDelay').value = settings.default_delay_minutes || 20;
-  document.getElementById('followupMessageTemplate').value = settings.message_template || '';
   setAdminStatus('followupSettingsStatus', `المتابعات المعلقة: ${data.pending_count || 0}`, true);
 }
 
@@ -59,67 +58,46 @@ function renderCustomerFollowups() {
     const displayName = adminEsc(customer.name || customer.sender_id || '-');
     const phone = customer.phone ? `<span>${adminEsc(customer.phone)}</span>` : '';
     const pending = customer.pending_followup_id
-      ? `<span class="badge bg-warning text-dark">متابعة معلقة: ${adminEsc(formatFollowupDate(customer.pending_scheduled_at))}</span>`
-      : '<span class="badge bg-secondary">لا توجد متابعة معلقة</span>';
-    const currentMessage = customer.pending_message_text
-      ? `<div class="small mt-2" style="color:var(--text-muted)">المعلقة الآن: ${adminEsc(customer.pending_message_text)}</div>`
-      : '';
-    return `
-      <div class="followup-customer-row" data-sender-id="${senderId}">
-        <div class="followup-customer-head">
-          <div>
-            <div class="fw-semibold">${displayName}</div>
-            <div class="small" style="color:var(--text-muted)">
-              <span>${senderId}</span>
-              ${phone}
-              <span>آخر نشاط: ${adminEsc(formatFollowupDate(customer.last_seen_at || customer.last_message_at))}</span>
+        ? `<span class="badge bg-warning text-dark">متابعة معلقة: ${adminEsc(formatFollowupDate(customer.pending_scheduled_at))}</span>`
+        : '<span class="badge bg-secondary">لا توجد متابعة معلقة</span>';
+      const currentMessage = customer.pending_message_text
+        ? `<div class="small mt-2" style="color:var(--text-muted)">المعلقة الآن: ${adminEsc(customer.pending_message_text)}</div>`
+        : '';
+      return `
+        <div class="followup-customer-row" data-sender-id="${senderId}">
+          <div class="followup-customer-head">
+            <div>
+              <div class="fw-semibold">${displayName}</div>
+              <div class="small" style="color:var(--text-muted)">
+                <span>${senderId}</span>
+                ${phone}
+                <span>آخر نشاط: ${adminEsc(formatFollowupDate(customer.last_seen_at || customer.last_message_at))}</span>
+              </div>
             </div>
+            <div>${pending}</div>
           </div>
-          <div>${pending}</div>
-        </div>
-        <textarea class="form-control form-control-sm followup-customer-message" rows="3"
-          placeholder="رسالة خاصة لهذا الزبون... اتركها فارغة لاستخدام القالب العام">${adminEsc(customer.message_template || '')}</textarea>
-        ${currentMessage}
-        <div class="d-flex flex-wrap gap-2 mt-2">
-          <button class="btn btn-primary btn-sm" type="button" onclick="saveCustomerFollowup('${senderId}')">
-            <i class="bi bi-save"></i> حفظ لهذا الزبون
-          </button>
-          <button class="btn btn-outline-danger btn-sm" type="button" onclick="clearCustomerFollowup('${senderId}')">
-            <i class="bi bi-x-circle"></i> استخدام القالب العام
-          </button>
-          <a class="btn btn-outline-secondary btn-sm" href="/dashboard?key=${encodeURIComponent(adminKey)}" target="_blank">
-            <i class="bi bi-chat-dots"></i> فتح الداشبورد
-          </a>
-        </div>
-      </div>`;
+          ${currentMessage}
+          <div class="small mt-2" id="preview-${senderId}"></div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" onclick="previewFollowup('${senderId}')">
+              <i class="bi bi-eye"></i> معاينة رسالة المتابعة
+            </button>
+            <a class="btn btn-outline-secondary btn-sm" href="/dashboard?key=${encodeURIComponent(adminKey)}" target="_blank">
+              <i class="bi bi-chat-dots"></i> فتح الداشبورد
+            </a>
+          </div>
+        </div>`;
   }).join('');
 }
 
 async function saveCustomerFollowup(senderId) {
-  const row = document.querySelector(`.followup-customer-row[data-sender-id="${CSS.escape(senderId)}"]`);
-  const textarea = row?.querySelector('.followup-customer-message');
-  if (!row || !textarea) return;
-  const payload = {
-    sender_id: senderId,
-    message_template: textarea.value || '',
-    update_pending: true,
-  };
-  const res = await fetch(adminApi('/api/followups/customer_messages'), {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json();
-  if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حفظ رسالة الزبون');
-  setAdminStatus('customerFollowupStatus', `تم حفظ رسالة الزبون وتحديث ${data.updated_pending || 0} متابعة معلقة`, true);
-  await loadCustomerFollowups();
+  // Disabled: followup messages are generated by AI automatically; no per-customer template to save
+  return;
 }
 
 function clearCustomerFollowup(senderId) {
-  const row = document.querySelector(`.followup-customer-row[data-sender-id="${CSS.escape(senderId)}"]`);
-  const textarea = row?.querySelector('.followup-customer-message');
-  if (textarea) textarea.value = '';
-  saveCustomerFollowup(senderId).catch((err) => setAdminStatus('customerFollowupStatus', err.message, false));
+  // Disabled: no-op since per-customer templates are not supported
+  return;
 }
 
 async function saveFollowupSettings(event) {
@@ -130,7 +108,7 @@ async function saveFollowupSettings(event) {
     stop_on_order: document.getElementById('followupStopOnOrder').checked,
     stop_on_rejection: document.getElementById('followupStopOnRejection').checked,
     default_delay_minutes: Number(document.getElementById('followupDelay').value || 20),
-    message_template: document.getElementById('followupMessageTemplate').value || ''
+    // message_template removed; AI will generate messages per-customer
   };
   const res = await fetch(adminApi('/api/settings/followup'), {
     method: 'POST',
@@ -148,6 +126,19 @@ async function postFollowupAction(path, successText) {
   if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تنفيذ العملية');
   setAdminStatus('followupSettingsStatus', successText(data), true);
   await loadFollowupSettings();
+}
+
+async function previewFollowup(senderId) {
+  const previewEl = document.getElementById(`preview-${senderId}`);
+  if (previewEl) previewEl.textContent = 'جاري توليد الرسالة...';
+  try {
+    const res = await fetch(adminApi(`/api/followups/generate_message?sender_id=${encodeURIComponent(senderId)}`));
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل توليد الرسالة');
+    if (previewEl) previewEl.innerHTML = `<div class="small">${adminEsc(data.message)}</div>`;
+  } catch (err) {
+    if (previewEl) previewEl.textContent = 'فشل التوليد: ' + err.message;
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

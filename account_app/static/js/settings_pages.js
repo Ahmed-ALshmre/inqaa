@@ -120,6 +120,31 @@ async function initStoreSettingsPage() {
   });
 }
 
+async function initDeliveryPage() {
+  const data = await getJSON('/api/settings/delivery');
+  document.getElementById('baghdadFee').value = data.baghdad_fee || '';
+  document.getElementById('otherFee').value = data.other_fee || '';
+  document.getElementById('fastDelivery').checked = !!data.fast_delivery;
+  document.getElementById('inspectionMessage').value = data.inspection_message || '';
+  document.getElementById('deliverySettingsForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    try {
+      await getJSON('/api/settings/delivery', {
+        method: 'POST',
+        body: JSON.stringify({
+          baghdad_fee: Number(document.getElementById('baghdadFee').value) || 0,
+          other_fee: Number(document.getElementById('otherFee').value) || 0,
+          fast_delivery: document.getElementById('fastDelivery').checked,
+          inspection_message: document.getElementById('inspectionMessage').value
+        })
+      });
+      setAdminStatus('deliverySettingsStatus', 'تم الحفظ');
+    } catch (err) {
+      setAdminStatus('deliverySettingsStatus', err.message, false);
+    }
+  });
+}
+
 async function initMaintenancePage() {
   const data = await getJSON('/api/settings/overview');
   const m = data.maintenance || {};

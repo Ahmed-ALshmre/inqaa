@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}إعدادات التوصيل{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">الإعدادات</p>
+    <h1>أجور التوصيل</h1>
+    <p>تعديل أجور التوصيل وخيارات التوصيل السريع ونص الفحص عند الاستلام.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <form id="deliverySettingsForm" class="admin-form">
+    <label class="form-label">أجور التوصيل - بغداد (فلس/دينار)</label>
+    <input class="form-control" id="baghdadFee" type="number">
+    <label class="form-label">أجور التوصيل - باقي المحافظات (فلس/دينار)</label>
+    <input class="form-control" id="otherFee" type="number">
+    <label class="form-label">التوصيل السريع</label>
+    <div><input id="fastDelivery" type="checkbox"> فعال</div>
+    <label class="form-label">نص رسالة الفحص عند الاستلام</label>
+    <textarea class="form-control" id="inspectionMessage" rows="4"></textarea>
+    <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> حفظ</button>
+    <span class="admin-status" id="deliverySettingsStatus"></span>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/settings_pages.js?v=3"></script>
+<script>initDeliveryPage();</script>
+{% endblock %}

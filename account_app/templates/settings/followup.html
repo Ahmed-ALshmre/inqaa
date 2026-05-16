@@ -36,10 +36,9 @@
       <input class="form-control" type="number" min="1" max="10080" id="followupDelay">
     </label>
 
-    <label>
-      قالب رسالة المتابعة (يمكن استخدام {customer_name} و {product_name})
-      <textarea class="form-control" id="followupMessageTemplate" rows="4" placeholder="مثال: {customer_name}، حبيت أتابع وياج بخصوص {product_name}. هل تحبين أكمل الحجز؟"></textarea>
-    </label>
+    <div class="admin-note">
+      الرسائل تُولّد الآن آلياً بواسطة AI لكل زبون بناءً على محادثته الأخيرة، لا حاجة لقالب يدوي
+    </div>
 
     <div class="admin-note">
       إذا كانت المتابعة متوقفة، فلن يتم إنشاء متابعات جديدة ولن يتم إرسال المتابعات المعلقة حتى يتم التفعيل.
@@ -64,7 +63,7 @@
     <div>
       <h2 class="h6 mb-1">رسائل مخصصة لكل زبون</h2>
       <div class="small" style="color:var(--text-muted)">
-        اكتب رسالة مختلفة لأي زبون. إذا تركتها فارغة سيستخدم النظام القالب العام أعلاه.
+        الرسائل الفردية تُولّد تلقائياً من النظام؛ يمكنك معاينة رسالة المتابعة لكل زبون قبل الإرسال
       </div>
     </div>
     <button class="btn btn-outline-secondary btn-sm" type="button" id="reloadCustomerFollowups">
@@ -75,7 +74,7 @@
   <div class="input-group input-group-sm mb-3">
     <span class="input-group-text border-0"><i class="bi bi-search"></i></span>
     <input class="form-control border-0" id="customerFollowupSearch"
-      placeholder="بحث باسم الزبون، الرقم، آخر رسالة أو نص المتابعة..." oninput="renderCustomerFollowups()">
+      placeholder="بحث باسم الزبون، الرقم، آخر رسالة..." oninput="renderCustomerFollowups()">
   </div>
 
   <div class="admin-note mb-3">

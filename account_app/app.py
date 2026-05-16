@@ -258,6 +258,9 @@ DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "35"))   # ثواني 
 ASYNC_WEBHOOK      = os.environ.get("ASYNC_WEBHOOK", "1") == "1"
 
 DB_PATH           = os.path.join(os.path.dirname(__file__), "sales.db")
+def generate_ai_followup_message(db, sender_id, stage, product=None):
+    """Placeholder declared early so code referencing it compiles; real implementation overwrites this later."""
+    return None
 PRODUCTS_FILE     = os.path.join(os.path.dirname(__file__), "products.json")
 PRODUCT_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "product_image")
 CATALOG_IMAGE_DIR = os.environ.get("CATALOG_IMAGE_DIR", os.path.join(PRODUCT_IMAGE_DIR, "catalog"))
@@ -275,7 +278,7 @@ FALLBACK_REPLY = (
     "حبيبتي ممكن توضحين أكثر شنو الموديل المطلوب؟ "
     "حتى أتأكدلج من التوفر والسعر 🌸"
 )
-FIXED_DELIVERY_TEXT = "أجور التوصيل ثابتة: 4 آلاف لكل محافظات العراق"
+FIXED_DELIVERY_TEXT = "أجور التوصيل: 5 آلاف داخل بغداد و6 آلاف لباقي المحافظات، والتوصيل سريع مع إمكانية الفحص عند الاستلام"
 
 app = Flask(__name__)
 _request_log_lock = threading.Lock()
@@ -885,6 +888,31 @@ def save_followup_settings(db, data):
     return get_followup_settings(db)
 
 
+def get_delivery_settings(db=None):
+    db = db or get_db()
+    return {
+        "baghdad_fee": _setting_int(get_setting(db, "delivery_baghdad_fee", "5000"), 5000, 0),
+        "other_fee": _setting_int(get_setting(db, "delivery_other_fee", "6000"), 6000, 0),
+        "fast_delivery": _setting_bool(get_setting(db, "delivery_fast", "1"), True),
+        "inspection_message": get_setting(db, "delivery_inspection_message", "التوصيل سريع مع إمكانية الفحص عند الاستلام")
+    }
+
+
+def save_delivery_settings(db, data):
+    baghdad = _setting_int(data.get("baghdad_fee"), 5000, 0)
+    other = _setting_int(data.get("other_fee"), 6000, 0)
+    fast = bool(data.get("fast_delivery"))
+    inspection = str(data.get("inspection_message") or "")
+    for key, value in (
+        ("delivery_baghdad_fee", str(baghdad)),
+        ("delivery_other_fee", str(other)),
+        ("delivery_fast", "1" if fast else "0"),
+        ("delivery_inspection_message", inspection),
+    ):
+        set_setting(db, key, value)
+    return get_delivery_settings(db)
+
+
 def _format_followup_message_template(template, customer_name, product_name, stage):
     if not template or not template.strip():
         return None
@@ -909,6 +937,12 @@ def get_customer_followup_template(db, sender_id):
         return ""
 
 
+def generate_ai_followup_message(db, sender_id, stage, product=None):
+    """Forward declaration placeholder; real implementation appears later in the file."""
+    # placeholder to satisfy references; actual implementation defined further below
+    return None
+
+
 def build_followup_message(db, sender_id, stage, product=None):
     customer_name = _customer_name_from_db(db, sender_id) or "حبيبتي"
     product_name = (product or {}).get("product_name") or "الموديل"
@@ -919,6 +953,14 @@ def build_followup_message(db, sender_id, stage, product=None):
         custom_message = _format_followup_message_template(template, customer_name, product_name, stage)
         if custom_message:
             return custom_message
+
+    # إذا لا يوجد قالب محفوظ، استدعِ مولّد AI لتوليد رسالة متابعة قصيرة ومخصصة
+    try:
+        ai_msg = generate_ai_followup_message(db, sender_id, stage, product)
+        if ai_msg:
+            return ai_msg
+    except Exception as exc:
+        print(f"[FollowUpAI] generation failed for {sender_id}: {exc}", flush=True)
     if stage in {"price", "asked_price"}:
         return f"حبيبتي بعدج مهتمة بـ {product_name}؟ أكدر أحجزه إلج إذا تحبين."
     if stage in {"availability", "asked_availability"}:
@@ -1870,6 +1912,73 @@ def build_safe_fallback_reply(matched_product, customer_text=""):
         size_part = f" والقياسات {sizes}" if sizes else ""
         return f"إي حبيبتي {name} متوفر حالياً{price_part}{size_part} 🌸 شنو تحبين تعرفين عنه؟"
     return FALLBACK_REPLY
+
+
+    def _last_messages_for_sender(db, sender_id, limit=8):
+        try:
+            rows = db.execute(
+                "SELECT text, created_at FROM messages WHERE sender_id=? ORDER BY created_at DESC LIMIT ?",
+                (sender_id, limit),
+            ).fetchall()
+            return [r[0] for r in rows if r[0]]
+        except Exception:
+            return []
+
+
+    def generate_ai_followup_message(db, sender_id, stage, product=None):
+        """Generate a short, personalized follow-up message using the AI model.
+        Returns a single short string (no trailing period requirement enforced here).
+        """
+        if not OPENROUTER_KEY:
+            # fallback message
+            product_name = (product or {}).get("product_name") if product else None
+            if product_name:
+                return f"حبيبتي بعدج مهتمة بـ {product_name}؟ أكدر أحجزه إلج إذا تحبين"
+            return "حبيت أتابع وياج، تحبين أكمل وياج الحجز"
+
+        last_msgs = _last_messages_for_sender(db, sender_id, limit=8)
+        convo_text = "\n".join(reversed(last_msgs)) or "[لا توجد رسائل سابقة]"
+
+        system_prompt = (
+            "أنتِ موظفة مبيعات قصيرة الكلام وباللهجة العراقية البيضاء. مهمتك: كتابة رسالة متابعة شخصية قصيرة لزبون بناءً على محادثته السابقة، "
+            "اذكري اسم الموديل لو واضح، اذكري ميزة قصيرة إن وُجدت، اذكري أجور التوصيل حسب النظام (بغداد 5 آلاف، باقي المحافظات 6 آلاف)، "
+            "واذكري أن الفحص متاح عند الاستلام. الطول: جملة إلى جملة ونص (≤ 25 كلمة). اختمي بسؤال واحد يحفز الرد. لا تطلبي العنوان أو رقم الموبايل الآن.")
+
+        user_content = (
+            f"سياق المحادثة مع الزبون:\n{convo_text}\n\n"
+            f"المرحلة: {stage}\n"
+            f"المنتَج (إن وُجد): { (product or {}).get('product_name') if product else 'غير محدد' }\n"
+            "صغ رسالة متابعة قصيرة بحسب التعليمات أعلاه. أجب بJSON فقط: {\"reply\": \"...\"}"
+        )
+
+        try:
+            resp = requests.post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": MAIN_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
+                    ],
+                    "max_tokens": 200,
+                    "temperature": 0.45,
+                },
+                timeout=20,
+            )
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"]
+            parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
+            reply = (parsed.get("reply") or "").strip()
+            if reply:
+                return reply
+        except Exception as exc:
+            print(f"[FollowUpAI] error for {sender_id}: {exc}", flush=True)
+
+        # fallback
+        if product and product.get("product_name"):
+            return f"حبيت أتابع وياج بخصوص {product.get('product_name')}، تحبين أكمل الحجز؟"
+        return "حبيت أتابع وياج، تحبين أكمل الحجز؟"
 
 
 def save_booking_to_file(booking_data):
@@ -6703,6 +6812,11 @@ def settings_store_page():
     return _admin_page("settings/store.html")
 
 
+@app.route("/settings/delivery")
+def settings_delivery_page():
+    return _admin_page("settings/delivery.html")
+
+
 @app.route("/settings/maintenance")
 def settings_maintenance_page():
     return _admin_page("settings/maintenance.html")
@@ -6716,6 +6830,23 @@ def analytics_page():
 @app.route("/evaluation")
 def evaluation_page():
     return _admin_page("evaluation.html")
+
+
+@app.route("/api/settings/delivery", methods=["GET", "POST"])
+@_dash_require
+def api_delivery_settings():
+    db = get_db()
+    if request.method == "GET":
+        s = get_delivery_settings(db)
+        return jsonify({
+            "baghdad_fee": s.get("baghdad_fee"),
+            "other_fee": s.get("other_fee"),
+            "fast_delivery": bool(s.get("fast_delivery")),
+            "inspection_message": s.get("inspection_message"),
+        })
+    data = request.get_json(silent=True) or {}
+    save_delivery_settings(db, data)
+    return jsonify({"ok": True})
 
 
 @app.route("/manifest.webmanifest")
@@ -8482,6 +8613,25 @@ def api_followup_customer_messages():
     if not result.get("ok"):
         return jsonify(result), 400
     return jsonify(result)
+
+
+@app.route("/api/followups/generate_message")
+@_dash_require
+def api_generate_followup_message():
+    sender_id = request.args.get("sender_id")
+    if not sender_id:
+        return jsonify({"ok": False, "error": "missing sender_id"}), 400
+    db = get_db()
+    row = db.execute(
+        "SELECT product_name FROM customer_product_interests WHERE sender_id=? ORDER BY last_seen_at DESC LIMIT 1",
+        (sender_id,),
+    ).fetchone()
+    product = {"product_name": row[0]} if row and row[0] else None
+    try:
+        msg = generate_ai_followup_message(db, sender_id, "followup", product)
+        return jsonify({"ok": True, "message": msg})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @app.route("/api/followups/send_due", methods=["POST"])
