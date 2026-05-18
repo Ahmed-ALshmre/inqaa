@@ -4278,6 +4278,31 @@ def match_product(db, ev, products):
 
 _INSTRUCTIONS_FILE  = os.path.join(os.path.dirname(__file__), "instructions.txt")
 _PLAYBOOK_FILE      = os.path.join(os.path.dirname(__file__), "gemini_sales_playbook.md")
+_PRODUCT_AI_SUMMARY_FILE = os.path.join(os.path.dirname(__file__), "product_ai_summary.txt")
+_FORBIDDEN_RULES_FILE = os.path.join(os.path.dirname(__file__), "forbidden_rules.txt")
+
+AI_COMMAND_FILES = {
+    "instructions": {
+        "path": _INSTRUCTIONS_FILE,
+        "title": "instructions.txt",
+        "description": "التعليمات الأساسية التي تتحكم بأسلوب وقرارات الردود اليومية.",
+    },
+    "product_summary": {
+        "path": _PRODUCT_AI_SUMMARY_FILE,
+        "title": "product_ai_summary.txt",
+        "description": "ملخص معرفة المنتجات الذي يضاف إلى تعليمات الذكاء الاصطناعي.",
+    },
+    "forbidden_rules": {
+        "path": _FORBIDDEN_RULES_FILE,
+        "title": "forbidden_rules.txt",
+        "description": "قواعد المنع النصية؛ كل سطر يعتبر قاعدة منفصلة.",
+    },
+    "playbook": {
+        "path": _PLAYBOOK_FILE,
+        "title": "gemini_sales_playbook.md",
+        "description": "دليل البيع والتوجيهات الطويلة المستخدمة مع الموديل.",
+    },
+}
 
 
 def _load_file_text(path):
@@ -4287,6 +4312,51 @@ def _load_file_text(path):
             return f.read().strip()
     except Exception:
         return ""
+
+
+def _safe_ai_command_path(path):
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+    abs_path = os.path.abspath(path)
+    if os.path.commonpath([base_dir, abs_path]) != base_dir:
+        raise ValueError("invalid instructions path")
+    return abs_path
+
+
+def _ai_command_file_payload(key, meta):
+    path = _safe_ai_command_path(meta["path"])
+    exists = os.path.exists(path)
+    stat = os.stat(path) if exists else None
+    return {
+        "key": key,
+        "title": meta["title"],
+        "description": meta["description"],
+        "path": os.path.basename(path),
+        "content": _load_file_text(path),
+        "exists": exists,
+        "updated_at": datetime.fromtimestamp(stat.st_mtime, BAGHDAD_TZ).isoformat() if stat else None,
+        "size": stat.st_size if stat else 0,
+    }
+
+
+def _write_ai_command_file(path, content):
+    path = _safe_ai_command_path(path)
+    if not isinstance(content, str):
+        raise TypeError("file content must be a string")
+    if len(content.encode("utf-8")) > 500_000:
+        raise ValueError("file content is too large")
+    if os.path.exists(path):
+        backup_path = path + ".bak"
+        try:
+            with open(path, "rb") as src, open(backup_path, "wb") as dst:
+                dst.write(src.read())
+        except Exception as exc:
+            print(f"[Settings] Could not write backup for {os.path.basename(path)}: {exc}", flush=True)
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
+        text = content.rstrip()
+        if text:
+            f.write(text + "\n")
+    os.replace(tmp_path, path)
 
 
 def send_text_to_facebook(sender_id: str, text: str, page_id: str = "", platform: str = "facebook") -> bool:
@@ -4452,19 +4522,34 @@ def load_ai_config(db, sender_id=None):
     rules = db.execute(
         "SELECT rule FROM forbidden_rules WHERE active=1"
     ).fetchall()
-    instructions_text = "\n".join(r["content"] for r in instructions)
-    rules_list        = [r["rule"] for r in rules]
+    db_instructions = "\n".join(r["content"] for r in instructions).strip()
+    rules_list = [r["rule"] for r in rules if (r["rule"] or "").strip()]
 
-    # If DB has no instructions, fall back to instructions.txt then playbook
-    if not instructions_text.strip():
-        file_instructions = _load_file_text(_INSTRUCTIONS_FILE)
-        playbook          = _load_file_text(_PLAYBOOK_FILE)
-        if file_instructions:
-            instructions_text = file_instructions
-            print("[Config] Loaded instructions from instructions.txt (DB was empty)", flush=True)
-        if playbook:
-            instructions_text = (instructions_text + "\n\n---\n\n" + playbook).strip()
-            print("[Config] Appended gemini_sales_playbook.md to instructions", flush=True)
+    file_instructions = _load_file_text(_INSTRUCTIONS_FILE)
+    product_summary = _load_file_text(_PRODUCT_AI_SUMMARY_FILE)
+    playbook = _load_file_text(_PLAYBOOK_FILE)
+    instruction_parts = []
+    if file_instructions:
+        instruction_parts.append(file_instructions)
+        print("[Config] Loaded instructions from instructions.txt", flush=True)
+    if product_summary:
+        instruction_parts.append("معرفة المنتجات من product_ai_summary.txt:\n" + product_summary)
+        print("[Config] Loaded product_ai_summary.txt", flush=True)
+    if db_instructions:
+        instruction_parts.append(db_instructions)
+    if playbook:
+        instruction_parts.append(playbook)
+        print("[Config] Appended gemini_sales_playbook.md to instructions", flush=True)
+    instructions_text = "\n\n---\n\n".join(instruction_parts).strip()
+
+    file_rules = [
+        line.strip()
+        for line in _load_file_text(_FORBIDDEN_RULES_FILE).splitlines()
+        if line.strip()
+    ]
+    if file_rules:
+        rules_list = file_rules + rules_list
+        print("[Config] Loaded forbidden_rules.txt", flush=True)
 
     # Append customer-specific and global supervisor instructions
     try:
@@ -6472,10 +6557,22 @@ def _orders_payload(db, limit=500):
             continue
         seen_order_keys.add(dedupe_key)
         orders.append(order)
+    total_people = db.execute(
+        """SELECT COUNT(DISTINCT sender_id) FROM (
+             SELECT sender_id FROM customers WHERE sender_id IS NOT NULL AND sender_id != ''
+             UNION
+             SELECT sender_id FROM messages
+             WHERE direction='incoming' AND sender_id IS NOT NULL AND sender_id != ''
+           )"""
+    ).fetchone()[0]
+    conversion_rate = round((len(orders) / total_people) * 100, 2) if total_people else 0
     return {
         "orders": orders,
         "total": len(orders),
         "new_count": sum(1 for o in orders if (o.get("status") or "new") == "new"),
+        "people_count": total_people,
+        "people_to_order_conversion": conversion_rate,
+        "conversion_rate": conversion_rate,
     }
 
 
@@ -6787,6 +6884,12 @@ def settings_ai_page():
     return _admin_page("settings/ai.html")
 
 
+@app.route("/settings/instructions")
+@app.route("/instructions")
+def settings_instructions_page():
+    return _admin_page("instructions.html")
+
+
 @app.route("/settings/auto-product")
 def settings_auto_product_page():
     return _admin_page("settings/auto_product.html")
@@ -6884,6 +6987,65 @@ def api_orders():
     except ValueError:
         limit = 500
     return jsonify(_orders_payload(get_db(), limit=limit))
+
+
+def _order_payload_by_id(db, order_id):
+    row = db.execute(
+        """SELECT
+             o.*,
+             c.name AS customer_display_name,
+             c.page_id,
+             COALESCE(c.platform, 'facebook') AS platform
+           FROM orders o
+           LEFT JOIN customers c ON c.sender_id = o.sender_id
+           WHERE o.id=?""",
+        (order_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+@app.route("/api/orders/<int:order_id>", methods=["PATCH"])
+@_dash_require
+def api_update_order(order_id):
+    db = get_db()
+    current = _order_payload_by_id(db, order_id)
+    if not current:
+        return jsonify({"ok": False, "error": "order not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    editable_fields = (
+        "customer_name", "phone", "province", "address", "product_id",
+        "product_name", "color", "size", "notes", "status",
+    )
+    updates = {}
+    for field in editable_fields:
+        if field in data:
+            updates[field] = str(data.get(field) or "").strip()
+
+    if not updates:
+        return jsonify({"ok": False, "error": "no fields to update"}), 400
+
+    set_clause = ", ".join(f"{field}=?" for field in updates)
+    values = list(updates.values()) + [order_id]
+    db.execute(f"UPDATE orders SET {set_clause} WHERE id=?", values)
+    db.commit()
+    order = _order_payload_by_id(db, order_id)
+    return jsonify({"ok": True, "order": order})
+
+
+@app.route("/api/orders/<int:order_id>/resend_telegram", methods=["POST"])
+@_dash_require
+def api_resend_order_telegram(order_id):
+    db = get_db()
+    order = _order_payload_by_id(db, order_id)
+    if not order:
+        return jsonify({"ok": False, "error": "order not found"}), 404
+    sent = send_order_to_telegram(order)
+    return jsonify({
+        "ok": sent,
+        "telegram_sent": sent,
+        "error": "" if sent else "تعذر إرسال الطلب إلى تلغرام. تأكد من إعدادات Telegram.",
+    }), 200 if sent else 502
 
 
 def _backup_sqlite_file_to_bytes(path):
@@ -8533,6 +8695,81 @@ def api_set_ai_enabled():
     set_setting(db, "ai_enabled", "1" if enabled else "0")
     print(f"[Settings] AI enabled={enabled}", flush=True)
     return jsonify({"ok": True, "ai_enabled": enabled})
+
+
+@app.route("/api/settings/ai_commands", methods=["GET", "POST"])
+@_dash_require
+def api_settings_ai_commands():
+    db = get_db()
+
+    if request.method == "GET":
+        files = {
+            key: _ai_command_file_payload(key, meta)
+            for key, meta in AI_COMMAND_FILES.items()
+        }
+        db_ai_rows = db.execute(
+            "SELECT content FROM ai_instructions WHERE active=1 ORDER BY id"
+        ).fetchall()
+        db_rule_rows = db.execute(
+            "SELECT rule FROM forbidden_rules WHERE active=1 ORDER BY id"
+        ).fetchall()
+        supervisor_rows = db.execute(
+            "SELECT instructions FROM customer_instructions "
+            "WHERE apply_to_all=1 AND instructions IS NOT NULL AND instructions != '' "
+            "ORDER BY id"
+        ).fetchall()
+        return jsonify({
+            "ok": True,
+            "files": files,
+            "db_ai_instructions": "\n\n".join(row["content"] for row in db_ai_rows).strip(),
+            "db_forbidden_rules": "\n".join(row["rule"] for row in db_rule_rows).strip(),
+            "global_supervisor_instructions": "\n\n".join(row["instructions"] for row in supervisor_rows).strip(),
+        })
+
+    data = request.get_json(silent=True) or {}
+    files = data.get("files") or {}
+    if not isinstance(files, dict):
+        return jsonify({"ok": False, "error": "files must be an object"}), 400
+
+    try:
+        for key, content in files.items():
+            meta = AI_COMMAND_FILES.get(key)
+            if not meta:
+                continue
+            _write_ai_command_file(meta["path"], content or "")
+    except (TypeError, ValueError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    now = now_baghdad_iso()
+    db_ai_instructions = str(data.get("db_ai_instructions") or "").strip()
+    db.execute("UPDATE ai_instructions SET active=0")
+    if db_ai_instructions:
+        db.execute(
+            "INSERT INTO ai_instructions (title, content, active) VALUES (?, ?, 1)",
+            ("تعليمات إضافية من الداشبورد", db_ai_instructions),
+        )
+
+    db_forbidden_rules = str(data.get("db_forbidden_rules") or "")
+    db.execute("UPDATE forbidden_rules SET active=0")
+    for rule in [line.strip() for line in db_forbidden_rules.splitlines() if line.strip()]:
+        db.execute(
+            "INSERT INTO forbidden_rules (rule, active) VALUES (?, 1)",
+            (rule,),
+        )
+
+    global_supervisor_instructions = str(data.get("global_supervisor_instructions") or "").strip()
+    db.execute("DELETE FROM customer_instructions WHERE apply_to_all=1")
+    if global_supervisor_instructions:
+        db.execute(
+            """INSERT INTO customer_instructions
+               (sender_id, instructions, apply_to_all, created_at, updated_at)
+               VALUES (?, ?, 1, ?, ?)""",
+            ("*", global_supervisor_instructions, now, now),
+        )
+    db.commit()
+
+    print("[Settings] AI command files and dashboard instructions updated", flush=True)
+    return jsonify({"ok": True, "message": "تم حفظ تعليمات الذكاء الاصطناعي"})
 
 
 @app.route("/api/settings/auto_product", methods=["GET", "POST"])

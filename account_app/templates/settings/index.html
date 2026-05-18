@@ -5,13 +5,16 @@
   <div>
     <p class="admin-kicker">مركز التحكم</p>
     <h1>الإعدادات</h1>
-    <p>إدارة الإعدادات المهمة من صفحات منفصلة وواضحة.</p>
+    <p>إدارة إعدادات المتجر والذكاء الاصطناعي من صفحات واضحة ومنفصلة.</p>
   </div>
 </section>
 
 <section class="admin-card-grid">
   <a class="admin-link-card" href="/settings/ai?key={{ request.args.get('key','') }}">
     <i class="bi bi-robot"></i><h2>الذكاء الاصطناعي</h2><p>حالة التشغيل والموديلات والمفاتيح.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/instructions?key={{ request.args.get('key','') }}">
+    <i class="bi bi-sliders2-vertical"></i><h2>تعليمات AI</h2><p>تعديل instructions.txt وملخص المنتجات وقواعد المنع ودليل البيع.</p>
   </a>
   <a class="admin-link-card" href="/settings/auto-product?key={{ request.args.get('key','') }}">
     <i class="bi bi-magic"></i><h2>المنتج التلقائي</h2><p>تفعيل المنتج الافتراضي واختيار المنتج.</p>

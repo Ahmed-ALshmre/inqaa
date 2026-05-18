@@ -53,6 +53,14 @@
           <span id="ordersNew">0</span>
           <small>جديد</small>
         </div>
+        <div class="orders-stat">
+          <span id="ordersPeople">0</span>
+          <small>أشخاص</small>
+        </div>
+        <div class="orders-stat">
+          <span id="ordersConversion">0%</span>
+          <small>تحويل</small>
+        </div>
       </div>
     </section>
 
@@ -78,11 +86,12 @@
               <th>العنوان</th>
               <th>القياس</th>
               <th>الحالة</th>
+              <th>إجراءات</th>
             </tr>
           </thead>
           <tbody id="ordersBody">
             <tr>
-              <td colspan="9" class="text-center py-5" style="color:var(--text-muted)">
+              <td colspan="10" class="text-center py-5" style="color:var(--text-muted)">
                 <div class="spinner-border spinner-border-sm mb-2"></div>
                 <div class="small">جاري تحميل الطلبات...</div>
               </td>
@@ -93,6 +102,78 @@
     </section>
   </main>
 
+  <div class="modal fade" id="orderEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <form id="orderEditForm">
+          <div class="modal-header">
+            <h5 class="modal-title">تعديل الطلب</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="editOrderId">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">اسم الزبون</label>
+                <input class="form-control" id="editCustomerName">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">الهاتف</label>
+                <input class="form-control" id="editPhone" dir="ltr">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">المحافظة</label>
+                <input class="form-control" id="editProvince">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">الحالة</label>
+                <select class="form-select" id="editStatus">
+                  <option value="new">new</option>
+                  <option value="confirmed">confirmed</option>
+                  <option value="sent">sent</option>
+                  <option value="delivered">delivered</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">العنوان</label>
+                <textarea class="form-control" id="editAddress" rows="2"></textarea>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">اسم المنتج</label>
+                <input class="form-control" id="editProductName">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Product ID</label>
+                <input class="form-control" id="editProductId" dir="ltr">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">اللون</label>
+                <input class="form-control" id="editColor">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">القياس</label>
+                <input class="form-control" id="editSize">
+              </div>
+              <div class="col-12">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" id="editNotes" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <span class="small me-auto" id="orderEditStatus" style="color:var(--text-muted)"></span>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">إلغاء</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>حفظ
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 start-0 p-3" id="ordersToastContainer"></div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/static/js/orders.js"></script>
 </body>

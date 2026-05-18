@@ -34,11 +34,11 @@ function showToast(message, type = 'success') {
   el.textContent = message;
   el.style.display = 'block';
   clearTimeout(showToast._timer);
-  showToast._timer = setTimeout(() => { el.style.display = 'none'; }, 2600);
+  showToast._timer = setTimeout(() => { el.style.display = 'none'; }, 2800);
 }
 
 function fileOrder() {
-  return ['instructions', 'forbidden_rules', 'playbook', 'product_summary'];
+  return ['instructions', 'product_summary', 'forbidden_rules', 'playbook'];
 }
 
 function syncActiveEditorToState() {
@@ -54,10 +54,11 @@ function renderTabs() {
   tabs.innerHTML = fileOrder().filter(key => aiCommandState.files[key]).map(key => {
     const file = aiCommandState.files[key];
     const active = key === activeFileKey ? 'active' : '';
+    const size = Number(file.size || 0).toLocaleString('ar');
     return `
       <button class="instruction-tab ${active}" type="button" onclick="selectFile('${key}')">
         <div class="fw-semibold">${esc(file.title || file.path || key)}</div>
-        <div class="small" style="color:var(--text-muted)">${Number(file.size || 0).toLocaleString('ar')} بايت</div>
+        <div class="small" style="color:var(--text-muted)">${size} بايت</div>
       </button>
     `;
   }).join('');
@@ -69,7 +70,9 @@ function renderActiveFile() {
   document.getElementById('activeFileName').textContent = file.title || file.path || activeFileKey;
   document.getElementById('activeFileDescription').textContent = file.description || '';
   document.getElementById('activeFileContent').value = file.content || '';
-  document.getElementById('activeFileMeta').textContent = `${file.path || ''} - ${Number(file.size || 0).toLocaleString('ar')} بايت`;
+  const size = Number(file.size || 0).toLocaleString('ar');
+  const updated = file.updated_at ? new Date(file.updated_at).toLocaleString('ar') : 'غير محفوظ بعد';
+  document.getElementById('activeFileMeta').textContent = `${file.path || ''} - ${size} بايت - آخر تعديل: ${updated}`;
   renderTabs();
 }
 

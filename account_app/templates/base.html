@@ -28,6 +28,10 @@
     </div>
   </nav>
 
+  <button class="admin-floating-menu" type="button" onclick="toggleAdminNav()" aria-label="القائمة">
+    <i class="bi bi-list"></i>
+  </button>
+
   <div class="admin-overlay" id="adminOverlay" onclick="closeAdminNav()"></div>
   <aside class="admin-sidebar" id="adminSidebar">
     <div class="admin-sidebar-title">التنقل</div>
@@ -41,6 +45,7 @@
     <a href="/settings?key={{ key }}"><i class="bi bi-gear"></i> الإعدادات</a>
     <div class="admin-sidebar-title mt-3">الإعدادات</div>
     <a href="/settings/ai?key={{ key }}"><i class="bi bi-robot"></i> الذكاء الاصطناعي</a>
+    <a href="/settings/instructions?key={{ key }}"><i class="bi bi-sliders2-vertical"></i> تعليمات AI</a>
     <a href="/settings/auto-product?key={{ key }}"><i class="bi bi-magic"></i> المنتج التلقائي</a>
     <a href="/settings/catalog?key={{ key }}"><i class="bi bi-images"></i> صور الكتالوج</a>
     <a href="/settings/followup?key={{ key }}"><i class="bi bi-send"></i> المتابعة</a>

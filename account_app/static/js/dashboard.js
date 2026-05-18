@@ -1,5 +1,8 @@
 // ── State ──────────────────────────────────────────────────────────────────
-const DASH_KEY        = new URLSearchParams(window.location.search).get('key') || '';
+const DASH_PARAMS     = new URLSearchParams(window.location.search);
+const DASH_KEY        = DASH_PARAMS.get('key') || '';
+const INITIAL_SENDER_ID = DASH_PARAMS.get('sender_id') || '';
+let initialSenderOpened = false;
 let currentSenderId   = null;
 let currentCustomer   = null;
 let allConversations  = [];
@@ -81,7 +84,9 @@ function toggleSidebar() {
   const sb = document.getElementById('sidebarPanel');
   const ov = document.getElementById('mobileOverlay');
   const cp = document.getElementById('controlPanel');
+  const drawer = document.getElementById('dashboardDrawer');
   cp.classList.remove('open');
+  drawer?.classList.remove('open');
   sb.classList.toggle('open');
   ov.classList.toggle('show', sb.classList.contains('open'));
 }
@@ -90,14 +95,35 @@ function toggleControl() {
   const cp = document.getElementById('controlPanel');
   const ov = document.getElementById('mobileOverlay');
   const sb = document.getElementById('sidebarPanel');
+  const drawer = document.getElementById('dashboardDrawer');
   sb.classList.remove('open');
+  drawer?.classList.remove('open');
   cp.classList.toggle('open');
   ov.classList.toggle('show', cp.classList.contains('open'));
+}
+
+function toggleDashboardDrawer() {
+  const drawer = document.getElementById('dashboardDrawer');
+  const ov = document.getElementById('mobileOverlay');
+  const sb = document.getElementById('sidebarPanel');
+  const cp = document.getElementById('controlPanel');
+  sb?.classList.remove('open');
+  cp?.classList.remove('open');
+  drawer?.classList.toggle('open');
+  ov?.classList.toggle('show', drawer?.classList.contains('open'));
+}
+
+function closeDashboardDrawer() {
+  document.getElementById('dashboardDrawer')?.classList.remove('open');
+  const sbOpen = document.getElementById('sidebarPanel')?.classList.contains('open');
+  const cpOpen = document.getElementById('controlPanel')?.classList.contains('open');
+  document.getElementById('mobileOverlay')?.classList.toggle('show', Boolean(sbOpen || cpOpen));
 }
 
 function closeAllPanels() {
   document.getElementById('sidebarPanel').classList.remove('open');
   document.getElementById('controlPanel').classList.remove('open');
+  document.getElementById('dashboardDrawer')?.classList.remove('open');
   document.getElementById('mobileOverlay').classList.remove('show');
 }
 
@@ -158,6 +184,13 @@ async function loadConversations(showSpinner = true) {
       });
     }
     renderConversations();
+    if (INITIAL_SENDER_ID && !initialSenderOpened) {
+      const exists = allConversations.some(c => c.sender_id === INITIAL_SENDER_ID);
+      if (exists) {
+        initialSenderOpened = true;
+        selectConversation(INITIAL_SENDER_ID);
+      }
+    }
   } catch (e) {
     if (showSpinner) showToast('فشل تحميل المحادثات', 'danger');
   }
