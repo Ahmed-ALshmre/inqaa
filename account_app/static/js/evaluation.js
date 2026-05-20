@@ -212,6 +212,68 @@ async function runDailyLearning() {
   if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تشغيل التحليل اليومي');
   await loadEvaluation();
 }
+async function triggerAiSelfAnalysis() {
+  const btn = document.getElementById('btnRunAiAnalysis');
+  const loading = document.getElementById('aiAnalysisLoading');
+  const results = document.getElementById('aiAnalysisResults');
+
+  if (btn) btn.disabled = true;
+  if (loading) loading.style.display = 'block';
+  if (results) results.style.display = 'none';
+
+  try {
+    const body = {
+      date_from: evaluationState?.date_from,
+      date_to: evaluationState?.date_to
+    };
+    const res = await fetch(adminApi('/api/evaluation/ai_self_analysis'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تشغيل التحليل الذاتي');
+
+    document.getElementById('purchaseReasonsText').textContent = data.purchase_reasons || 'لا توجد بيانات كافية.';
+    document.getElementById('nonPurchaseReasonsText').textContent = data.non_purchase_reasons || 'لا توجد بيانات كافية.';
+    document.getElementById('aiMistakesText').textContent = data.ai_mistakes_learnings || 'لا توجد بيانات كافية.';
+    document.getElementById('suggestedEditsTextarea').value = data.suggested_prompt_edits || '';
+
+    if (results) results.style.display = 'block';
+  } catch (err) {
+    alert('حدث خطأ أثناء إجراء التحليل: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (loading) loading.style.display = 'none';
+  }
+}
+
+async function applySuggestedEdits() {
+  const text = document.getElementById('suggestedEditsTextarea').value;
+  if (!text.trim()) {
+    alert('لا توجد تعديلات مقترحة لتطبيقها.');
+    return;
+  }
+
+  const btn = document.getElementById('btnApplyPromptEdits');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch(adminApi('/api/evaluation/apply_prompt_edits'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ suggested_prompt_edits: text })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'فشل تطبيق التعديلات');
+
+    alert(data.msg || 'تم تطبيق التعديلات بنجاح وتحديث التعليمات!');
+  } catch (err) {
+    alert('حدث خطأ أثناء تطبيق التعديلات: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('generateSuggestions')?.addEventListener('click', () => {

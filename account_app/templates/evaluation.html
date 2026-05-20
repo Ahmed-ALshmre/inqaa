@@ -23,6 +23,60 @@
 
 <section class="stats-grid admin-stats-grid" id="evaluationCards"></section>
 
+<section class="admin-panel" id="aiSelfLearningSection" style="border: 2px solid #5a4bda; background: #faf9ff; border-radius: 12px; box-shadow: 0 4px 12px rgba(90, 75, 218, 0.08); margin-bottom: 2rem;">
+  <div class="admin-section-head" style="border-bottom: 1px solid #e1dff7; padding-bottom: 1rem; margin-bottom: 1rem;">
+    <div>
+      <h2 style="color: #4c3fb3; display: flex; align-items: center; gap: 0.5rem; margin: 0;"><i class="bi bi-robot"></i> التحليل الذكي والدراسة الذاتية للذكاء الاصطناعي (AI Self-Learning)</h2>
+      <p style="margin: 5px 0 0 0; font-size: 0.9rem; color: #666;">يقوم الذكاء الاصطناعي بقراءة محادثات آخر 7 أيام، وتحديد أسباب الشراء وترك المحادثة، ودراسة أخطائه وتوليد تعديلات مقترحة لملف التعليمات.</p>
+    </div>
+    <div>
+      <button class="btn btn-primary" type="button" id="btnRunAiAnalysis" onclick="triggerAiSelfAnalysis()" style="background-color: #5a4bda; border-color: #5a4bda; font-weight: 500; padding: 0.5rem 1.2rem; border-radius: 6px; box-shadow: 0 2px 6px rgba(90, 75, 218, 0.3);">
+        <i class="bi bi-stars"></i> تحليل ودراسة آخر 7 أيام
+      </button>
+    </div>
+  </div>
+  
+  <!-- Spinner / Loading indicator -->
+  <div id="aiAnalysisLoading" style="display:none; text-align:center; padding: 2.5rem 1rem;">
+    <div class="spinner-border text-primary" role="status" style="color: #5a4bda !important; width: 3rem; height: 3rem;">
+      <span class="visually-hidden">جاري التحليل...</span>
+    </div>
+    <p style="margin-top: 1.2rem; font-weight: bold; color: #5a4bda; font-size: 1.1rem;">جاري قراءة المحادثات وتحليلها بواسطة الذكاء الاصطناعي... قد يستغرق ذلك دقيقة كاملة.</p>
+  </div>
+
+  <!-- Results Section -->
+  <div id="aiAnalysisResults" style="display:none;">
+    <div style="display: flex; gap: 1.2rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 280px; background: #fff; padding: 1.2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border-left: 5px solid #28a745; border-right: 1px solid #eee; border-top: 1px solid #eee; border-bottom: 1px solid #eee;">
+        <h4 style="color: #28a745; margin-top: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem; font-weight: bold;"><i class="bi bi-emoji-laughing"></i> لماذا يشتري الزبائن؟</h4>
+        <p id="purchaseReasonsText" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #333; margin: 0.5rem 0 0 0;"></p>
+      </div>
+      <div style="flex: 1; min-width: 280px; background: #fff; padding: 1.2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border-left: 5px solid #dc3545; border-right: 1px solid #eee; border-top: 1px solid #eee; border-bottom: 1px solid #eee;">
+        <h4 style="color: #dc3545; margin-top: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem; font-weight: bold;"><i class="bi bi-emoji-frown"></i> لماذا يتركون المحادثة؟</h4>
+        <p id="nonPurchaseReasonsText" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #333; margin: 0.5rem 0 0 0;"></p>
+      </div>
+    </div>
+
+    <div style="background: #fff; padding: 1.2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); margin-bottom: 1.5rem; border-left: 5px solid #ffc107; border-right: 1px solid #eee; border-top: 1px solid #eee; border-bottom: 1px solid #eee;">
+      <h4 style="color: #d39e00; margin-top: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem; font-weight: bold;"><i class="bi bi-bug"></i> أخطاء الذكاء الاصطناعي والدروس المستفادة</h4>
+      <p id="aiMistakesText" style="white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; color: #333; margin: 0.5rem 0 0 0;"></p>
+    </div>
+
+    <div style="background: #fff; padding: 1.2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border-left: 5px solid #5a4bda; border-right: 1px solid #eee; border-top: 1px solid #eee; border-bottom: 1px solid #eee;">
+      <h4 style="color: #5a4bda; margin-top: 0; font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem; font-weight: bold;"><i class="bi bi-pencil-square"></i> التعديلات والتعليمات الجديدة المقترحة للتحسين</h4>
+      <p style="font-size: 0.85rem; color: #666; margin: 0.2rem 0 0.8rem 0;">سيتم حفظ هذه التعليمات وتضمينها تلقائياً في ملف <code>instructions.txt</code> بمجرد الموافقة.</p>
+      <textarea id="suggestedEditsTextarea" class="form-control" rows="8" style="font-family: monospace; font-size: 0.9rem; direction: rtl; margin-bottom: 1.2rem; border-radius: 6px; border-color: #dcd9f5; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);"></textarea>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-top: 1px solid #eee; padding-top: 1rem;">
+        <span class="text-muted" style="font-size: 0.85rem;"><i class="bi bi-file-earmark-text"></i> تم بناء ملف التقرير: <code>last_7_days_analysis.txt</code></span>
+        <button class="btn btn-success" type="button" id="btnApplyPromptEdits" onclick="applySuggestedEdits()" style="background-color: #28a745; border-color: #28a745; font-weight: 500; padding: 0.5rem 1.5rem; border-radius: 6px; box-shadow: 0 2px 6px rgba(40, 167, 69, 0.3);">
+          <i class="bi bi-check-circle"></i> موافقة وتحديث التعليمات تلقائياً
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="admin-two-col">
   <div class="admin-panel">
     <h2>تحليل مراحل الزبائن</h2>

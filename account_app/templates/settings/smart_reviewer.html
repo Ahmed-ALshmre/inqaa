@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}المراجع الذكي للمحادثات{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">Smart AI Reviewer</p>
+    <h1>المراجع الذكي والمتابعة الديناميكية</h1>
+    <p>يقرأ الذكاء الاصطناعي محادثات الزبائن كل فترة معينة، يعطيهم علامات (Tags) تقييمية (مثل: مهتم، فضولي)، ويرسل لهم رسائل متابعة مخصصة ومبنية على سياق محادثاتهم بشكل ذكي وتلقائي.</p>
+  </div>
+</section>
+
+<section class="admin-panel">
+  <form class="admin-form" id="smartReviewerSettingsForm">
+    <label class="admin-switch mb-4">
+      <input class="form-check-input" type="checkbox" id="smartReviewerEnabled">
+      <span>تفعيل المراجع الذكي (AI Reviewer)</span>
+    </label>
+
+    <label class="mb-4">
+      <div class="fw-bold mb-1">وقت المراجعة الدورية (بالدقائق)</div>
+      <div class="text-muted small mb-2">كم دقيقة ينتظر النظام قبل فحص المحادثات الجديدة؟ (ننصح بـ 60 دقيقة). الزبون النشط يتم تجاهله حتى يسكت لمدة 15 دقيقة على الأقل.</div>
+      <input class="form-control" type="number" min="10" max="1440" id="smartReviewerInterval" placeholder="مثال: 60">
+    </label>
+
+    <div class="admin-actions-row">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> حفظ الإعدادات</button>
+    </div>
+
+    <div class="admin-status mt-3" id="smartReviewerSettingsStatus"></div>
+  </form>
+</section>
+
+<section class="admin-panel mt-3">
+  <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+    <div>
+      <h2 class="h6 mb-1">كيف تعمل هذه الميزة؟</h2>
+    </div>
+  </div>
+  <div class="admin-note mb-3">
+    <ul>
+      <li>بمجرد التفعيل، سيقوم السيرفر في الخلفية بجلب كل من راسلك ولم يتم الرد عليه بمتابعة.</li>
+      <li>يقوم السيرفر بتخطي أي شخص لا يزال يتحدث حالياً (يجب أن تمر 15 دقيقة على آخر رسالة له).</li>
+      <li>يقوم الذكاء الاصطناعي بقراءة كامل المحادثة وتحديد "علامة" له (مثال: اشترى، فضولي، يريد القياس).</li>
+      <li>يقرر الذكاء الاصطناعي ما إذا كان الزبون بحاجة لرسالة متابعة، ويقوم بصياغتها بشكل بشري 100٪ وإرسالها!</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/smart_reviewer_settings.js?v=1"></script>
+{% endblock %}

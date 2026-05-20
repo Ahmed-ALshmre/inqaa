@@ -8,6 +8,10 @@ let currentCustomer   = null;
 let allConversations  = [];
 let currentFilter     = 'all';
 let searchQuery       = '';
+let convLimit = 20;
+let convOffset = 0;
+let isLoadingMoreConv = false;
+let hasMoreConv = true;
 let pollConvTimer     = null;
 let pollMsgTimer      = null;
 let uploadedImageUrl  = null;
@@ -33,12 +37,18 @@ imageSound.loop      = false;
 // ── Auth Fetch ─────────────────────────────────────────────────────────────
 function apiFetch(url, opts = {}) {
   opts.headers = { ...(opts.headers || {}), 'X-Dashboard-Key': DASH_KEY };
+  if (!opts.method || opts.method.toUpperCase() === 'GET') {
+    const sep = url.includes('?') ? '&' : '?';
+    url = `${url}${sep}_t=${Date.now()}`;
+  }
   return fetch(url, opts);
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', unlockAudioOnce, { once: true });
+  const custEl = document.getElementById('customerList');
+  if (custEl) custEl.addEventListener('scroll', onCustomerListScroll);
   syncConversationFilterUI();
   loadConversations();
   loadStats();
@@ -71,7 +81,6 @@ async function installPWA() {
     const { outcome } = await _pwaDeferredPrompt.userChoice;
     if (outcome === 'accepted') showToast('سيتم التثبيت', 'success');
   } catch (e) {
-    console.warn('install prompt error', e);
   } finally {
     _pwaDeferredPrompt = null;
     const btn = document.getElementById('pwaInstallBtn');
@@ -128,19 +137,39 @@ function closeAllPanels() {
 }
 
 // ══ Conversations ══════════════════════════════════════════════════════════
-async function loadConversations(showSpinner = true) {
-  if (showSpinner) {
+async function loadConversations(showSpinner = true, isLoadMore = false) {
+  if (showSpinner && !isLoadMore) {
     document.getElementById('customerList').innerHTML =
       '<div class="text-center py-5" style="color:var(--text-muted)">' +
       '<div class="spinner-border spinner-border-sm mb-2"></div>' +
       '<div class="small">جاري التحميل...</div></div>';
   }
   try {
+    if (isLoadMore) isLoadingMoreConv = true;
+    
+    let fetchLimit = isLoadMore ? convLimit : Math.max(convLimit, allConversations.length);
+    let fetchOffset = isLoadMore ? convOffset + convLimit : 0;
+    
     const previousPending = new Map(allConversations.map(c => [c.sender_id, c.pending_reviews_count || 0]));
     const previousProblems = new Map(allConversations.map(c => [c.sender_id, c.problem_count || 0]));
-    const res  = await apiFetch('/api/conversations');
+    const res  = await apiFetch(`/api/conversations?limit=${fetchLimit}&offset=${fetchOffset}`);
     const data = await res.json();
-    allConversations = data.conversations || [];
+    
+    if (isLoadMore) {
+      const newConvs = data.conversations || [];
+      if (newConvs.length < convLimit) hasMoreConv = false;
+      
+      const existingIds = new Set(allConversations.map(c => c.sender_id));
+      for (const nc of newConvs) {
+         if (!existingIds.has(nc.sender_id)) allConversations.push(nc);
+      }
+      convOffset += convLimit;
+    } else {
+      allConversations = data.conversations || [];
+      // If we got exactly what we asked for, there might be more
+      if (allConversations.length < fetchLimit && allConversations.length > 0) hasMoreConv = false;
+      else if (allConversations.length === 0) hasMoreConv = false;
+    }
     if (!showSpinner) {
       for (const c of allConversations) {
         const prev = previousPending.get(c.sender_id) || pendingReviewsBySender[c.sender_id] || 0;
@@ -192,7 +221,13 @@ async function loadConversations(showSpinner = true) {
       }
     }
   } catch (e) {
-    if (showSpinner) showToast('فشل تحميل المحادثات', 'danger');
+    console.error("loadConversations error:", e);
+    if (showSpinner) {
+      showToast('فشل تحميل المحادثات', 'danger');
+      document.getElementById('customerList').innerHTML = `<div class="text-danger p-3 small text-start" dir="ltr" style="white-space:pre-wrap;">${e.stack || e.message || e}</div>`;
+    }
+  } finally {
+    if (isLoadMore) isLoadingMoreConv = false;
   }
 }
 
@@ -216,6 +251,16 @@ function setFilter(f, btn = null) {
 function filterCustomers() {
   searchQuery = document.getElementById('searchInput').value.toLowerCase();
   renderConversations();
+}
+
+function onCustomerListScroll() {
+  const el = document.getElementById('customerList');
+  if (!el) return;
+  if (el.scrollHeight - el.scrollTop <= el.clientHeight + 100) {
+    if (!isLoadingMoreConv && hasMoreConv) {
+      loadConversations(false, true);
+    }
+  }
 }
 
 function renderConversations() {
@@ -330,10 +375,12 @@ async function selectConversation(senderId) {
   if (linkedNames.length) {
     document.getElementById('linkedProductInfo').innerHTML =
       linkedNames.map((name, idx) =>
-        `<div class="fw-semibold">${esc(name)}</div>` +
-        `<small style="color:var(--text-muted)">${esc(linkedIds[idx] || '')}</small>`
+        `<div class="d-flex justify-content-between align-items-center mb-1">` +
+        `<div><div class="fw-semibold">${esc(name)}</div><small style="color:var(--text-muted)">${esc(linkedIds[idx] || '')}</small></div>` +
+        `<button class="btn btn-sm btn-outline-danger p-1" onclick="unlinkProduct('${esc(linkedIds[idx])}')" title="إلغاء الربط"><i class="bi bi-x"></i></button>` +
+        `</div>`
       ).join('<hr class="my-1" style="border-color:var(--border)">') +
-      `<small style="color:var(--text-muted)">` +
+      `<small style="color:var(--text-muted) d-block mt-1">` +
       (conv.ad_id ? ` | إعلان: ${esc(conv.ad_id)}` : '') +
       (conv.ref ? ` | Ref: ${esc(conv.ref)}` : '') + '</small>';
   } else {
@@ -380,7 +427,7 @@ async function loadMessages(senderId, scroll = true) {
     latestIncomingBySender[senderId] = Math.max(prevIncoming, latestIncoming);
     latestImageIdBySender[senderId] = Math.max(prevImage, latestIncomingImage);
     renderMessages(messages, scroll);
-  } catch (e) { console.error('loadMessages', e); }
+  } catch (e) {}
 }
 
 function renderMessages(msgs, scroll = true) {
@@ -625,19 +672,6 @@ async function hiAskAI() {
   try {
     await _hiSyncGenderIfChosen();
     await _hiSilentLinkIfChosen();
-    if (!currentConversationAIEnabled) {
-      const res = await apiFetch(`/api/conversations/${currentSenderId}/ai`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: true }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        currentConversationAIEnabled = true;
-        if (currentCustomer) currentCustomer.ai_enabled = 1;
-        renderConversationAIToggle();
-      }
-    }
     document.getElementById('messageInput').value = text;
     await askAI({
       text,
@@ -698,7 +732,6 @@ async function hiCloseReview() {
 
 async function refreshLinkedProductSync() {
   if (!currentSenderId) return;
-  await loadConversations(false);
   const conv = allConversations.find(c => c.sender_id === currentSenderId);
   if (!conv) return;
   const linkedNames = splitPipeList(conv.product_names || conv.product_name);
@@ -707,8 +740,10 @@ async function refreshLinkedProductSync() {
   if (linkedBox) {
     linkedBox.innerHTML = linkedNames.length
       ? linkedNames.map((name, idx) =>
-          `<div class="fw-semibold">${esc(name)}</div>` +
-          `<small style="color:var(--text-muted)">${esc(linkedIds[idx] || '')}</small>`
+          `<div class="d-flex justify-content-between align-items-center mb-1">` +
+          `<div><div class="fw-semibold">${esc(name)}</div><small style="color:var(--text-muted)">${esc(linkedIds[idx] || '')}</small></div>` +
+          `<button class="btn btn-sm btn-outline-danger p-1" onclick="unlinkProduct('${esc(linkedIds[idx])}')" title="إلغاء الربط"><i class="bi bi-x"></i></button>` +
+          `</div>`
         ).join('<hr class="my-1" style="border-color:var(--border)">')
       : '<span style="color:var(--text-muted)" class="small">لا يوجد منتج مرتبط</span>';
   }
@@ -786,7 +821,6 @@ async function sendMessage(text = null, imgUrl = null) {
       return true;
     } else {
       const detail = data.warning || data.error || 'ManyChat لم يؤكد الإرسال';
-      console.warn('[ManualSend] failure', data);
       showToast('فشل الإرسال: ' + detail, 'danger');
       return false;
     }
@@ -801,7 +835,6 @@ async function testManyChat() {
     if (data.ok) {
       showToast(`ManyChat OK — ${data.page_name || data.page_id || 'page connected'}`, 'success');
     } else {
-      console.warn('[ManyChatTest]', data);
       showToast('ManyChat غير صالح: ' + (data.message || data.reason || data.status || 'unknown'), 'danger');
     }
   } catch (e) { showToast('فشل اختبار ManyChat: ' + e.message, 'danger'); }
@@ -877,8 +910,8 @@ async function sendAIReply() {
     const res = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      currentConversationAIEnabled = true;
-      if (currentCustomer) currentCustomer.ai_enabled = 1;
+      currentConversationAIEnabled = data.ai_enabled !== 0 && data.ai_enabled !== false;
+      if (currentCustomer) currentCustomer.ai_enabled = currentConversationAIEnabled ? 1 : 0;
       renderConversationAIToggle();
       hideHumanIntervention();
       await loadConversations(false);
@@ -1027,7 +1060,6 @@ async function setCustomerGenderQuick(gender) {
     setCustomerGenderUI(r.gender || '');
     return true;
   } catch (e) {
-    console.error('setCustomerGenderQuick', e);
     return false;
   }
 }
@@ -1044,7 +1076,7 @@ async function loadProducts() {
     document.getElementById('productSelect').innerHTML  = '<option value="">— اختر منتجاً —</option>' + opts;
     document.getElementById('orderProduct').innerHTML   = '<option value="">— اختر —</option>' +
       allProducts.map(p => `<option value="${esc(p.product_id)}">${esc(p.product_name)}</option>`).join('');
-  } catch (e) { console.error('loadProducts', e); }
+  } catch (e) {}
 }
 
 let _isLinking = false;
@@ -1069,6 +1101,22 @@ async function linkProduct() {
     if (data.ok) {
       showToast('تم ربط المنتج بدون إرسال أي تفاصيل للزبون', 'success');
       await loadMessages(currentSenderId);
+      const conv = allConversations.find(c => c.sender_id === currentSenderId);
+      if (conv) {
+         let pIds = conv.product_ids ? conv.product_ids.split('||') : [];
+         let pNames = conv.product_names ? conv.product_names.split('||') : [];
+         for (const pid of productIds) {
+             if (!pIds.includes(pid)) {
+                 const p = allProducts.find(x => x.product_id === pid);
+                 if (p) {
+                     pIds.push(pid);
+                     pNames.push(p.product_name);
+                 }
+             }
+         }
+         conv.product_ids = pIds.join('||');
+         conv.product_names = pNames.join('||');
+      }
       await refreshLinkedProductSync();
     } else showToast('فشل ربط المنتج', 'danger');
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
@@ -1100,7 +1148,7 @@ async function loadCustomerInstructions(senderId) {
     const data = await res.json();
     document.getElementById('aiInstructions').value  = data.instructions  || '';
     document.getElementById('applyToAll').checked    = data.apply_to_all || false;
-  } catch (e) { console.error('loadInstructions', e); }
+  } catch (e) {}
 }
 
 async function saveInstructions() {
@@ -1135,7 +1183,7 @@ async function loadStats() {
     renderTopProducts(data.top_products || []);
     globalAIEnabled = data.ai_enabled !== false;
     renderAIToggle();
-  } catch (e) { console.error('loadStats', e); }
+  } catch (e) {}
 }
 
 async function openStatsModal() {
@@ -1500,4 +1548,38 @@ function showToast(msg, type = 'info') {
   const t = new bootstrap.Toast(el, { delay: 4000 });
   t.show();
   el.addEventListener('hidden.bs.toast', () => el.remove());
+}
+
+
+async function unlinkProduct(productId) {
+  if (!currentSenderId) return;
+  if (!confirm('هل أنت متأكد من إلغاء ربط هذا المنتج؟')) return;
+  try {
+    const res = await apiFetch(`/api/conversations/${currentSenderId}/unlink_product`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('تم إلغاء ربط المنتج', 'success');
+      const conv = allConversations.find(c => c.sender_id === currentSenderId);
+      if (conv && conv.product_ids) {
+         let pIds = conv.product_ids.split('||');
+         let pNames = (conv.product_names || '').split('||');
+         const idx = pIds.indexOf(productId);
+         if (idx > -1) {
+            pIds.splice(idx, 1);
+            pNames.splice(idx, 1);
+            conv.product_ids = pIds.join('||');
+            conv.product_names = pNames.join('||');
+         }
+      }
+      await refreshLinkedProductSync();
+    } else {
+      showToast('فشل إلغاء الربط', 'danger');
+    }
+  } catch (e) {
+    showToast('خطأ: ' + e.message, 'danger');
+  }
 }

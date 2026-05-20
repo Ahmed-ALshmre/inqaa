@@ -11,7 +11,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       Promise.all(APP_SHELL.map((url) =>
-        cache.add(url).catch((err) => console.warn('SW cache miss:', url, err))
+        cache.add(url).catch(() => {})
       ))
     ).then(() => self.skipWaiting())
   );

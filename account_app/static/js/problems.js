@@ -110,7 +110,6 @@ async function updateProblemStatus(problemId, status) {
     if (!res.ok) throw new Error('فشل تحديث الحالة');
     await loadProblems();
   } catch (err) {
-    console.error(err);
     alert('تعذر تحديث حالة المشكلة.');
   }
 }

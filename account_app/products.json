@@ -1,1 +1,68 @@
-[]
+[
+  {
+    "product_id": "P001",
+    "ref": "",
+    "ad_id": "",
+    "product_name": "سوت ملكي",
+    "keywords": "",
+    "category": "",
+    "description": "",
+    "visual_description": "يظهر في الصور طقم نسائي سادة بقطعتين متناسقتين. القميص طويل يصل أسفل الورك بياقة دائرية صغيرة وأزرار، والبنطلون عريض ونازل. الطقم معروض بلونين في الصور:\n\nاللون الأسود الملكي والأنيق.\n\nاللون الأزرق الفاتح (النيلي/الرصاصي المائل للأزرق) الهادئ والمميز.",
+    "price": "18000",
+    "offer": "",
+    "colors": "الأسود الأزرق الفاتح",
+    "sizes": "من 50 الى 100 كيلو",
+    "stock": "متوفر",
+    "delivery": "",
+    "image_url": [
+      "https://scontent.fnjf32-1.fna.fbcdn.net/v/t39.30808-6/687037176_122197157786578440_950365049142305081_n.jpg?_nc_cat=109&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeEUNeZsR9V9ZOTT10PY4k7J8PEqC7iIEafw8SoLuIgRp3dWPtTspMIB30tnq8wN_IH-Wjs23A6xznSTiUEHEcN2&_nc_ohc=exMrOxsgVIkQ7kNvwH8DTYp&_nc_oc=AdpfhpKyJdNfCVeRL9s2AQldyDNoXx4qiPpZiBPFOQbsMVgSfEhHfKPYghtA0XQzz-c&_nc_zt=23&_nc_ht=scontent.fnjf32-1.fna&_nc_gid=0iXlw65nCm3bNUo5hbkbdw&_nc_ss=7b2a8&oh=00_Af7SkoMykrhUkOttX1zkCJRcHLEn8E4z5MJTUB5ibfjYuw&oe=6A0BADAB",
+      "https://scontent.fnjf32-1.fna.fbcdn.net/v/t39.30808-6/687041338_122197217084578440_526661720720688228_n.jpg?_nc_cat=102&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeF2nj_sIYPTJETraziBGh3D_MjJTlT2x1P8yMlOVPbHU1cyYvZCYr_WsovXagGrylpKUDiMPH7NG87k8biOBeUY&_nc_ohc=zlWpKjr0k8EQ7kNvwFfe-sl&_nc_oc=AdpW3M5dE9myBErEcJbsBUA8Zv3PfBavSZmbtiNntXJcDUA6-EgAu0oi8_8ZraAQCZc&_nc_zt=23&_nc_ht=scontent.fnjf32-1.fna&_nc_gid=d-aNG50wdr__Y7OlcIujgg&_nc_ss=7b2a8&oh=00_Af6EguYUaVVyj4eyKqHWGctpBhqpPixg52HaKtwk6cKJsA&oe=6A0B9A7F"
+    ],
+    "image_embedding": "",
+    "status": "active",
+    "notes": ""
+  },
+  {
+    "product_id": "P002",
+    "ref": "",
+    "ad_id": "",
+    "product_name": "سوت ياخة",
+    "keywords": "",
+    "category": "",
+    "description": "سيت نسائي محتشم بلمسة بنوتية نازكة جداً، مكون من قطعتين (قميص وبنطرون عريض). القميص يتميز بياقة دائرية كلاسيكية (بيتر بان) وأزرار أمامية ناعمة، مع قصة مزمومة من الخصر تعطي شكل \"كلوش\" مريح يخفي تفاصيل الجسم، وأكمام بزم (لاستيك) لسهولة الحركة والوضوء. البنطرون بقصة عريضة (وايد ليگ) تناسب الجميع. القطعة مصنوعة من قماش تركي درجة أولى مريح وعملي، ومناسب جداً للدوام والطلعات السريعة.",
+    "visual_description": "يظهر في الصورة طقم نسائي أنيق باللون الأسود الملكي. القميص يتميز بقصة الـ \"بيبلوم\" (نازل بكلوش من الخصر) وياقة مطوية، وتبرز فيه أزرار بيضاء تضيف لمسة جمالية للقطعة. البنطلون واسع ومريح ومستقيم، منسق بطريقة عصرية وعملية.",
+    "price": "20000",
+    "offer": "",
+    "colors": "اسود",
+    "sizes": "من 50 الى 100 كيلو",
+    "stock": "متوفر",
+    "delivery": "",
+    "image_url": "https://scontent.fnjf32-1.fna.fbcdn.net/v/t39.30808-6/689472882_122197155272578440_8388078162202772073_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFdbCV4iS12ZDZs8orAF4r52C4zak-v_WrYLjNqT6_9arbAxbABPDH0H0eRum22bLsQNonywKdTA1KAVc1Gr6LD&_nc_ohc=H1tl6gXcW14Q7kNvwGR9Hhk&_nc_oc=Adq1HUql6WELU_SigcIkHGYQacJykZ6OIFi7eq9nG8cx6DN1Vtctkx-XGyj29uVOdaM&_nc_zt=23&_nc_ht=scontent.fnjf32-1.fna&_nc_gid=KVbrCKfZrfdlVjqizayD9w&_nc_ss=7b2a8&oh=00_Af4Qlx4FtjrV-9VNWQTgkjU_WGpkxSr8a-iOXvqJUzO6uA&oe=6A090386",
+    "image_embedding": "",
+    "status": "active",
+    "notes": ""
+  },
+  {
+    "product_id": "P003",
+    "ref": "",
+    "ad_id": "",
+    "product_name": "عباء ام السوتاج",
+    "keywords": "عباية\n    عباية سوتاج,\n   عباية سوداء,\n    عباية زيتي,\n    عباية خليجية,\n    عباية محتشمة,\n    عباية تطريز,",
+    "category": "ملابس نساء",
+    "description": "عباية أم السوتاج بتصميم راقي ومحتشم ✨ قماش ناعم وانسيابي مع تطريز فاخر على الأكمام يضيف لمسة فخامة هادئة. متوفرة بلونين مميزين الأسود الفاحم والزيتي المطفي، مناسبة للخروج اليومي والمناسبات. قياسات واسعة تناسب من 50 إلى 120 كيلو",
+    "visual_description": "موديل ترتدي عباية طويلة واسعة بتصميم سادة مع تطريز سوتاج فاخر على الأكمام، القماش انسيابي ومرتب، التصوير بإضاءة طبيعية هادئة وخلفية فخمة تعطي إحساس بالأناقة والرقي.",
+    "price": "20000",
+    "offer": "",
+    "colors": "زيتوني فاتح , اسود",
+    "sizes": "من 50 الى 100 كيلو",
+    "stock": "متوفر",
+    "delivery": "",
+    "image_url": [
+      "https://scontent.fnjf32-1.fna.fbcdn.net/v/t39.30808-6/700482795_122198169074578440_6383304396525421479_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeFRTYKYp4rSHT1bN4NfpIhF3qZGVHbU2B3epkZUdtTYHZ_AN4qxg1GRIJSrcu20sHLxQw5QnZkEetllRE-ad7y3&_nc_ohc=ZqRK-hfAmKQQ7kNvwFcqmch&_nc_oc=AdquA4KBXHZMEBXwaYkqEbxZ_5Bu6AiHjAETX4s08zzhcWIpAqTIvDwwfkyCdbbJgcI&_nc_zt=23&_nc_ht=scontent.fnjf32-1.fna&_nc_gid=_hH4fk90joobokcJ2rlndQ&_nc_ss=7b2a8&oh=00_Af74Ecj__yCi3hMVfhXuJG0gV33PBkvJZrYm-qpLbNqrKg&oe=6A0E5192",
+      "https://scontent.fnjf32-1.fna.fbcdn.net/v/t39.30808-6/698979107_122198168810578440_4820680408444966476_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeGuAyZIdPQZRKmVfBEJtN1pjW5fmURFe7-Nbl-ZREV7vz31lqcXoczdkCndHAynrkB7eeQSdpg_TALAZvGocCdP&_nc_ohc=p8SGkzDuRsUQ7kNvwGtBMt4&_nc_oc=AdrkI71zHxfquWUK6fFog0Qb3bH0Wp8gRWGy9VbV3VaTsnu57vGD868QqSxaL2mwKUQ&_nc_zt=23&_nc_ht=scontent.fnjf32-1.fna&_nc_gid=6rG2h6ecqDo2jHlRtSp7_g&_nc_ss=7b2a8&oh=00_Af4RPu_cDPaLYNyE5b32ZFWMKUluQuPHFgDKo-BbcsifMA&oe=6A0E53FB"
+    ],
+    "image_embedding": "",
+    "status": "active",
+    "notes": "قماش تركي درجة اولى"
+  }
+]

@@ -65,10 +65,24 @@
     </section>
 
     <section class="orders-toolbar">
-      <div class="input-group input-group-sm">
-        <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
-        <input type="text" class="form-control border-0" id="orderSearch"
-          placeholder="بحث بالاسم، الهاتف، المنتج، المحافظة..." oninput="renderOrders()">
+      <div class="row g-2 align-items-center">
+        <div class="col-md-6">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
+            <input type="text" class="form-control border-0" id="orderSearch"
+              placeholder="بحث بالاسم، الهاتف، المنتج، المحافظة..." oninput="renderOrders()">
+          </div>
+        </div>
+        <div class="col-md-6 d-flex gap-2">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text border-0 bg-transparent text-white">من:</span>
+            <input type="date" class="form-control border-0" id="orderDateFrom" onchange="loadOrders()">
+          </div>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text border-0 bg-transparent text-white">إلى:</span>
+            <input type="date" class="form-control border-0" id="orderDateTo" onchange="loadOrders()">
+          </div>
+        </div>
       </div>
     </section>
 

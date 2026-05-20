@@ -16,6 +16,9 @@
   <a class="admin-link-card" href="/settings/instructions?key={{ request.args.get('key','') }}">
     <i class="bi bi-sliders2-vertical"></i><h2>تعليمات AI</h2><p>تعديل instructions.txt وملخص المنتجات وقواعد المنع ودليل البيع.</p>
   </a>
+  <a class="admin-link-card" href="/evaluation?key={{ request.args.get('key','') }}#aiSelfLearningSection" style="border: 1px dashed #5a4bda;">
+    <i class="bi bi-stars" style="color: #5a4bda;"></i><h2>التعلم الذاتي للـ AI</h2><p>تحليل محادثات آخر 7 أيام ودراسة أخطائه وبناء تقارير وتحديث تعليماتك تلقائياً.</p>
+  </a>
   <a class="admin-link-card" href="/settings/auto-product?key={{ request.args.get('key','') }}">
     <i class="bi bi-magic"></i><h2>المنتج التلقائي</h2><p>تفعيل المنتج الافتراضي واختيار المنتج.</p>
   </a>
@@ -23,7 +26,10 @@
     <i class="bi bi-images"></i><h2>صور الكتالوج</h2><p>رفع أكثر من صورة للكتالوج وحذف الصور التي لا تريد إرسالها للـ AI.</p>
   </a>
   <a class="admin-link-card" href="/settings/followup?key={{ request.args.get('key','') }}">
-    <i class="bi bi-send"></i><h2>المتابعة التلقائية</h2><p>تشغيل أو إيقاف المتابعات وضبط حدود الإرسال.</p>
+    <i class="bi bi-clock-history"></i><h2>المتابعات</h2><p>إعدادات المتابعة التلقائية للزبائن المتأخرين.</p>
+  </a>
+  <a class="admin-link-card" href="/settings/smart-reviewer?key={{ request.args.get('key','') }}" style="border: 1px dashed #e83e8c;">
+    <i class="bi bi-robot" style="color: #e83e8c;"></i><h2>المراجع الذكي والمتابعة الديناميكية</h2><p>يقوم الذكاء الاصطناعي بقراءة محادثات آخر ساعة وتحديد علامة للزبون وإرسال متابعات مخصصة.</p>
   </a>
   <a class="admin-link-card" href="/settings/channels?key={{ request.args.get('key','') }}">
     <i class="bi bi-broadcast"></i><h2>قنوات التواصل</h2><p>ManyChat وTelegram وحالة الروابط.</p>

@@ -8,25 +8,56 @@ async function getJSON(path, options = {}) {
   return data;
 }
 
+const DEFAULT_AI_MODEL_OPTIONS = [
+  'deepseek/deepseek-chat-v3.1',
+  'google/gemini-2.5-flash',
+  'openai/gpt-5-mini',
+  'google/gemini-3.1-pro-preview',
+  'google/gemini-3-flash-preview'
+];
+
+function setModelSelectValue(id, value, options) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const selected = value || '';
+  const choices = Array.from(new Set([...(options || DEFAULT_AI_MODEL_OPTIONS), selected].filter(Boolean)));
+  el.innerHTML = choices.map((model) => `<option value="${adminEsc(model)}">${adminEsc(model)}</option>`).join('');
+  el.value = selected || choices[0] || '';
+}
+
 async function initAISettingsPage() {
   const data = await getJSON('/api/settings/ai');
-  document.getElementById('aiEnabled').checked = !!data.ai_enabled;
-  document.getElementById('mainModel').textContent = data.main_model || '-';
-  document.getElementById('improveModel').textContent = data.improve_model || '-';
-  document.getElementById('checkerState').textContent = data.checker_enabled ? data.checker_model : 'متوقف';
-  document.getElementById('openrouterState').textContent = data.openrouter_key_present ? 'موجود' : 'غير مضبوط';
-  document.getElementById('aiSettingsForm').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    try {
-      await getJSON('/api/settings/ai', {
-        method: 'POST',
-        body: JSON.stringify({ enabled: document.getElementById('aiEnabled').checked })
-      });
-      setAdminStatus('aiSettingsStatus', 'تم الحفظ');
-    } catch (err) {
-      setAdminStatus('aiSettingsStatus', err.message, false);
-    }
-  });
+  const modelOptions = data.model_options || DEFAULT_AI_MODEL_OPTIONS;
+  
+  const aiEnabledEl = document.getElementById('aiEnabled');
+  if (aiEnabledEl) aiEnabledEl.checked = !!data.ai_enabled;
+  
+  const checkerStateEl = document.getElementById('checkerState');
+  if (checkerStateEl) checkerStateEl.textContent = data.checker_enabled ? data.checker_model : 'متوقف';
+  
+  const openrouterStateEl = document.getElementById('openrouterState');
+  if (openrouterStateEl) openrouterStateEl.textContent = data.openrouter_key_present ? 'موجود' : 'غير مضبوط';
+  
+  setModelSelectValue('mainModelInput', data.main_model, modelOptions);
+  
+  const formEl = document.getElementById('aiSettingsForm');
+  if (formEl) {
+    formEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        await getJSON('/api/settings/ai', {
+          method: 'POST',
+          body: JSON.stringify({
+            enabled: document.getElementById('aiEnabled').checked,
+            main_model: document.getElementById('mainModelInput').value
+          })
+        });
+        setAdminStatus('aiSettingsStatus', 'تم الحفظ');
+      } catch (err) {
+        setAdminStatus('aiSettingsStatus', err.message, false);
+      }
+    });
+  }
 }
 
 async function initAutoProductPage() {
@@ -68,6 +99,7 @@ async function initAutoProductPage() {
 
 function renderSelectedAutoProduct(product) {
   const el = document.getElementById('autoProductCurrent');
+  if (!el) return;
   if (!product) {
     el.textContent = 'لا يوجد منتج محدد.';
     return;
@@ -97,6 +129,7 @@ async function initStoreSettingsPage() {
   const data = await getJSON('/api/settings/store');
   document.getElementById('storeName').value = data.name || '';
   document.getElementById('storePhone').value = data.phone || '';
+  document.getElementById('storeDescription').value = data.description || '';
   document.getElementById('deliveryPolicy').value = data.delivery_policy || '';
   document.getElementById('storeProvinces').value = data.provinces || '';
   document.getElementById('inspectionMessage').value = data.inspection_message || '';
@@ -108,6 +141,7 @@ async function initStoreSettingsPage() {
         body: JSON.stringify({
           name: document.getElementById('storeName').value,
           phone: document.getElementById('storePhone').value,
+          description: document.getElementById('storeDescription').value,
           delivery_policy: document.getElementById('deliveryPolicy').value,
           provinces: document.getElementById('storeProvinces').value,
           inspection_message: document.getElementById('inspectionMessage').value
@@ -170,14 +204,11 @@ async function clearBrowserCacheAndReload() {
     try {
       sessionStorage.clear();
       localStorage.clear();
-    } catch (err) {
-      console.warn('Storage clear failed:', err);
-    }
+    } catch (err) {}
     const url = new URL(window.location.href);
     url.searchParams.set('_refresh', Date.now().toString());
     window.location.href = url.toString();
   } catch (error) {
-    console.error('Cache clear failed:', error);
     window.location.reload();
   }
 }

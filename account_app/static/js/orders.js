@@ -79,7 +79,13 @@ async function loadOrders() {
         <div class="small">جاري تحميل الطلبات...</div>
       </td>
     </tr>`;
-  const res = await fetch(orderApi('/api/orders'));
+  const from = document.getElementById('orderDateFrom')?.value || '';
+  const to = document.getElementById('orderDateTo')?.value || '';
+  let url = '/api/orders?';
+  if (from) url += `date_from=${from}&`;
+  if (to) url += `date_to=${to}&`;
+  
+  const res = await fetch(orderApi(url));
   if (!res.ok) {
     body.innerHTML = `<tr><td colspan="10" class="text-center py-5 text-danger">فشل تحميل الطلبات</td></tr>`;
     return;
@@ -222,6 +228,14 @@ async function resendOrderTelegram(orderId, btn) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date();
+  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+  const todayStr = today.toISOString().split('T')[0];
+  const df = document.getElementById('orderDateFrom');
+  const dt = document.getElementById('orderDateTo');
+  if (df) df.value = todayStr;
+  if (dt) dt.value = todayStr;
+
   document.getElementById('orderEditForm')?.addEventListener('submit', saveEditedOrder);
   loadOrders();
 });
