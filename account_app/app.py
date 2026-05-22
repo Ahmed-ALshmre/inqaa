@@ -3606,19 +3606,38 @@ def _strip_arabic_prefix(word):
 
 def _text_match_product(text, products):
     text_lower = text.lower()
-    raw_words = [w for w in re.split(r"\s+", text_lower) if len(w) > 1]
-    # أضف النسخة بدون أداة التعريف لكل كلمة
-    words = set(raw_words) | {_strip_arabic_prefix(w) for w in raw_words}
+    raw_words = [w for w in re.split(r"\s+", text_lower) if len(w) > 2]
+    # الكلمات الشائعة التي يجب تجاهلها لمنع الربط العشوائي للمنتجات
+    stop_words = {"شنو", "شكد", "اريد", "هذا", "هذي", "عليكم", "السلام", "مرحبا", "ممكن", "عيني", "قلبي", "حبيبتي", "توصيل", "بغداد", "محافظات", "شلون", "شلونك", "شلونكم", "بشكد", "بيش", "سعر", "السعر", "عندكم", "عندج", "موجود", "موجودة", "يمكم", "هالمنتج", "هالقطعة", "القطعة", "قطعة"}
+    words = set()
+    for w in raw_words:
+        if w not in stop_words:
+            words.add(w)
+            stripped = _strip_arabic_prefix(w)
+            if stripped not in stop_words and len(stripped) > 2:
+                words.add(stripped)
+
     best_product, best_score = None, 0
     for p in products:
-        haystack = " ".join(filter(None, [
+        # نبحث فقط في الاسم والكلمات الدلالية لتجنب المطابقات الخاطئة من الوصف
+        haystack_str = " ".join(filter(None, [
             p.get("product_name", ""),
             p.get("keywords", ""),
-            p.get("description", ""),
         ])).lower()
-        score = sum(1 for w in words if w in haystack and len(w) > 1)
+        haystack_raw = [w for w in re.split(r"[\s,]+", haystack_str) if len(w) > 2]
+        haystack_words = set(haystack_raw) | {_strip_arabic_prefix(w) for w in haystack_raw}
+        
+        # يجب أن تتطابق الكلمة تماماً مع كلمة في المنتج (ليس مجرد جزء من نص)
+        score = sum(1 for w in words if w in haystack_words)
+        
+        # نعطي وزناً أكبر إذا تم ذكر اسم المنتج كاملاً
+        name = p.get("product_name", "").strip().lower()
+        if name and name in text_lower:
+            score += 5
+            
         if score > best_score:
             best_score, best_product = score, p
+            
     return best_product if best_score > 0 else None
 
 
