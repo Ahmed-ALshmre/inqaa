@@ -433,6 +433,20 @@ DEFAULT_CATALOG_SEARCH_CONTEXT_PROMPT = """[نتائج بحث المنتجات �
 - إذا الزبون لم يطلب صراحةً عرض موديلات، لا تعرض أي شيء — فقط تابع الحوار.
 - إذا الزبون طلب صراحةً ('ورّيني'، 'عرضي'، 'شنو عندكم')، اقترح 1-2 موديل بأسلوب طبيعي محادثاتي قصير.
 {search_products_json}"""
+SALES_RETENTION_GUIDE = """[قواعد المحافظة على الزبون وزيادة البيع]
+- اقرأ آخر رسائل الزبون قبل الرد، ولا تعامل السكوت كرفض مباشر.
+- الهدف من كل رد هو خطوة واحدة للأمام: توضيح نقص، إزالة تردد، أو طلب بيانات الحجز.
+- اسأل سؤالاً واحداً فقط في نهاية الرد، ويجب أن يكون السؤال مرتبطاً بسياق المحادثة.
+- إذا الزبون متردد بالسعر: اطمئنه بالفحص عند الاستلام واسأله هل يريد تثبيت القطعة قبل النفاد.
+- إذا الزبون توقف بعد سؤال عن المقاس أو اللون: ذكّره بالنقطة التي توقف عندها واسأله عن الاختيار الناقص فقط.
+- إذا الزبون أرسل صورة ولم يرد بعدها: قل إن الصورة وصلت وأنك تستطيع التأكد من الموديل، واسأل عن القياس أو اللون.
+- إذا الزبون طلب حجزاً ولم يكمل البيانات: اطلب فقط البيانات الناقصة: الموبايل، المحافظة، العنوان.
+- لا ترسل متابعة إذا كان آخر كلام الزبون رفضاً واضحاً أو طلب إيقاف أو قال إنه اشترى من مكان آخر.
+- لا تستخدم ضغطاً مبالغاً؛ استخدم ندرة لطيفة فقط إذا كانت مناسبة مثل: أخليه محجوز لك؟"""
+
+FOLLOWUP_REVIEW_OUTPUT_PROMPT = """Return JSON only:
+{"silent_reason":"price_hesitation|missing_info|waiting_choice|image_sent|general_interest|after_order|rejection|unknown","risk_level":"low|medium|high","reply":"short Iraqi Arabic follow-up"}"""
+
 AI_MODEL_OPTIONS = [
     "deepseek/deepseek-chat-v3.1",
     "google/gemini-2.5-flash",
@@ -1370,6 +1384,9 @@ def schedule_followup_if_needed(db, sender_id, stage="conversation", product=Non
     scheduled_at = (datetime.now(BAGHDAD_TZ) + timedelta(minutes=max(1, int(delay)))).isoformat()
     now = now_baghdad_iso()
     message = build_followup_message(db, sender_id, stage, product)
+    if not message:
+        print(f"[FollowUp] No suitable message generated for {sender_id}; not scheduling.", flush=True)
+        return None
     cur = db.execute(
         """INSERT INTO followups
            (sender_id, stage, message_text, status, scheduled_at, created_at, meta_json)
@@ -1500,6 +1517,21 @@ def send_due_followups(db=None, limit=25):
     skipped = 0
     for row in rows:
         sender_id = row["sender_id"]
+        latest_incoming = _latest_incoming_message(db, sender_id)
+        if latest_incoming and str(latest_incoming["created_at"] or "") > str(row["created_at"] or ""):
+            db.execute(
+                "UPDATE followups SET status='cancelled', sent_at=?, meta_json=COALESCE(meta_json, '') || ? WHERE id=?",
+                (now, "\ncustomer_replied_before_followup", row["id"]),
+            )
+            skipped += 1
+            continue
+        if settings["stop_on_rejection"] and latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
+            db.execute(
+                "UPDATE followups SET status='cancelled', sent_at=?, meta_json=COALESCE(meta_json, '') || ? WHERE id=?",
+                (now, "\ncustomer_rejection_detected", row["id"]),
+            )
+            skipped += 1
+            continue
         if settings["stop_on_order"]:
             order = db.execute(
                 "SELECT id FROM orders WHERE sender_id=? AND created_at >= ? ORDER BY id DESC LIMIT 1",
@@ -2398,6 +2430,138 @@ def build_safe_fallback_reply(matched_product, customer_text=""):
         if product and product.get("product_name"):
             return f"حبيت أتابع وياج بخصوص {product.get('product_name')}، تحبين أكمل الحجز؟"
         return "حبيت أتابع وياج، تحبين أكمل الحجز؟"
+
+
+CUSTOMER_REJECTION_TERMS = (
+    "ما اريد",
+    "ما اريدها",
+    "لا اريد",
+    "لا اريدها",
+    "بطلت",
+    "خليها",
+    "الغاء",
+    "إلغاء",
+    "مو هسه",
+    "مو محتاج",
+    "اشتريت",
+    "اخذت",
+    "لا تراسل",
+    "لا ترسل",
+    "وقف",
+)
+
+
+def _looks_like_customer_rejection(text):
+    text = str(text or "").strip().lower()
+    if not text:
+        return False
+    return any(term in text for term in CUSTOMER_REJECTION_TERMS)
+
+
+def _recent_conversation_lines(db, sender_id, limit=12):
+    try:
+        rows = db.execute(
+            """SELECT direction, message_type, text, created_at
+               FROM messages
+               WHERE sender_id=?
+               ORDER BY id DESC
+               LIMIT ?""",
+            (sender_id, int(limit)),
+        ).fetchall()
+    except Exception:
+        return []
+
+    lines = []
+    for row in reversed(rows):
+        role = "Customer" if row["direction"] == "incoming" else "Assistant"
+        content = (row["text"] or "").strip() or f"[{row['message_type'] or 'message'}]"
+        created_at = str(row["created_at"] or "")[:16]
+        lines.append(f"{created_at} | {role}: {content}")
+    return lines
+
+
+def _latest_incoming_message(db, sender_id):
+    try:
+        return db.execute(
+            """SELECT text, created_at
+               FROM messages
+               WHERE sender_id=? AND direction='incoming'
+               ORDER BY id DESC
+               LIMIT 1""",
+            (sender_id,),
+        ).fetchone()
+    except Exception:
+        return None
+
+
+def _followup_fallback_message(stage, product=None):
+    product_name = (product or {}).get("product_name") or "الموديل"
+    if stage in {"price", "asked_price"}:
+        return f"حبيت أتابع وياك بخصوص {product_name}، تحب أثبته لك قبل ما يخلص؟"
+    if stage in {"availability", "asked_availability"}:
+        return f"بعدك مهتم بخصوص {product_name}؟ أقدر أتأكد لك من القياس وأثبته إذا يناسبك."
+    if stage in {"order", "waiting_for_customer_info"}:
+        return "باقي بس الموبايل والمحافظة والعنوان حتى أثبت الحجز، تحب أكمله لك؟"
+    return f"حبيت أرجع لك بخصوص {product_name}، تحب أكمل وياك ونثبته؟"
+
+
+def generate_ai_followup_message(db, sender_id, stage, product=None):
+    """Generate a context-aware sales follow-up for a customer who stopped replying."""
+    latest_incoming = _latest_incoming_message(db, sender_id)
+    if latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
+        return None
+
+    product_name = (product or {}).get("product_name") or "غير محدد"
+    transcript = "\n".join(_recent_conversation_lines(db, sender_id, limit=14))
+    if not transcript:
+        return _followup_fallback_message(stage, product)
+
+    if not OPENROUTER_KEY:
+        return _followup_fallback_message(stage, product)
+
+    system_prompt = (
+        f"{render_setting_template(db, 'prompt_followup_system', DEFAULT_FOLLOWUP_SYSTEM_PROMPT)}\n\n"
+        f"{SALES_RETENTION_GUIDE}\n\n"
+        "اكتب رسالة متابعة لا تشعر الزبون بالملاحقة. الرسالة قصيرة، مخصصة، وباللهجة العراقية.\n"
+        "ممنوع ذكر اسم الزبون، وممنوع تكرار تفاصيل المنتج إلا إذا كانت مطلوبة في السياق.\n"
+        "إذا ظهر رفض واضح أو عدم رغبة، اجعل reply فارغاً.\n"
+        f"{FOLLOWUP_REVIEW_OUTPUT_PROMPT}"
+    )
+    user_content = (
+        f"Conversation transcript:\n{transcript}\n\n"
+        f"Follow-up stage: {stage or 'conversation'}\n"
+        f"Linked product: {product_name}\n"
+        "Analyze why the customer stopped replying and write the best single follow-up question."
+    )
+
+    try:
+        resp = requests.post(
+            OPENROUTER_URL,
+            headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": get_ai_model(db, "main_model", MAIN_MODEL),
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                "max_tokens": get_ai_max_tokens(db, "followup", 200),
+                "temperature": get_ai_temperature(db, "followup", 0.45),
+            },
+            timeout=25,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["choices"][0]["message"]["content"]
+        parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
+        reason = str(parsed.get("silent_reason") or "").strip()
+        reply = str(parsed.get("reply") or "").strip()
+        if reason == "rejection" or _looks_like_customer_rejection(reply):
+            return None
+        if reply:
+            return reply[:500].strip()
+    except Exception as exc:
+        print(f"[FollowUpAI] error for {sender_id}: {exc}", flush=True)
+
+    return _followup_fallback_message(stage, product)
 
 
 def save_booking_to_file(booking_data):
@@ -5250,6 +5414,7 @@ def call_main_ai(
     system_prompt = (
         f"{base_prompt}\n\n"
         f"{main_rules}\n\n"
+        f"{SALES_RETENTION_GUIDE}\n\n"
         "تعليمات الإدارة (الأولوية الأعلى بعد القواعد):\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
@@ -9112,6 +9277,27 @@ def run_smart_reviewer_cycle(db):
             last_review = reviewed_map.get(sender_id)
             if last_review and last_review > cutoff_time:
                 continue
+            latest_incoming = _latest_incoming_message(db, sender_id)
+            if latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
+                db.execute(
+                    """INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)
+                       VALUES (?, ?, ?, 0, '', 0, ?)
+                       ON CONFLICT(sender_id) DO UPDATE SET
+                         tag=excluded.tag,
+                         last_review_time=excluded.last_review_time,
+                         needs_followup=0,
+                         followup_message='',
+                         updated_at=excluded.updated_at""",
+                    (sender_id, "رفض/غير مهتم", now.isoformat(), now.isoformat()),
+                )
+                db.commit()
+                continue
+            recent_order = db.execute(
+                "SELECT id FROM orders WHERE sender_id=? ORDER BY id DESC LIMIT 1",
+                (sender_id,),
+            ).fetchone()
+            if recent_order:
+                continue
                 
             msgs = db.execute("""
                 SELECT direction, message_type, text
@@ -9133,7 +9319,10 @@ def run_smart_reviewer_cycle(db):
                 "Review the following conversation transcript between a Customer and an Iraqi e-commerce AI Assistant.\n"
                 "1. Assign a short Arabic tag describing the customer's intent (e.g., 'يريد الشراء', 'فضولي', 'متردد', 'تم الشراء', 'منزعج').\n"
                 "2. Decide if the customer needs a proactive follow-up message to encourage a sale or provide help.\n"
-                "3. If they need a follow-up, write a highly personalized, friendly, and natural Arabic message (Iraqi dialect) based strictly on their previous conversation context. Do not sound like a bot. If they bought, maybe just say 'شكراً لثقتك بينا' or similar.\n"
+                "3. If they need a follow-up, write a highly personalized, friendly, and natural Arabic message (Iraqi dialect) based strictly on their previous conversation context. Do not sound like a bot.\n"
+                "4. Do not follow up if the customer refused, asked to stop, bought already, or the last customer text is hostile.\n"
+                "5. The message must contain one clear next-step question and must not mention internal IDs.\n\n"
+                f"{SALES_RETENTION_GUIDE}\n\n"
                 "Return JSON exactly like this:\n"
                 "{\"tag\": \"string\", \"needs_followup\": true/false, \"followup_message\": \"string or null\"}"
             )
@@ -9167,7 +9356,10 @@ def run_smart_reviewer_cycle(db):
                 
                 tag = result.get("tag", "غير معروف")
                 needs_followup = result.get("needs_followup", False)
-                followup_msg = result.get("followup_message", "")
+                followup_msg = str(result.get("followup_message") or "").strip()
+                if _looks_like_customer_rejection(followup_msg):
+                    needs_followup = False
+                    followup_msg = ""
                 
                 db.execute("""
                     INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)

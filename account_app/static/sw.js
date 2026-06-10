@@ -1,8 +1,8 @@
 /* Minimal service worker — needed for installability + offline fallback */
-const CACHE_NAME = 'sales-dashboard-v1';
+const CACHE_NAME = 'sales-dashboard-v5';
 const APP_SHELL = [
-  '/static/css/dashboard.css',
-  '/static/js/dashboard.js',
+  '/static/css/dashboard.css?v=5',
+  '/static/js/dashboard.js?v=5',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
 ];

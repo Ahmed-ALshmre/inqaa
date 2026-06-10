@@ -2098,3 +2098,314 @@ video {
     grid-template-columns: 1fr;
   }
 }
+
+/* Fresh light sales workspace refresh */
+:root {
+  --primary: #2563eb;
+  --primary-light: #60a5fa;
+  --primary-dark: #1d4ed8;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #f59e0b;
+  --info: #0891b2;
+  --chat-bg: #f8fafc;
+  --msg-in: #ffffff;
+  --msg-in-text: #0f172a;
+  --msg-out: #2563eb;
+  --msg-out-text: #ffffff;
+  --sidebar-bg: #ffffff;
+  --control-bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #dbe3ef;
+  --text: #102033;
+  --text-muted: #64748b;
+}
+
+body {
+  background:
+    linear-gradient(180deg, rgba(219, 234, 254, .55), rgba(248, 250, 252, 0) 260px),
+    var(--chat-bg);
+  color: var(--text);
+}
+
+.navbar-custom,
+.admin-topbar {
+  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, .18);
+}
+
+.main-container,
+.chat-panel,
+.orders-layout,
+.products-layout {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(96, 165, 250, .28), transparent 30%),
+    radial-gradient(circle at 12% 92%, rgba(34, 197, 94, .12), transparent 28%),
+    var(--chat-bg);
+}
+
+.sidebar,
+.control-panel,
+.dashboard-drawer,
+.chat-header,
+.input-area,
+.orders-header,
+.orders-toolbar,
+.orders-table-wrap,
+.products-list-panel,
+.product-form-panel,
+.modal-content {
+  background: rgba(255, 255, 255, .96) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, .08);
+}
+
+.sidebar,
+.control-panel,
+.dashboard-drawer {
+  box-shadow: 0 18px 44px rgba(15, 23, 42, .10);
+}
+
+.customer-item,
+.ctrl-section,
+.metric-card,
+.orders-stat,
+.linked-product-box,
+.followup-customer-row,
+.admin-panel,
+.admin-link-card,
+.admin-info-grid > div,
+.admin-selected-product,
+.suggestion-card,
+.catalog-image-card,
+.admin-note {
+  background: #ffffff !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .05);
+}
+
+.customer-item:hover,
+.customer-item.active,
+.drawer-link:hover,
+.drawer-action:hover,
+.admin-sidebar a:hover {
+  background: #eff6ff !important;
+  color: var(--text) !important;
+}
+
+.customer-item.active {
+  border-right-color: var(--primary);
+}
+
+.cust-avatar,
+.avatar-circle,
+.metric-icon {
+  background: linear-gradient(135deg, #2563eb, #14b8a6) !important;
+  color: #fff !important;
+}
+
+.msg-bubble {
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
+}
+
+.msg-wrapper.incoming .msg-bubble {
+  border: 1px solid var(--border);
+}
+
+.msg-wrapper.outgoing .msg-bubble,
+.input-actions .send-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+}
+
+.ai-preview,
+.human-intervention-panel,
+.msg-review-alert,
+.hi-banner {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: var(--text) !important;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, .10);
+}
+
+.hi-banner-sub,
+.msg-time,
+.admin-muted,
+.cust-preview,
+.cust-time {
+  color: var(--text-muted) !important;
+}
+
+.form-control,
+.form-select,
+.input-group-text,
+.control-panel .form-control,
+.control-panel .form-select,
+.sidebar .form-control,
+.sidebar .input-group-text,
+.modal-content .form-control,
+.modal-content .form-select,
+.products-list-panel .form-control,
+.product-form .form-control,
+.product-form .form-select,
+.orders-toolbar .form-control,
+.orders-toolbar .input-group-text {
+  background: #ffffff !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+.form-control:focus,
+.form-select:focus,
+.input-area textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .16) !important;
+}
+
+.btn,
+.drawer-link,
+.drawer-action,
+.admin-sidebar a {
+  border-radius: 8px !important;
+}
+
+.btn-primary,
+.btn-info,
+.input-actions .ai-btn {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #fff !important;
+}
+
+.btn-success {
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+}
+
+.btn-outline-secondary {
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.btn-outline-secondary:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.admin-shell,
+body.admin-shell {
+  background:
+    linear-gradient(180deg, #dbeafe 0, #f8fafc 220px),
+    #f8fafc;
+  color: var(--text);
+}
+
+.admin-sidebar {
+  background: rgba(255, 255, 255, .96);
+  border-left-color: var(--border);
+}
+
+.admin-main {
+  background: transparent;
+}
+
+.table,
+.orders-table {
+  color: var(--text);
+}
+
+.orders-table th {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+}
+
+.orders-table td {
+  color: var(--text) !important;
+}
+
+.dashboard-metrics .metric-card {
+  display: block;
+  padding: 10px;
+}
+
+.dashboard-metrics .metric-card strong {
+  font-size: 15px;
+}
+
+.dashboard-metrics .metric-card small,
+.drawer-section-title,
+.ctrl-header {
+  color: var(--text-muted) !important;
+}
+
+@media (max-width: 992px) {
+  .main-container {
+    height: calc(100dvh - var(--navbar-h));
+  }
+
+  .sidebar,
+  .control-panel,
+  .dashboard-drawer {
+    width: min(94vw, 420px);
+  }
+}
+
+@media (max-width: 576px) {
+  .navbar-custom {
+    gap: 6px;
+    padding-inline: 8px !important;
+  }
+
+  .dashboard-drawer-toggle span,
+  .drawer-section-title {
+    font-size: 12px;
+  }
+
+  .sidebar,
+  .control-panel,
+  .dashboard-drawer {
+    width: 100vw;
+  }
+
+  .chat-header {
+    align-items: center;
+  }
+
+  #chatName,
+  #chatSenderId {
+    max-width: 36vw;
+  }
+
+  .messages-area {
+    padding: 10px 8px;
+  }
+
+  .msg-wrapper {
+    max-width: 92%;
+  }
+
+  .input-row {
+    align-items: end;
+  }
+
+  .input-actions {
+    width: 92px;
+    flex: 0 0 92px;
+  }
+
+  .modal-dialog {
+    margin: 6px;
+  }
+
+  .modal-footer,
+  .product-form-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-floating-menu {
+    background: #2563eb;
+    border-color: rgba(255,255,255,.45);
+  }
+}
