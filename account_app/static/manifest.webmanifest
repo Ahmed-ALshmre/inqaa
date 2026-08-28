@@ -1,7 +1,7 @@
 ﻿{
-  "name": "أنيقة",
-  "short_name": "أنيقة",
-  "description": "لوحة إدارة محادثات وطلبات أنيقة.",
+  "name": "لمسة ستور",
+  "short_name": "لمسة",
+  "description": "لوحة إدارة متجر لمسة ستور للملابس النسائية.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

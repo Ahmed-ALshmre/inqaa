@@ -8,11 +8,14 @@ const fields = {
   price: 'productPrice',
   status: 'productStatus',
   stock: 'productStock',
+  stock_quantity: 'productStockQuantity',
   sizes: 'productSizes',
   colors: 'productColors',
   ref: 'productRef',
   ad_id: 'productAdId',
   category: 'productCategory',
+  fabric: 'productFabric',
+  style: 'productStyle',
   keywords: 'productKeywords',
   description: 'productDescription',
   visual_description: 'productVisualDescription',
@@ -237,6 +240,37 @@ function imageText(value) {
   return value || '';
 }
 
+async function uploadProductImages(input) {
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  const progress = document.getElementById('productUploadProgress');
+  progress.innerHTML = '<span class="spinner-border spinner-border-sm"></span> جاري رفع الصور...';
+  const form = new FormData();
+  files.forEach(file => form.append('images', file));
+  try {
+    const response = await apiFetch('/api/upload_image', { method: 'POST', body: form });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'فشل رفع الصور');
+    const urls = [...imageLines(), ...(result.image_urls || [])];
+    document.getElementById('productImages').value = [...new Set(urls)].join('\n');
+    renderImagePreview();
+    progress.textContent = `تم رفع ${result.image_urls?.length || files.length} صورة بنجاح`;
+    showToast('تم رفع الصور وإضافتها إلى المنتج');
+  } catch (error) {
+    progress.textContent = error.message;
+    showToast(error.message, 'danger');
+  } finally {
+    input.value = '';
+  }
+}
+
+function removeProductImage(index) {
+  const urls = imageLines();
+  urls.splice(index, 1);
+  document.getElementById('productImages').value = urls.join('\n');
+  renderImagePreview();
+}
+
 function renderImagePreview() {
   const urls = imageLines();
   const el = document.getElementById('productImagePreview');
@@ -244,7 +278,11 @@ function renderImagePreview() {
     el.innerHTML = '<span class="small" style="color:var(--text-muted)">لا توجد صور للمعاينة</span>';
     return;
   }
-  el.innerHTML = urls.map(url => `<img src="${escAttr(url)}" alt="صورة المنتج" loading="lazy" onerror="this.style.display='none'">`).join('');
+  el.innerHTML = urls.map((url, index) => `
+    <div class="product-image-tile">
+      <img src="${escAttr(url)}" alt="صورة المنتج" loading="lazy" onerror="this.closest('.product-image-tile').classList.add('image-error')">
+      <button type="button" onclick="removeProductImage(${index})" title="حذف الصورة"><i class="bi bi-x-lg"></i></button>
+    </div>`).join('');
 }
 
 function setSaving(saving) {

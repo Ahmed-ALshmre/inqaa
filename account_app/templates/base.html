@@ -3,27 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#2563eb">
-  <title>{% block title %}أنيقة{% endblock %}</title>
+  <meta name="theme-color" content="#642447">
+  <title>{% block title %}لمسة ستور{% endblock %}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=5">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=10">
 </head>
 <body class="admin-shell">
-  {% set key = request.args.get('key','') %}
   <nav class="admin-topbar">
     <button class="admin-menu-btn" type="button" onclick="toggleAdminNav()" aria-label="القائمة">
       <i class="bi bi-list"></i>
     </button>
-    <a class="admin-brand" href="/dashboard?key={{ key }}">
-      <i class="bi bi-shop"></i>
-      <span>أنيقة</span>
+    <a class="admin-brand" href="/dashboard">
+      <i class="bi bi-bag-heart-fill"></i>
+      <span>لمسة ستور</span>
     </a>
     <div class="admin-topbar-actions">
-      <a class="btn btn-outline-light btn-sm" href="/settings/maintenance?key={{ key }}">
-        <i class="bi bi-arrow-clockwise"></i>
-        <span>تحديث</span>
+      <a class="btn btn-outline-light btn-sm" href="/settings/maintenance"><i class="bi bi-shield-check"></i><span>نسخة احتياطية</span></a>
+      <a class="btn btn-outline-light btn-sm" href="/logout"><i class="bi bi-box-arrow-left"></i><span>خروج</span>
       </a>
     </div>
   </nav>
@@ -35,24 +33,18 @@
   <div class="admin-overlay" id="adminOverlay" onclick="closeAdminNav()"></div>
   <aside class="admin-sidebar" id="adminSidebar">
     <div class="admin-sidebar-title">التنقل</div>
-    <a href="/dashboard?key={{ key }}"><i class="bi bi-house"></i> الرئيسية</a>
-    <a href="/dashboard?key={{ key }}"><i class="bi bi-chat-dots"></i> المحادثات</a>
-    <a href="/orders?key={{ key }}"><i class="bi bi-receipt"></i> الطلبات</a>
-    <a href="/products?key={{ key }}"><i class="bi bi-box-seam"></i> المنتجات</a>
-    <a href="/dashboard?key={{ key }}"><i class="bi bi-people"></i> العملاء</a>
-    <a href="/analytics?key={{ key }}"><i class="bi bi-graph-up"></i> التحليلات</a>
-    <a href="/evaluation?key={{ key }}"><i class="bi bi-clipboard2-data"></i> التقييم</a>
-    <a href="/settings?key={{ key }}"><i class="bi bi-gear"></i> الإعدادات</a>
+    <a href="/dashboard"><i class="bi bi-chat-heart"></i> المحادثات والعملاء</a>
+    <a href="/orders"><i class="bi bi-receipt"></i> الطلبات</a>
+    <a href="/products"><i class="bi bi-box-seam"></i> المنتجات</a>
+    <a href="/settings"><i class="bi bi-gear"></i> الإعدادات</a>
     <div class="admin-sidebar-title mt-3">الإعدادات</div>
-    <a href="/settings/ai?key={{ key }}"><i class="bi bi-robot"></i> الذكاء الاصطناعي</a>
-    <a href="/settings/instructions?key={{ key }}"><i class="bi bi-sliders2-vertical"></i> تعليمات AI</a>
-    <a href="/settings/auto-product?key={{ key }}"><i class="bi bi-magic"></i> المنتج التلقائي</a>
-    <a href="/settings/catalog?key={{ key }}"><i class="bi bi-images"></i> صور الكتالوج</a>
-    <a href="/settings/followup?key={{ key }}"><i class="bi bi-send"></i> المتابعة</a>
-    <a href="/settings/smart-reviewer?key={{ key }}" style="color: #e83e8c;"><i class="bi bi-robot"></i> المراجع الذكي للمحادثات</a>
-    <a href="/settings/channels?key={{ key }}"><i class="bi bi-broadcast"></i> القنوات</a>
-    <a href="/settings/store?key={{ key }}"><i class="bi bi-shop-window"></i> المتجر</a>
-    <a href="/settings/maintenance?key={{ key }}"><i class="bi bi-tools"></i> الصيانة</a>
+    <a href="/settings/ai"><i class="bi bi-robot"></i> الذكاء الاصطناعي</a>
+    <a href="/settings/auto-product"><i class="bi bi-magic"></i> المنتج الافتراضي</a>
+    <a href="/settings/catalog"><i class="bi bi-images"></i> صور الكتالوج</a>
+    <a href="/settings/followup"><i class="bi bi-send"></i> المتابعة</a>
+    <a href="/settings/channels"><i class="bi bi-broadcast"></i> الربط والقنوات</a>
+    <a href="/settings/store"><i class="bi bi-shop-window"></i> بيانات المتجر</a>
+    <a href="/settings/maintenance"><i class="bi bi-shield-check"></i> النسخ الاحتياطي</a>
   </aside>
 
   <main class="admin-main">

@@ -10,44 +10,32 @@
 </section>
 
 <section class="admin-card-grid">
-  <a class="admin-link-card" href="/settings/ai?key={{ request.args.get('key','') }}">
+  <a class="admin-link-card" href="/settings/ai">
     <i class="bi bi-robot"></i><h2>الذكاء الاصطناعي</h2><p>حالة التشغيل والموديلات والمفاتيح.</p>
   </a>
-  <a class="admin-link-card" href="/settings/instructions?key={{ request.args.get('key','') }}">
-    <i class="bi bi-sliders2-vertical"></i><h2>تعليمات AI</h2><p>تعديل instructions.txt وملخص المنتجات وقواعد المنع ودليل البيع.</p>
-  </a>
-  <a class="admin-link-card" href="/evaluation?key={{ request.args.get('key','') }}#aiSelfLearningSection" style="border: 1px dashed #5a4bda;">
-    <i class="bi bi-stars" style="color: #5a4bda;"></i><h2>التعلم الذاتي للـ AI</h2><p>تحليل محادثات آخر 7 أيام ودراسة أخطائه وبناء تقارير وتحديث تعليماتك تلقائياً.</p>
-  </a>
-  <a class="admin-link-card" href="/settings/auto-product?key={{ request.args.get('key','') }}">
+  <a class="admin-link-card" href="/settings/auto-product">
     <i class="bi bi-magic"></i><h2>المنتج التلقائي</h2><p>تفعيل المنتج الافتراضي واختيار المنتج.</p>
   </a>
-  <a class="admin-link-card" href="/settings/catalog?key={{ request.args.get('key','') }}">
+  <a class="admin-link-card" href="/settings/catalog">
     <i class="bi bi-images"></i><h2>صور الكتالوج</h2><p>رفع أكثر من صورة للكتالوج وحذف الصور التي لا تريد إرسالها للـ AI.</p>
   </a>
-  <a class="admin-link-card" href="/settings/followup?key={{ request.args.get('key','') }}">
+  <a class="admin-link-card" href="/settings/followup">
     <i class="bi bi-clock-history"></i><h2>المتابعات</h2><p>إعدادات المتابعة التلقائية للزبائن المتأخرين.</p>
   </a>
-  <a class="admin-link-card" href="/settings/smart-reviewer?key={{ request.args.get('key','') }}" style="border: 1px dashed #e83e8c;">
+  <a class="admin-link-card" href="/settings/smart-reviewer">
     <i class="bi bi-robot" style="color: #e83e8c;"></i><h2>المراجع الذكي والمتابعة الديناميكية</h2><p>يقوم الذكاء الاصطناعي بقراءة محادثات آخر ساعة وتحديد علامة للزبون وإرسال متابعات مخصصة.</p>
   </a>
-  <a class="admin-link-card" href="/settings/channels?key={{ request.args.get('key','') }}">
+  <a class="admin-link-card" href="/settings/channels">
     <i class="bi bi-broadcast"></i><h2>قنوات التواصل</h2><p>ManyChat وTelegram وحالة الروابط.</p>
   </a>
-  <a class="admin-link-card" href="/settings/store?key={{ request.args.get('key','') }}">
+  <a class="admin-link-card" href="/settings/store">
     <i class="bi bi-shop-window"></i><h2>المتجر</h2><p>اسم المتجر والتوصيل ورسائل الفحص.</p>
   </a>
-  <a class="admin-link-card" href="/settings/delivery?key={{ request.args.get('key','') }}">
+  <a class="admin-link-card" href="/settings/delivery">
     <i class="bi bi-truck"></i><h2>أجور التوصيل</h2><p>تعديل أجور التوصيل وخيارات التوصيل السريع.</p>
   </a>
-  <a class="admin-link-card" href="/settings/maintenance?key={{ request.args.get('key','') }}">
-    <i class="bi bi-tools"></i><h2>الصيانة</h2><p>حذف الكاش ومعلومات قاعدة البيانات.</p>
-  </a>
-  <a class="admin-link-card" href="/analytics?key={{ request.args.get('key','') }}">
-    <i class="bi bi-graph-up"></i><h2>التحليلات</h2><p>أداء الرسائل والطلبات والمنتجات.</p>
-  </a>
-  <a class="admin-link-card" href="/evaluation?key={{ request.args.get('key','') }}">
-    <i class="bi bi-clipboard2-data"></i><h2>التقييم والاقتراحات</h2><p>تحليل التحويلات ومراجعة اقتراحات الردود قبل تفعيلها.</p>
+  <a class="admin-link-card" href="/settings/maintenance">
+    <i class="bi bi-shield-check"></i><h2>النسخ الاحتياطي</h2><p>أخذ نسخة كاملة واستعادة قاعدة البيانات والمنتجات.</p>
   </a>
 </section>
 {% endblock %}

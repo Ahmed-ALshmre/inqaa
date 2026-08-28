@@ -3,32 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>منتجات أنيقة</title>
+  <title>منتجات لمسة ستور</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=5">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=10">
 </head>
 <body class="products-page">
   <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
     <div class="nav-main d-flex align-items-center gap-2">
       <span class="navbar-brand fw-bold fs-6 mb-0">
-        <i class="bi bi-box-seam-fill me-2"></i>منتجات أنيقة
+        <i class="bi bi-box-seam-fill me-2"></i>منتجات لمسة ستور
       </span>
     </div>
     <div class="nav-actions d-flex align-items-center gap-2">
-      <a class="btn btn-outline-light btn-sm" href="/dashboard?key={{ request.args.get('key','') }}">
+      <a class="btn btn-outline-light btn-sm" href="/dashboard">
         <i class="bi bi-chat-dots me-1"></i>الداشبورد
       </a>
-      <a class="btn btn-outline-light btn-sm" href="/orders?key={{ request.args.get('key','') }}">
+      <a class="btn btn-outline-light btn-sm" href="/orders">
         <i class="bi bi-receipt me-1"></i>الطلبات
       </a>
-      <a class="btn btn-outline-light btn-sm" href="/analytics?key={{ request.args.get('key','') }}" title="التحليلات">
-        <i class="bi bi-graph-up-arrow me-1"></i>التحليلات
-      </a>
-      <a class="btn btn-outline-light btn-sm" href="/settings?key={{ request.args.get('key','') }}" title="الإعدادات">
+      <a class="btn btn-outline-light btn-sm" href="/settings" title="الإعدادات">
         <i class="bi bi-gear me-1"></i>الإعدادات
       </a>
+      <a class="btn btn-outline-light btn-sm" href="/logout"><i class="bi bi-box-arrow-left"></i><span>خروج</span></a>
       <input type="file" id="productsImportInput" accept="application/json,.json" style="display:none" onchange="importProductsFile(this)">
       <input type="file" id="databaseImportInput" accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/octet-stream" style="display:none" onchange="importDatabaseFile(this)">
       <div class="btn-group btn-group-sm data-tools" role="group" aria-label="استيراد وتصدير">
@@ -89,7 +87,9 @@
       </div>
 
       <form id="productForm" class="product-form" onsubmit="saveProduct(event)">
+        <div class="product-ai-hint"><i class="bi bi-stars"></i><div><strong>بطاقة معرفة المنتج</strong><span>كلما كانت الحقول دقيقة، فهم المساعد المنتج وأجاب الزبونة بثقة أكبر.</span></div></div>
         <div class="row g-3">
+          <div class="col-12"><h6 class="product-section-title">التعريف والبيع</h6></div>
           <div class="col-md-4">
             <label class="form-label">كود المنتج</label>
             <input class="form-control" id="productId" required placeholder="P009">
@@ -113,6 +113,11 @@
             <label class="form-label">المخزون</label>
             <input class="form-control" id="productStock" placeholder="متوفر / نفذ">
           </div>
+          <div class="col-md-4">
+            <label class="form-label">الكمية المتوفرة</label>
+            <input class="form-control" id="productStockQuantity" type="number" min="0" placeholder="مثال: 25">
+          </div>
+          <div class="col-12"><h6 class="product-section-title">الخيارات والمواصفات</h6></div>
           <div class="col-md-6">
             <label class="form-label">المقاسات</label>
             <input class="form-control" id="productSizes" placeholder="S / M / L / XL">
@@ -131,27 +136,41 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">التصنيف</label>
-            <input class="form-control" id="productCategory" placeholder="موديلات وقطع نسائية محتشمة">
+            <input class="form-control" id="productCategory" placeholder="سوت نسائي / دشداشة نسائية">
           </div>
+          <div class="col-md-4">
+            <label class="form-label">القماش</label>
+            <input class="form-control" id="productFabric" placeholder="تركي، كريب، لينن...">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">القصة والاستخدام</label>
+            <input class="form-control" id="productStyle" placeholder="واسع، رسمي، للدوام...">
+          </div>
+          <div class="col-12"><h6 class="product-section-title">الصور ومعرفة الذكاء الاصطناعي</h6></div>
           <div class="col-12">
-            <label class="form-label">روابط الصور</label>
-            <textarea class="form-control" id="productImages" rows="4"
-              placeholder="/product_image/P009_1.jpg&#10;/product_image/P009_2.jpg"></textarea>
-            <div class="small mt-1" style="color:var(--text-muted)">ضع كل صورة في سطر منفصل. يدعم روابط محلية أو روابط خارجية.</div>
+            <label class="form-label">صور المنتج</label>
+            <input id="productImageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onchange="uploadProductImages(this)">
+            <textarea id="productImages" hidden></textarea>
+            <button class="product-upload-zone" type="button" onclick="document.getElementById('productImageFiles').click()">
+              <i class="bi bi-cloud-arrow-up"></i>
+              <strong>اختيار صور من الجهاز</strong>
+              <span>PNG أو JPG أو WEBP — حتى 10 صور</span>
+            </button>
+            <div class="product-upload-progress" id="productUploadProgress"></div>
           </div>
           <div class="col-12">
             <div class="product-image-preview" id="productImagePreview"></div>
           </div>
           <div class="col-12">
-            <label class="form-label">الكلمات المفتاحية</label>
+            <label class="form-label">أسماء البحث والكلمات التي قد تستخدمها الزبونة</label>
             <textarea class="form-control" id="productKeywords" rows="2"></textarea>
           </div>
           <div class="col-md-6">
-            <label class="form-label">الوصف</label>
+            <label class="form-label">وصف البيع للزبونة</label>
             <textarea class="form-control" id="productDescription" rows="4"></textarea>
           </div>
           <div class="col-md-6">
-            <label class="form-label">الوصف البصري للصور</label>
+            <label class="form-label">الوصف البصري للتعرّف على الصور</label>
             <textarea class="form-control" id="productVisualDescription" rows="4"></textarea>
           </div>
           <div class="col-md-6">
@@ -182,6 +201,6 @@
 
   <div class="toast-container position-fixed bottom-0 start-0 p-3" id="toastContainer"></div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/static/js/products.js"></script>
+  <script src="/static/js/products.js?v=9"></script>
 </body>
 </html>

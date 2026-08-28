@@ -1,0 +1,84 @@
+# لمسة ستور
+
+لوحة مبيعات Flask لمتجر ملابس نسائية عراقي متخصص بالسوت والدشداشة النسائية. تدير محادثات Messenger وManyChat والكتالوج والردود الذكية والطلبات، مع توصيل إلى جميع المحافظات بسعر 5,000 د.ع.
+
+## المزايا الأساسية
+
+- مساعد مبيعات باللهجة العراقية يفهم الكتالوج وسجل المحادثة والمنتجات المرتبطة بالزبون.
+- تحديد آمن للجنس من التصريح الصريح مع دعم تغييره أثناء المحادثة، دون التخمين من اسم الحساب.
+- تصنيف فوري للزبائن إلى جديد/مهتم/جاد/تم الحجز مع فلتر خاص بالزبائن الجادين.
+- استخراج محلي قابل للتصحيح لرقم الهاتف والمحافظة والعنوان حتى عند تعطل خدمة AI.
+- تغيير ربط المنتج من أي مصدر عندما يصحح الزبون اختياره، مع استبعاد الربط القديم من السياق.
+- حجز قطعة واحدة أو عدة قطع مع لون وقياس وكمية مستقلة لكل قطعة.
+- مطابقة المنتجات بالاسم والكود والصورة، وإرسال صور المنتج أو الكتالوج عند الطلب.
+- تحقق من الهاتف والمحافظة والعنوان وخيارات القطع قبل تثبيت الطلب.
+- لوحة موحدة للمحادثات والمنتجات والطلبات والتحليلات والمراجعة البشرية.
+- نسخة احتياطية كاملة ZIP بدون مفاتيح API، مع تصدير واستعادة قاعدة البيانات والمنتجات منفصلين.
+
+## التشغيل المحلي
+
+```bash
+pip install -r requirements.txt
+python account_app/app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:5000/login
+```
+
+## النشر على Railway
+
+المشروع جاهز للنشر مباشرة من GitHub. يحتوي على `Dockerfile` ويستمع تلقائياً إلى متغير `PORT` الذي توفره Railway.
+
+1. أنشئ Project جديداً من مستودع GitHub.
+2. فعّل Public Networking وأنشئ Railway Domain.
+3. أضف Volume إلى خدمة التطبيق واجعل Mount Path هو `/data`. التطبيق يقرأ المسار الذي توفره Railway تلقائياً ويحفظ فيه قاعدة البيانات، المنتجات، الصور المرفوعة، وصور الكتالوج.
+4. اجعل Healthcheck Path هو `/health`.
+5. أضف المتغيرات أدناه من تبويب Variables ثم انشر الخدمة.
+
+Required environment variables:
+
+```text
+API_SECRET_KEY
+SESSION_SECRET_KEY
+DASHBOARD_PASSWORD
+PUBLIC_URL
+OPENROUTER_API_KEY
+MANYCHAT_API_KEY
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+DISABLE_CLIP=1
+```
+
+استخدم قيماً عشوائية قوية لـ `API_SECRET_KEY` و`SESSION_SECRET_KEY` و`DASHBOARD_PASSWORD`، ولا تنسخ ملف `.env` المحلي إلى Railway أو GitHub. بعد إنشاء الدومين ضع رابط الخدمة الكامل في `PUBLIC_URL` بدون شرطة أخيرة.
+
+Optional:
+
+```text
+HUMAN_REPLY_WEBHOOK_URL
+ASYNC_WEBHOOK=1
+DEBOUNCE_DELAY=35
+```
+
+After deploying, set `PUBLIC_URL` to the Railway public URL and configure ManyChat/Facebook webhooks to use:
+
+```text
+https://your-railway-domain.up.railway.app/webhook
+https://your-railway-domain.up.railway.app/manychat/webhook
+```
+
+## صور المنتجات
+
+المنتجات الأولية موجودة في `account_app/products.json`. عند تشغيل Railway لأول مرة تُنسخ تلقائياً إلى الـVolume، وبعد ذلك تُحفظ تعديلات المنتجات والصور المرفوعة في التخزين الدائم.
+
+## ملاحظات الحماية
+
+Runtime logs and local secrets are intentionally ignored by Git:
+
+- `.env`
+- `sales.db`
+- `incoming_requests.jsonl`
+- `ad_tracking.jsonl`
+- `bookings.jsonl`

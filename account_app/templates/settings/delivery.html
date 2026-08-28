@@ -5,16 +5,14 @@
   <div>
     <p class="admin-kicker">الإعدادات</p>
     <h1>أجور التوصيل</h1>
-    <p>تعديل أجور التوصيل وخيارات التوصيل السريع ونص الفحص عند الاستلام.</p>
+    <p>سعر موحّد للتوصيل إلى جميع محافظات العراق.</p>
   </div>
 </section>
 
 <section class="admin-panel">
   <form id="deliverySettingsForm" class="admin-form">
-    <label class="form-label">أجور التوصيل - بغداد (فلس/دينار)</label>
-    <input class="form-control" id="baghdadFee" type="number">
-    <label class="form-label">أجور التوصيل - باقي المحافظات (فلس/دينار)</label>
-    <input class="form-control" id="otherFee" type="number">
+    <label class="form-label">أجور التوصيل لكل المحافظات (دينار عراقي)</label>
+    <input class="form-control" id="allProvincesFee" type="number" min="0" step="500" value="5000">
     <label class="form-label">التوصيل السريع</label>
     <div><input id="fastDelivery" type="checkbox"> فعال</div>
     <label class="form-label">نص رسالة الفحص عند الاستلام</label>

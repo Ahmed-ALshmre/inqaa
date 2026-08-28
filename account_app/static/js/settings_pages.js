@@ -156,8 +156,7 @@ async function initStoreSettingsPage() {
 
 async function initDeliveryPage() {
   const data = await getJSON('/api/settings/delivery');
-  document.getElementById('baghdadFee').value = data.baghdad_fee || '';
-  document.getElementById('otherFee').value = data.other_fee || '';
+  document.getElementById('allProvincesFee').value = data.all_provinces_fee || 5000;
   document.getElementById('fastDelivery').checked = !!data.fast_delivery;
   document.getElementById('inspectionMessage').value = data.inspection_message || '';
   document.getElementById('deliverySettingsForm').addEventListener('submit', async (event) => {
@@ -166,8 +165,7 @@ async function initDeliveryPage() {
       await getJSON('/api/settings/delivery', {
         method: 'POST',
         body: JSON.stringify({
-          baghdad_fee: Number(document.getElementById('baghdadFee').value) || 0,
-          other_fee: Number(document.getElementById('otherFee').value) || 0,
+          all_provinces_fee: Number(document.getElementById('allProvincesFee').value) || 5000,
           fast_delivery: document.getElementById('fastDelivery').checked,
           inspection_message: document.getElementById('inspectionMessage').value
         })
@@ -180,6 +178,10 @@ async function initDeliveryPage() {
 }
 
 async function initMaintenancePage() {
+  const key = new URLSearchParams(location.search).get('key') || '';
+  document.getElementById('fullBackupLink').href = `/api/export/full-backup?key=${encodeURIComponent(key)}`;
+  document.getElementById('databaseBackupLink').href = `/api/export/database?key=${encodeURIComponent(key)}`;
+  document.getElementById('productsBackupLink').href = `/api/export/products?key=${encodeURIComponent(key)}`;
   const data = await getJSON('/api/settings/overview');
   const m = data.maintenance || {};
   document.getElementById('maintenanceGrid').innerHTML = [
@@ -187,6 +189,35 @@ async function initMaintenancePage() {
     ['حجم قاعدة البيانات', `${Math.round((m.database_size || 0) / 1024)} KB`],
     ['عدد المنتجات', m.products_count || 0]
   ].map(([label, value]) => `<div><small>${adminEsc(label)}</small><strong>${adminEsc(value)}</strong></div>`).join('');
+}
+
+async function restoreProductsBackup(input) {
+  if (!input.files?.[0]) return;
+  if (!confirm('سيتم استبدال كتالوج المنتجات الحالي. هل تريد المتابعة؟')) { input.value = ''; return; }
+  const key = new URLSearchParams(location.search).get('key') || '';
+  const form = new FormData(); form.append('file', input.files[0]);
+  try {
+    const response = await fetch(`/api/import/products?key=${encodeURIComponent(key)}`, {method:'POST', body:form});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'تعذرت الاستعادة');
+    alert(`تمت استعادة ${result.count || 0} منتج بنجاح.`);
+  } catch (error) { alert(error.message); }
+  input.value = '';
+}
+
+async function restoreDatabaseBackup(input) {
+  if (!input.files?.[0]) return;
+  if (!confirm('سيتم استبدال قاعدة البيانات الحالية بالنسخة المحددة. هل تريد المتابعة؟')) { input.value = ''; return; }
+  const key = new URLSearchParams(location.search).get('key') || '';
+  const form = new FormData();
+  form.append('file', input.files[0]);
+  try {
+    const response = await fetch(`/api/import/database?key=${encodeURIComponent(key)}`, {method: 'POST', body: form});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'تعذرت الاستعادة');
+    alert('تمت استعادة قاعدة البيانات بنجاح. حدّث الصفحة.');
+  } catch (error) { alert(error.message); }
+  input.value = '';
 }
 
 async function clearBrowserCacheAndReload() {

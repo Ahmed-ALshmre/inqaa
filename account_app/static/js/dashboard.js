@@ -234,7 +234,7 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
 function syncConversationFilterUI() {
   const group = document.getElementById('conversationFilters');
   if (!group) return;
-  const validFilters = new Set(['all', 'human', 'pending', 'problems', 'unanswered', 'today']);
+  const validFilters = new Set(['all', 'booked', 'problems', 'unanswered']);
   if (!validFilters.has(currentFilter)) currentFilter = 'all';
   group.querySelectorAll('[data-filter]').forEach(button => {
     button.classList.toggle('active', button.dataset.filter === currentFilter);
@@ -267,18 +267,14 @@ function renderConversations() {
   syncConversationFilterUI();
   let list = allConversations;
 
-  if (currentFilter === 'human' || currentFilter === 'pending') {
-    list = list.filter(c => Number(c.pending_reviews_count || 0) > 0);
+  if (currentFilter === 'booked') {
+    list = list.filter(c => c.lead_stage === 'booked');
   }
   else if (currentFilter === 'problems') {
     list = list.filter(c => Number(c.problem_count || 0) > 0);
   }
   else if (currentFilter === 'unanswered') {
     list = list.filter(c => Number(c.unanswered || 0) === 1 || c.last_direction === 'incoming');
-  }
-  else if (currentFilter === 'today') {
-    const today = new Date().toISOString().slice(0, 10);
-    list = list.filter(c => c.last_time && c.last_time.startsWith(today));
   }
 
   if (searchQuery) {
@@ -291,8 +287,8 @@ function renderConversations() {
   const el = document.getElementById('customerList');
 
   if (!list.length) {
-    const emptyText = currentFilter === 'human'
-      ? 'لا توجد محادثات تحتاج تدخل بشري'
+    const emptyText = currentFilter === 'booked'
+      ? 'لا توجد محادثات تم فيها تثبيت طلب'
       : currentFilter === 'problems'
         ? 'لا توجد مشاكل مفتوحة'
       : currentFilter === 'unanswered'
@@ -313,6 +309,14 @@ function renderConversations() {
     const adBadge = (c.ad_id || c.ref)
       ? `<span class="ad-badge"><i class="bi bi-megaphone-fill"></i></span>` : '';
     const sourceMeta = customerSourceMeta(c);
+    const leadStage = c.lead_stage || 'new';
+    const leadMeta = leadStage === 'booked'
+      ? '<span class="badge bg-success" style="font-size:9px">تم الحجز</span>'
+      : leadStage === 'hot'
+        ? `<span class="badge bg-danger" style="font-size:9px">جاد ${Number(c.lead_score || 0)}%</span>`
+        : leadStage === 'warm'
+          ? `<span class="badge bg-warning text-dark" style="font-size:9px">مهتم ${Number(c.lead_score || 0)}%</span>`
+          : '';
     const preview = esc(c.last_message || '...');
     return `
       <div class="customer-item ${active}" onclick="selectConversation('${c.sender_id}')">
@@ -323,7 +327,7 @@ function renderConversations() {
           <div class="cust-preview">${preview}</div>
         </div>
         <div class="d-flex flex-column align-items-end gap-1">
-          <span class="cust-time">${time}</span>${badge}${problemBadge}
+          <span class="cust-time">${time}</span>${leadMeta}${badge}${problemBadge}
         </div>
       </div>`;
   }).join('');
@@ -788,7 +792,7 @@ function _setSendingState(busy) {
     sendBtn.disabled = busy;
     sendBtn.innerHTML = busy
       ? '<span class="spinner-border spinner-border-sm" role="status"></span>'
-      : '<i class="bi bi-send-fill"></i>';
+      : '<i class="bi bi-send-fill"></i><span>إرسال</span>';
   }
   if (aiBtn)    aiBtn.disabled = busy || !canUseAI();
   if (sendAIBtn) sendAIBtn.disabled = busy;
@@ -855,10 +859,9 @@ async function askAI(options = {}) {
     renderAIActionButtons();
     return;
   }
-  const text = options.text !== undefined
-    ? String(options.text || '').trim()
-    : document.getElementById('messageInput').value.trim();
-  const allowEmpty = Boolean(options.allowEmpty);
+  const autonomous = options.text === undefined;
+  const text = autonomous ? '' : String(options.text || '').trim();
+  const allowEmpty = autonomous || Boolean(options.allowEmpty);
   if (!text && !allowEmpty) {
     showToast('اكتب نصاً في حقل الرسالة حتى يعيد AI صياغته', 'warning');
     return;
@@ -887,9 +890,17 @@ async function askAI(options = {}) {
     });
     const data = await res.json();
     if (data.reply) {
-      aiPendingReply = data.reply;
-      document.getElementById('aiReplyText').textContent      = data.reply;
-      document.getElementById('aiReplyPreview').style.display = 'block';
+      if (autonomous) {
+        const composer = document.getElementById('messageInput');
+        composer.value = data.reply;
+        composer.focus();
+        composer.setSelectionRange(composer.value.length, composer.value.length);
+        showToast('تم تحليل المحادثة وصياغة رد جاهز للمراجعة', 'success');
+      } else {
+        aiPendingReply = data.reply;
+        document.getElementById('aiReplyText').textContent = data.reply;
+        document.getElementById('aiReplyPreview').style.display = 'block';
+      }
     } else {
       showToast('AI لم يستطع الرد — يمكنك التدخل يدوياً', 'warning');
       showHumanIntervention();
@@ -899,6 +910,20 @@ async function askAI(options = {}) {
     _isAskingAI = false;
     renderAskAIButton();
   }
+}
+
+function applyReplyShortcut(type) {
+  const templates = {
+    price: 'السعر موضح حسب الموديل المرتبط. تحبين أثبت لج الطلب؟',
+    delivery: 'التوصيل متوفر لكل محافظات العراق بـ5 آلاف، والفحص عند الاستلام 🌸',
+    details: 'حتى أثبت الطلب أرسلي رقم الهاتف والمحافظة والعنوان الكامل، ويا اللون والقياس المطلوب.',
+    confirm: 'تمام، أتأكد من القطع واللون والقياس وأثبت الطلب إلج الآن 🌸',
+    unavailable: 'هذا الموديل غير متوفر حالياً، تحبين أقترح لج أقرب موديل متوفر؟'
+  };
+  const input = document.getElementById('messageInput');
+  input.value = templates[type] || '';
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
 }
 
 async function sendAIReply() {
@@ -1258,9 +1283,9 @@ function renderAskAIButton() {
   btn.classList.toggle('btn-secondary', !enabled);
   btn.classList.toggle('btn-info', enabled);
   btn.title = enabled
-    ? 'اقتراح AI'
+    ? 'تحليل المحادثة وآخر رسالة وصياغة رد جاهز'
     : (!globalAIEnabled ? 'AI متوقف من الزر الرئيسي' : 'AI متوقف في هذه المحادثة');
-  btn.innerHTML = '<i class="bi bi-robot d-block mb-1"></i><span style="font-size:9px;">AI</span>';
+  btn.innerHTML = '<i class="bi bi-stars"></i><span>صياغة رد</span>';
 }
 
 function renderAIActionButtons() {

@@ -5,12 +5,15 @@ import json
 import mimetypes
 import os
 import re
+import secrets
+import shutil
 import sqlite3
 import sys
 import tempfile
 import threading
 import time
 import unicodedata
+import zipfile
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from functools import wraps
@@ -18,7 +21,7 @@ from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
-from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory
+from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
 
@@ -250,31 +253,49 @@ DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
 DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "35"))   # ثواني انتظار قبل الرد (لجمع كل رسائل الزبون قبل تشغيل الموديل)
 ASYNC_WEBHOOK      = os.environ.get("ASYNC_WEBHOOK", "1") == "1"
 
-DB_PATH           = os.path.join(os.path.dirname(__file__), "sales.db")
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# Railway exposes the attached volume path automatically. Local runs keep
+# using account_app/ so no additional configuration is needed.
+DATA_DIR = (
+    os.environ.get("DATA_DIR")
+    or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    or APP_DIR
+)
+if not os.path.isabs(DATA_DIR):
+    DATA_DIR = os.path.join(APP_DIR, DATA_DIR)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+DB_PATH = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "sales.db"))
 def generate_ai_followup_message(db, sender_id, stage, product=None):
     """Placeholder declared early so code referencing it compiles; real implementation overwrites this later."""
     return None
-PRODUCTS_FILE     = os.path.join(os.path.dirname(__file__), "products.json")
-PRODUCT_IMAGE_DIR = os.path.join(os.path.dirname(__file__), "product_image")
-CATALOG_IMAGE_DIR = os.environ.get("CATALOG_IMAGE_DIR", os.path.join(PRODUCT_IMAGE_DIR, "catalog"))
+PRODUCTS_SEED_FILE = os.path.join(APP_DIR, "products.json")
+PRODUCTS_FILE = os.environ.get("PRODUCTS_FILE", os.path.join(DATA_DIR, "products.json"))
+if PRODUCTS_FILE != PRODUCTS_SEED_FILE and not os.path.exists(PRODUCTS_FILE):
+    shutil.copyfile(PRODUCTS_SEED_FILE, PRODUCTS_FILE)
+PRODUCT_IMAGE_DIR = os.path.join(APP_DIR, "product_image")
+UPLOADS_DIR = os.environ.get("UPLOADS_DIR", os.path.join(DATA_DIR, "uploads"))
+CATALOG_IMAGE_DIR = os.environ.get("CATALOG_IMAGE_DIR", os.path.join(DATA_DIR, "catalog"))
 if not os.path.isabs(CATALOG_IMAGE_DIR):
-    CATALOG_IMAGE_DIR = os.path.join(os.path.dirname(__file__), CATALOG_IMAGE_DIR)
-AUD_DIR           = os.path.join(os.path.dirname(__file__), "aud")
-BOOKINGS_FILE     = os.path.join(os.path.dirname(__file__), "bookings.jsonl")
+    CATALOG_IMAGE_DIR = os.path.join(APP_DIR, CATALOG_IMAGE_DIR)
+AUD_DIR = os.path.join(APP_DIR, "aud")
+BOOKINGS_FILE = os.environ.get("BOOKINGS_FILE", os.path.join(DATA_DIR, "bookings.jsonl"))
 INCOMING_REQUESTS_FILE = os.environ.get(
     "INCOMING_REQUESTS_FILE",
-    os.path.join(os.path.dirname(__file__), "incoming_requests.jsonl"),
+    os.path.join(DATA_DIR, "incoming_requests.jsonl"),
 )
 REQUEST_LOGGING_ENABLED = os.environ.get("REQUEST_LOGGING_ENABLED", "0") == "1"
-AD_TRACKING_FILE = os.path.join(os.path.dirname(__file__), "ad_tracking.jsonl")
+AD_TRACKING_FILE = os.environ.get("AD_TRACKING_FILE", os.path.join(DATA_DIR, "ad_tracking.jsonl"))
 MAX_HISTORY  = 20
 FALLBACK_REPLY = (
     "حبيبتي ممكن توضحين أكثر شنو الموديل المطلوب؟ "
     "حتى أتأكدلج من التوفر والسعر 🌸"
 )
-DEFAULT_STORE_NAME = (os.environ.get("STORE_NAME") or TELEGRAM_NOTIFICATION_HEADER or "المتجر").strip()
-DEFAULT_STORE_DESCRIPTION = "متجر للموديلات والقطع النسائية المحتشمة"
-DEFAULT_DELIVERY_INSPECTION_MESSAGE = "التوصيل سريع مع إمكانية الفحص عند الاستلام"
+DEFAULT_STORE_NAME = (os.environ.get("STORE_NAME") or TELEGRAM_NOTIFICATION_HEADER or "لمسة ستور").strip()
+DEFAULT_STORE_DESCRIPTION = "متجر عراقي للملابس النسائية، متخصص بالسوت والدشداشة النسائية"
+DEFAULT_STORE_PROVINCES = "جميع محافظات العراق"
+DEFAULT_DELIVERY_FEE = 5000
+DEFAULT_DELIVERY_INSPECTION_MESSAGE = "التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام"
 DEFAULT_ORDER_CONFIRMATION_TEXT = (
     "تم تثبيت الطلب\n"
     "يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. "
@@ -346,7 +367,7 @@ DEFAULT_MAIN_RULES_PROMPT = """قواعد عامة صارمة:
    - فارغ أو غير محدد → استخدم صياغة محايدة قدر الإمكان ولا تفترض الجنس ولا تسأل عنه.
    لا تخلط الصيغ في نفس الرد، والتزم بالجنس المحدد طوال الرد.
 13) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد. خاطبه بصيغ عامة فقط (عيني، حبيبتي، يا هلا، تأمرين).
-14) ممنوع حصر المتجر بالعبايات أو اللون الأسود. استخدم كلمة الموديل/القطعة عند السؤال العام.
+14) المتجر متخصص بالسوت والدشداشة النسائية. استخدم كلمة الموديل/القطعة عند السؤال العام ولا تخترع نوعاً غير موجود في الكتالوج.
 15) ممنوع تكرار تفاصيل المنتج (السعر، القياسات، الألوان، الوصف، اسم المنتج الكامل) في كل رد. اذكر فقط ما طلبه الزبون في رسالته الحالية:
    - سأل عن السعر فقط؟ → رد بالسعر فقط بدون قياسات أو ألوان.
    - سأل عن المقاس فقط؟ → رد بالمقاسات فقط بدون السعر أو الألوان.
@@ -363,6 +384,9 @@ DEFAULT_MAIN_RULES_PROMPT = """قواعد عامة صارمة:
    - ممنوع إرسال رسائل مثبتة جاهزة مثل 'لقيت لك X موديل'. كل رد يجب أن يكون مخصصاً لسياق المحادثة.
    - ممنوع عرض قائمة مرقّمة بالمنتجات (1. اسم - سعر - قياس). اذكر الموديل بشكل طبيعي ضمن الجملة.
 20) ممنوع إرسال صور المنتجات إلا إذا الزبون طلب الصورة صراحةً أو وافق على الاقتراح. لا ترسل صورة مع أول اقتراح.
+21) يمكن للزبون حجز قطعة واحدة أو عدة قطع. احتفظ بكل قطعة طلبها مع اللون والقياس والكمية داخل order.items، ولا تستبدل قطعة سابقة عند إضافة قطعة جديدة.
+22) لا تجعل create_order=true إلا بعد توفر الهاتف والمحافظة والعنوان، وتحديد اللون والقياس لكل عنصر عندما تكون هذه الخيارات مطلوبة.
+23) قبل تثبيت طلب متعدد القطع لخّص العناصر باختصار واطلب تأكيداً واحداً إذا لم يؤكد الزبون الطلب بعد.
 
 قاعدة الترحيب: {greeting_rule}"""
 DEFAULT_MAIN_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخر:
@@ -370,7 +394,10 @@ DEFAULT_MAIN_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخ�
   "reply": "نص الرد للزبون",
   "intent": "question|price|availability|order|image_check|unknown",
   "create_order": false,
-  "order": {"customer_name":"","phone":"","province":"","address":"","product_id":"","product_name":"","color":"","size":"","notes":""},
+  "order": {
+    "customer_name":"","phone":"","province":"","address":"","notes":"",
+    "items":[{"product_id":"","product_name":"","color":"","size":"","quantity":1}]
+  },
   "confidence": 0
 }"""
 DEFAULT_CHECKER_RULES_PROMPT = """ارفض الرد إذا:
@@ -456,6 +483,13 @@ AI_MODEL_OPTIONS = [
 ]
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SESSION_SECRET_KEY") or API_SECRET_KEY or secrets.token_hex(32)
+app.config.update(
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=PUBLIC_URL.startswith("https://"),
+)
 _request_log_lock = threading.Lock()
 _ad_tracking_lock = threading.Lock()
 _products_file_lock = threading.Lock()
@@ -471,13 +505,16 @@ DEFAULT_APP_SETTINGS = {
     "store_name": DEFAULT_STORE_NAME,
     "store_phone": "",
     "store_description": DEFAULT_STORE_DESCRIPTION,
-    "store_provinces": "",
+    "store_provinces": DEFAULT_STORE_PROVINCES,
     "delivery_policy": "",
-    "delivery_baghdad_fee": "5000",
-    "delivery_other_fee": "6000",
+    "delivery_baghdad_fee": str(DEFAULT_DELIVERY_FEE),
+    "delivery_other_fee": str(DEFAULT_DELIVERY_FEE),
     "delivery_fast": "1",
     "delivery_inspection_message": DEFAULT_DELIVERY_INSPECTION_MESSAGE,
     "inspection_message": DEFAULT_ORDER_CONFIRMATION_TEXT,
+    "auto_product_enabled": "1",
+    "auto_product_id": "P001",
+    "auto_product_send_image": "0",
     "ai_main_model": MAIN_MODEL,
     "ai_improve_model": IMPROVE_MODEL,
     "ai_checker_model": CHECKER_MODEL,
@@ -793,6 +830,7 @@ def init_db():
             size          TEXT,
             notes         TEXT,
             status        TEXT DEFAULT 'new',
+            order_items   TEXT DEFAULT '[]',
             created_at    TEXT
         );
 
@@ -940,6 +978,49 @@ def init_db():
             "INSERT OR IGNORE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)",
             (key, value, now_baghdad_iso()),
         )
+
+    # Keep existing installations aligned with the current store identity and
+    # the single nationwide delivery price.
+    db.execute(
+        "UPDATE app_settings SET value=?, updated_at=? "
+        "WHERE key='store_name' AND (value IS NULL OR TRIM(value) IN ('', 'المتجر', 'أنيقة'))",
+        (DEFAULT_STORE_NAME, now_baghdad_iso()),
+    )
+    db.execute(
+        "UPDATE app_settings SET value=?, updated_at=? "
+        "WHERE key='store_description' AND (value IS NULL OR TRIM(value) IN ('', 'متجر للموديلات والقطع النسائية المحتشمة'))",
+        (DEFAULT_STORE_DESCRIPTION, now_baghdad_iso()),
+    )
+    db.execute(
+        "UPDATE app_settings SET value=?, updated_at=? WHERE key IN ('delivery_baghdad_fee', 'delivery_other_fee')",
+        (str(DEFAULT_DELIVERY_FEE), now_baghdad_iso()),
+    )
+    db.execute(
+        "UPDATE app_settings SET value='', updated_at=? WHERE key='delivery_policy'",
+        (now_baghdad_iso(),),
+    )
+    prompt_row = db.execute("SELECT value FROM app_settings WHERE key='prompt_main_output'").fetchone()
+    if not prompt_row or '"items"' not in str(prompt_row[0] or ""):
+        db.execute(
+            "INSERT INTO app_settings(key,value,updated_at) VALUES('prompt_main_output',?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (DEFAULT_MAIN_OUTPUT_PROMPT, now_baghdad_iso()),
+        )
+    rules_row = db.execute("SELECT value FROM app_settings WHERE key='prompt_main_rules'").fetchone()
+    if not rules_row or "عدة قطع" not in str(rules_row[0] or ""):
+        db.execute(
+            "INSERT INTO app_settings(key,value,updated_at) VALUES('prompt_main_rules',?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (DEFAULT_MAIN_RULES_PROMPT, now_baghdad_iso()),
+        )
+    auto_migration = db.execute(
+        "SELECT value FROM app_settings WHERE key='auto_product_linking_v2_migrated'"
+    ).fetchone()
+    if not auto_migration:
+        set_setting(db, "auto_product_enabled", "1")
+        set_setting(db, "auto_product_id", "P001")
+        set_setting(db, "auto_product_send_image", "0")
+        set_setting(db, "auto_product_linking_v2_migrated", "1")
     db.commit()
 
     # Migration: أضف العمود إذا لم يكن موجوداً (للقواعد القديمة)
@@ -988,6 +1069,19 @@ def init_db():
         pass  # العمود موجود مسبقاً
 
     try:
+        _add_column_if_missing("orders", "order_items", "TEXT DEFAULT '[]'")
+    except Exception as exc:
+        print(f"[DB] Could not add orders.order_items: {exc}", flush=True)
+    for column, definition in (
+        ("lead_score", "INTEGER DEFAULT 0"),
+        ("lead_stage", "TEXT DEFAULT 'new'"),
+    ):
+        try:
+            _add_column_if_missing("customers", column, definition)
+        except Exception as exc:
+            print(f"[DB] Could not add customers.{column}: {exc}", flush=True)
+
+    try:
         db.execute("DELETE FROM products")
         db.commit()
         print("[DB] Cleared products table; products are loaded from products.json.", flush=True)
@@ -1003,7 +1097,8 @@ def init_db():
 PRODUCT_FIELDS = (
     "product_id", "ref", "ad_id", "product_name", "keywords", "category",
     "description", "visual_description", "price", "offer", "colors", "sizes",
-    "stock", "delivery", "image_url", "image_embedding", "status", "notes",
+    "stock", "stock_quantity", "fabric", "style", "delivery", "image_url",
+    "image_embedding", "status", "notes",
 )
 
 
@@ -1138,11 +1233,10 @@ def _format_iqd_fee(value):
 
 
 def build_delivery_policy_text(settings):
-    baghdad = _format_iqd_fee(settings.get("baghdad_fee", 0))
-    other = _format_iqd_fee(settings.get("other_fee", 0))
+    fee = _format_iqd_fee(settings.get("all_provinces_fee", DEFAULT_DELIVERY_FEE))
     inspection = str(settings.get("inspection_message") or "").strip()
     fast = "والتوصيل سريع" if settings.get("fast_delivery") else ""
-    parts = [f"أجور التوصيل: {baghdad} داخل بغداد و{other} لباقي المحافظات"]
+    parts = [f"أجور التوصيل {fee} لجميع محافظات العراق"]
     if fast:
         parts.append(fast)
     if inspection:
@@ -1159,7 +1253,7 @@ def get_store_settings(db=None):
         "name": str(get_app_setting("store_name", DEFAULT_STORE_NAME, db) or DEFAULT_STORE_NAME).strip(),
         "phone": str(get_app_setting("store_phone", "", db) or "").strip(),
         "description": str(get_app_setting("store_description", DEFAULT_STORE_DESCRIPTION, db) or DEFAULT_STORE_DESCRIPTION).strip(),
-        "provinces": str(get_app_setting("store_provinces", "", db) or "").strip(),
+        "provinces": str(get_app_setting("store_provinces", DEFAULT_STORE_PROVINCES, db) or DEFAULT_STORE_PROVINCES).strip(),
         "delivery_policy": delivery_policy,
         "inspection_message": str(get_app_setting("inspection_message", DEFAULT_ORDER_CONFIRMATION_TEXT, db) or "").strip(),
     }
@@ -1271,22 +1365,27 @@ def save_followup_settings(db, data):
 
 
 def get_delivery_settings(db=None):
+    fee = _setting_int(get_app_setting("delivery_other_fee", str(DEFAULT_DELIVERY_FEE), db), DEFAULT_DELIVERY_FEE, 0)
     return {
-        "baghdad_fee": _setting_int(get_app_setting("delivery_baghdad_fee", "5000", db), 5000, 0),
-        "other_fee": _setting_int(get_app_setting("delivery_other_fee", "6000", db), 6000, 0),
+        "all_provinces_fee": fee,
+        "baghdad_fee": fee,
+        "other_fee": fee,
         "fast_delivery": _setting_bool(get_app_setting("delivery_fast", "1", db), True),
         "inspection_message": get_app_setting("delivery_inspection_message", DEFAULT_DELIVERY_INSPECTION_MESSAGE, db)
     }
 
 
 def save_delivery_settings(db, data):
-    baghdad = _setting_int(data.get("baghdad_fee"), 5000, 0)
-    other = _setting_int(data.get("other_fee"), 6000, 0)
+    fee = _setting_int(
+        data.get("all_provinces_fee", data.get("other_fee", data.get("baghdad_fee"))),
+        DEFAULT_DELIVERY_FEE,
+        0,
+    )
     fast = bool(data.get("fast_delivery"))
     inspection = str(data.get("inspection_message") or "")
     for key, value in (
-        ("delivery_baghdad_fee", str(baghdad)),
-        ("delivery_other_fee", str(other)),
+        ("delivery_baghdad_fee", str(fee)),
+        ("delivery_other_fee", str(fee)),
         ("delivery_fast", "1" if fast else "0"),
         ("delivery_inspection_message", inspection),
     ):
@@ -1796,6 +1895,17 @@ def complete_customer_product_link(db, sender_id, product, match_method, confide
             effective_source = "auto_default_product"
         else:
             effective_source = "unknown"
+    strong_relink = (
+        effective_source in {"image_recognition", "ad_ref", "manual_admin", "auto_default_product"}
+        or effective_method in {"text", "customer_correction", "image_recognition", "openrouter_catalog", "vision_product_id"}
+    )
+    if strong_relink:
+        db.execute(
+            """UPDATE customer_product_interests
+               SET status='superseded', rejected_at=?, notes=COALESCE(notes,'') || ?
+               WHERE sender_id=? AND product_id<>? AND COALESCE(status,'active')='active'""",
+            (now, f"\nsuperseded_by={product_id}; method={effective_method}", sender_id, product_id),
+        )
     remember_customer_product(
         db, sender_id, product, effective_method,
         confidence=confidence, source=effective_source, status="active",
@@ -1934,9 +2044,11 @@ def bind_customer_to_product(
     return get_active_product_binding(db, sender_id)
 
 
-def reject_current_binding(db, sender_id, reason=""):
+def reject_current_binding(db, sender_id, reason="", allow_any_source=False):
     binding = get_active_product_binding(db, sender_id)
-    if not binding or (binding.get("source") or binding.get("match_method")) != "auto_default_product":
+    if not binding:
+        return False
+    if not allow_any_source and (binding.get("source") or binding.get("match_method")) != "auto_default_product":
         return False
     now = now_baghdad_iso()
     note = str(reason or "").strip()
@@ -1982,14 +2094,12 @@ def is_product_objection(text):
 
 
 def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
-    if message_type == "image" or ev.get("image_url"):
-        return False
     if customer_products or get_active_product_binding(db, sender_id):
         return False
     if ev.get("ref") or ev.get("ad_id"):
         return False
     text = (ev.get("text") or "").strip()
-    if not text or is_product_objection(text):
+    if text and is_product_objection(text):
         return False
     return bool(get_auto_product_settings(db).get("enabled"))
 
@@ -2220,6 +2330,81 @@ def _customer_gender_from_db(db, sender_id: str) -> str:
         return ""
 
 
+def infer_explicit_customer_gender(text):
+    """Infer only explicit self-identification; never guess from a purchase recipient."""
+    normalized = re.sub(r"[ـًٌٍَُِّْ]", "", str(text or "").strip().lower())
+    female_patterns = (
+        r"\b(?:اني|انا|أنا)\s+(?:بنت|بنية|امرأة|امراة|حرمة|زوجه|زوجة)\b",
+        r"\b(?:مو|لست)\s+(?:رجل|رجال|ولد|شاب)\b.*\b(?:بنت|بنية|امرأة|امراة)\b",
+        r"\bخاطبني\s+(?:كمؤنث|بصيغة المؤنث)\b",
+    )
+    male_patterns = (
+        r"\b(?:اني|انا|أنا)\s+(?:رجل|رجال|ولد|شاب|زوج)\b",
+        r"\b(?:مو|لست)\s+(?:بنت|بنية|امرأة|امراة)\b.*\b(?:رجل|ولد|شاب)\b",
+        r"\bخاطبني\s+(?:كمذكر|بصيغة المذكر)\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in female_patterns):
+        return "female"
+    if any(re.search(pattern, normalized) for pattern in male_patterns):
+        return "male"
+    return ""
+
+
+def update_customer_intelligence(db, sender_id, text):
+    """Update explicit gender plus a real-time, explainable purchase-intent score."""
+    text = str(text or "").strip()
+    normalized = text.lower()
+    gender = infer_explicit_customer_gender(text)
+    row = db.execute(
+        "SELECT COALESCE(lead_score,0) AS lead_score, gender FROM customers WHERE sender_id=?",
+        (sender_id,),
+    ).fetchone()
+    score = int(row["lead_score"] or 0) if row else 0
+    signals = (
+        (("سعر", "بكم", "شكد"), 8),
+        (("متوفر", "موجود", "قياس", "لون"), 10),
+        (("اريد", "أريد", "احجز", "أحجز", "اطلب", "أطلب"), 22),
+        (("عنوان", "محافظة", "منطقة"), 15),
+    )
+    for keywords, points in signals:
+        if any(word in normalized for word in keywords):
+            score += points
+    western_text = text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
+    phone_match = re.search(r"(?<!\d)(07\d{8,9})(?!\d)", re.sub(r"[\s\-()]", "", western_text))
+    phone = phone_match.group(1) if phone_match else ""
+    digits = re.sub(r"\D", "", western_text)
+    if len(digits) in {10, 11}:
+        score += 30
+    if _looks_like_customer_rejection(text):
+        score -= 15
+    has_order = bool(db.execute("SELECT 1 FROM orders WHERE sender_id=? LIMIT 1", (sender_id,)).fetchone())
+    score = max(0, min(score, 100))
+    stage = "booked" if has_order else ("hot" if score >= 60 else "warm" if score >= 15 else "new")
+    provinces = (
+        "بغداد", "البصرة", "نينوى", "الموصل", "أربيل", "دهوك", "السليمانية",
+        "كركوك", "الأنبار", "النجف", "كربلاء", "بابل", "واسط", "ميسان",
+        "ذي قار", "الناصرية", "المثنى", "الديوانية", "صلاح الدين", "ديالى",
+    )
+    province = next((name for name in provinces if name in text), "")
+    address_match = re.search(r"(?:عنواني|العنوان)\s*[:\-]?\s*(.{4,160})", text, re.IGNORECASE)
+    address = address_match.group(1).strip(" .،") if address_match else ""
+    db.execute(
+        """UPDATE customers SET
+           gender=CASE WHEN ?!='' THEN ? ELSE gender END,
+           phone=CASE WHEN ?!='' THEN ? ELSE phone END,
+           province=CASE WHEN ?!='' THEN ? ELSE province END,
+           address=CASE WHEN ?!='' THEN ? ELSE address END,
+           lead_score=?, lead_stage=? WHERE sender_id=?""",
+        (gender, gender, phone, phone, province, province, address, address, score, stage, sender_id),
+    )
+    db.commit()
+    return {
+        "gender": gender or ((row["gender"] or "") if row else ""),
+        "phone_updated": bool(phone), "province_updated": bool(province),
+        "address_updated": bool(address), "lead_score": score, "lead_stage": stage,
+    }
+
+
 def generate_first_message_reply(db, ev, products, instructions_text, rules_list):
     """
     صياغة رد ديناميكي على أول رسالة من الزبون:
@@ -2310,9 +2495,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         raw = resp.json()["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         reply = (parsed.get("reply") or "").strip()
-        gender = (parsed.get("gender") or detected_context or "unknown").strip().lower()
-        if gender != "unknown":
-            gender = "unknown"
+        gender = infer_explicit_customer_gender(customer_text) or "unknown"
         if not reply:
             return get_first_message_fallback(db), detected_context
         print(f"[FirstMsgAI] name={customer_name!r} context={gender} | reply={reply[:80]}", flush=True)
@@ -2606,6 +2789,17 @@ ORDER_CONFIRMATION_TEXT = DEFAULT_ORDER_CONFIRMATION_TEXT
 
 def format_order_for_telegram(order):
     store_name = get_store_name()
+    items = order.get("items") or order.get("order_items") or []
+    if isinstance(items, str):
+        try:
+            items = json.loads(items)
+        except Exception:
+            items = []
+    items_text = "\n".join(
+        f"• {item.get('product_name') or item.get('product_id')} ×{item.get('quantity', 1)}"
+        f" | اللون: {item.get('color') or '-'} | القياس: {item.get('size') or '-'}"
+        for item in items if isinstance(item, dict)
+    )
     return (
         f"🧾 طلب جديد - {store_name}\n"
         f"الوقت: {order.get('created_at') or '-'}\n"
@@ -2614,7 +2808,7 @@ def format_order_for_telegram(order):
         f"الهاتف: {order.get('phone') or '-'}\n"
         f"المحافظة: {order.get('province') or '-'}\n"
         f"العنوان: {order.get('address') or '-'}\n"
-        f"المنتج: {order.get('product_name') or '-'}\n"
+        f"القطع:\n{items_text or order.get('product_name') or '-'}\n"
         f"Product ID: {order.get('product_id') or '-'}\n"
         f"اللون: {order.get('color') or '-'}\n"
         f"القياس: {order.get('size') or '-'}\n"
@@ -5376,7 +5570,8 @@ def call_main_ai(
             return prod
         keys = (
             "product_id", "product_name", "price", "stock",
-            "sizes", "colors", "description", "category",
+            "stock_quantity", "sizes", "colors", "fabric", "style",
+            "description", "category", "keywords", "offer", "delivery",
             "image_url" if full else None,
         )
         return {k: prod.get(k) for k in keys if k}
@@ -5513,6 +5708,8 @@ def call_main_ai(
         "- إذا الزبون سأل عدة أسئلة (مثلاً: السعر + التوصيل + المقاس)، اجمع الإجابات في رد واحد قصير.\n"
         "- لا تكرر وصف المنتج إذا الزبون سأل سؤالاً محدداً.\n"
         "- إذا كانت الإجابة تحتاج بيانات الزبون الناقصة (هاتف/محافظة/عنوان) اطلب الناقص فقط بأسلوب ودود، ولا تطلب الاسم.\n"
+        "- كوّن سلة داخلية من كل القطع التي طلبها الزبون. لا تنسَ القطع السابقة عند إضافة قطعة جديدة.\n"
+        "- عند الحجز أرجع كل القطع في order.items مع product_id والاسم واللون والقياس والكمية.\n"
         f"- التزم بقاعدة الترحيب أعلاه: {'لك حرية اختيار صيغة الترحيب المناسبة لرسالة الزبون.' if is_first_reply else 'لا ترحيب في بداية الرد، ابدأ مباشرة بالإجابة.'}"
     )
     if fix_instruction:
@@ -5649,21 +5846,86 @@ def check_reply(
 
 # ── Order creation ────────────────────────────────────────────────────────────
 
+def normalize_order_items(order_data, matched_product=None, products=None):
+    """Return validated, catalog-aware order lines while supporting legacy payloads."""
+    order_data = order_data or {}
+    raw_items = order_data.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        raw_items = [{
+            "product_id": order_data.get("product_id") or (matched_product or {}).get("product_id", ""),
+            "product_name": order_data.get("product_name") or (matched_product or {}).get("product_name", ""),
+            "color": order_data.get("color", ""),
+            "size": order_data.get("size", ""),
+            "quantity": order_data.get("quantity", 1),
+        }]
+
+    catalog = products if isinstance(products, list) else load_products_from_file()
+    by_id = {str(p.get("product_id") or "").strip(): p for p in catalog}
+    by_name = {str(p.get("product_name") or "").strip().casefold(): p for p in catalog}
+    items = []
+    for raw in raw_items[:20]:
+        if not isinstance(raw, dict):
+            continue
+        product_id = str(raw.get("product_id") or "").strip()
+        product_name = str(raw.get("product_name") or "").strip()
+        product = by_id.get(product_id) or by_name.get(product_name.casefold())
+        if product:
+            product_id = str(product.get("product_id") or product_id).strip()
+            product_name = str(product.get("product_name") or product_name).strip()
+            if _is_out_of_stock(product):
+                continue
+        if not product_id and not product_name:
+            continue
+        try:
+            quantity = max(1, min(int(raw.get("quantity") or 1), 20))
+        except (TypeError, ValueError):
+            quantity = 1
+        items.append({
+            "product_id": product_id,
+            "product_name": product_name,
+            "color": str(raw.get("color") or "").strip(),
+            "size": str(raw.get("size") or "").strip(),
+            "quantity": quantity,
+        })
+    return items
+
+
+def order_items_summary(items):
+    return "، ".join(
+        f"{item.get('product_name') or item.get('product_id')} ×{item.get('quantity', 1)}"
+        + (f" ({item.get('color')})" if item.get("color") else "")
+        + (f" - {item.get('size')}" if item.get("size") else "")
+        for item in (items or [])
+    )
+
 def create_order_if_valid(db, sender_id, ai_result, matched_product):
     order_data = ai_result.get("order") or {}
     phone   = (order_data.get("phone")   or "").strip()
+    province = (order_data.get("province") or "").strip()
     address = (order_data.get("address") or "").strip()
 
-    if not phone or not address:
-        print("[Order] Missing phone/address, not creating order.", flush=True)
-        return None, "لو سمحتِ أرسلي رقم هاتفك وعنوانك الكامل لإتمام الطلب 🌸"
+    if not phone or not province or not address:
+        missing = " و".join(label for value, label in ((phone, "رقم الهاتف"), (province, "المحافظة"), (address, "العنوان الكامل")) if not value)
+        print("[Order] Missing customer fields, not creating order.", flush=True)
+        return None, f"حتى أثبت الطلب أحتاج {missing} 🌸"
 
-    now          = now_baghdad_iso()
-    product_id   = order_data.get("product_id")   or (matched_product or {}).get("product_id",   "")
-    product_name = order_data.get("product_name") or (matched_product or {}).get("product_name", "")
-    if not product_id and not product_name:
+    now = now_baghdad_iso()
+    items = normalize_order_items(order_data, matched_product)
+    if not items:
         print("[Order] Missing linked product, not creating order.", flush=True)
         return None, "لازم أحدد المنتج أولاً حتى أثبت الطلب. دزيلي صورة/اسم الموديل 🌸"
+    catalog = {p.get("product_id"): p for p in load_products_from_file()}
+    missing_options = []
+    for item in items:
+        product = catalog.get(item.get("product_id")) or {}
+        if product.get("colors") and not item.get("color"):
+            missing_options.append(f"لون {item.get('product_name')}")
+        if product.get("sizes") and not item.get("size"):
+            missing_options.append(f"قياس {item.get('product_name')}")
+    if missing_options:
+        return None, "باقي نحدد " + " و".join(missing_options) + " حتى أثبت الطلب 🌸"
+    product_id = ", ".join(item["product_id"] for item in items if item.get("product_id"))
+    product_name = order_items_summary(items)
 
     duplicate = find_duplicate_order(db, sender_id, phone, product_id, address)
     if duplicate:
@@ -5682,14 +5944,15 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         "color": order_data.get("color", ""),
         "size": order_data.get("size", ""),
         "notes": order_data.get("notes", ""),
+        "items": items,
         "status": "new",
     }
 
     db.execute(
         """INSERT INTO orders
            (sender_id, customer_name, phone, province, address,
-            product_id, product_name, color, size, notes, status, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            product_id, product_name, color, size, notes, status, order_items, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             sender_id,
             order_data.get("customer_name", ""),
@@ -5698,10 +5961,11 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
             address,
             product_id,
             product_name,
-            order_data.get("color", ""),
-            order_data.get("size",  ""),
+            items[0].get("color", "") if len(items) == 1 else "متعدد",
+            items[0].get("size", "") if len(items) == 1 else "متعدد",
             order_data.get("notes", ""),
             "new",
+            json.dumps(items, ensure_ascii=False),
             now,
         ),
     )
@@ -5710,7 +5974,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         """UPDATE customers SET
            phone    = CASE WHEN ? != '' THEN ? ELSE phone    END,
            address  = CASE WHEN ? != '' THEN ? ELSE address  END,
-           province = CASE WHEN ? != '' THEN ? ELSE province END
+           province = CASE WHEN ? != '' THEN ? ELSE province END,
+           lead_score = 100, lead_stage = 'booked'
            WHERE sender_id=?""",
         (
             phone,   phone,
@@ -5807,6 +6072,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         ev["text"], ev["image_url"], ev["ad_id"], ev["ref"], body,
     )
     save_conversation_message(db, ev["sender_id"], "user", ev["text"])
+    customer_intelligence = update_customer_intelligence(db, ev["sender_id"], ev.get("text"))
+    customer = get_or_create_customer(db, ev["sender_id"], ev["page_id"], ev["platform"])
+    log(5, "CUSTOMER INTELLIGENCE", "Updated gender and purchase intent", customer_intelligence)
     log(5, "SAVE MSG", "Incoming message saved")
     if message_type == "image":
         image_flow(
@@ -5940,18 +6208,25 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         customer_products = load_customer_products(db, ev["sender_id"])
         active_binding = get_active_product_binding(db, ev["sender_id"])
 
-    if (
-        message_type != "image"
-        and active_binding
-        and active_binding.get("source") == "auto_default_product"
-        and is_product_objection(ev.get("text"))
-    ):
-        reject_current_binding(db, ev["sender_id"], ev.get("text"))
-        reply = "تمام حبيبتي، حتى أحددلج نفس الموديل بالضبط أرسلي صورة المنتج اللي تقصدينه."
+    if message_type != "image" and active_binding and is_product_objection(ev.get("text")):
+        old_product_id = active_binding.get("product_id")
+        replacement = _text_match_product(ev.get("text"), products)
+        if replacement and replacement.get("product_id") == old_product_id:
+            replacement = None
+        reject_current_binding(db, ev["sender_id"], ev.get("text"), allow_any_source=True)
+        if replacement:
+            complete_customer_product_link(
+                db, ev["sender_id"], replacement, "customer_correction",
+                confidence=100, source="unknown",
+            )
+            reply = f"تمام، غيّرت الموديل إلى {replacement.get('product_name')} 🌸 شنو تحبين تعرفين عنه؟"
+        else:
+            reply = "تمام، ألغيت الموديل السابق. أرسلي صورة أو اسم الموديل الجديد حتى أربطه إلج بدقة."
         save_message(
             db, ev["sender_id"], "outgoing", "text",
             reply, None, None, None,
-            {"auto_default_product_rejected": True},
+            {"product_binding_changed": True, "old_product_id": old_product_id,
+             "new_product_id": (replacement or {}).get("product_id")},
         )
         save_conversation_message(db, ev["sender_id"], "assistant", reply)
         return {
@@ -5962,7 +6237,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             "send_image": False,
             "meta": {
                 "skipped": True,
-                "reason": "auto_default_product_rejected",
+                "reason": "customer_changed_product",
             },
         }
 
@@ -6005,24 +6280,26 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             notes="Automatically linked from auto_product_id setting",
         )
         customer_products = load_customer_products(db, ev["sender_id"])
-        send_product_image_if_available(
-            db,
-            ev["sender_id"],
-            ev["page_id"],
-            ev["platform"],
-            auto_product,
-            binding=active_binding,
-        )
+        if message_type != "image" and not ev.get("image_url"):
+            send_product_image_if_available(
+                db,
+                ev["sender_id"],
+                ev["page_id"],
+                ev["platform"],
+                auto_product,
+                binding=active_binding,
+            )
+        if message_type == "image" or ev.get("image_url"):
+            reject_current_binding(
+                db, ev["sender_id"], "customer_image_supersedes_initial_default",
+                allow_any_source=True,
+            )
+            customer_products = load_customer_products(db, ev["sender_id"])
+            active_binding = get_active_product_binding(db, ev["sender_id"])
 
     if first_incoming and not customer_products and message_type != "image":
         # نحمّل التعليمات والقواعد مبكراً للترحيب الديناميكي بأول رسالة
         first_instructions, first_rules = load_ai_config(db, sender_id=ev["sender_id"])
-        review_id = create_human_review(
-            db,
-            ev,
-            "First customer message needs human product selection",
-            build_product_vision_candidates(products, limit=20),
-        )
         first_reply_text, detected_gender = generate_first_message_reply(
             db, ev, products, first_instructions, first_rules,
         )
@@ -6030,13 +6307,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             db, ev["sender_id"], "outgoing", "text",
             first_reply_text, None, None, None,
             {
-                "human_review_id": review_id,
                 "first_message_reply": True,
                 "detected_gender": detected_gender,
             },
         )
         save_conversation_message(db, ev["sender_id"], "assistant", first_reply_text)
-        log(8, "FIRST MESSAGE", f"First message routed to review #{review_id}; AI greeting (gender={detected_gender}) sent.")
+        log(8, "FIRST MESSAGE", f"Smart first reply sent without unnecessary human review (gender={detected_gender}).")
         return {
             "sender_id": ev["sender_id"],
             "page_id": ev["page_id"],
@@ -6045,8 +6321,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             "send_image": False,
             "meta": {
                 "skipped": True,
-                "reason": "first_message_waiting_for_human_product",
-                "human_review_id": review_id,
+                "reason": "smart_first_message",
                 "detected_gender": detected_gender,
             },
         }
@@ -6722,7 +6997,7 @@ def process_webhook_in_background(body):
 @app.route("/")
 def home():
     """نقطة دخول آمنة للـ PWA دون تضمين مفتاح في manifest."""
-    return redirect(f"/dashboard?{urlencode({'key': DASHBOARD_PASSWORD})}", code=302)
+    return redirect("/dashboard" if session.get("dashboard_authenticated") else "/login", code=302)
 
 
 @app.route("/webhook", methods=["POST"])
@@ -7058,6 +7333,10 @@ def _orders_payload(db, limit=500, date_from=None, date_to=None):
     seen_order_keys = set()
     for row in rows:
         order = dict(row)
+        try:
+            order["items"] = json.loads(order.get("order_items") or "[]")
+        except Exception:
+            order["items"] = []
         dedupe_key = (
             _norm_order_value(order.get("sender_id")),
             _norm_order_value(order.get("phone")),
@@ -7094,11 +7373,7 @@ def orders_page_or_legacy_api():
         return render_template("orders.html")
     if API_SECRET_KEY and request.headers.get("X-API-Key") == API_SECRET_KEY:
         return jsonify(_orders_payload(db)["orders"]), 200
-    return (
-        "<h1>403 — Unauthorized</h1>"
-        "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط أو استخدم X-API-Key للـ API.</p>",
-        403,
-    )
+    return redirect(url_for("login", next=request.path))
 
 
 @app.route("/problems")
@@ -7283,6 +7558,9 @@ def telegram_webhook():
 @app.route("/product_image/<path:filename>", methods=["GET"])
 def serve_product_image(filename):
     """تخدم صور المنتجات من مجلد product_image بدون مصادقة (مطلوبة للـ AI)."""
+    normalized = filename.replace("\\", "/")
+    if normalized.startswith("uploads/"):
+        return send_from_directory(UPLOADS_DIR, normalized.removeprefix("uploads/"))
     return send_from_directory(PRODUCT_IMAGE_DIR, filename)
 
 
@@ -7335,8 +7613,16 @@ def index_all_products():
 
 @app.route("/health", methods=["GET"])
 def health():
+    readiness = {
+        "ai": bool(OPENROUTER_KEY),
+        "customer_messaging": bool(current_manychat_api_key()),
+        "public_product_images": bool(PUBLIC_URL),
+        "order_notifications": bool(TELEGRAM_BOT_TOKEN and (TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID)),
+    }
     return jsonify({
         "status"        : "ok",
+        "sales_ready"   : all(readiness.values()),
+        "readiness"     : readiness,
         "db"            : DB_PATH,
         "clip_loaded"   : _clip_model is not None,
         "clip_available": CLIP_AVAILABLE,
@@ -7351,8 +7637,14 @@ def health():
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 def _dash_auth():
+    if session.get("dashboard_authenticated") is True:
+        return True
     key = request.args.get("key") or request.headers.get("X-Dashboard-Key", "")
-    return key == DASHBOARD_PASSWORD
+    if key and key == DASHBOARD_PASSWORD:
+        session.permanent = True
+        session["dashboard_authenticated"] = True
+        return True
+    return False
 
 
 def _dash_require(fn):
@@ -7364,24 +7656,41 @@ def _dash_require(fn):
     return wrapper
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("dashboard_authenticated"):
+        return redirect(url_for("dashboard"))
+    error = ""
+    if request.method == "POST":
+        password = str(request.form.get("password") or "")
+        if password == DASHBOARD_PASSWORD:
+            session.clear()
+            session.permanent = bool(request.form.get("remember"))
+            session["dashboard_authenticated"] = True
+            next_url = request.args.get("next") or url_for("dashboard")
+            if not next_url.startswith("/") or next_url.startswith("//"):
+                next_url = url_for("dashboard")
+            return redirect(next_url)
+        error = "كلمة المرور غير صحيحة"
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout", methods=["POST", "GET"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/dashboard")
 def dashboard():
     if not _dash_auth():
-        return (
-            "<h1>403 — Unauthorized</h1>"
-            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
-            403,
-        )
+        return redirect(url_for("login", next=request.path))
     return render_template("dashboard.html")
 
 
 def _admin_page(template_name, **context):
     if not _dash_auth():
-        return (
-            "<h1>403 — Unauthorized</h1>"
-            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
-            403,
-        )
+        return redirect(url_for("login", next=request.path))
     return render_template(template_name, **context)
 
 
@@ -7458,6 +7767,7 @@ def api_delivery_settings():
     if request.method == "GET":
         s = get_delivery_settings(db)
         return jsonify({
+            "all_provinces_fee": s.get("all_provinces_fee"),
             "baghdad_fee": s.get("baghdad_fee"),
             "other_fee": s.get("other_fee"),
             "fast_delivery": bool(s.get("fast_delivery")),
@@ -7486,11 +7796,7 @@ def pwa_service_worker():
 @app.route("/products")
 def products_page():
     if not _dash_auth():
-        return (
-            "<h1>403 — Unauthorized</h1>"
-            "<p>أضف <code>?key=YOUR_PASSWORD</code> للرابط</p>",
-            403,
-        )
+        return redirect(url_for("login", next=request.path))
     return render_template("products.html")
 
 
@@ -7519,7 +7825,14 @@ def _order_payload_by_id(db, order_id):
            WHERE o.id=?""",
         (order_id,),
     ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    payload = dict(row)
+    try:
+        payload["items"] = json.loads(payload.get("order_items") or "[]")
+    except Exception:
+        payload["items"] = []
+    return payload
 
 
 @app.route("/api/orders/<int:order_id>", methods=["PATCH"])
@@ -7647,6 +7960,32 @@ def api_export_database():
     )
 
 
+@app.route("/api/export/full-backup")
+@_dash_require
+def api_export_full_backup():
+    """Download one portable backup without secrets or runtime logs."""
+    archive = io.BytesIO()
+    timestamp = datetime.now(BAGHDAD_TZ).strftime("%Y%m%d-%H%M%S")
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        if os.path.exists(DB_PATH):
+            db_backup = _backup_sqlite_file_to_bytes(DB_PATH)
+            bundle.writestr("sales.db", db_backup.read())
+        for path, name in (
+            (PRODUCTS_FILE, "products.json"),
+            (_INSTRUCTIONS_FILE, "instructions.txt"),
+            (_FORBIDDEN_RULES_FILE, "forbidden_rules.txt"),
+        ):
+            if os.path.exists(path):
+                bundle.write(path, arcname=name)
+        bundle.writestr("backup-info.json", json.dumps({
+            "store": get_store_name(), "created_at": now_baghdad_iso(),
+            "format": 1, "contains_secrets": False,
+        }, ensure_ascii=False, indent=2))
+    archive.seek(0)
+    return send_file(archive, mimetype="application/zip", as_attachment=True,
+                     download_name=f"lamsa-store-backup-{timestamp}.zip")
+
+
 @app.route("/api/import/database", methods=["POST"])
 @_dash_require
 def api_import_database():
@@ -7719,6 +8058,8 @@ def api_conversations():
             c.province,
             c.address,
             c.gender,
+            COALESCE(c.lead_score, 0) AS lead_score,
+            COALESCE(c.lead_stage, 'new') AS lead_stage,
             m.text       AS last_message,
             m.direction  AS last_direction,
             m.created_at AS last_time,
@@ -7748,9 +8089,9 @@ def api_conversations():
             cpi.product_id,
             cpi.product_name,
             (SELECT GROUP_CONCAT(product_id, '||') FROM customer_product_interests
-             WHERE sender_id = c.sender_id) AS product_ids,
+             WHERE sender_id = c.sender_id AND COALESCE(status,'active')='active') AS product_ids,
             (SELECT GROUP_CONCAT(product_name, '||') FROM customer_product_interests
-             WHERE sender_id = c.sender_id) AS product_names,
+             WHERE sender_id = c.sender_id AND COALESCE(status,'active')='active') AS product_names,
             (SELECT ad_id FROM messages
              WHERE sender_id = c.sender_id AND ad_id IS NOT NULL
              ORDER BY id DESC LIMIT 1) AS ad_id,
@@ -8253,22 +8594,32 @@ def api_link_product(sender_id):
 @app.route("/api/upload_image", methods=["POST"])
 @_dash_require
 def api_upload_image():
-    if "image" not in request.files:
-        return jsonify({"error": "No image file"}), 400
-    file = request.files["image"]
-    if not file.filename:
-        return jsonify({"error": "Empty filename"}), 400
+    files = request.files.getlist("images") or request.files.getlist("image")
+    files = [file for file in files if file and file.filename]
+    if not files:
+        return jsonify({"error": "اختر صورة واحدة على الأقل"}), 400
+    if len(files) > 10:
+        return jsonify({"error": "يمكن رفع 10 صور كحد أقصى في المرة الواحدة"}), 400
 
-    uploads_dir = os.path.join(PRODUCT_IMAGE_DIR, "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-
-    ext      = os.path.splitext(file.filename)[1].lower() or ".jpg"
-    filename = f"upload_{int(time.time())}{ext}"
-    file.save(os.path.join(uploads_dir, filename))
-
-    image_url = build_public_image_url(f"/product_image/uploads/{filename}")
-    print(f"[Dashboard] Image uploaded: {filename}", flush=True)
-    return jsonify({"image_url": image_url, "filename": filename})
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    allowed_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+    uploaded = []
+    for index, file in enumerate(files):
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in allowed_extensions:
+            return jsonify({"error": f"صيغة الصورة غير مدعومة: {file.filename}"}), 400
+        filename = f"product_{time.time_ns()}_{index}{ext}"
+        file.save(os.path.join(UPLOADS_DIR, filename))
+        image_url = build_public_image_url(f"/product_image/uploads/{filename}")
+        uploaded.append({"image_url": image_url, "filename": filename})
+        print(f"[Dashboard] Image uploaded: {filename}", flush=True)
+    return jsonify({
+        "ok": True,
+        "images": uploaded,
+        "image_urls": [item["image_url"] for item in uploaded],
+        "image_url": uploaded[0]["image_url"],
+        "filename": uploaded[0]["filename"],
+    })
 
 
 @app.route("/api/catalog_image", methods=["GET", "POST"])
@@ -9975,8 +10326,23 @@ def api_create_order(sender_id):
     if not isinstance(product_names, list):
         product_names = [data.get("product_name")]
     product_names = [str(name or "").strip() for name in product_names if str(name or "").strip()]
-    product_id_text = ", ".join(product_ids)
-    product_name_text = ", ".join(product_names) or str(data.get("product_name") or "")
+    raw_items = data.get("items") if isinstance(data.get("items"), list) else []
+    if not raw_items:
+        raw_items = [
+            {
+                "product_id": pid,
+                "product_name": product_names[index] if index < len(product_names) else "",
+                "color": data.get("color", ""),
+                "size": data.get("size", ""),
+                "quantity": 1,
+            }
+            for index, pid in enumerate(product_ids)
+        ]
+    if not raw_items and product_names:
+        raw_items = [{"product_name": name, "quantity": 1} for name in product_names]
+    items = normalize_order_items({"items": raw_items})
+    product_id_text = ", ".join(item["product_id"] for item in items if item.get("product_id"))
+    product_name_text = order_items_summary(items)
     if not product_id_text and not product_name_text.strip():
         return jsonify({"ok": False, "error": "اختر منتجاً قبل تثبيت الطلب"}), 400
 
@@ -10009,17 +10375,24 @@ def api_create_order(sender_id):
         "color": data.get("color"),
         "size": data.get("size"),
         "notes": data.get("notes"),
+        "items": items,
         "status": "new",
     }
 
     db.execute(
         "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
-        "product_id, product_name, color, size, notes, status, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?)",
+        "product_id, product_name, color, size, notes, status, order_items, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?,?)",
         (sender_id, data.get("customer_name"), data.get("phone"),
          data.get("province"), data.get("address"), product_id_text,
          product_name_text, data.get("color"), data.get("size"),
-         data.get("notes"), now),
+         data.get("notes"), json.dumps(items, ensure_ascii=False), now),
+    )
+    db.execute(
+        "UPDATE customers SET lead_score=100, lead_stage='booked', "
+        "phone=COALESCE(NULLIF(?,''),phone), province=COALESCE(NULLIF(?,''),province), "
+        "address=COALESCE(NULLIF(?,''),address) WHERE sender_id=?",
+        (data.get("phone"), data.get("province"), data.get("address"), sender_id),
     )
     db.commit()
     save_booking_to_file(order_info)

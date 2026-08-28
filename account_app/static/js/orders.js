@@ -106,28 +106,31 @@ function renderOrders() {
   const orders = query ? allOrders.filter(order => orderSearchText(order).includes(query)) : allOrders;
 
   if (!orders.length) {
-    body.innerHTML = `<tr><td colspan="10" class="text-center py-5" style="color:var(--text-muted)">لا توجد طلبات مطابقة</td></tr>`;
+    body.innerHTML = `<tr class="orders-empty-row"><td colspan="10"><i class="bi bi-bag-check"></i><strong>لا توجد طلبات مطابقة</strong><span>ستظهر الطلبات الجديدة هنا تلقائيًا</span></td></tr>`;
     return;
   }
 
   body.innerHTML = orders.map(order => {
     const customer = order.customer_name || order.customer_display_name || order.sender_id || '-';
-    const product = [order.product_name, order.product_id ? `(${order.product_id})` : ''].filter(Boolean).join(' ');
+    const items = Array.isArray(order.items) ? order.items : [];
+    const product = items.length
+      ? items.map(item => esc(`${item.product_name || item.product_id || '-'} ×${item.quantity || 1}${item.color ? ` · ${item.color}` : ''}${item.size ? ` · ${item.size}` : ''}`)).join('<br>')
+      : esc([order.product_name, order.product_id ? `(${order.product_id})` : ''].filter(Boolean).join(' '));
     return `
       <tr>
-        <td class="text-muted">#${esc(order.id)}</td>
-        <td>${esc(formatTime(order.created_at))}</td>
-        <td>
+        <td data-label="رقم الطلب" class="text-muted">#${esc(order.id)}</td>
+        <td data-label="الوقت">${esc(formatTime(order.created_at))}</td>
+        <td data-label="الزبون">
           <div class="fw-semibold">${esc(customer)}</div>
           <div class="small" style="color:var(--text-muted)">${esc(order.sender_id || '')}</div>
         </td>
-        <td dir="ltr">${esc(order.phone || '-')}</td>
-        <td>${esc(product || '-')}</td>
-        <td>${esc(order.province || '-')}</td>
-        <td class="orders-address">${esc(order.address || '-')}</td>
-        <td>${esc(order.size || '-')}</td>
-        <td><span class="badge bg-success">${esc(order.status || 'new')}</span></td>
-        <td>
+        <td data-label="الهاتف" dir="ltr">${esc(order.phone || '-')}</td>
+        <td data-label="المنتج" class="order-items-cell">${product || '-'}</td>
+        <td data-label="المحافظة">${esc(order.province || '-')}</td>
+        <td data-label="العنوان" class="orders-address">${esc(order.address || '-')}</td>
+        <td data-label="القياس">${esc(order.size || '-')}</td>
+        <td data-label="الحالة"><span class="badge bg-success">${esc(order.status || 'new')}</span></td>
+        <td data-label="الإجراءات">
           <div class="orders-actions">
             <a class="btn btn-sm btn-outline-info" href="${esc(dashboardConversationUrl(order.sender_id || ''))}" title="فتح المحادثة">
               <i class="bi bi-chat-dots"></i>

@@ -5,11 +5,24 @@
   <div>
     <p class="admin-kicker">الإعدادات</p>
     <h1>الصيانة</h1>
-    <p>تحديث الواجهة وحذف كاش المتصفح ومعلومات النظام.</p>
+    <p>النسخ الاحتياطي والاستعادة وتحديث الواجهة ومعلومات النظام.</p>
   </div>
 </section>
 
 <section class="admin-panel">
+  <h2><i class="bi bi-shield-check"></i> النسخ الاحتياطي</h2>
+  <p class="admin-muted">نزّل نسخة من قاعدة البيانات ونسخة مستقلة من الكتالوج قبل أي تعديل كبير.</p>
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    <a class="btn btn-success" id="fullBackupLink"><i class="bi bi-file-earmark-zip"></i> نسخة كاملة ZIP</a>
+    <a class="btn btn-primary" id="databaseBackupLink"><i class="bi bi-database-down"></i> تنزيل قاعدة البيانات</a>
+    <a class="btn btn-outline-primary" id="productsBackupLink"><i class="bi bi-box-arrow-down"></i> تنزيل المنتجات</a>
+    <button class="btn btn-outline-warning" type="button" onclick="document.getElementById('databaseRestoreInput').click()"><i class="bi bi-database-up"></i> استعادة قاعدة البيانات</button>
+    <button class="btn btn-outline-warning" type="button" onclick="document.getElementById('productsRestoreInput').click()"><i class="bi bi-box-arrow-in-up"></i> استعادة المنتجات</button>
+    <input id="databaseRestoreInput" type="file" accept=".db,.sqlite,.sqlite3" hidden onchange="restoreDatabaseBackup(this)">
+    <input id="productsRestoreInput" type="file" accept=".json,application/json" hidden onchange="restoreProductsBackup(this)">
+  </div>
+  <hr>
+  <h2><i class="bi bi-arrow-clockwise"></i> تحديث الواجهة</h2>
   <button class="btn btn-danger btn-lg" type="button" onclick="clearBrowserCacheAndReload()">
     <i class="bi bi-arrow-clockwise"></i> تحديث النظام وحذف الكاش
   </button>
