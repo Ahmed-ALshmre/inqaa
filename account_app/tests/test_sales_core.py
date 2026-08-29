@@ -9,10 +9,12 @@ from account_app.app import (
     create_order_if_valid,
     complete_customer_product_link,
     get_active_product_binding,
+    get_auto_product_settings,
     get_db,
     infer_explicit_customer_gender,
     load_products_from_file,
     reject_current_binding,
+    _should_send_image,
     should_use_auto_product,
     update_customer_intelligence,
 )
@@ -83,6 +85,50 @@ class SalesCoreTests(unittest.TestCase):
             self.db, self.sender_id,
             {"text": "", "image_url": "/tmp/customer.jpg", "ref": "", "ad_id": ""},
             "image", [],
+        ))
+
+    def test_ad_customer_also_gets_default_product(self):
+        self.assertTrue(should_use_auto_product(
+            self.db, self.sender_id,
+            {"text": "مرحبا", "image_url": "", "ref": "campaign", "ad_id": "123"},
+            "text", [],
+        ))
+
+    def test_stale_default_product_is_repaired(self):
+        old_id = self.db.execute(
+            "SELECT value FROM app_settings WHERE key='auto_product_id'"
+        ).fetchone()
+        old_id = old_id[0] if old_id else ""
+        try:
+            self.db.execute(
+                "INSERT INTO app_settings(key,value) VALUES('auto_product_id','P999') "
+                "ON CONFLICT(key) DO UPDATE SET value='P999'"
+            )
+            self.db.commit()
+            settings = get_auto_product_settings(self.db)
+            self.assertTrue(settings["enabled"])
+            self.assertEqual(settings["product_id"], "P001")
+        finally:
+            self.db.execute(
+                "INSERT INTO app_settings(key,value) VALUES('auto_product_id',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (old_id,),
+            )
+            self.db.commit()
+
+    def test_explicit_image_request_can_resend_auto_product_image(self):
+        product = load_products_from_file()[0]
+        binding = bind_customer_to_product(
+            self.db, self.sender_id, product, source="auto_default_product"
+        )
+        self.db.execute(
+            "UPDATE customer_product_interests SET image_sent=1 WHERE id=?",
+            (binding["id"],),
+        )
+        self.db.commit()
+        self.assertTrue(_should_send_image(
+            self.db, self.sender_id, product,
+            {"text": "ممكن ترسلين صورته؟", "ref": "", "ad_id": ""},
         ))
 
     def test_recognized_image_supersedes_default_binding(self):

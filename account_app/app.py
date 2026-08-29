@@ -1707,8 +1707,22 @@ def get_auto_product_settings(db):
         "1", "true", "yes", "on",
     }
     product = find_product_by_id(product_id) if enabled and product_id else None
-    if enabled and product_id and not product:
-        print(f"[AutoProduct] Configured product is missing or inactive: {product_id}", flush=True)
+    if enabled and not product:
+        # The catalog may have been replaced while a backup still points to an
+        # old product id. Keep first-contact automation working and repair the
+        # stale setting instead of silently disabling image sending.
+        active_products = [
+            item for item in load_products_from_file()
+            if item.get("status") == "active"
+        ]
+        product = next(
+            (item for item in active_products if item.get("product_id") == "P001"),
+            active_products[0] if active_products else None,
+        )
+        if product:
+            product_id = product.get("product_id", "")
+            set_setting(db, "auto_product_id", product_id)
+            print(f"[AutoProduct] Repaired stale default product to: {product_id}", flush=True)
     return {
         "enabled": enabled and bool(product),
         "product_id": product_id,
@@ -2095,8 +2109,6 @@ def is_product_objection(text):
 
 def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
     if customer_products or get_active_product_binding(db, sender_id):
-        return False
-    if ev.get("ref") or ev.get("ad_id"):
         return False
     text = (ev.get("text") or "").strip()
     if text and is_product_objection(text):
@@ -3151,7 +3163,11 @@ def product_image_urls(product):
         path = parsed.path if parsed.scheme and parsed.netloc else raw_url
         if "/product_image/" in path.replace("\\", "/"):
             local_rel = path.replace("\\", "/").split("/product_image/", 1)[1]
-            if not os.path.isfile(os.path.join(PRODUCT_IMAGE_DIR, local_rel)):
+            if local_rel.startswith("uploads/"):
+                local_path = os.path.join(UPLOADS_DIR, local_rel.removeprefix("uploads/"))
+            else:
+                local_path = os.path.join(PRODUCT_IMAGE_DIR, local_rel)
+            if not os.path.isfile(local_path):
                 print(f"[Catalog] Skipping missing product image: {path}", flush=True)
                 continue
         url = build_public_image_url(raw_url)
@@ -3202,7 +3218,11 @@ def _should_send_image(db, sender_id: str, product: dict, ev: dict) -> bool:
     if not product or not product.get("image_url"):
         return False
 
-    # طلب صريح للصورة/التفاصيل
+    # An explicit request always wins, even when an automatic image was sent
+    # earlier in the conversation and the customer asks to see it again.
+    if _is_product_info_request(ev.get("text", "")):
+        return True
+
     binding = get_active_product_binding(db, sender_id)
     if (
         binding
@@ -3210,9 +3230,6 @@ def _should_send_image(db, sender_id: str, product: dict, ev: dict) -> bool:
         and int(binding.get("image_sent") or 0) == 1
     ):
         return False
-
-    if _is_product_info_request(ev.get("text", "")):
-        return True
 
     # أول اتصال عبر ref/ad_id (إعلان)
     if ev.get("ref") or ev.get("ad_id"):
