@@ -242,8 +242,14 @@ MANYCHAT_API_URL = "https://api.manychat.com"
 HUMAN_REPLY_WEBHOOK_URL = os.environ.get("HUMAN_REPLY_WEBHOOK_URL", "")
 HUMAN_REVIEW_ALL_IMAGES = os.environ.get("HUMAN_REVIEW_ALL_IMAGES", "1") == "1"
 PUBLIC_URL         = os.environ.get("PUBLIC_URL", "").rstrip("/")
-if MANYCHAT_API_KEY:
-    print(f"[Config] ✅ MANYCHAT_API_KEY loaded ({MANYCHAT_API_KEY[:12]}...)", flush=True)
+_STORE_MANYCHAT_KEYS_CONFIGURED = any(
+    normalize for normalize in (
+        _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_LAMSA", "")),
+        _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_KHUYOOT", "")),
+    )
+)
+if MANYCHAT_API_KEY or _STORE_MANYCHAT_KEYS_CONFIGURED:
+    print("[Config] ✅ ManyChat API key configuration loaded", flush=True)
 else:
     print("[Config] ❌ MANYCHAT_API_KEY is MISSING — customer messages will NOT be sent!", flush=True)
 if PUBLIC_URL:
@@ -3625,8 +3631,26 @@ def _manychat_page_id_to_key_map():
     return _manychat_page_key_map
 
 
-def manychat_api_key_for_page(page_id) -> str:
-    """مفتاح الإرسال: خاص بالصفحة إن وُجد في MANYCHAT_KEYS_BY_PAGE وإلا المفتاح العام."""
+def manychat_api_key_for_store(store_id="") -> str:
+    """Return the dedicated ManyChat key for a store without exposing it in the database/UI."""
+    sid = _safe_store_id(store_id or current_store_id())
+    aliases = {
+        DEFAULT_STORE_ID: ("MANYCHAT_API_KEY_LAMSA", "MANYCHAT_API_KEY_DEFAULT"),
+        KHUYOOT_STORE_ID: ("MANYCHAT_API_KEY_KHUYOOT",),
+    }
+    dynamic_name = f"MANYCHAT_API_KEY_{sid.upper().replace('-', '_')}"
+    for name in (*aliases.get(sid, ()), dynamic_name):
+        key = normalize_manychat_api_key(os.environ.get(name, ""))
+        if key:
+            return key
+    return ""
+
+
+def manychat_api_key_for_page(page_id, store_id="") -> str:
+    """Store key first, legacy page mapping second, then the global fallback key."""
+    store_key = manychat_api_key_for_store(store_id)
+    if store_key:
+        return store_key
     pid = str(page_id or "").strip()
     if pid:
         m = _manychat_page_id_to_key_map()
@@ -3757,11 +3781,14 @@ def _build_manychat_content(content_type: str, messages: list, message_tag: str 
 
 
 def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "facebook",
-                        label: str = "send", message_tag: str = "", page_id: str = "") -> dict:
+                        label: str = "send", message_tag: str = "", page_id: str = "",
+                        store_id: str = "") -> dict:
     subscriber_id = str(subscriber_id or "").strip()
+    sender_store_id = store_id
     if "::" in subscriber_id:
-        subscriber_id = subscriber_id.split("::", 1)[1]
-    api_key = manychat_api_key_for_page(page_id)
+        sender_store_id, subscriber_id = subscriber_id.split("::", 1)
+    sender_store_id = _safe_store_id(sender_store_id or current_store_id())
+    api_key = manychat_api_key_for_page(page_id, sender_store_id)
     if not api_key:
         msg = "MANYCHAT_API_KEY not set"
         print(f"[ManyChat] {msg}", flush=True)
@@ -3918,12 +3945,17 @@ def send_manychat_messages(subscriber_id: str, messages: list, platform: str = "
     return send_manychat_messages_detailed(subscriber_id, messages, platform, page_id=page_id).get("ok", False)
 
 
-def get_subscriber_info(subscriber_id: str, page_id: str = "") -> dict:
+def get_subscriber_info(subscriber_id: str, page_id: str = "", store_id: str = "") -> dict:
     """
     جلب معلومات الزبون من ManyChat
     endpoint: GET /fb/subscriber/getInfo
     """
-    api_key = current_manychat_api_key()
+    raw_subscriber_id = str(subscriber_id or "").strip()
+    if "::" in raw_subscriber_id:
+        inferred_store, raw_subscriber_id = raw_subscriber_id.split("::", 1)
+        store_id = store_id or inferred_store
+    subscriber_id = raw_subscriber_id
+    api_key = manychat_api_key_for_page(page_id, store_id or current_store_id())
     if not api_key:
         return {}
     try:
@@ -8711,7 +8743,7 @@ def api_send_message(sender_id):
         (text_result and text_result.get("ok"))
         or (image_result and image_result.get("ok"))
     )
-    manychat_key = current_manychat_api_key()
+    manychat_key = manychat_api_key_for_page(page_id, current_store_id())
     primary = text_result or image_result or {}
     warning = None
     if not manychat_key and not sent:
@@ -9272,7 +9304,8 @@ def api_delete_catalog_image(image_id):
 def api_manychat_diag():
     """تشخيص ما هي المتغيرات التي وصلت فعلاً لعملية التطبيق (بدون كشف القيم)."""
     candidates = [
-        "MANYCHAT_API_KEY", "MANYCHAT_KEY", "MC_API_KEY",
+        "MANYCHAT_API_KEY", "MANYCHAT_API_KEY_LAMSA", "MANYCHAT_API_KEY_KHUYOOT",
+        "MANYCHAT_KEYS_BY_PAGE", "MANYCHAT_KEY", "MC_API_KEY",
         "MANYCHAT_MESSAGE_TAG", "OPENROUTER_API_KEY", "PUBLIC_URL",
         "DASHBOARD_PASSWORD", "API_SECRET_KEY", "TELEGRAM_CHAT_ID", "TELEGRAM_ORDERS_CHAT_ID",
         "TELEGRAM_NOTIFICATION_HEADER", "CATALOG_MATCH_MODEL", "CATALOG_MATCH_ENABLED", "CATALOG_IMAGE_PATH",
@@ -9312,7 +9345,7 @@ def api_manychat_diag():
         "env_file_present": env_file_present,
         "env_file_lines": env_lines,
         "manychat_api_url": MANYCHAT_API_URL,
-        "current_key_loaded": bool(current_manychat_api_key()),
+        "current_key_loaded": bool(manychat_api_key_for_page("", current_store_id())),
     })
 
 
@@ -9320,7 +9353,7 @@ def api_manychat_diag():
 @_dash_require
 def api_manychat_test():
     """Quick diagnostic: verify the configured ManyChat key by hitting /fb/page/getInfo."""
-    api_key = current_manychat_api_key()
+    api_key = manychat_api_key_for_page("", current_store_id())
     if not api_key:
         return jsonify({"ok": False, "reason": "missing_key", "message": "MANYCHAT_API_KEY غير مُعرَّف — ضيفه في Railway Variables أو .env"})
     try:
@@ -10443,7 +10476,7 @@ def api_settings_overview():
             "openrouter_key_present": bool(OPENROUTER_KEY),
         },
         "channels": {
-            "manychat_key_present": bool(current_manychat_api_key()),
+            "manychat_key_present": bool(manychat_api_key_for_page("", current_store_id())),
             "manychat_api_url": MANYCHAT_API_URL,
             "telegram_bot_present": bool(TELEGRAM_BOT_TOKEN),
             "telegram_chat_present": bool(TELEGRAM_CHAT_ID),

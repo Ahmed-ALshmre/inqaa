@@ -33,6 +33,7 @@ from account_app.app import (
     current_store_id,
     get_store_settings,
     send_catalog_to_customer,
+    manychat_api_key_for_page,
 )
 
 
@@ -482,6 +483,36 @@ class MultiStoreIntegrationTests(unittest.TestCase):
         set_store_setting(self.db, key, "قيمة خيوط", "khuyoot")
         self.assertEqual(get_app_setting(key, "", self.db, "default"), "قيمة لمسة")
         self.assertEqual(get_app_setting(key, "", self.db, "khuyoot"), "قيمة خيوط")
+
+    def test_manychat_api_key_is_selected_by_store(self):
+        with patch.dict(os.environ, {
+            "MANYCHAT_API_KEY_LAMSA": "lamsa-private-key",
+            "MANYCHAT_API_KEY_KHUYOOT": "khuyoot-private-key",
+            "MANYCHAT_API_KEY": "fallback-key",
+        }, clear=False):
+            self.assertEqual(manychat_api_key_for_page("", "default"), "lamsa-private-key")
+            self.assertEqual(manychat_api_key_for_page("", "khuyoot"), "khuyoot-private-key")
+            self.assertEqual(manychat_api_key_for_page("", "unknown-store"), "fallback-key")
+
+    @patch("account_app.app.requests.post")
+    def test_manychat_sender_prefix_chooses_correct_store_key(self, post):
+        response = post.return_value
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"status": "success"}
+        with patch.dict(os.environ, {
+            "MANYCHAT_API_KEY_LAMSA": "lamsa-private-key",
+            "MANYCHAT_API_KEY_KHUYOOT": "khuyoot-private-key",
+        }, clear=False):
+            from account_app.app import send_manychat_messages_detailed
+            send_manychat_messages_detailed(
+                self.khuyoot_sender,
+                [{"type": "text", "text": "اختبار"}],
+            )
+        headers = post.call_args.kwargs["headers"]
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(headers["Authorization"], "Bearer khuyoot-private-key")
+        self.assertEqual(payload["subscriber_id"], self.marker)
 
 
 if __name__ == "__main__":
