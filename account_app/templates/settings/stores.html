@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}إدارة المتاجر{% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div><p class="admin-kicker">نظام متعدد المتاجر</p><h1>المتاجر والـ Webhook</h1><p>كل متجر يملك منتجات وكتالوجاً وإعدادات ذكاء مستقلة.</p></div>
+</section>
+<section class="admin-panel"><p class="admin-muted">النظام مضبوط على متجرين فقط. انسخ رابط كل متجر وضعه في ManyChat الخاص به.</p><span class="admin-status" id="storesStatus"></span></section>
+<section class="admin-panel mt-3"><h2>المتاجر الحالية</h2><div class="admin-list" id="storesList"></div></section>
+{% endblock %}
+{% block scripts %}<script src="/static/js/stores.js?v=1"></script>{% endblock %}

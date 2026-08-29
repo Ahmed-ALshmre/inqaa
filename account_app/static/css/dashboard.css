@@ -2566,3 +2566,27 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans Arabic',s
   .input-row{grid-template-columns:1fr!important;gap:7px!important}.input-textarea{min-height:66px!important;max-height:120px;border-radius:15px!important;padding:10px 12px!important}.input-actions{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}.input-actions .input-btn{min-height:46px!important;flex-direction:row!important;gap:5px!important;border-radius:12px!important;font-size:.7rem!important}.input-actions .ai-btn{grid-column:auto!important}
   .ai-preview{margin:0 9px 7px!important;border-radius:15px!important}
 }
+.conversation-store-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.conversation-store-badge.store-lamsa {
+  color: #8a285f;
+  background: #fce8f3;
+  border: 1px solid #efb7d5;
+}
+
+.conversation-store-badge.store-khuyoot {
+  color: #17644b;
+  background: #e4f7ef;
+  border: 1px solid #a9dfca;
+}

@@ -10,6 +10,8 @@
 </section>
 
 <section class="admin-panel">
+  <label class="form-label" for="catalogStoreSelect">المتجر</label>
+  <select class="form-select mb-3" id="catalogStoreSelect"></select>
   <form id="catalogImagesForm" class="admin-form">
     <div>
       <label class="form-label">إضافة صور للكتالوج</label>
@@ -41,6 +43,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/catalog_settings.js?v=1"></script>
+<script src="/static/js/catalog_settings.js?v=2"></script>
 <script>initCatalogImagesPage();</script>
 {% endblock %}

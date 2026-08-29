@@ -1,4 +1,8 @@
 async function getJSON(path, options = {}) {
+  const storeId = new URLSearchParams(location.search).get('store_id') || 'default';
+  if (path.startsWith('/api/') && !path.includes('store_id=')) {
+    path += `${path.includes('?') ? '&' : '?'}store_id=${encodeURIComponent(storeId)}`;
+  }
   const res = await fetch(adminApi(path), {
     headers: { 'Content-Type': 'application/json' },
     ...options
@@ -8,7 +12,25 @@ async function getJSON(path, options = {}) {
   return data;
 }
 
+async function initStoreSelector(id) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const response = await fetch(adminApi('/api/stores'));
+  const data = await response.json();
+  const selected = new URLSearchParams(location.search).get('store_id') || data.current_store_id || 'default';
+  select.innerHTML = (data.stores || []).map(store =>
+    `<option value="${adminEsc(store.store_id)}">${adminEsc(store.name)}</option>`
+  ).join('');
+  select.value = selected;
+  select.addEventListener('change', () => {
+    const url = new URL(location.href);
+    url.searchParams.set('store_id', select.value);
+    location.href = url.toString();
+  });
+}
+
 async function initAISettingsPage() {
+  await initStoreSelector('aiStoreSelect');
   const data = await getJSON('/api/settings/ai');
   
   const aiEnabledEl = document.getElementById('aiEnabled');
@@ -22,6 +44,15 @@ async function initAISettingsPage() {
   
   const mainModelEl = document.getElementById('mainModelInput');
   if (mainModelEl) mainModelEl.value = data.main_model || '';
+  document.getElementById('visionEnabled').checked = !!data.vision_enabled;
+  document.getElementById('catalogMatchEnabled').checked = !!data.catalog_match_enabled;
+  document.getElementById('checkerEnabled').checked = !!data.checker_enabled;
+  document.getElementById('visionModelInput').value = data.vision_model || '';
+  document.getElementById('catalogMatchModelInput').value = data.catalog_match_model || '';
+  document.getElementById('checkerModelInput').value = data.checker_model || '';
+  document.getElementById('improveModelInput').value = data.improve_model || '';
+  document.getElementById('mainTemperatureInput').value = data.main_temperature ?? 0.7;
+  document.getElementById('mainMaxTokensInput').value = data.main_max_tokens ?? 1500;
   
   const formEl = document.getElementById('aiSettingsForm');
   if (formEl) {
@@ -32,7 +63,16 @@ async function initAISettingsPage() {
           method: 'POST',
           body: JSON.stringify({
             enabled: document.getElementById('aiEnabled').checked,
-            main_model: document.getElementById('mainModelInput').value.trim()
+            main_model: document.getElementById('mainModelInput').value.trim(),
+            vision_enabled: document.getElementById('visionEnabled').checked,
+            catalog_match_enabled: document.getElementById('catalogMatchEnabled').checked,
+            checker_enabled: document.getElementById('checkerEnabled').checked,
+            vision_model: document.getElementById('visionModelInput').value.trim(),
+            catalog_match_model: document.getElementById('catalogMatchModelInput').value.trim(),
+            checker_model: document.getElementById('checkerModelInput').value.trim(),
+            improve_model: document.getElementById('improveModelInput').value.trim(),
+            main_temperature: Number(document.getElementById('mainTemperatureInput').value),
+            main_max_tokens: Number(document.getElementById('mainMaxTokensInput').value)
           })
         });
         setAdminStatus('aiSettingsStatus', 'تم الحفظ');
@@ -44,6 +84,7 @@ async function initAISettingsPage() {
 }
 
 async function initAutoProductPage() {
+  await initStoreSelector('autoProductStoreSelect');
   const [settings, productsData] = await Promise.all([
     getJSON('/api/settings/auto_product'),
     getJSON('/api/products')
@@ -109,6 +150,7 @@ async function initChannelsPage() {
 }
 
 async function initStoreSettingsPage() {
+  await initStoreSelector('storeSettingsStoreSelect');
   const data = await getJSON('/api/settings/store');
   document.getElementById('storeName').value = data.name || '';
   document.getElementById('storePhone').value = data.phone || '';
@@ -138,6 +180,7 @@ async function initStoreSettingsPage() {
 }
 
 async function initDeliveryPage() {
+  await initStoreSelector('deliveryStoreSelect');
   const data = await getJSON('/api/settings/delivery');
   document.getElementById('allProvincesFee').value = data.all_provinces_fee || 5000;
   document.getElementById('fastDelivery').checked = !!data.fast_delivery;

@@ -24,12 +24,15 @@ const fields = {
   notes: 'productNotes',
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await initProductsStoreSelector();
   loadProducts();
   document.getElementById('productImages').addEventListener('input', renderImagePreview);
 });
 
 function apiFetch(url, opts = {}) {
+  const storeId = new URLSearchParams(window.location.search).get('store_id') || 'default';
+  url += `${url.includes('?') ? '&' : '?'}store_id=${encodeURIComponent(storeId)}`;
   opts.headers = {
     ...(opts.headers || {}),
     'X-Dashboard-Key': DASH_KEY,
@@ -37,7 +40,25 @@ function apiFetch(url, opts = {}) {
   return fetch(url, opts);
 }
 
+async function initProductsStoreSelector() {
+  const res = await apiFetch('/api/stores');
+  const data = await res.json();
+  const select = document.getElementById('productsStoreSelect');
+  const selected = new URLSearchParams(location.search).get('store_id') || data.current_store_id || 'default';
+  select.innerHTML = (data.stores || []).map(store =>
+    `<option value="${escAttr(store.store_id)}">${esc(store.name)}</option>`
+  ).join('');
+  select.value = selected;
+  select.addEventListener('change', () => {
+    const url = new URL(location.href);
+    url.searchParams.set('store_id', select.value);
+    location.href = url.toString();
+  });
+}
+
 function downloadUrl(path) {
+  const storeId = new URLSearchParams(window.location.search).get('store_id') || 'default';
+  path += `${path.includes('?') ? '&' : '?'}store_id=${encodeURIComponent(storeId)}`;
   const sep = path.includes('?') ? '&' : '?';
   return `${path}${sep}key=${encodeURIComponent(DASH_KEY)}`;
 }

@@ -10,6 +10,8 @@
 </section>
 
 <section class="admin-panel">
+  <label class="form-label" for="autoProductStoreSelect">المتجر</label>
+  <select class="form-select mb-3" id="autoProductStoreSelect"></select>
   <form id="autoProductForm" class="admin-form">
     <label class="form-check form-switch admin-switch">
       <input class="form-check-input" type="checkbox" id="autoProductEnabled">
@@ -28,6 +30,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/settings_pages.js?v=3"></script>
+<script src="/static/js/settings_pages.js?v=7"></script>
 <script>initAutoProductPage();</script>
 {% endblock %}

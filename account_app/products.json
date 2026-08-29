@@ -1,5 +1,6 @@
 [
   {
+    "store_id": "default",
     "product_id": "P001",
     "ref": "",
     "ad_id": "",
@@ -26,6 +27,7 @@
     "notes": ""
   },
   {
+    "store_id": "default",
     "product_id": "P002",
     "ref": "",
     "ad_id": "",
@@ -49,6 +51,7 @@
     "notes": ""
   },
   {
+    "store_id": "default",
     "product_id": "P003",
     "ref": "",
     "ad_id": "",

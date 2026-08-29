@@ -1,13 +1,28 @@
 let catalogImagesState = [];
 
 async function catalogJSON(path, options = {}) {
+  const storeId = new URLSearchParams(location.search).get('store_id') || 'default';
+  path += `${path.includes('?') ? '&' : '?'}store_id=${encodeURIComponent(storeId)}`;
   const res = await fetch(adminApi(path), options);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || data.message || 'فشل الطلب');
   return data;
 }
 
-function initCatalogImagesPage() {
+async function initCatalogImagesPage() {
+  const storesResponse = await fetch(adminApi('/api/stores'));
+  const storesData = await storesResponse.json();
+  const storeSelect = document.getElementById('catalogStoreSelect');
+  const selected = new URLSearchParams(location.search).get('store_id') || storesData.current_store_id || 'default';
+  storeSelect.innerHTML = (storesData.stores || []).map(store =>
+    `<option value="${adminEsc(store.store_id)}">${adminEsc(store.name)}</option>`
+  ).join('');
+  storeSelect.value = selected;
+  storeSelect.addEventListener('change', () => {
+    const url = new URL(location.href);
+    url.searchParams.set('store_id', storeSelect.value);
+    location.href = url.toString();
+  });
   const form = document.getElementById('catalogImagesForm');
   form?.addEventListener('submit', uploadCatalogImages);
   loadCatalogImages();

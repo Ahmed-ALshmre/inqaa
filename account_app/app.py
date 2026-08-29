@@ -15,6 +15,7 @@ import time
 import unicodedata
 import zipfile
 from collections import Counter
+from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 from functools import wraps
 from urllib.parse import urlencode, urlparse
@@ -292,6 +293,15 @@ FALLBACK_REPLY = (
     "حتى أتأكدلج من التوفر والسعر 🌸"
 )
 DEFAULT_STORE_NAME = (os.environ.get("STORE_NAME") or TELEGRAM_NOTIFICATION_HEADER or "لمسة ستور").strip()
+DEFAULT_STORE_ID = "default"
+LAMSA_WEBHOOK_KEY = "lamsa-store"
+KHUYOOT_STORE_ID = "khuyoot"
+KHUYOOT_STORE_NAME = "خيوط"
+KHUYOOT_STORE_DESCRIPTION = (
+    "متجر ملابس نسائية يستهدف النساء من عمر 18 إلى 40 سنة تقريباً وما فوق، "
+    "ومتخصص ببيع السوت والكيلوت والتنورة"
+)
+_current_store_id = ContextVar("current_store_id", default=DEFAULT_STORE_ID)
 DEFAULT_STORE_DESCRIPTION = "متجر عراقي للملابس النسائية، متخصص بالسوت والدشداشة النسائية"
 DEFAULT_STORE_PROVINCES = "جميع محافظات العراق"
 DEFAULT_DELIVERY_FEE = 5000
@@ -730,6 +740,16 @@ def init_db():
             processed_at TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS stores (
+            store_id      TEXT PRIMARY KEY,
+            name          TEXT NOT NULL,
+            webhook_key   TEXT UNIQUE,
+            page_id       TEXT,
+            active        INTEGER DEFAULT 1,
+            created_at    TEXT,
+            updated_at    TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS sender_processing_locks (
             sender_id TEXT PRIMARY KEY,
             locked_at TEXT
@@ -1076,6 +1096,35 @@ def init_db():
     except Exception as exc:
         print(f"[DB] Could not add customers.store_name: {exc}", flush=True)
 
+    for table_name in ("customers", "messages", "orders", "human_reviews"):
+        try:
+            _add_column_if_missing(table_name, "store_id", "TEXT DEFAULT 'default'")
+        except Exception as exc:
+            print(f"[DB] Could not add {table_name}.store_id: {exc}", flush=True)
+
+    now = now_baghdad_iso()
+    for store_id, name, webhook_key in (
+        (DEFAULT_STORE_ID, "لمسة ستور", LAMSA_WEBHOOK_KEY),
+        (KHUYOOT_STORE_ID, KHUYOOT_STORE_NAME, KHUYOOT_STORE_ID),
+    ):
+        db.execute(
+            """INSERT INTO stores(store_id,name,webhook_key,active,created_at,updated_at)
+               VALUES(?,?,?,1,?,?)
+               ON CONFLICT(store_id) DO UPDATE SET
+                 name=excluded.name,webhook_key=excluded.webhook_key,active=1,updated_at=excluded.updated_at""",
+            (store_id, name, webhook_key, now, now),
+        )
+    db.execute(
+        """INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?)
+           ON CONFLICT(key) DO NOTHING""",
+        (f"store:{KHUYOOT_STORE_ID}:store_description", KHUYOOT_STORE_DESCRIPTION, now),
+    )
+    for table_name in ("customers", "messages", "orders", "human_reviews"):
+        db.execute(
+            f"UPDATE {table_name} SET store_id=? WHERE store_id IS NULL OR TRIM(store_id)=''",
+            (DEFAULT_STORE_ID,),
+        )
+
     try:
         _add_column_if_missing("orders", "order_items", "TEXT DEFAULT '[]'")
     except Exception as exc:
@@ -1102,8 +1151,105 @@ def init_db():
 
 # ── Products file ──────────────────────────────────────────────────────────────
 
+def _safe_store_id(value):
+    value = str(value or "").strip().lower()
+    value = re.sub(r"[^a-z0-9_-]+", "-", value).strip("-_")
+    return value[:64] or DEFAULT_STORE_ID
+
+
+def current_store_id():
+    try:
+        if request:
+            requested = request.args.get("store_id") or request.headers.get("X-Store-ID")
+            if requested:
+                return _safe_store_id(requested)
+    except RuntimeError:
+        pass
+    return _safe_store_id(_current_store_id.get())
+
+
+def list_stores(db=None):
+    db = db or get_db()
+    return [dict(row) for row in db.execute(
+        "SELECT * FROM stores WHERE active=1 ORDER BY name COLLATE NOCASE"
+    ).fetchall()]
+
+
+def get_store(db=None, store_id=None):
+    db = db or get_db()
+    sid = _safe_store_id(store_id or current_store_id())
+    row = db.execute("SELECT * FROM stores WHERE store_id=?", (sid,)).fetchone()
+    return dict(row) if row else None
+
+
+def ensure_store(db, store_id=None, name="", page_id="", webhook_key=""):
+    sid = _safe_store_id(store_id or webhook_key or page_id or name)
+    display_name = str(name or sid).strip()[:120]
+    now = now_baghdad_iso()
+    db.execute(
+        """INSERT INTO stores(store_id,name,webhook_key,page_id,active,created_at,updated_at)
+           VALUES(?,?,?,?,1,?,?)
+           ON CONFLICT(store_id) DO UPDATE SET
+             name=CASE WHEN excluded.name!='' THEN excluded.name ELSE stores.name END,
+             webhook_key=COALESCE(NULLIF(excluded.webhook_key,''),stores.webhook_key),
+             page_id=COALESCE(NULLIF(excluded.page_id,''),stores.page_id),
+             active=1,updated_at=excluded.updated_at""",
+        (sid, display_name, str(webhook_key or sid), str(page_id or ""), now, now),
+    )
+    db.commit()
+    return sid
+
+
+def resolve_webhook_store(db, data, route_store_key=""):
+    explicit = (
+        route_store_key or data.get("store_id") or data.get("store_key")
+        or data.get("webhook_store") or ""
+    )
+    page_id = str(data.get("page_id") or "").strip()
+    name = extract_store_name_from_manychat(data)
+    if explicit:
+        lookup = _safe_store_id(explicit)
+        row = db.execute(
+            "SELECT store_id FROM stores WHERE store_id=? OR webhook_key=?",
+            (lookup, lookup),
+        ).fetchone()
+        if not row:
+            raise ValueError("Webhook store is not configured")
+        sid = row["store_id"]
+    elif page_id:
+        row = db.execute("SELECT store_id FROM stores WHERE page_id=?", (page_id,)).fetchone()
+        sid = row["store_id"] if row else _safe_store_id(f"page-{page_id}")
+    elif name:
+        row = db.execute("SELECT store_id FROM stores WHERE name=?", (name,)).fetchone()
+        sid = row["store_id"] if row else DEFAULT_STORE_ID
+    else:
+        sid = DEFAULT_STORE_ID
+    display_name = name or (DEFAULT_STORE_NAME if sid == DEFAULT_STORE_ID else sid)
+    return ensure_store(db, sid, display_name, page_id, explicit)
+
+
+@app.before_request
+def bind_request_to_conversation_store():
+    """Bind dashboard conversation actions to their owning store before AI/product access."""
+    requested = request.args.get("store_id") or request.headers.get("X-Store-ID")
+    if requested:
+        _current_store_id.set(_safe_store_id(requested))
+        return
+    sender_id = (request.view_args or {}).get("sender_id")
+    if not sender_id:
+        return
+    try:
+        row = get_db().execute(
+            "SELECT COALESCE(NULLIF(store_id,''),?) AS store_id FROM customers WHERE sender_id=?",
+            (DEFAULT_STORE_ID, sender_id),
+        ).fetchone()
+        if row:
+            _current_store_id.set(_safe_store_id(row["store_id"]))
+    except Exception:
+        _current_store_id.set(DEFAULT_STORE_ID)
+
 PRODUCT_FIELDS = (
-    "product_id", "ref", "ad_id", "product_name", "keywords", "category",
+    "store_id", "product_id", "ref", "ad_id", "product_name", "keywords", "category",
     "description", "visual_description", "price", "offer", "colors", "sizes",
     "stock", "stock_quantity", "fabric", "style", "delivery", "image_url",
     "image_embedding", "status", "notes",
@@ -1113,6 +1259,7 @@ PRODUCT_FIELDS = (
 def _normalize_product(raw_product):
     product = {field: raw_product.get(field, "") for field in PRODUCT_FIELDS}
     product["product_id"] = str(product.get("product_id") or "").strip()
+    product["store_id"] = _safe_store_id(product.get("store_id") or DEFAULT_STORE_ID)
     product["status"] = str(product.get("status") or "active").strip() or "active"
     return product
 
@@ -1135,7 +1282,7 @@ def product_payload(product):
     return payload
 
 
-def load_products_from_file():
+def load_products_from_file(store_id=None, all_stores=False):
     """تحميل المنتجات من products.json فقط بدل قاعدة البيانات."""
     try:
         with open(PRODUCTS_FILE, encoding="utf-8") as f:
@@ -1151,11 +1298,15 @@ def load_products_from_file():
         print("[ProductsFile] products.json must contain a JSON array.", flush=True)
         return []
 
-    return [
+    products = [
         _normalize_product(item)
         for item in data
         if isinstance(item, dict) and str(item.get("product_id") or "").strip()
     ]
+    if all_stores:
+        return products
+    sid = _safe_store_id(store_id or current_store_id())
+    return [item for item in products if item.get("store_id") == sid]
 
 
 def save_products_to_file(products):
@@ -1216,17 +1367,27 @@ def _setting_float(value, default=0.0, minimum=None, maximum=None):
     return number
 
 
-def get_app_setting(key, default="", db=None):
+def _store_setting_key(key, store_id=None):
+    sid = _safe_store_id(store_id or current_store_id())
+    return key if sid == DEFAULT_STORE_ID else f"store:{sid}:{key}"
+
+
+def set_store_setting(db, key, value, store_id=None):
+    return set_setting(db, _store_setting_key(key, store_id), value)
+
+
+def get_app_setting(key, default="", db=None, store_id=None):
+    scoped_key = _store_setting_key(key, store_id)
     if db is not None:
-        return get_setting(db, key, default)
+        return get_setting(db, scoped_key, default)
     try:
-        return get_setting(get_db(), key, default)
+        return get_setting(get_db(), scoped_key, default)
     except Exception:
         try:
             conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
             conn.row_factory = sqlite3.Row
             try:
-                return get_setting(conn, key, default)
+                return get_setting(conn, scoped_key, default)
             finally:
                 conn.close()
         except Exception:
@@ -1253,12 +1414,17 @@ def build_delivery_policy_text(settings):
 
 
 def get_store_settings(db=None):
+    store_row = None
+    try:
+        store_row = get_store(db, current_store_id())
+    except Exception:
+        store_row = None
     delivery_settings = get_delivery_settings(db)
     delivery_policy = str(get_app_setting("delivery_policy", "", db) or "").strip()
     if not delivery_policy:
         delivery_policy = build_delivery_policy_text(delivery_settings)
     return {
-        "name": str(get_app_setting("store_name", DEFAULT_STORE_NAME, db) or DEFAULT_STORE_NAME).strip(),
+        "name": str(get_app_setting("store_name", (store_row or {}).get("name") or DEFAULT_STORE_NAME, db) or (store_row or {}).get("name") or DEFAULT_STORE_NAME).strip(),
         "phone": str(get_app_setting("store_phone", "", db) or "").strip(),
         "description": str(get_app_setting("store_description", DEFAULT_STORE_DESCRIPTION, db) or DEFAULT_STORE_DESCRIPTION).strip(),
         "provinces": str(get_app_setting("store_provinces", DEFAULT_STORE_PROVINCES, db) or DEFAULT_STORE_PROVINCES).strip(),
@@ -1295,6 +1461,10 @@ def get_ai_temperature(db, setting_name, default):
 
 def get_ai_max_tokens(db, setting_name, default):
     return _setting_int(get_app_setting(f"ai_{setting_name}_max_tokens", str(default), db), default, 1, 8000)
+
+
+def is_store_feature_enabled(key, default, db=None):
+    return _setting_bool(get_app_setting(key, "1" if default else "0", db), default)
 
 
 def render_setting_template(db, setting_key, default_text, **extra_context):
@@ -1339,17 +1509,17 @@ def save_smart_reviewer_settings(db, data):
 def get_followup_settings(db=None):
     db = db or get_db()
     return {
-        "enabled": _setting_bool(get_setting(db, "followup_enabled", "0")),
-        "max_per_day": _setting_int(get_setting(db, "followup_max_per_day", "2"), 2, 1, 10),
-        "stop_on_order": _setting_bool(get_setting(db, "followup_stop_on_order", "1"), True),
-        "stop_on_rejection": _setting_bool(get_setting(db, "followup_stop_on_rejection", "1"), True),
+        "enabled": _setting_bool(get_app_setting("followup_enabled", "0", db)),
+        "max_per_day": _setting_int(get_app_setting("followup_max_per_day", "2", db), 2, 1, 10),
+        "stop_on_order": _setting_bool(get_app_setting("followup_stop_on_order", "1", db), True),
+        "stop_on_rejection": _setting_bool(get_app_setting("followup_stop_on_rejection", "1", db), True),
         "default_delay_minutes": _setting_int(
-            get_setting(db, "followup_default_delay_minutes", "20"),
+            get_app_setting("followup_default_delay_minutes", "20", db),
             20,
             1,
             10080,
         ),
-        "message_template": get_setting(db, "followup_message_template", ""),
+        "message_template": get_app_setting("followup_message_template", "", db),
     }
 
 
@@ -1368,7 +1538,7 @@ def save_followup_settings(db, data):
         ("followup_default_delay_minutes", str(delay)),
         ("followup_message_template", message_template),
     ):
-        set_setting(db, key, value)
+        set_store_setting(db, key, value)
     return get_followup_settings(db)
 
 
@@ -1397,7 +1567,7 @@ def save_delivery_settings(db, data):
         ("delivery_fast", "1" if fast else "0"),
         ("delivery_inspection_message", inspection),
     ):
-        set_setting(db, key, value)
+        set_store_setting(db, key, value)
     return get_delivery_settings(db)
 
 
@@ -1668,7 +1838,7 @@ def send_due_followups(db=None, limit=25):
 
 
 def is_ai_enabled(db):
-    return get_setting(db, "ai_enabled", "1") != "0"
+    return get_app_setting("ai_enabled", "1", db) != "0"
 
 
 def is_customer_ai_enabled(db, sender_id):
@@ -1694,9 +1864,9 @@ def set_customer_ai_enabled(db, sender_id, enabled):
     db.commit()
 
 
-def find_product_by_id(product_id, include_inactive=False):
+def find_product_by_id(product_id, include_inactive=False, store_id=None):
     product_id = str(product_id or "").strip()
-    for product in load_products_from_file():
+    for product in load_products_from_file(store_id=store_id):
         if product.get("product_id") != product_id:
             continue
         if include_inactive or product.get("status") == "active":
@@ -1706,21 +1876,22 @@ def find_product_by_id(product_id, include_inactive=False):
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-def get_auto_product_settings(db):
-    enabled = str(get_setting(db, "auto_product_enabled", "0")).strip().lower() in {
+def get_auto_product_settings(db, store_id=None):
+    sid = _safe_store_id(store_id or current_store_id())
+    enabled = str(get_app_setting("auto_product_enabled", "0", db, sid)).strip().lower() in {
         "1", "true", "yes", "on",
     }
-    product_id = str(get_setting(db, "auto_product_id", "") or "").strip()
-    send_image = str(get_setting(db, "auto_product_send_image", "0")).strip().lower() in {
+    product_id = str(get_app_setting("auto_product_id", "", db, sid) or "").strip()
+    send_image = str(get_app_setting("auto_product_send_image", "0", db, sid)).strip().lower() in {
         "1", "true", "yes", "on",
     }
-    product = find_product_by_id(product_id) if enabled and product_id else None
+    product = find_product_by_id(product_id, store_id=sid) if enabled and product_id else None
     if enabled and not product:
         # The catalog may have been replaced while a backup still points to an
         # old product id. Keep first-contact automation working and repair the
         # stale setting instead of silently disabling image sending.
         active_products = [
-            item for item in load_products_from_file()
+            item for item in load_products_from_file(store_id=sid)
             if item.get("status") == "active"
         ]
         product = next(
@@ -1729,13 +1900,14 @@ def get_auto_product_settings(db):
         )
         if product:
             product_id = product.get("product_id", "")
-            set_setting(db, "auto_product_id", product_id)
+            set_store_setting(db, "auto_product_id", product_id, sid)
             print(f"[AutoProduct] Repaired stale default product to: {product_id}", flush=True)
     return {
         "enabled": enabled and bool(product),
         "product_id": product_id,
         "send_image": send_image,
         "product": product,
+        "store_id": sid,
     }
 
 
@@ -1826,8 +1998,8 @@ def get_or_create_customer(db, sender_id, page_id, platform=None):
     if row is None:
         platform = platform or "facebook"
         db.execute(
-            "INSERT INTO customers (sender_id, page_id, platform, first_seen_at, last_seen_at) VALUES (?,?,?,?,?)",
-            (sender_id, page_id, platform, now, now),
+            "INSERT INTO customers (sender_id, page_id, platform, first_seen_at, last_seen_at, store_id) VALUES (?,?,?,?,?,?)",
+            (sender_id, page_id, platform, now, now, current_store_id()),
         )
         db.commit()
         print(f"[Customer] New: {sender_id}", flush=True)
@@ -1836,8 +2008,8 @@ def get_or_create_customer(db, sender_id, page_id, platform=None):
         current = dict(row)
         platform = platform or current.get("platform") or "facebook"
         db.execute(
-            "UPDATE customers SET last_seen_at=?, page_id=COALESCE(?, page_id), platform=? WHERE sender_id=?",
-            (now, page_id or None, platform, sender_id),
+            "UPDATE customers SET last_seen_at=?, page_id=COALESCE(?, page_id), platform=?, store_id=? WHERE sender_id=?",
+            (now, page_id or None, platform, current_store_id(), sender_id),
         )
         db.commit()
         print(f"[Customer] Returning: {sender_id}", flush=True)
@@ -3007,8 +3179,8 @@ def create_human_review(db, ev, reason, candidates=None):
     candidates = candidates or []
     db.execute(
         """INSERT INTO human_reviews
-           (sender_id, message_text, image_url, candidates_json, reason, status, created_at)
-           VALUES (?,?,?,?,?,'pending',?)""",
+           (sender_id, message_text, image_url, candidates_json, reason, status, created_at, store_id)
+           VALUES (?,?,?,?,?,'pending',?,?)""",
         (
             ev.get("sender_id"),
             ev.get("text", ""),
@@ -3016,6 +3188,7 @@ def create_human_review(db, ev, reason, candidates=None):
             json.dumps(candidates, ensure_ascii=False),
             reason,
             now,
+            ev.get("store_id") or current_store_id(),
         ),
     )
     db.commit()
@@ -3585,6 +3758,9 @@ def _build_manychat_content(content_type: str, messages: list, message_tag: str 
 
 def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "facebook",
                         label: str = "send", message_tag: str = "", page_id: str = "") -> dict:
+    subscriber_id = str(subscriber_id or "").strip()
+    if "::" in subscriber_id:
+        subscriber_id = subscriber_id.split("::", 1)[1]
     api_key = manychat_api_key_for_page(page_id)
     if not api_key:
         msg = "MANYCHAT_API_KEY not set"
@@ -3784,11 +3960,11 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
     now = now_baghdad_iso()
     db.execute(
         """INSERT INTO messages
-           (sender_id, direction, message_type, text, image_url, ad_id, ref, raw_payload, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+           (sender_id, direction, message_type, text, image_url, ad_id, ref, raw_payload, created_at, store_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
         (
             sender_id, direction, message_type, text, image_url,
-            ad_id, ref, json.dumps(raw_payload, ensure_ascii=False), now,
+            ad_id, ref, json.dumps(raw_payload, ensure_ascii=False), now, current_store_id(),
         ),
     )
     db.commit()
@@ -3912,6 +4088,7 @@ def extract_facebook_event(body):
     event     = entry["messaging"][0]
     sender_id = event["sender"]["id"]
     page_id   = entry["id"]
+    store_id  = _safe_store_id(entry.get("_store_id") or DEFAULT_STORE_ID)
     platform  = detect_message_platform(body)
     timestamp = event.get("timestamp")
     message   = event.get("message", {})
@@ -3943,6 +4120,7 @@ def extract_facebook_event(body):
     return {
         "sender_id"      : sender_id,
         "page_id"        : page_id,
+        "store_id"       : store_id,
         "platform"       : platform,
         "timestamp"      : timestamp,
         "text"           : text,
@@ -4329,7 +4507,7 @@ def select_customer_context_product(text, customer_products):
 
 
 def analyze_image_with_ai(image_url, candidate_products):
-    if not VISION_ENABLED:
+    if not is_store_feature_enabled("vision_enabled", VISION_ENABLED):
         print("[Vision] Disabled by VISION_ENABLED=0.", flush=True)
         return {"product_found": False, "confidence": 0, "reason": "Vision disabled"}
     if not OPENROUTER_KEY:
@@ -4426,10 +4604,10 @@ def index_product_image(product_id: str, image_url: str):
     """حساب وتخزين embedding صورة المنتج داخل products.json."""
     try:
         embedding = get_image_embedding(image_url)
-        products = load_products_from_file()
+        products = load_products_from_file(all_stores=True)
         updated = False
         for product in products:
-            if product.get("product_id") == product_id:
+            if product.get("product_id") == product_id and product.get("store_id") == current_store_id():
                 product["image_url"] = image_url or product.get("image_url", "")
                 product["image_embedding"] = embedding
                 updated = True
@@ -4552,7 +4730,7 @@ def _extract_product_id_only(raw, candidates):
 
 def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
     """إرجاع product_id فقط من Vision بعد مقارنة صورة الزبون بصور المنتجات."""
-    if not VISION_ENABLED:
+    if not is_store_feature_enabled("vision_enabled", VISION_ENABLED):
         return {
             "product_found": False, "product_id": "", "confidence": 0,
             "available": False, "reason": "Vision disabled",
@@ -4644,6 +4822,8 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
 
 
 def _resolve_catalog_image_path():
+    if current_store_id() != DEFAULT_STORE_ID:
+        return ""
     path = str(CATALOG_IMAGE_PATH or "").strip()
     if not path:
         return ""
@@ -4656,12 +4836,18 @@ def _is_catalog_image_file(filename):
     return os.path.splitext(str(filename or "").strip())[1].lower() in CATALOG_IMAGE_EXTENSIONS
 
 
+def _catalog_store_dir(store_id=None):
+    sid = _safe_store_id(store_id or current_store_id())
+    return CATALOG_IMAGE_DIR if sid == DEFAULT_STORE_ID else os.path.join(CATALOG_IMAGE_DIR, sid)
+
+
 def _catalog_image_paths_from_dir():
-    if not os.path.isdir(CATALOG_IMAGE_DIR):
+    catalog_dir = _catalog_store_dir()
+    if not os.path.isdir(catalog_dir):
         return []
     paths = []
-    for name in os.listdir(CATALOG_IMAGE_DIR):
-        path = os.path.join(CATALOG_IMAGE_DIR, name)
+    for name in os.listdir(catalog_dir):
+        path = os.path.join(catalog_dir, name)
         if os.path.isfile(path) and _is_catalog_image_file(name):
             paths.append(path)
     return sorted(paths, key=lambda item: (os.path.getmtime(item), os.path.basename(item).lower()))
@@ -4691,13 +4877,9 @@ def _catalog_image_id(path):
 
 
 def _catalog_image_public_url(path):
-    try:
-        rel = os.path.relpath(path, PRODUCT_IMAGE_DIR).replace("\\", "/")
-    except ValueError:
-        return ""
-    if rel.startswith(".."):
-        return ""
-    return build_public_image_url(f"/product_image/{rel}")
+    return build_public_image_url(
+        f"/catalog_image_file/{current_store_id()}/{os.path.basename(path)}"
+    )
 
 
 def _catalog_image_meta(path):
@@ -4798,11 +4980,11 @@ def match_customer_image_with_catalog(customer_image_url, products):
         "04_catalog_match_start",
         customer_image_url=customer_image_url,
         products_count=len(products or []),
-        enabled=CATALOG_MATCH_ENABLED,
+        enabled=is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED),
         model=catalog_model,
         catalog_images_count=len(_resolve_catalog_image_paths()),
     )
-    if not CATALOG_MATCH_ENABLED:
+    if not is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED):
         image_flow("04_catalog_match_skipped", reason="disabled")
         print("[CatalogVision] returned NONE, human review required", flush=True)
         return {
@@ -5027,7 +5209,7 @@ def match_product(db, ev, products, resume_ai_on_link=True):
         )
         return None, None, image_result
 
-    if not matched and image_url and products and VISION_ENABLED:
+    if not matched and image_url and products and is_store_feature_enabled("vision_enabled", VISION_ENABLED, db):
         # ── Vision product-id pipeline ────────────────────────────────────────
         candidates = []
         if CLIP_AVAILABLE and _clip_model is not None:
@@ -6003,13 +6185,14 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         "delivery_fee": delivery_fee,
         "total_amount": total_amount,
         "status": "new",
+        "store_id": current_store_id(),
     }
 
     db.execute(
         """INSERT INTO orders
            (sender_id, customer_name, phone, province, address,
-            product_id, product_name, color, size, notes, status, order_items, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            product_id, product_name, color, size, notes, status, order_items, created_at, store_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             sender_id,
             order_data.get("customer_name", ""),
@@ -6024,6 +6207,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
             "new",
             json.dumps(items, ensure_ascii=False),
             now,
+            current_store_id(),
         ),
     )
 
@@ -6068,6 +6252,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 02: Event extraction ─────────────────────────────────────────────
     log(2, "EXTRACT", "Extracting event data from payload...")
     ev = extract_facebook_event(body)
+    _current_store_id.set(ev.get("store_id") or DEFAULT_STORE_ID)
 
     # ── Deduplication: avoid processing the same message twice ────────────────
     mid = (body.get("entry", [{}])[0]
@@ -6794,7 +6979,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 11: Reply checker ───────────────────────────────────────────────
     checker = {"approved": True, "problem": "", "fix_instruction": ""}
     checker_approved = True
-    if not CHECKER_ENABLED:
+    if not is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db):
         log(11, "CHECKER", "Checker is disabled. Main model reply will be sent directly.")
     else:
         local_checker = local_reply_validation(reply, matched_product, customer_products)
@@ -7126,14 +7311,22 @@ def webhook():
 
 
 @app.route("/manychat/webhook", methods=["POST"])
-def manychat_webhook():
+@app.route("/manychat/webhook/<store_key>", methods=["POST"])
+def manychat_webhook(store_key=""):
     """
     يستقبل الرسائل من ManyChat External Request ويرجع الرد في نفس response.
     هذا المسار لا يحتاج X-API-Key لأن ManyChat يستدعيه مباشرة.
     """
     data = request.get_json(silent=True) or request.form.to_dict() or request.args.to_dict() or {}
+    db = get_db()
+    try:
+        store_id = resolve_webhook_store(db, data, store_key)
+    except ValueError:
+        return jsonify({"ok": False, "error": "المتجر غير معروف في رابط Webhook"}), 404
+    _current_store_id.set(store_id)
 
     subscriber_id = str(data.get("id") or data.get("subscriber_id") or data.get("user_id") or "")
+    internal_sender_id = f"{store_id}::{subscriber_id}" if subscriber_id else ""
     text = (
         data.get("last_input_text")
         or data.get("text")
@@ -7143,7 +7336,7 @@ def manychat_webhook():
     ).strip()
     first_name = data.get("first_name", "") or ""
     last_name = data.get("last_name", "") or ""
-    store_name = extract_store_name_from_manychat(data)
+    store_name = extract_store_name_from_manychat(data) or (get_store(db, store_id) or {}).get("name", "")
     platform = detect_manychat_platform(data)
     page_id = str(data.get("page_id") or "")
     image_url = extract_image_url_from_manychat_data(data)
@@ -7180,12 +7373,13 @@ def manychat_webhook():
         "object": "instagram" if is_instagram_platform(platform) else "page",
         "entry": [{
             "id": page_id,
+            "_store_id": store_id,
             "messaging": [{
-                "sender": {"id": subscriber_id},
+                "sender": {"id": internal_sender_id},
                 "recipient": {"id": page_id},
                 "timestamp": timestamp_ms,
                 "message": {
-                    "mid": f"manychat_{subscriber_id}_{timestamp_ms}",
+                    "mid": f"manychat_{store_id}_{subscriber_id}_{timestamp_ms}",
                     "text": text,
                     "attachments": ([{
                         "type": "image",
@@ -7202,20 +7396,19 @@ def manychat_webhook():
         }],
     }
 
-    db = get_db()
-
     # نضمن وجود سجل الزبون ونحفظ الاسم قبل المعالجة لتمكين الردود من استخدامه
     if subscriber_id:
         try:
-            get_or_create_customer(db, subscriber_id, page_id, platform)
+            get_or_create_customer(db, internal_sender_id, page_id, platform)
             if first_name or last_name or store_name:
                 full_name = f"{first_name} {last_name}".strip()
                 db.execute(
                     """UPDATE customers SET
                        name=CASE WHEN ?!='' THEN ? ELSE name END,
                        store_name=CASE WHEN ?!='' THEN ? ELSE store_name END
+                       ,store_id=?
                        WHERE sender_id=?""",
-                    (full_name, full_name, store_name, store_name, subscriber_id),
+                    (full_name, full_name, store_name, store_name, store_id, internal_sender_id),
                 )
                 db.commit()
                 print(f"[ManyChat IN] Saved profile name={full_name}", flush=True)
@@ -7226,13 +7419,14 @@ def manychat_webhook():
     # ثم إرسال الرد عبر ManyChat API. هكذا نرجع لـ ManyChat فوراً ولا نحتاج رد متزامن.
     threading.Thread(
         target=_process_manychat_webhook_async,
-        args=(fake_body, subscriber_id, platform),
+        args=(fake_body, internal_sender_id, platform, subscriber_id),
         daemon=True,
     ).start()
 
     print(f"[ManyChat IN] Queued background processing for {subscriber_id} (debounce={DEBOUNCE_DELAY}s)", flush=True)
     return jsonify({
         "version": "v2",
+        "store_id": store_id,
         "content": {
             "type": manychat_content_type(platform),
             "messages": [],
@@ -7240,7 +7434,7 @@ def manychat_webhook():
     }), 200
 
 
-def _process_manychat_webhook_async(fake_body, subscriber_id, platform):
+def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id=None):
     """Serialize one customer's webhooks before semantic de-duplication."""
     with app.app_context():
         db = get_db()
@@ -7248,12 +7442,14 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform):
         if not acquired:
             return
         try:
-            return _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform)
+            return _process_manychat_webhook_async_locked(
+                fake_body, subscriber_id, platform, outbound_subscriber_id or subscriber_id,
+            )
         finally:
             release_sender_lock(db, subscriber_id)
 
 
-def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform):
+def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, outbound_subscriber_id=None):
     """يعالج رسائل ManyChat في الخلفية مع debounce ثم يُرسل الرد عبر ManyChat API."""
     with app.app_context():
         db = get_db()
@@ -7292,14 +7488,14 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform):
 
         # إرسال النص أولاً ثم الصور
         if reply_text:
-            sent = send_reply_via_manychat(subscriber_id, reply_text, platform)
+            sent = send_reply_via_manychat(outbound_subscriber_id or subscriber_id, reply_text, platform)
             print(f"[ManyChatAsync] reply sent={sent} | {reply_text[:80]}", flush=True)
         else:
             print(f"[ManyChatAsync] No reply to send (debounced/skipped/handoff).", flush=True)
 
         if image_urls and result.get("send_image"):
             for image_url in image_urls:
-                ok = send_image_via_manychat(subscriber_id, image_url, platform=platform)
+                ok = send_image_via_manychat(outbound_subscriber_id or subscriber_id, image_url, platform=platform)
                 print(f"[ManyChatAsync] image sent={ok} url={image_url}", flush=True)
 
 
@@ -7626,6 +7822,14 @@ def serve_product_image(filename):
     return send_from_directory(PRODUCT_IMAGE_DIR, filename)
 
 
+@app.route("/catalog_image_file/<store_id>/<path:filename>", methods=["GET"])
+def serve_catalog_image(store_id, filename):
+    safe_name = os.path.basename(str(filename or "").replace("\\", "/"))
+    if safe_name != filename or not _is_catalog_image_file(safe_name):
+        return jsonify({"error": "invalid catalog image"}), 400
+    return send_from_directory(_catalog_store_dir(store_id), safe_name)
+
+
 @app.route("/aud/<path:filename>", methods=["GET"])
 def serve_audio(filename):
     """تخدم ملفات التنبيه الصوتي للداشبورد."""
@@ -7759,6 +7963,11 @@ def _admin_page(template_name, **context):
 @app.route("/settings")
 def settings_index_page():
     return _admin_page("settings/index.html")
+
+
+@app.route("/settings/stores")
+def settings_stores_page():
+    return _admin_page("settings/stores.html")
 
 
 @app.route("/settings/ai")
@@ -7992,11 +8201,13 @@ def api_import_products():
     if not isinstance(data, list):
         return jsonify({"error": "ملف المنتجات يجب أن يحتوي قائمة JSON"}), 400
     normalized = []
+    sid = current_store_id()
     seen = set()
     for idx, item in enumerate(data, 1):
         if not isinstance(item, dict):
             return jsonify({"error": f"المنتج رقم {idx} ليس object"}), 400
         product = _normalize_product(item)
+        product["store_id"] = sid
         if not product.get("product_id") or not product.get("product_name"):
             return jsonify({"error": f"المنتج رقم {idx} يحتاج product_id و product_name"}), 400
         if product["product_id"] in seen:
@@ -8004,7 +8215,11 @@ def api_import_products():
         seen.add(product["product_id"])
         normalized.append(product)
     with _products_file_lock:
-        save_products_to_file(normalized)
+        existing_other_stores = [
+            item for item in load_products_from_file(all_stores=True)
+            if item.get("store_id") != sid
+        ]
+        save_products_to_file(existing_other_stores + normalized)
     return jsonify({"ok": True, "count": len(normalized)})
 
 
@@ -8281,7 +8496,8 @@ def api_conversations():
         SELECT
             c.sender_id,
             c.name,
-            c.store_name,
+            COALESCE(NULLIF(c.store_name,''), s.name, 'لمسة ستور') AS store_name,
+            COALESCE(NULLIF(c.store_id,''), 'default') AS store_id,
             c.phone,
             c.province,
             c.address,
@@ -8328,6 +8544,7 @@ def api_conversations():
              ORDER BY id DESC LIMIT 1) AS ref,
             COALESCE(cais.enabled, 1) AS ai_enabled
         FROM customers c
+        LEFT JOIN stores s ON s.store_id=COALESCE(NULLIF(c.store_id,''), 'default')
         LEFT JOIN customer_ai_settings cais ON cais.sender_id = c.sender_id
         LEFT JOIN messages m ON m.id = (
             SELECT id FROM messages WHERE sender_id = c.sender_id ORDER BY id DESC LIMIT 1
@@ -8673,6 +8890,60 @@ def api_products():
     ]})
 
 
+@app.route("/api/stores", methods=["GET", "POST"])
+@_dash_require
+def api_stores():
+    db = get_db()
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        webhook_key = _safe_store_id(data.get("webhook_key") or name)
+        if not name:
+            return jsonify({"error": "اسم المتجر مطلوب"}), 400
+        allowed = {
+            DEFAULT_STORE_ID: ("لمسة ستور", LAMSA_WEBHOOK_KEY),
+            LAMSA_WEBHOOK_KEY: ("لمسة ستور", LAMSA_WEBHOOK_KEY),
+            KHUYOOT_STORE_ID: (KHUYOOT_STORE_NAME, KHUYOOT_STORE_ID),
+        }
+        requested = _safe_store_id(data.get("store_id") or webhook_key)
+        if requested not in allowed:
+            return jsonify({"error": "النظام مخصص لمتجري لمسة ستور وخيوط فقط"}), 409
+        fixed_name, fixed_webhook = allowed[requested]
+        fixed_store_id = DEFAULT_STORE_ID if requested == LAMSA_WEBHOOK_KEY else requested
+        store_id = ensure_store(
+            db,
+            fixed_store_id,
+            fixed_name,
+            data.get("page_id") or "",
+            fixed_webhook,
+        )
+        return jsonify({"ok": True, "store": get_store(db, store_id)}), 201
+    stores = list_stores(db)
+    base_url = PUBLIC_URL or request.url_root.rstrip("/")
+    for store in stores:
+        store["webhook_url"] = f"{base_url}/manychat/webhook/{store.get('webhook_key') or store['store_id']}"
+    return jsonify({"ok": True, "stores": stores, "current_store_id": current_store_id()})
+
+
+@app.route("/api/stores/<store_id>", methods=["PUT"])
+@_dash_require
+def api_update_store(store_id):
+    db = get_db()
+    existing = get_store(db, store_id)
+    if not existing:
+        return jsonify({"error": "المتجر غير موجود"}), 404
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name") or existing["name"]).strip()
+    page_id = str(data.get("page_id") if "page_id" in data else existing.get("page_id") or "").strip()
+    webhook_key = _safe_store_id(data.get("webhook_key") or existing.get("webhook_key") or store_id)
+    db.execute(
+        "UPDATE stores SET name=?,page_id=?,webhook_key=?,updated_at=? WHERE store_id=?",
+        (name, page_id, webhook_key, now_baghdad_iso(), _safe_store_id(store_id)),
+    )
+    db.commit()
+    return jsonify({"ok": True, "store": get_store(db, store_id)})
+
+
 def _product_from_request(data, existing=None):
     data = data or {}
     existing = existing or {}
@@ -8683,6 +8954,7 @@ def _product_from_request(data, existing=None):
         elif field not in product:
             product[field] = ""
     product["product_id"] = str(product.get("product_id") or "").strip()
+    product["store_id"] = _safe_store_id(product.get("store_id") or current_store_id())
     product["product_name"] = str(product.get("product_name") or "").strip()
     product["status"] = str(product.get("status") or "active").strip() or "active"
     product["image_url"] = _normalize_product_image_value(product.get("image_url"))
@@ -8706,8 +8978,8 @@ def api_create_product():
         return jsonify({"error": "product_id and product_name required"}), 400
 
     with _products_file_lock:
-        products = load_products_from_file()
-        if any(p.get("product_id") == product["product_id"] for p in products):
+        products = load_products_from_file(all_stores=True)
+        if any(p.get("product_id") == product["product_id"] and p.get("store_id") == product["store_id"] for p in products):
             return jsonify({"error": "product_id already exists"}), 409
         products.append(product)
         save_products_to_file(products)
@@ -8723,9 +8995,9 @@ def api_update_product(product_id):
         return jsonify({"error": "product_id required"}), 400
 
     with _products_file_lock:
-        products = load_products_from_file()
+        products = load_products_from_file(all_stores=True)
         for idx, existing in enumerate(products):
-            if existing.get("product_id") == product_id:
+            if existing.get("product_id") == product_id and existing.get("store_id") == current_store_id():
                 updated = _product_from_request(data, existing)
                 updated["product_id"] = product_id
                 if not updated.get("product_name"):
@@ -8745,8 +9017,8 @@ def api_delete_product(product_id):
         return jsonify({"error": "product_id required"}), 400
 
     with _products_file_lock:
-        products = load_products_from_file()
-        remaining = [p for p in products if p.get("product_id") != product_id]
+        products = load_products_from_file(all_stores=True)
+        remaining = [p for p in products if not (p.get("product_id") == product_id and p.get("store_id") == current_store_id())]
         if len(remaining) == len(products):
             return jsonify({"error": "product not found"}), 404
         save_products_to_file(remaining)
@@ -8861,7 +9133,7 @@ def api_catalog_image():
             "exists": len(images) > 0,
             "images": images,
             "images_count": len(images),
-            "catalog_match_enabled": CATALOG_MATCH_ENABLED,
+            "catalog_match_enabled": is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED),
             "catalog_match_model": get_ai_model(None, "catalog_match_model", CATALOG_MATCH_MODEL),
         })
     # POST: forward single image as multi-image upload
@@ -8878,18 +9150,19 @@ def api_catalog_image():
             "message": "فشل رفع صورة الكتالوج — استخدم صفحة /settings/catalog لرفع أكثر من صورة",
         }), 400
     saved = []
+    catalog_dir = _catalog_store_dir()
     with _catalog_image_lock:
-        os.makedirs(CATALOG_IMAGE_DIR, exist_ok=True)
+        os.makedirs(catalog_dir, exist_ok=True)
         filename = _safe_catalog_filename(file.filename)
         if not filename:
             return jsonify({"ok": False, "error": "Unsupported image type"}), 400
         stem, fext = os.path.splitext(filename)
         candidate = filename
         counter = 1
-        while os.path.exists(os.path.join(CATALOG_IMAGE_DIR, candidate)):
+        while os.path.exists(os.path.join(catalog_dir, candidate)):
             candidate = f"{stem}_{counter}{fext}"
             counter += 1
-        path = os.path.join(CATALOG_IMAGE_DIR, candidate)
+        path = os.path.join(catalog_dir, candidate)
         try:
             file.save(path)
             if os.path.getsize(path) <= 0:
@@ -8917,9 +9190,10 @@ def api_settings_catalog_images():
             "ok": True,
             "images": images,
             "count": len(images),
-            "catalog_match_enabled": CATALOG_MATCH_ENABLED,
+            "catalog_match_enabled": is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED),
             "catalog_match_model": get_ai_model(None, "catalog_match_model", CATALOG_MATCH_MODEL),
-            "upload_dir": os.path.basename(CATALOG_IMAGE_DIR),
+            "upload_dir": os.path.basename(_catalog_store_dir()),
+            "store_id": current_store_id(),
         })
 
     files = request.files.getlist("images") or request.files.getlist("image")
@@ -8929,8 +9203,9 @@ def api_settings_catalog_images():
 
     saved = []
     errors = []
+    catalog_dir = _catalog_store_dir()
     with _catalog_image_lock:
-        os.makedirs(CATALOG_IMAGE_DIR, exist_ok=True)
+        os.makedirs(catalog_dir, exist_ok=True)
         for file in files:
             filename = _safe_catalog_filename(file.filename)
             if not filename:
@@ -8939,10 +9214,10 @@ def api_settings_catalog_images():
             stem, ext = os.path.splitext(filename)
             candidate = filename
             counter = 1
-            while os.path.exists(os.path.join(CATALOG_IMAGE_DIR, candidate)):
+            while os.path.exists(os.path.join(catalog_dir, candidate)):
                 candidate = f"{stem}_{counter}{ext}"
                 counter += 1
-            path = os.path.join(CATALOG_IMAGE_DIR, candidate)
+            path = os.path.join(catalog_dir, candidate)
             try:
                 file.save(path)
                 if os.path.getsize(path) <= 0:
@@ -8976,7 +9251,7 @@ def api_delete_catalog_image(image_id):
         safe_name = os.path.basename(image_id.replace("\\", "/"))
         if safe_name != image_id or not _is_catalog_image_file(safe_name):
             return jsonify({"ok": False, "error": "invalid image_id"}), 400
-        path = os.path.join(CATALOG_IMAGE_DIR, safe_name)
+        path = os.path.join(_catalog_store_dir(), safe_name)
 
     if not path or not os.path.isfile(path):
         return jsonify({"ok": False, "error": "image not found"}), 404
@@ -10161,7 +10436,9 @@ def api_settings_overview():
             "enabled": is_ai_enabled(db),
             "main_model": get_ai_model(db, "main_model", MAIN_MODEL),
             "improve_model": get_ai_model(db, "improve_model", IMPROVE_MODEL),
-            "checker_enabled": CHECKER_ENABLED,
+            "checker_enabled": is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db),
+            "vision_enabled": is_store_feature_enabled("vision_enabled", VISION_ENABLED, db),
+            "catalog_match_enabled": is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED, db),
             "checker_model": get_ai_model(db, "checker_model", CHECKER_MODEL),
             "openrouter_key_present": bool(OPENROUTER_KEY),
         },
@@ -10200,7 +10477,7 @@ def api_store_settings():
         ("provinces", "store_provinces"),
         ("inspection_message", "inspection_message"),
     ):
-        set_setting(db, setting_key, data.get(key, ""))
+        set_store_setting(db, setting_key, data.get(key, ""))
     return jsonify({"ok": True})
 
 
@@ -10223,6 +10500,7 @@ def api_unlink_product(sender_id):
 @_dash_require
 def api_set_ai_enabled():
     db = get_db()
+    sid = current_store_id()
     if request.method == "GET":
         return jsonify({
             "ok": True,
@@ -10230,7 +10508,9 @@ def api_set_ai_enabled():
             "model_options": AI_MODEL_OPTIONS,
             "main_model": get_ai_model(db, "main_model", MAIN_MODEL),
             "improve_model": get_ai_model(db, "improve_model", IMPROVE_MODEL),
-            "checker_enabled": CHECKER_ENABLED,
+            "checker_enabled": is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db),
+            "vision_enabled": is_store_feature_enabled("vision_enabled", VISION_ENABLED, db),
+            "catalog_match_enabled": is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED, db),
             "checker_model": get_ai_model(db, "checker_model", CHECKER_MODEL),
             "vision_model": get_ai_model(db, "vision_model", VISION_MODEL),
             "catalog_match_model": get_ai_model(db, "catalog_match_model", CATALOG_MATCH_MODEL),
@@ -10271,7 +10551,10 @@ def api_set_ai_enabled():
         })
     data = request.get_json(silent=True) or {}
     enabled = bool(data.get("enabled"))
-    set_setting(db, "ai_enabled", "1" if enabled else "0")
+    set_store_setting(db, "ai_enabled", "1" if enabled else "0", sid)
+    for feature in ("checker_enabled", "vision_enabled", "catalog_match_enabled"):
+        if feature in data:
+            set_store_setting(db, feature, "1" if bool(data.get(feature)) else "0", sid)
     for field, setting_key in (
         ("main_model", "ai_main_model"),
         ("improve_model", "ai_improve_model"),
@@ -10313,7 +10596,7 @@ def api_set_ai_enabled():
         ("prompt_catalog_search_context", "prompt_catalog_search_context"),
     ):
         if field in data:
-            set_setting(db, setting_key, data.get(field, ""))
+            set_store_setting(db, setting_key, data.get(field, ""), sid)
     print(f"[Settings] AI enabled={enabled}", flush=True)
     return jsonify({"ok": True, "ai_enabled": enabled})
 
@@ -10397,8 +10680,9 @@ def api_settings_ai_commands():
 @_dash_require
 def api_auto_product_settings():
     db = get_db()
+    sid = current_store_id()
     if request.method == "GET":
-        settings = get_auto_product_settings(db)
+        settings = get_auto_product_settings(db, sid)
         return jsonify({
             "ok": True,
             "auto_product_enabled": settings["enabled"],
@@ -10412,16 +10696,16 @@ def api_auto_product_settings():
     product_id = str(data.get("product_id") or data.get("auto_product_id") or "").strip()
     send_image = bool(data.get("send_image", data.get("auto_product_send_image", False)))
     if enabled:
-        product = find_product_by_id(product_id)
+        product = find_product_by_id(product_id, store_id=sid)
         if not product:
             return jsonify({
                 "ok": False,
                 "error": "auto_product_id must be an active product when enabled",
             }), 400
-    set_setting(db, "auto_product_enabled", "1" if enabled else "0")
-    set_setting(db, "auto_product_id", product_id)
-    set_setting(db, "auto_product_send_image", "1" if send_image else "0")
-    settings = get_auto_product_settings(db)
+    set_store_setting(db, "auto_product_enabled", "1" if enabled else "0", sid)
+    set_store_setting(db, "auto_product_id", product_id, sid)
+    set_store_setting(db, "auto_product_send_image", "1" if send_image else "0", sid)
+    settings = get_auto_product_settings(db, sid)
     print(
         f"[Settings] Auto product enabled={enabled} product_id={product_id} send_image={send_image}",
         flush=True,
@@ -10667,12 +10951,12 @@ def api_create_order(sender_id):
 
     db.execute(
         "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
-        "product_id, product_name, color, size, notes, status, order_items, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?,?)",
+        "product_id, product_name, color, size, notes, status, order_items, created_at, store_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?,?,?)",
         (sender_id, data.get("customer_name"), data.get("phone"),
          data.get("province"), data.get("address"), product_id_text,
          product_name_text, data.get("color"), data.get("size"),
-         data.get("notes"), json.dumps(items, ensure_ascii=False), now),
+         data.get("notes"), json.dumps(items, ensure_ascii=False), now, current_store_id()),
     )
     db.execute(
         "UPDATE customers SET lead_score=100, lead_stage='booked', "

@@ -7,6 +7,7 @@ let currentSenderId   = null;
 let currentCustomer   = null;
 let allConversations  = [];
 let currentFilter     = 'all';
+let currentStoreFilter = 'all';
 let searchQuery       = '';
 let convLimit = 20;
 let convOffset = 0;
@@ -253,6 +254,11 @@ function filterCustomers() {
   renderConversations();
 }
 
+function setConversationStoreFilter(storeId) {
+  currentStoreFilter = ['all', 'default', 'khuyoot'].includes(storeId) ? storeId : 'all';
+  renderConversations();
+}
+
 function onCustomerListScroll() {
   const el = document.getElementById('customerList');
   if (!el) return;
@@ -267,6 +273,10 @@ function renderConversations() {
   syncConversationFilterUI();
   let list = allConversations;
 
+  if (currentStoreFilter !== 'all') {
+    list = list.filter(c => (c.store_id || 'default') === currentStoreFilter);
+  }
+
   if (currentFilter === 'booked') {
     list = list.filter(c => c.lead_stage === 'booked');
   }
@@ -280,7 +290,8 @@ function renderConversations() {
   if (searchQuery) {
     list = list.filter(c =>
       (c.sender_id || '').toLowerCase().includes(searchQuery) ||
-      (c.name || '').toLowerCase().includes(searchQuery)
+      (c.name || '').toLowerCase().includes(searchQuery) ||
+      (c.store_name || '').toLowerCase().includes(searchQuery)
     );
   }
 
@@ -318,11 +329,15 @@ function renderConversations() {
           ? `<span class="badge bg-warning text-dark" style="font-size:9px">مهتم ${Number(c.lead_score || 0)}%</span>`
           : '';
     const preview = esc(c.last_message || '...');
+    const storeId = c.store_id || 'default';
+    const storeName = c.store_name || (storeId === 'khuyoot' ? 'خيوط' : 'لمسة ستور');
+    const storeBadgeClass = storeId === 'khuyoot' ? 'store-khuyoot' : 'store-lamsa';
     return `
       <div class="customer-item ${active}" onclick="selectConversation('${c.sender_id}')">
         <div class="cust-avatar">${init}</div>
         <div class="cust-info">
           <div class="cust-name">${esc(c.name || c.sender_id)} ${adBadge}</div>
+          <div><span class="conversation-store-badge ${storeBadgeClass}"><i class="bi bi-shop"></i> ${esc(storeName)}</span></div>
           ${sourceMeta ? `<div class="cust-preview">${sourceMeta}</div>` : ''}
           <div class="cust-preview">${preview}</div>
         </div>
@@ -346,6 +361,7 @@ async function selectConversation(senderId) {
   const conv = allConversations.find(c => c.sender_id === senderId) || {};
   currentCustomer = conv;
   currentConversationAIEnabled = conv.ai_enabled !== 0 && conv.ai_enabled !== false;
+  await loadProducts(conv.store_id || 'default');
 
   const init = (conv.name || senderId || '؟').slice(0, 2).toUpperCase();
   document.getElementById('chatAvatar').textContent   = init;
@@ -1091,9 +1107,9 @@ async function setCustomerGenderQuick(gender) {
 }
 
 // ══ Products ═══════════════════════════════════════════════════════════════
-async function loadProducts() {
+async function loadProducts(storeId = 'default') {
   try {
-    const res  = await apiFetch('/api/products');
+    const res  = await apiFetch(`/api/products?store_id=${encodeURIComponent(storeId || 'default')}`);
     const data = await res.json();
     allProducts = data.products || [];
     const opts = allProducts.map(p =>

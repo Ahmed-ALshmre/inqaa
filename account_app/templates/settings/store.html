@@ -10,6 +10,8 @@
 </section>
 
 <section class="admin-panel">
+  <label class="form-label" for="storeSettingsStoreSelect">المتجر</label>
+  <select class="form-select mb-3" id="storeSettingsStoreSelect"></select>
   <form id="storeSettingsForm" class="admin-form">
     <label class="form-label">اسم المتجر</label>
     <input class="form-control" id="storeName">
@@ -29,6 +31,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/settings_pages.js?v=4"></script>
+<script src="/static/js/settings_pages.js?v=8"></script>
 <script>initStoreSettingsPage();</script>
 {% endblock %}

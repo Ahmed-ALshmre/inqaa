@@ -10,6 +10,8 @@
 </section>
 
 <section class="admin-panel">
+  <label class="form-label" for="deliveryStoreSelect">المتجر</label>
+  <select class="form-select mb-3" id="deliveryStoreSelect"></select>
   <form id="deliverySettingsForm" class="admin-form">
     <label class="form-label">أجور التوصيل لكل المحافظات (دينار عراقي)</label>
     <input class="form-control" id="allProvincesFee" type="number" min="0" step="500" value="5000">
@@ -23,6 +25,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/settings_pages.js?v=3"></script>
+<script src="/static/js/settings_pages.js?v=8"></script>
 <script>initDeliveryPage();</script>
 {% endblock %}
