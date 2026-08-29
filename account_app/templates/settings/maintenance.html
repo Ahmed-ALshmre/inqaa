@@ -11,15 +11,11 @@
 
 <section class="admin-panel">
   <h2><i class="bi bi-shield-check"></i> النسخ الاحتياطي</h2>
-  <p class="admin-muted">نزّل نسخة من قاعدة البيانات ونسخة مستقلة من الكتالوج قبل أي تعديل كبير.</p>
+  <p class="admin-muted">زر واحد يحفظ المحادثات والزبائن والطلبات والمنتجات والصور وإعدادات الذكاء الاصطناعي في ملف واحد. مفاتيح الدخول السرية لا تُضمّن.</p>
   <div class="d-flex flex-wrap gap-2 mb-4">
-    <a class="btn btn-success" id="fullBackupLink"><i class="bi bi-file-earmark-zip"></i> نسخة كاملة ZIP</a>
-    <a class="btn btn-primary" id="databaseBackupLink"><i class="bi bi-database-down"></i> تنزيل قاعدة البيانات</a>
-    <a class="btn btn-outline-primary" id="productsBackupLink"><i class="bi bi-box-arrow-down"></i> تنزيل المنتجات</a>
-    <button class="btn btn-outline-warning" type="button" onclick="document.getElementById('databaseRestoreInput').click()"><i class="bi bi-database-up"></i> استعادة قاعدة البيانات</button>
-    <button class="btn btn-outline-warning" type="button" onclick="document.getElementById('productsRestoreInput').click()"><i class="bi bi-box-arrow-in-up"></i> استعادة المنتجات</button>
-    <input id="databaseRestoreInput" type="file" accept=".db,.sqlite,.sqlite3" hidden onchange="restoreDatabaseBackup(this)">
-    <input id="productsRestoreInput" type="file" accept=".json,application/json" hidden onchange="restoreProductsBackup(this)">
+    <a class="btn btn-success btn-lg" id="fullBackupLink"><i class="bi bi-cloud-arrow-down"></i> أخذ نسخة احتياطية كاملة</a>
+    <button class="btn btn-outline-warning btn-lg" type="button" onclick="document.getElementById('fullRestoreInput').click()"><i class="bi bi-cloud-arrow-up"></i> استعادة نسخة كاملة</button>
+    <input id="fullRestoreInput" type="file" accept=".zip,application/zip" hidden onchange="restoreFullBackup(this)">
   </div>
   <hr>
   <h2><i class="bi bi-arrow-clockwise"></i> تحديث الواجهة</h2>
@@ -31,6 +27,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/settings_pages.js?v=3"></script>
+<script src="/static/js/settings_pages.js?v=4"></script>
 <script>initMaintenancePage();</script>
 {% endblock %}

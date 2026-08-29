@@ -6,14 +6,20 @@ from unittest.mock import patch
 from account_app.app import (
     app,
     bind_customer_to_product,
+    clean_telegram_text,
+    create_human_review,
     create_order_if_valid,
+    format_order_for_telegram,
     complete_customer_product_link,
     get_active_product_binding,
     get_auto_product_settings,
     get_db,
     infer_explicit_customer_gender,
+    extract_store_name_from_manychat,
+    is_recent_duplicate_incoming,
     load_products_from_file,
     reject_current_binding,
+    save_message,
     _should_send_image,
     should_use_auto_product,
     update_customer_intelligence,
@@ -34,6 +40,7 @@ class SalesCoreTests(unittest.TestCase):
 
     def tearDown(self):
         self.db.execute("DELETE FROM orders WHERE sender_id=?", (self.sender_id,))
+        self.db.execute("DELETE FROM human_reviews WHERE sender_id=?", (self.sender_id,))
         self.db.execute("DELETE FROM customer_product_interests WHERE sender_id=?", (self.sender_id,))
         self.db.execute("DELETE FROM customers WHERE sender_id=?", (self.sender_id,))
         self.db.commit()
@@ -131,6 +138,34 @@ class SalesCoreTests(unittest.TestCase):
             {"text": "ممكن ترسلين صورته؟", "ref": "", "ad_id": ""},
         ))
 
+    def test_telegram_text_removes_links(self):
+        cleaned = clean_telegram_text(
+            "تفاصيل المنتج https://example.com/product/1\nwww.example.com/image.jpg"
+        )
+        self.assertNotIn("http", cleaned)
+        self.assertNotIn("www.", cleaned)
+
+    @patch("account_app.app.send_telegram_photo", return_value=True)
+    @patch("account_app.app.send_telegram_message", return_value=True)
+    def test_human_review_sends_only_simple_alert(self, send_message, send_photo):
+        candidates = [
+            {"product_id": f"P{i:03d}", "product_name": f"منتج {i}", "image_url": f"https://example.com/{i}.jpg"}
+            for i in range(1, 8)
+        ]
+        create_human_review(
+            self.db,
+            {"sender_id": self.sender_id, "text": "هذا موجود؟", "image_url": "https://example.com/customer.jpg"},
+            "لم يتم التعرف تلقائياً",
+            candidates,
+        )
+        self.assertEqual(send_message.call_count, 1)
+        self.assertEqual(send_photo.call_count, 0)
+        notification = send_message.call_args.args[0]
+        self.assertNotIn("https://", notification)
+        self.assertIn("تحتاج تدخلك", notification)
+        self.assertNotIn("P001", notification)
+        self.assertNotIn("هذا موجود", notification)
+
     def test_recognized_image_supersedes_default_binding(self):
         products = load_products_from_file()
         complete_customer_product_link(
@@ -152,6 +187,11 @@ class SalesCoreTests(unittest.TestCase):
     @patch("account_app.app.send_order_to_telegram", return_value=True)
     @patch("account_app.app.save_booking_to_file")
     def test_multi_item_order_is_structured(self, _save, _telegram):
+        self.db.execute(
+            "UPDATE customers SET name='زبونة الاختبار' WHERE sender_id=?",
+            (self.sender_id,),
+        )
+        self.db.commit()
         result, _ = create_order_if_valid(self.db, self.sender_id, {"order": {
             "phone": "07701234567", "province": "بغداد", "address": "المنصور",
             "items": [
@@ -162,6 +202,10 @@ class SalesCoreTests(unittest.TestCase):
         self.assertTrue(result)
         row = self.db.execute("SELECT order_items FROM orders WHERE sender_id=?", (self.sender_id,)).fetchone()
         self.assertEqual(len(json.loads(row[0])), 2)
+        booking = _save.call_args.args[0]
+        self.assertEqual(booking["product_total"], 56000)
+        self.assertEqual(booking["delivery_fee"], 5000)
+        self.assertEqual(booking["total_amount"], 56000)
 
     def test_incomplete_order_is_rejected(self):
         result, reply = create_order_if_valid(self.db, self.sender_id, {"order": {
@@ -170,6 +214,67 @@ class SalesCoreTests(unittest.TestCase):
         }}, None)
         self.assertIsNone(result)
         self.assertIn("المحافظة", reply)
+
+    def test_duplicate_customer_event_is_detected_semantically(self):
+        save_message(
+            self.db, self.sender_id, "incoming", "text",
+            "مرحبا، شكد السعر؟", None, None, None, {},
+        )
+        self.assertTrue(is_recent_duplicate_incoming(
+            self.db, self.sender_id, "مرحبا شكد السعر", "",
+        ))
+        self.assertFalse(is_recent_duplicate_incoming(
+            self.db, self.sender_id, "أريد قياس مختلف", "",
+        ))
+
+    def test_booking_telegram_message_matches_importer_shape(self):
+        message = format_order_for_telegram({
+            "phone": "07701234567",
+            "province": "بغداد",
+            "address": "المنصور قرب السوق",
+            "total_amount": 40000,
+            "items": [
+                {"product_name": "فستان انيقه", "quantity": 1, "color": "أسود", "size": "40"},
+                {"product_name": "فستان انيقه", "quantity": 1, "color": "أسود", "size": "42"},
+            ],
+        })
+        self.assertEqual(message, (
+            "فستان انيقه × 2\n"
+            "بغداد / المنصور قرب السوق\n"
+            "07701234567\n"
+            "40000\n"
+            "القياسات: 40، 42"
+        ))
+        self.assertNotIn("http", message)
+        self.assertNotIn("Sender", message)
+
+        weight_message = format_order_for_telegram({
+            "phone": "07800000000",
+            "province": "بغداد",
+            "address": "حي الجهاد / قرب السوق",
+            "total_amount": 38000,
+            "items": [
+                {"product_id": "P001", "product_name": "سوت ملكي", "quantity": 1, "size": "75"},
+                {"product_id": "P003", "product_name": "دشداشة أم السوتاج", "quantity": 1, "size": "75"},
+            ],
+        })
+        self.assertEqual(weight_message, (
+            "سوت ملكي + دشداشة أم السوتاج\n"
+            "بغداد / حي الجهاد / قرب السوق\n"
+            "07800000000\n"
+            "38000\n"
+            "الوزن: 75"
+        ))
+
+    def test_store_name_is_extracted_from_manychat(self):
+        self.assertEqual(
+            extract_store_name_from_manychat({"store_name": "متجر الفاتنة"}),
+            "متجر الفاتنة",
+        )
+        self.assertEqual(
+            extract_store_name_from_manychat({"custom_fields": {"page_name": "لمسة ستور"}}),
+            "لمسة ستور",
+        )
 
 
 if __name__ == "__main__":

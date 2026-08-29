@@ -22,7 +22,17 @@
     </div>
 
     <label class="form-label">الموديل الرئيسي</label>
-    <select class="form-select" id="mainModelInput"></select>
+    <input
+      class="form-control"
+      id="mainModelInput"
+      type="text"
+      dir="ltr"
+      required
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="مثال: google/gemini-3-flash-preview"
+    >
+    <div class="form-text">اكتب معرف الموديل كاملاً كما يظهر في OpenRouter.</div>
 
     <button class="btn btn-primary mt-3" type="submit"><i class="bi bi-save"></i> حفظ</button>
     <span class="admin-status" id="aiSettingsStatus"></span>
@@ -30,6 +40,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/settings_pages.js?v=5"></script>
+<script src="/static/js/settings_pages.js?v=6"></script>
 <script>initAISettingsPage();</script>
 {% endblock %}

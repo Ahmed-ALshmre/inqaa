@@ -349,6 +349,7 @@ async function selectConversation(senderId) {
 
   const init = (conv.name || senderId || '؟').slice(0, 2).toUpperCase();
   document.getElementById('chatAvatar').textContent   = init;
+  document.getElementById('chatStoreName').textContent = conv.store_name || 'المتجر غير محدد';
   document.getElementById('chatName').textContent     = conv.name || senderId;
   document.getElementById('chatSenderId').textContent = senderId;
   renderConversationAIToggle();
@@ -1195,12 +1196,13 @@ async function saveInstructions() {
 // ══ Stats ══════════════════════════════════════════════════════════════════
 async function loadStats() {
   try {
-    const res  = await apiFetch('/api/dashboard_stats');
+    const period = document.getElementById('dashboardStatsPeriod')?.value || 'all';
+    const res  = await apiFetch(`/api/dashboard_stats?period=${encodeURIComponent(period)}`);
     const data = await res.json();
     document.getElementById('statPending').textContent  = `${data.pending_reviews  || 0} مراجعة`;
     document.getElementById('statOrders').textContent   = `${data.orders_today    || 0} طلب`;
     document.getElementById('statMessages').textContent = `${data.messages_today  || 0} رسالة`;
-    setText('statTotalMessages', fmtNumber(data.messages_total || 0));
+    setText('statTotalMessages', fmtNumber(data.people_total || data.total_conversations || 0));
     setText('statTotalOrders', fmtNumber(data.orders_total || 0));
     setText('statConversion', `${Number(data.message_to_order_conversion || 0).toFixed(1)}%`);
     const top = (data.top_products || [])[0];

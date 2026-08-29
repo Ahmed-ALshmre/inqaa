@@ -387,6 +387,8 @@ DEFAULT_MAIN_RULES_PROMPT = """قواعد عامة صارمة:
 21) يمكن للزبون حجز قطعة واحدة أو عدة قطع. احتفظ بكل قطعة طلبها مع اللون والقياس والكمية داخل order.items، ولا تستبدل قطعة سابقة عند إضافة قطعة جديدة.
 22) لا تجعل create_order=true إلا بعد توفر الهاتف والمحافظة والعنوان، وتحديد اللون والقياس لكل عنصر عندما تكون هذه الخيارات مطلوبة.
 23) قبل تثبيت طلب متعدد القطع لخّص العناصر باختصار واطلب تأكيداً واحداً إذا لم يؤكد الزبون الطلب بعد.
+24) اقرأ آخر رد أرسله المتجر قبل صياغة الرد الحالي. لا تعِد الترحيب، ولا تعِد نفس السؤال أو نفس تفاصيل المنتج. ابنِ ردك فقط على المعلومة الجديدة التي قالها الزبون، وإذا أجاب عن سؤال سابق انتقل مباشرة إلى المعلومة الناقصة التالية للحجز.
+25) افهم المقصود من كامل المحادثة لا من آخر جملة وحدها. أي تصحيح جديد من الزبون (المنتج، القياس، اللون، الجنس، الهاتف أو العنوان) يلغي المعلومة القديمة فوراً، ولا تجادل الزبون أو تتمسك بالاختيار السابق.
 
 قاعدة الترحيب: {greeting_rule}"""
 DEFAULT_MAIN_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخر:
@@ -741,6 +743,7 @@ def init_db():
             first_seen_at TEXT,
             last_seen_at  TEXT,
             name         TEXT,
+            store_name   TEXT,
             phone        TEXT,
             province     TEXT,
             address      TEXT,
@@ -1067,6 +1070,11 @@ def init_db():
         print("[DB] Migration: added customer gender column.", flush=True)
     except Exception:
         pass  # العمود موجود مسبقاً
+
+    try:
+        _add_column_if_missing("customers", "store_name", "TEXT")
+    except Exception as exc:
+        print(f"[DB] Could not add customers.store_name: {exc}", flush=True)
 
     try:
         _add_column_if_missing("orders", "order_items", "TEXT DEFAULT '[]'")
@@ -2766,8 +2774,17 @@ def save_booking_to_file(booking_data):
     print(f"[BookingFile] Saved booking to {BOOKINGS_FILE}", flush=True)
 
 
+def clean_telegram_text(text):
+    """Keep Telegram notifications readable and never expose raw links."""
+    cleaned = re.sub(r"https?://\S+|www\.\S+", "", str(text or ""), flags=re.IGNORECASE)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
 def send_telegram_message(text, chat_id=None, label="notification"):
     target_chat_id = chat_id or TELEGRAM_CHAT_ID
+    text = clean_telegram_text(text)
     if label == "notification":
         header = get_store_name()
         if not str(text or "").startswith(header):
@@ -2782,7 +2799,7 @@ def send_telegram_message(text, chat_id=None, label="notification"):
             json={
                 "chat_id": target_chat_id,
                 "text": text,
-                "disable_web_page_preview": False,
+                "disable_web_page_preview": True,
             },
             timeout=15,
         )
@@ -2800,57 +2817,64 @@ ORDER_CONFIRMATION_TEXT = DEFAULT_ORDER_CONFIRMATION_TEXT
 
 
 def format_order_for_telegram(order):
-    store_name = get_store_name()
     items = order.get("items") or order.get("order_items") or []
     if isinstance(items, str):
         try:
             items = json.loads(items)
         except Exception:
             items = []
-    items_text = "\n".join(
-        f"• {item.get('product_name') or item.get('product_id')} ×{item.get('quantity', 1)}"
-        f" | اللون: {item.get('color') or '-'} | القياس: {item.get('size') or '-'}"
-        for item in items if isinstance(item, dict)
-    )
-    return (
-        f"🧾 طلب جديد - {store_name}\n"
-        f"الوقت: {order.get('created_at') or '-'}\n"
-        f"Sender: {order.get('sender_id') or '-'}\n"
-        f"الاسم: {order.get('customer_name') or '-'}\n"
-        f"الهاتف: {order.get('phone') or '-'}\n"
-        f"المحافظة: {order.get('province') or '-'}\n"
-        f"العنوان: {order.get('address') or '-'}\n"
-        f"القطع:\n{items_text or order.get('product_name') or '-'}\n"
-        f"Product ID: {order.get('product_id') or '-'}\n"
-        f"اللون: {order.get('color') or '-'}\n"
-        f"القياس: {order.get('size') or '-'}\n"
-        f"ملاحظات: {order.get('notes') or '-'}\n"
-        f"الحالة: {order.get('status') or 'new'}"
-    )
+    item_quantities = {}
+    option_values = []
+    weight_based = True
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        quantity = max(1, int(item.get("quantity") or 1))
+        name = str(item.get("product_name") or item.get("product_id") or "منتج")
+        item_quantities[name] = item_quantities.get(name, 0) + quantity
+        if item.get("size"):
+            option_values.extend([str(item["size"]).strip()] * quantity)
+        product = find_product_by_id(item.get("product_id")) if item.get("product_id") else None
+        size_description = str((product or {}).get("sizes") or "").lower()
+        if not any(word in size_description for word in ("كيلو", "وزن")):
+            weight_based = False
+    item_lines = [
+        name + (f" × {quantity}" if quantity > 1 else "")
+        for name, quantity in item_quantities.items()
+    ]
+    if not item_lines:
+        item_lines.append(str(order.get("product_name") or "منتج"))
+
+    location = " / ".join(filter(None, (
+        str(order.get("province") or "").strip(),
+        str(order.get("address") or "").strip(),
+    )))
+    location = re.sub(r"\s*/\s*", " / ", location)
+    product_line = " + ".join(item_lines)
+    lines = [
+        product_line,
+        location,
+        str(order.get("phone") or "").strip(),
+        str(int(order.get("total_amount") or order.get("price") or 0)),
+    ]
+    if option_values:
+        unique_options = list(dict.fromkeys(option_values))
+        if weight_based:
+            label = "الوزن"
+        else:
+            label = "القياسات" if len(unique_options) > 1 else "القياس"
+        lines.append(f"{label}: {'، '.join(unique_options)}")
+    return "\n".join(line for line in lines if line)
 
 
 def send_order_to_telegram(order):
+    """Send one parser-friendly booking block to the order-import channel."""
     chat_id = TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID
-    sent = send_telegram_message(
+    return send_telegram_message(
         format_order_for_telegram(order),
         chat_id=chat_id,
         label="order",
     )
-    try:
-        product = find_product_by_id(order.get("product_id")) if order.get("product_id") else None
-        image_urls = product_image_urls(product) if product else []
-        if image_urls:
-            caption = (
-                f"صور موديل الطلب - {get_store_name()}\n"
-                f"المنتج: {order.get('product_name') or order.get('product_id') or '-'}\n"
-                f"اللون: {order.get('color') or (product or {}).get('colors') or '-'}\n"
-                f"القياس: {order.get('size') or '-'}"
-            )
-            for image_url in image_urls:
-                send_telegram_photo(image_url, caption=caption, chat_id=chat_id, label="order_photo")
-    except Exception as exc:
-        print(f"[Telegram] Could not send order product images: {exc}", flush=True)
-    return sent
 
 
 def create_problem_report(db, ev, reason, matched_product=None):
@@ -2900,17 +2924,11 @@ def send_problem_to_telegram(problem):
         print("[Telegram] No problems chat configured. Problem message skipped.", flush=True)
         return False
 
-    text = (
-        "🚨 مشكلة جديدة\n"
-        f"الزبون: {problem.get('customer_name') or problem.get('sender_id') or '-'}\n"
-        f"Sender ID: {problem.get('sender_id') or '-'}\n"
-        f"سبب المشكلة: {problem.get('reason') or '-'}\n"
-        f"الرسالة: {problem.get('message_text') or '-'}\n"
+    return send_telegram_message(
+        "🔔 توجد حالة تحتاج تدخلك\nراجع صفحة المشاكل في لوحة الإدارة.",
+        chat_id=chat_id,
+        label="problem",
     )
-    if problem.get('product_name') or problem.get('product_id'):
-        text += f"\nالمنتج: {problem.get('product_name') or problem.get('product_id')}"
-
-    return send_telegram_message(text, chat_id=chat_id, label="problem")
 
 
 def get_problem_reports(db, status=None, limit=200):
@@ -2970,7 +2988,7 @@ def send_telegram_photo(photo_url, caption="", chat_id=None, label="notification
             json={
                 "chat_id": target_chat_id,
                 "photo": photo_url,
-                "caption": caption[:1024],
+                "caption": clean_telegram_text(caption)[:1024],
             },
             timeout=20,
         )
@@ -3003,47 +3021,9 @@ def create_human_review(db, ev, reason, candidates=None):
     db.commit()
     review_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
 
-    candidate_lines = []
-    for c in candidates[:10]:
-        candidate_lines.append(
-            f"- {c.get('product_id')} | {c.get('product_name')} | score={c.get('score', 0)} | stock={c.get('stock')}\n"
-            f"  image: {c.get('image_url') or '-'}"
-        )
-
-    msg = (
-        "⚠️ مراجعة بشرية مطلوبة\n"
-        f"Review ID: {review_id}\n"
-        f"Sender: {ev.get('sender_id')}\n"
-        f"Reason: {reason}\n"
-        f"Text: {ev.get('text') or '-'}\n"
-        f"Image: {ev.get('image_url') or '-'}\n\n"
-        "Candidates:\n"
-        + ("\n".join(candidate_lines) if candidate_lines else "لا توجد مرشحات")
-        + "\n\nإذا عرفت المنتج اكتب:\n"
-        f"/product {review_id} P001\n"
-        f"أو إذا غير موجود:\n/product {review_id} NONE\n\n"
-        "للرد اليدوي المباشر اكتب:\n"
-        f"/reply {review_id} نص الرد"
+    send_telegram_message(
+        f"🔔 توجد محادثة تحتاج تدخلك\nرقم المراجعة: {review_id}\nراجع لوحة الإدارة."
     )
-    send_telegram_message(msg)
-
-    if ev.get("image_url"):
-        send_telegram_photo(
-            ev.get("image_url"),
-            f"صورة الزبون للمراجعة #{review_id}\nSender: {ev.get('sender_id')}",
-        )
-
-    for c in candidates[:10]:
-        send_telegram_photo(
-            c.get("image_url"),
-            (
-                f"Candidate for review #{review_id}\n"
-                f"ID: {c.get('product_id')}\n"
-                f"Name: {c.get('product_name')}\n"
-                f"Stock: {c.get('stock')}\n"
-                f"Score: {c.get('score', 0)}"
-            ),
-        )
     return review_id
 
 
@@ -3511,6 +3491,31 @@ def detect_manychat_platform(data):
     return "facebook"
 
 
+def extract_store_name_from_manychat(data):
+    """Read the originating store/page name explicitly supplied by ManyChat."""
+    keys = ("store_name", "page_name", "business_name", "account_name")
+    for key in keys:
+        value = (data or {}).get(key)
+        if str(value or "").strip():
+            return str(value).strip()[:120]
+    custom_fields = (data or {}).get("custom_fields")
+    if isinstance(custom_fields, dict):
+        for key in keys:
+            value = custom_fields.get(key)
+            if str(value or "").strip():
+                return str(value).strip()[:120]
+    elif isinstance(custom_fields, list):
+        for field in custom_fields:
+            if not isinstance(field, dict):
+                continue
+            name = str(field.get("name") or field.get("key") or "").strip().lower()
+            if name in keys:
+                value = field.get("value")
+                if str(value or "").strip():
+                    return str(value).strip()[:120]
+    return ""
+
+
 def _looks_like_image_url(value):
     text = str(value or "").strip()
     if not text:
@@ -3850,6 +3855,29 @@ def latest_incoming_message(db, sender_id):
         (sender_id,),
     ).fetchone()
     return dict(row) if row else {}
+
+
+def is_recent_duplicate_incoming(db, sender_id, text="", image_url="", seconds=120):
+    """Detect the same customer event arriving through two webhook paths."""
+    normalized_text = " ".join(re.findall(r"\w+", str(text or "").lower()))
+    normalized_image = str(image_url or "").strip()
+    if not normalized_text and not normalized_image:
+        return False
+    cutoff = (datetime.now(BAGHDAD_TZ) - timedelta(seconds=seconds)).replace(microsecond=0).isoformat()
+    rows = db.execute(
+        """SELECT text, image_url FROM messages
+           WHERE sender_id=? AND direction='incoming' AND created_at>=?
+           ORDER BY id DESC LIMIT 10""",
+        (sender_id, cutoff),
+    ).fetchall()
+    for row in rows:
+        old_text = " ".join(re.findall(r"\w+", str(row["text"] or "").lower()))
+        old_image = str(row["image_url"] or "").strip()
+        if normalized_text and old_text == normalized_text:
+            return True
+        if normalized_image and old_image == normalized_image:
+            return True
+    return False
 
 
 # ── Referral extraction ───────────────────────────────────────────────────────
@@ -5943,6 +5971,15 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         return None, "باقي نحدد " + " و".join(missing_options) + " حتى أثبت الطلب 🌸"
     product_id = ", ".join(item["product_id"] for item in items if item.get("product_id"))
     product_name = order_items_summary(items)
+    product_total = 0
+    for item in items:
+        product = catalog.get(item.get("product_id")) or {}
+        price_digits = re.sub(r"[^0-9]", "", str(product.get("price") or ""))
+        product_total += (int(price_digits) if price_digits else 0) * int(item.get("quantity") or 1)
+    delivery_fee = get_delivery_settings(db).get("all_provinces_fee", DEFAULT_DELIVERY_FEE)
+    # The Telegram importer expects the merchandise amount exactly as staff
+    # write it; delivery remains a separate policy and is not added here.
+    total_amount = product_total
 
     duplicate = find_duplicate_order(db, sender_id, phone, product_id, address)
     if duplicate:
@@ -5962,6 +5999,9 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         "size": order_data.get("size", ""),
         "notes": order_data.get("notes", ""),
         "items": items,
+        "product_total": product_total,
+        "delivery_fee": delivery_fee,
+        "total_amount": total_amount,
         "status": "new",
     }
 
@@ -6048,6 +6088,17 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             (mid, now_baghdad_iso())
         )
         db.commit()
+
+    if is_recent_duplicate_incoming(
+        db, ev["sender_id"], ev.get("text"), ev.get("image_url"),
+    ):
+        log(2, "DEDUP", "Same customer message arrived again through another webhook; skipping.")
+        return {
+            "sender_id": ev["sender_id"],
+            "reply": "",
+            "send_image": False,
+            "meta": {"skipped": True, "reason": "duplicate_customer_event"},
+        }
     log(2, "EXTRACT", "Event data extracted successfully", {
         "sender_id"      : ev["sender_id"],
         "page_id"        : ev["page_id"],
@@ -7092,6 +7143,7 @@ def manychat_webhook():
     ).strip()
     first_name = data.get("first_name", "") or ""
     last_name = data.get("last_name", "") or ""
+    store_name = extract_store_name_from_manychat(data)
     platform = detect_manychat_platform(data)
     page_id = str(data.get("page_id") or "")
     image_url = extract_image_url_from_manychat_data(data)
@@ -7156,11 +7208,14 @@ def manychat_webhook():
     if subscriber_id:
         try:
             get_or_create_customer(db, subscriber_id, page_id, platform)
-            if first_name or last_name:
+            if first_name or last_name or store_name:
                 full_name = f"{first_name} {last_name}".strip()
                 db.execute(
-                    "UPDATE customers SET name=? WHERE sender_id=?",
-                    (full_name, subscriber_id),
+                    """UPDATE customers SET
+                       name=CASE WHEN ?!='' THEN ? ELSE name END,
+                       store_name=CASE WHEN ?!='' THEN ? ELSE store_name END
+                       WHERE sender_id=?""",
+                    (full_name, full_name, store_name, store_name, subscriber_id),
                 )
                 db.commit()
                 print(f"[ManyChat IN] Saved profile name={full_name}", flush=True)
@@ -7186,6 +7241,19 @@ def manychat_webhook():
 
 
 def _process_manychat_webhook_async(fake_body, subscriber_id, platform):
+    """Serialize one customer's webhooks before semantic de-duplication."""
+    with app.app_context():
+        db = get_db()
+        acquired = acquire_sender_lock(db, subscriber_id)
+        if not acquired:
+            return
+        try:
+            return _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform)
+        finally:
+            release_sender_lock(db, subscriber_id)
+
+
+def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform):
     """يعالج رسائل ManyChat في الخلفية مع debounce ثم يُرسل الرد عبر ManyChat API."""
     with app.app_context():
         db = get_db()
@@ -7521,15 +7589,6 @@ def telegram_webhook():
         with app.app_context():
             db = get_db()
             result = handle_human_product_selection(db, review_id, product_id)
-        if result.get("ok"):
-            send_telegram_message(
-                f"تم اختيار المنتج للمراجعة {review_id}\n"
-                f"Product: {result.get('product_id')}\n"
-                f"Sent to customer: {result.get('sent_to_customer')}\n\n"
-                f"Reply:\n{result.get('reply')}"
-            )
-        else:
-            send_telegram_message(f"خطأ: {result.get('error')}")
         return jsonify({"ok": True}), 200
 
     if reply_match:
@@ -7541,7 +7600,6 @@ def telegram_webhook():
             db = get_db()
             row = db.execute("SELECT * FROM human_reviews WHERE id=?", (review_id,)).fetchone()
             if not row:
-                send_telegram_message(f"لم أجد مراجعة برقم {review_id}")
                 return jsonify({"ok": True}), 200
             now = now_baghdad_iso()
             db.execute(
@@ -7554,21 +7612,8 @@ def telegram_webhook():
                 reply, None, None, None, {"human_review_id": review_id, "reply": reply},
             )
             sent = send_human_reply_to_customer(row["sender_id"], reply)
-        send_telegram_message(
-            f"تم حفظ الرد للمراجعة {review_id}.\n"
-            f"Sender: {row['sender_id']}\n"
-            f"Sent to customer: {sent}"
-        )
         return jsonify({"ok": True}), 200
 
-    # لا ترسل رسالة المساعدة لكل رسالة واردة (صور/نص عادي) — فقط عند أمر / غير مفهوم
-    if text.startswith("/"):
-        send_telegram_message(
-            "استخدم إحدى الصيغ:\n"
-            "/product REVIEW_ID P001\n"
-            "/product REVIEW_ID NONE\n"
-            "/reply REVIEW_ID نص الرد"
-        )
     return jsonify({"ok": True}), 200
 
 
@@ -7980,27 +8025,192 @@ def api_export_database():
 @app.route("/api/export/full-backup")
 @_dash_require
 def api_export_full_backup():
-    """Download one portable backup without secrets or runtime logs."""
+    """Download one portable backup containing all store data, never .env secrets."""
     archive = io.BytesIO()
     timestamp = datetime.now(BAGHDAD_TZ).strftime("%Y%m%d-%H%M%S")
+    included = []
+
+    def add_file(bundle, source, archive_name):
+        if source and os.path.isfile(source):
+            bundle.write(source, arcname=archive_name)
+            included.append(archive_name)
+
+    def add_directory(bundle, source_dir, archive_dir):
+        if not source_dir or not os.path.isdir(source_dir):
+            return
+        for root, dirs, files in os.walk(source_dir):
+            dirs[:] = [name for name in dirs if not os.path.islink(os.path.join(root, name))]
+            for filename in files:
+                source = os.path.join(root, filename)
+                if os.path.islink(source):
+                    continue
+                relative = os.path.relpath(source, source_dir).replace("\\", "/")
+                add_file(bundle, source, f"{archive_dir}/{relative}")
+
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
         if os.path.exists(DB_PATH):
             db_backup = _backup_sqlite_file_to_bytes(DB_PATH)
             bundle.writestr("sales.db", db_backup.read())
+            included.append("sales.db")
         for path, name in (
             (PRODUCTS_FILE, "products.json"),
-            (_INSTRUCTIONS_FILE, "instructions.txt"),
-            (_FORBIDDEN_RULES_FILE, "forbidden_rules.txt"),
+            (BOOKINGS_FILE, "runtime/bookings.jsonl"),
+            (INCOMING_REQUESTS_FILE, "runtime/incoming_requests.jsonl"),
+            (AD_TRACKING_FILE, "runtime/ad_tracking.jsonl"),
+            (_INSTRUCTIONS_FILE, "ai/instructions.txt"),
+            (_PLAYBOOK_FILE, "ai/gemini_sales_playbook.md"),
+            (_PRODUCT_AI_SUMMARY_FILE, "ai/product_ai_summary.txt"),
+            (_FORBIDDEN_RULES_FILE, "ai/forbidden_rules.txt"),
         ):
-            if os.path.exists(path):
-                bundle.write(path, arcname=name)
+            add_file(bundle, path, name)
+        add_directory(bundle, UPLOADS_DIR, "images/uploads")
+        add_directory(bundle, CATALOG_IMAGE_DIR, "images/catalog")
+        add_directory(bundle, PRODUCT_IMAGE_DIR, "images/products")
         bundle.writestr("backup-info.json", json.dumps({
             "store": get_store_name(), "created_at": now_baghdad_iso(),
-            "format": 1, "contains_secrets": False,
+            "format": 2,
+            "contains_secrets": False,
+            "includes": included,
+            "note": "Environment variables and API keys are intentionally excluded.",
         }, ensure_ascii=False, indent=2))
     archive.seek(0)
     return send_file(archive, mimetype="application/zip", as_attachment=True,
                      download_name=f"lamsa-store-backup-{timestamp}.zip")
+
+
+def _restore_directory_from_backup(bundle, archive_prefix, destination):
+    prefix = archive_prefix.rstrip("/") + "/"
+    restored = 0
+    destination_real = os.path.realpath(destination)
+    for member in bundle.infolist():
+        if member.is_dir() or not member.filename.startswith(prefix):
+            continue
+        relative = member.filename[len(prefix):].replace("\\", "/").lstrip("/")
+        if not relative or ".." in relative.split("/"):
+            raise ValueError("تحتوي النسخة على مسار ملف غير آمن")
+        target = os.path.realpath(os.path.join(destination_real, *relative.split("/")))
+        if os.path.commonpath([destination_real, target]) != destination_real:
+            raise ValueError("تحتوي النسخة على مسار ملف غير آمن")
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with bundle.open(member) as source, open(target, "wb") as output:
+            shutil.copyfileobj(source, output)
+        restored += 1
+    return restored
+
+
+@app.route("/api/import/full-backup", methods=["POST"])
+@_dash_require
+def api_import_full_backup():
+    """Validate and restore a complete backup created by this application."""
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"error": "اختر ملف النسخة الكاملة ZIP أولاً"}), 400
+
+    tmp_zip = ""
+    tmp_db = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp:
+            tmp_zip = temp.name
+            upload.save(temp)
+        if not zipfile.is_zipfile(tmp_zip):
+            return jsonify({"error": "الملف المحدد ليس نسخة ZIP صالحة"}), 400
+
+        with zipfile.ZipFile(tmp_zip, "r") as bundle:
+            names = set(bundle.namelist())
+            if "backup-info.json" not in names or "sales.db" not in names:
+                return jsonify({"error": "هذه ليست نسخة كاملة للنظام أو أنها ناقصة"}), 400
+            if len(names) > 20000 or sum(item.file_size for item in bundle.infolist()) > 2 * 1024**3:
+                return jsonify({"error": "حجم النسخة أو عدد ملفاتها أكبر من الحد الآمن"}), 400
+
+            try:
+                info = json.loads(bundle.read("backup-info.json"))
+            except Exception:
+                return jsonify({"error": "معلومات النسخة غير صالحة"}), 400
+            if int(info.get("format") or 0) not in (1, 2):
+                return jsonify({"error": "إصدار النسخة غير مدعوم"}), 400
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as temp_db:
+                tmp_db = temp_db.name
+                temp_db.write(bundle.read("sales.db"))
+            source_db = sqlite3.connect(tmp_db)
+            try:
+                integrity = source_db.execute("PRAGMA integrity_check").fetchone()[0]
+                tables = {
+                    row[0] for row in source_db.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    ).fetchall()
+                }
+                required = {"customers", "messages", "orders", "app_settings"}
+                if integrity != "ok" or not required.issubset(tables):
+                    return jsonify({"error": "قاعدة البيانات داخل النسخة ناقصة أو تالفة"}), 400
+
+                backups_dir = os.path.join(APP_DIR, "backups")
+                os.makedirs(backups_dir, exist_ok=True)
+                safety_path = os.path.join(
+                    backups_dir,
+                    f"sales-before-full-restore-{datetime.now(BAGHDAD_TZ).strftime('%Y%m%d-%H%M%S')}.db",
+                )
+                current = sqlite3.connect(DB_PATH)
+                safety = sqlite3.connect(safety_path)
+                try:
+                    current.backup(safety)
+                finally:
+                    safety.close()
+                    current.close()
+
+                destination_db = get_db()
+                source_db.backup(destination_db)
+                destination_db.commit()
+            finally:
+                source_db.close()
+
+            restored_products = 0
+            if "products.json" in names:
+                products = json.loads(bundle.read("products.json").decode("utf-8-sig"))
+                if not isinstance(products, list):
+                    raise ValueError("ملف المنتجات داخل النسخة غير صالح")
+                normalized = [_normalize_product(item) for item in products if isinstance(item, dict)]
+                with _products_file_lock:
+                    save_products_to_file(normalized)
+                restored_products = len(normalized)
+
+            single_files = (
+                ("runtime/bookings.jsonl", BOOKINGS_FILE),
+                ("runtime/incoming_requests.jsonl", INCOMING_REQUESTS_FILE),
+                ("runtime/ad_tracking.jsonl", AD_TRACKING_FILE),
+                ("ai/instructions.txt", _INSTRUCTIONS_FILE),
+                ("ai/gemini_sales_playbook.md", _PLAYBOOK_FILE),
+                ("ai/product_ai_summary.txt", _PRODUCT_AI_SUMMARY_FILE),
+                ("ai/forbidden_rules.txt", _FORBIDDEN_RULES_FILE),
+            )
+            for archive_name, destination in single_files:
+                if archive_name in names:
+                    os.makedirs(os.path.dirname(destination), exist_ok=True)
+                    with open(destination, "wb") as output:
+                        output.write(bundle.read(archive_name))
+
+            image_count = sum((
+                _restore_directory_from_backup(bundle, "images/uploads", UPLOADS_DIR),
+                _restore_directory_from_backup(bundle, "images/catalog", CATALOG_IMAGE_DIR),
+                _restore_directory_from_backup(bundle, "images/products", PRODUCT_IMAGE_DIR),
+            ))
+        return jsonify({
+            "ok": True,
+            "message": "تمت استعادة النسخة الكاملة بنجاح",
+            "products": restored_products,
+            "images": image_count,
+        })
+    except (ValueError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+        return jsonify({"error": f"فشل فحص النسخة: {exc}"}), 400
+    except Exception as exc:
+        return jsonify({"error": f"فشلت استعادة النسخة الكاملة: {exc}"}), 500
+    finally:
+        for path in (tmp_zip, tmp_db):
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
 
 
 @app.route("/api/import/database", methods=["POST"])
@@ -8071,6 +8281,7 @@ def api_conversations():
         SELECT
             c.sender_id,
             c.name,
+            c.store_name,
             c.phone,
             c.province,
             c.address,
@@ -8864,15 +9075,39 @@ def api_manychat_test():
     })
 
 
-def _top_ordered_products(db, limit=5):
-    rows = db.execute(
-        """SELECT product_id, product_name
-           FROM orders
-           WHERE COALESCE(product_id, '') != '' OR COALESCE(product_name, '') != ''"""
-    ).fetchall()
+def _top_ordered_products(db, limit=5, date_from=None, date_to=None):
+    query = """SELECT product_id, product_name, order_items
+               FROM orders
+               WHERE (COALESCE(product_id, '') != '' OR COALESCE(product_name, '') != '')"""
+    params = []
+    if date_from:
+        query += " AND created_at >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND created_at < ?"
+        params.append(date_to)
+    rows = db.execute(query, params).fetchall()
     counts = Counter()
     labels = {}
     for row in rows:
+        try:
+            items = json.loads(row["order_items"] or "[]")
+        except (TypeError, json.JSONDecodeError):
+            items = []
+        if isinstance(items, list) and items:
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get("product_id") or item.get("product_name") or "").strip()
+                if not key:
+                    continue
+                labels.setdefault(key, str(item.get("product_name") or key).strip())
+                try:
+                    quantity = max(1, int(item.get("quantity") or 1))
+                except (TypeError, ValueError):
+                    quantity = 1
+                counts[key] += quantity
+            continue
         ids = [x.strip() for x in str(row["product_id"] or "").split(",") if x.strip()]
         names = [x.strip() for x in str(row["product_name"] or "").split(",") if x.strip()]
         if not ids and names:
@@ -8893,33 +9128,51 @@ def _top_ordered_products(db, limit=5):
 @app.route("/api/dashboard_stats")
 @_dash_require
 def api_dashboard_stats():
-    db    = get_db()
+    db = get_db()
     today = datetime.now(BAGHDAD_TZ).date().isoformat()
-    total_messages = db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-    total_orders = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
-    total_conversations = db.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
-    incoming_messages = db.execute("SELECT COUNT(*) FROM messages WHERE direction='incoming'").fetchone()[0]
-    outgoing_messages = db.execute("SELECT COUNT(*) FROM messages WHERE direction='outgoing'").fetchone()[0]
-    conversion_rate = round((total_orders / total_messages) * 100, 2) if total_messages else 0
-    conversation_conversion_rate = round((total_orders / total_conversations) * 100, 2) if total_conversations else 0
+    period, date_from, date_to = _analytics_range(default_period="all")
+    where = ""
+    params = []
+    if date_from and date_to:
+        where = " AND created_at >= ? AND created_at < ?"
+        params = [date_from, date_to]
+    total_people = db.execute(
+        "SELECT COUNT(DISTINCT sender_id) FROM messages "
+        "WHERE direction='incoming' AND COALESCE(sender_id, '') != ''" + where,
+        params,
+    ).fetchone()[0]
+    total_orders = db.execute("SELECT COUNT(*) FROM orders WHERE 1=1" + where, params).fetchone()[0]
+    booked_people = db.execute(
+        "SELECT COUNT(DISTINCT sender_id) FROM orders WHERE COALESCE(sender_id, '') != ''" + where,
+        params,
+    ).fetchone()[0]
+    incoming_messages = db.execute(
+        "SELECT COUNT(*) FROM messages WHERE direction='incoming'" + where, params
+    ).fetchone()[0]
+    outgoing_messages = db.execute(
+        "SELECT COUNT(*) FROM messages WHERE direction='outgoing'" + where, params
+    ).fetchone()[0]
+    conversion_rate = round((booked_people / total_people) * 100, 2) if total_people else 0
     return jsonify({
-        "total_conversations": total_conversations,
+        "period": period,
+        "total_conversations": total_people,
+        "people_total": total_people,
         "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0],
         "orders_today":        db.execute("SELECT COUNT(*) FROM orders WHERE created_at >= ?", (today,)).fetchone()[0],
         "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?", (today,)).fetchone()[0],
-        "messages_total":      total_messages,
+        "messages_total":      total_people,
         "incoming_messages":   incoming_messages,
         "outgoing_messages":   outgoing_messages,
         "orders_total":        total_orders,
         "message_to_order_conversion": conversion_rate,
-        "conversation_to_order_conversion": conversation_conversion_rate,
-        "top_products":        _top_ordered_products(db),
+        "conversation_to_order_conversion": conversion_rate,
+        "top_products":        _top_ordered_products(db, date_from=date_from, date_to=date_to),
         "ai_enabled":          is_ai_enabled(db),
     })
 
 
-def _analytics_range():
-    period = (request.args.get("period") or "today").strip()
+def _analytics_range(default_period="today"):
+    period = (request.args.get("period") or default_period).strip()
     today = datetime.now(BAGHDAD_TZ).date()
     if period == "yesterday":
         date_from = datetime.fromordinal(today.toordinal() - 1).date()
@@ -8939,6 +9192,8 @@ def _analytics_range():
         except ValueError:
             date_from = today
             date_to = datetime.fromordinal(today.toordinal() + 1).date()
+    elif period == "all":
+        return period, None, None
     else:
         date_from = today
         date_to = datetime.fromordinal(today.toordinal() + 1).date()
@@ -8950,9 +9205,17 @@ def _analytics_range():
 def api_analytics():
     db = get_db()
     period, date_from, date_to = _analytics_range()
-    params = (date_from, date_to)
+    # Wide bounds let the same aggregate queries represent "all" without
+    # excluding rows when the UI sends period=all.
+    params = (date_from or "0001-01-01", date_to or "9999-12-31")
     messages = db.execute(
         "SELECT COUNT(*) FROM messages WHERE created_at >= ? AND created_at < ?",
+        params,
+    ).fetchone()[0]
+    people = db.execute(
+        """SELECT COUNT(DISTINCT sender_id) FROM messages
+           WHERE direction='incoming' AND COALESCE(sender_id, '') != ''
+             AND created_at >= ? AND created_at < ?""",
         params,
     ).fetchone()[0]
     incoming = db.execute(
@@ -8965,6 +9228,11 @@ def api_analytics():
     ).fetchone()[0]
     orders = db.execute(
         "SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ?",
+        params,
+    ).fetchone()[0]
+    booked_people = db.execute(
+        """SELECT COUNT(DISTINCT sender_id) FROM orders
+           WHERE COALESCE(sender_id, '') != '' AND created_at >= ? AND created_at < ?""",
         params,
     ).fetchone()[0]
     new_customers = db.execute(
@@ -9007,16 +9275,17 @@ def api_analytics():
         "date_to": date_to,
         "cards": {
             "messages": messages,
+            "people": people,
             "incoming_messages": incoming,
             "outgoing_messages": outgoing,
             "orders": orders,
-            "message_to_order_conversion": round((orders / messages) * 100, 2) if messages else 0,
+            "message_to_order_conversion": round((booked_people / people) * 100, 2) if people else 0,
             "new_customers": new_customers,
             "human_reviews": human_reviews,
             "pending_reviews": pending_reviews,
             "unanswered_conversations": unanswered,
         },
-        "top_ordered_products": _top_ordered_products(db, limit=8),
+        "top_ordered_products": _top_ordered_products(db, limit=8, date_from=date_from, date_to=date_to),
         "top_interested_products": [dict(row) for row in interests],
         "top_objections": [dict(row) for row in objections],
         "ai": {

@@ -8,26 +8,8 @@ async function getJSON(path, options = {}) {
   return data;
 }
 
-const DEFAULT_AI_MODEL_OPTIONS = [
-  'deepseek/deepseek-chat-v3.1',
-  'google/gemini-2.5-flash',
-  'openai/gpt-5-mini',
-  'google/gemini-3.1-pro-preview',
-  'google/gemini-3-flash-preview'
-];
-
-function setModelSelectValue(id, value, options) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const selected = value || '';
-  const choices = Array.from(new Set([...(options || DEFAULT_AI_MODEL_OPTIONS), selected].filter(Boolean)));
-  el.innerHTML = choices.map((model) => `<option value="${adminEsc(model)}">${adminEsc(model)}</option>`).join('');
-  el.value = selected || choices[0] || '';
-}
-
 async function initAISettingsPage() {
   const data = await getJSON('/api/settings/ai');
-  const modelOptions = data.model_options || DEFAULT_AI_MODEL_OPTIONS;
   
   const aiEnabledEl = document.getElementById('aiEnabled');
   if (aiEnabledEl) aiEnabledEl.checked = !!data.ai_enabled;
@@ -38,7 +20,8 @@ async function initAISettingsPage() {
   const openrouterStateEl = document.getElementById('openrouterState');
   if (openrouterStateEl) openrouterStateEl.textContent = data.openrouter_key_present ? 'موجود' : 'غير مضبوط';
   
-  setModelSelectValue('mainModelInput', data.main_model, modelOptions);
+  const mainModelEl = document.getElementById('mainModelInput');
+  if (mainModelEl) mainModelEl.value = data.main_model || '';
   
   const formEl = document.getElementById('aiSettingsForm');
   if (formEl) {
@@ -49,7 +32,7 @@ async function initAISettingsPage() {
           method: 'POST',
           body: JSON.stringify({
             enabled: document.getElementById('aiEnabled').checked,
-            main_model: document.getElementById('mainModelInput').value
+            main_model: document.getElementById('mainModelInput').value.trim()
           })
         });
         setAdminStatus('aiSettingsStatus', 'تم الحفظ');
@@ -180,8 +163,6 @@ async function initDeliveryPage() {
 async function initMaintenancePage() {
   const key = new URLSearchParams(location.search).get('key') || '';
   document.getElementById('fullBackupLink').href = `/api/export/full-backup?key=${encodeURIComponent(key)}`;
-  document.getElementById('databaseBackupLink').href = `/api/export/database?key=${encodeURIComponent(key)}`;
-  document.getElementById('productsBackupLink').href = `/api/export/products?key=${encodeURIComponent(key)}`;
   const data = await getJSON('/api/settings/overview');
   const m = data.maintenance || {};
   document.getElementById('maintenanceGrid').innerHTML = [
@@ -189,6 +170,25 @@ async function initMaintenancePage() {
     ['حجم قاعدة البيانات', `${Math.round((m.database_size || 0) / 1024)} KB`],
     ['عدد المنتجات', m.products_count || 0]
   ].map(([label, value]) => `<div><small>${adminEsc(label)}</small><strong>${adminEsc(value)}</strong></div>`).join('');
+}
+
+async function restoreFullBackup(input) {
+  if (!input.files?.[0]) return;
+  const warning = 'سيتم استبدال بيانات النظام الحالية بالمحادثات والمنتجات والصور الموجودة في النسخة. سيتم حفظ قاعدة البيانات الحالية تلقائياً للطوارئ. هل تريد المتابعة؟';
+  if (!confirm(warning)) { input.value = ''; return; }
+  const key = new URLSearchParams(location.search).get('key') || '';
+  const form = new FormData();
+  form.append('file', input.files[0]);
+  try {
+    const response = await fetch(`/api/import/full-backup?key=${encodeURIComponent(key)}`, {method: 'POST', body: form});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'تعذرت استعادة النسخة الكاملة');
+    alert(`تمت استعادة النظام بنجاح\nالمنتجات: ${result.products || 0}\nالصور: ${result.images || 0}`);
+    location.reload();
+  } catch (error) {
+    alert(error.message);
+  }
+  input.value = '';
 }
 
 async function restoreProductsBackup(input) {

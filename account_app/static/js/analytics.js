@@ -11,10 +11,10 @@ async function loadAnalytics() {
 
 function renderAnalyticsCards(cards) {
   const items = [
-    ['الرسائل', cards.messages || 0, 'bi-chat-dots'],
+    ['الزبائن المتواصلون', cards.people || 0, 'bi-people'],
     ['رسائل واردة', cards.incoming_messages || 0, 'bi-inbox'],
     ['الطلبات', cards.orders || 0, 'bi-receipt'],
-    ['نسبة التحويل', `${cards.message_to_order_conversion || 0}%`, 'bi-percent'],
+    ['تحويل زبون إلى طلب', `${cards.message_to_order_conversion || 0}%`, 'bi-percent'],
     ['عملاء جدد', cards.new_customers || 0, 'bi-person-plus'],
     ['تدخل بشري', cards.human_reviews || 0, 'bi-person-exclamation'],
     ['مراجعات معلقة', cards.pending_reviews || 0, 'bi-hourglass-split'],
