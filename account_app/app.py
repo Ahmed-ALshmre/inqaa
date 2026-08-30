@@ -10316,7 +10316,8 @@ def _advisor_sync_memory_file(db):
     return content
 
 
-def _advisor_conversation_snapshot(db, message_limit=300):
+def _advisor_conversation_snapshot(db, message_limit=1500):
+    message_limit = max(200, min(int(message_limit or 1500), 2500))
     rows = db.execute(
         """SELECT m.sender_id, m.direction, m.message_type, m.text, m.created_at,
                   COALESCE(c.name, '') AS customer_name, COALESCE(c.lead_stage, '') AS lead_stage
@@ -10326,22 +10327,23 @@ def _advisor_conversation_snapshot(db, message_limit=300):
         (message_limit,),
     ).fetchall()
     rows = list(reversed(rows))
-    sender_ids = list(dict.fromkeys(row["sender_id"] for row in rows))
-    transcript = []
-    current_sender = None
+    grouped = {}
     for row in rows:
-        if row["sender_id"] != current_sender:
-            current_sender = row["sender_id"]
-            transcript.append(
-                f"\n[محادثة: {row['customer_name'] or current_sender} | {current_sender} | المرحلة: {row['lead_stage'] or '-'}]"
-            )
-        role = "الزبون" if row["direction"] == "incoming" else "الموظف"
-        content = (row["text"] or f"[{row['message_type'] or 'رسالة'}]").strip()
-        transcript.append(f"{role}: {content[:700]}")
+        grouped.setdefault(row["sender_id"], []).append(row)
+    transcript = []
+    for sender_id, conversation_rows in grouped.items():
+        first = conversation_rows[0]
+        transcript.append(
+            f"\n[محادثة: {first['customer_name'] or sender_id} | {sender_id} | المرحلة: {first['lead_stage'] or '-'}]"
+        )
+        for row in conversation_rows:
+            role = "الزبون" if row["direction"] == "incoming" else "الموظف"
+            content = (row["text"] or f"[{row['message_type'] or 'رسالة'}]").strip()
+            transcript.append(f"{role}: {content[:900]}")
     orders_count = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
     problems_count = db.execute("SELECT COUNT(*) FROM problem_reports").fetchone()[0]
     return {
-        "conversation_count": len(sender_ids),
+        "conversation_count": len(grouped),
         "message_count": len(rows),
         "orders_count": orders_count,
         "problems_count": problems_count,
@@ -10349,13 +10351,13 @@ def _advisor_conversation_snapshot(db, message_limit=300):
     }
 
 
-def _advisor_call_model(db, user_message):
+def _advisor_call_model(db, user_message, message_limit=1500):
     if not OPENROUTER_KEY:
         raise RuntimeError("مفتاح نموذج الذكاء الاصطناعي غير متوفر")
-    snapshot = _advisor_conversation_snapshot(db)
+    snapshot = _advisor_conversation_snapshot(db, message_limit=message_limit)
     approved_memory = _advisor_sync_memory_file(db)
     history_rows = db.execute(
-        "SELECT role, content FROM advisor_chat_messages ORDER BY id DESC LIMIT 24"
+        "SELECT role, content FROM advisor_chat_messages ORDER BY id DESC LIMIT 36"
     ).fetchall()
     history = [
         {"role": row["role"], "content": row["content"]}
@@ -10372,12 +10374,13 @@ def _advisor_call_model(db, user_message):
     {"title":"عنوان", "content":"قاعدة أو معرفة محددة قابلة للتطبيق", "proposal_type":"rule|workflow|memory", "apply_target":"active_rule|memory", "reason":"لماذا تقترحها"}
   ]
 }
-لا تقترح قاعدة عامة مبهمة. لا تدّع تطبيق أي اقتراح. إذا كان المالك يناقش فقط ولا يطلب تغييراً، يجوز إرجاع proposals فارغة."""
+حلّل الأنماط المتكررة وليس الحالات المنفردة فقط، وقارن بين المحادثات الناجحة والمتعثرة. اذكر أرقاماً أو أمثلة مختصرة من العينة عندما تتوفر.
+رتّب analysis إلى: ملخص تنفيذي، ملاحظات مثبتة، أسباب، فرص تحسين، ومخاطر. لا تقترح قاعدة عامة مبهمة. لا تدّع تطبيق أي اقتراح. إذا كان المالك يناقش فقط ولا يطلب تغييراً، يجوز إرجاع proposals فارغة."""
     context = (
         f"إحصاءات العينة: {snapshot['conversation_count']} محادثة، {snapshot['message_count']} رسالة، "
         f"{snapshot['orders_count']} طلب، {snapshot['problems_count']} مشكلة.\n\n"
         f"الذاكرة الموافق عليها فقط:\n{approved_memory[-12000:]}\n\n"
-        f"عينة المحادثات السابقة:\n{snapshot['transcript'][-50000:]}\n\n"
+        f"عينة المحادثات السابقة (حلّلها كاملة قدر الإمكان):\n{snapshot['transcript'][-140000:]}\n\n"
         f"رسالة المالك الحالية: {user_message}"
     )
     response = requests.post(
@@ -10386,10 +10389,10 @@ def _advisor_call_model(db, user_message):
         json={
             "model": get_ai_model(db, "main_model", MAIN_MODEL),
             "messages": [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": context}],
-            "max_tokens": get_ai_max_tokens(db, "main", 1800),
+            "max_tokens": max(get_ai_max_tokens(db, "main", 1800), 2600),
             "temperature": 0.25,
         },
-        timeout=60,
+        timeout=90,
     )
     response.raise_for_status()
     raw = response.json()["choices"][0]["message"]["content"]
@@ -10428,6 +10431,10 @@ def api_advisor_chat():
     db = get_db()
     data = request.get_json(silent=True) or {}
     message = str(data.get("message") or "").strip()
+    try:
+        review_limit = max(200, min(int(data.get("review_limit") or 1500), 2500))
+    except (TypeError, ValueError):
+        review_limit = 1500
     if not message:
         return jsonify({"ok": False, "error": "اكتب رسالة للمستشار أولاً"}), 400
     now = now_baghdad_iso()
@@ -10437,7 +10444,7 @@ def api_advisor_chat():
     )
     db.commit()
     try:
-        result = _advisor_call_model(db, message)
+        result = _advisor_call_model(db, message, message_limit=review_limit)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
     snapshot = result.pop("_snapshot")

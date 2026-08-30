@@ -6,6 +6,20 @@ function advisorEsc(value) {
   }[char]));
 }
 
+function advisorFormat(value) {
+  return advisorEsc(value).split(/\r?\n/).map((line) => {
+    const clean = line.trim();
+    if (!clean) return '<div class="advisor-text-gap"></div>';
+    const heading = clean.match(/^#{1,3}\s+(.+)/);
+    if (heading) return `<strong class="advisor-text-heading">${heading[1]}</strong>`;
+    const bullet = clean.match(/^[-•*]\s+(.+)/);
+    if (bullet) return `<div class="advisor-text-bullet"><i class="bi bi-check2"></i><span>${bullet[1]}</span></div>`;
+    const numbered = clean.match(/^(\d+)[.)-]\s+(.+)/);
+    if (numbered) return `<div class="advisor-text-bullet numbered"><b>${numbered[1]}</b><span>${numbered[2]}</span></div>`;
+    return `<p>${clean.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</p>`;
+  }).join('');
+}
+
 function renderAdvisorMessages(messages) {
   const container = document.getElementById('advisorMessages');
   if (!messages.length) {
@@ -14,10 +28,10 @@ function renderAdvisorMessages(messages) {
   }
   container.innerHTML = messages.map((message) => `
     <article class="advisor-message ${message.role === 'user' ? 'owner' : 'assistant'}">
-      <div class="advisor-message-label">${message.role === 'user' ? 'أنت' : 'مستشار صوف'}</div>
-      <div class="advisor-message-content">${advisorEsc(message.content)}</div>
-      ${message.analysis_text ? `<details class="advisor-analysis"><summary><i class="bi bi-graph-up-arrow"></i> عرض نتيجة التحليل</summary><div>${advisorEsc(message.analysis_text)}</div></details>` : ''}
-      ${message.conversations_count ? `<small>راجع ${advisorEsc(message.conversations_count)} محادثة في هذه الجولة</small>` : ''}
+      <div class="advisor-message-label">${message.role === 'user' ? '<i class="bi bi-person-fill"></i> أنت' : '<span><i class="bi bi-stars"></i></span> مستشار صوف'}</div>
+      <div class="advisor-message-content">${advisorFormat(message.content)}</div>
+      ${message.analysis_text ? `<section class="advisor-analysis"><div class="advisor-analysis-title"><i class="bi bi-graph-up-arrow"></i><strong>نتيجة التحليل</strong></div><div class="advisor-analysis-content">${advisorFormat(message.analysis_text)}</div></section>` : ''}
+      ${message.conversations_count ? `<small class="advisor-reviewed"><i class="bi bi-database-check"></i> راجع ${advisorEsc(message.conversations_count)} محادثة في هذه الجولة</small>` : ''}
     </article>
   `).join('');
   container.scrollTop = container.scrollHeight;
@@ -36,11 +50,11 @@ function renderAdvisorProposals(proposals) {
   container.innerHTML = proposals.map((proposal) => `
     <article class="advisor-proposal ${advisorEsc(proposal.status)}">
       <div class="advisor-proposal-top">
-        <span class="advisor-proposal-type">${proposal.apply_target === 'active_rule' ? 'قاعدة تشغيل' : 'ذاكرة'}</span>
+        <span class="advisor-proposal-type"><i class="bi ${proposal.apply_target === 'active_rule' ? 'bi-lightning-charge-fill' : 'bi-memory'}"></i> ${proposal.apply_target === 'active_rule' ? 'قاعدة تشغيل' : 'ذاكرة'}</span>
         <span class="advisor-proposal-status">${proposalStatusLabel(proposal.status)}</span>
       </div>
       <h3>${advisorEsc(proposal.title)}</h3>
-      <p>${advisorEsc(proposal.content)}</p>
+      <div class="advisor-proposal-content">${advisorFormat(proposal.content)}</div>
       ${proposal.reason ? `<div class="advisor-proposal-reason"><strong>السبب:</strong> ${advisorEsc(proposal.reason)}</div>` : ''}
       ${proposal.status === 'pending' ? `<div class="advisor-proposal-actions">
         <button class="btn btn-success btn-sm" onclick="reviewAdvisorProposal(${Number(proposal.id)}, 'approve')"><i class="bi bi-check2-circle"></i> موافقة وإضافة</button>
@@ -57,7 +71,17 @@ async function loadAdvisor() {
   renderAdvisorMessages(data.messages || []);
   renderAdvisorProposals(data.proposals || []);
   document.getElementById('advisorMemoryCount').textContent = data.approved_count || 0;
-  document.getElementById('advisorStats').textContent = `${(data.messages || []).length} رسالة محفوظة · ${(data.proposals || []).filter((item) => item.status === 'pending').length} بانتظار الموافقة`;
+  const pendingCount = (data.proposals || []).filter((item) => item.status === 'pending').length;
+  document.getElementById('advisorStats').textContent = `${(data.messages || []).length} رسالة محفوظة · ${pendingCount} بانتظار الموافقة`;
+  document.getElementById('advisorMessageMetric').textContent = (data.messages || []).length;
+  document.getElementById('advisorPendingMetric').textContent = pendingCount;
+  document.getElementById('advisorApprovedMetric').textContent = data.approved_count || 0;
+}
+
+function setAdvisorPrompt(text) {
+  const input = document.getElementById('advisorInput');
+  input.value = text;
+  input.focus();
 }
 
 async function sendAdvisorMessage(event) {
@@ -68,11 +92,15 @@ async function sendAdvisorMessage(event) {
   if (!message) return;
   advisorBusy = true;
   const button = document.getElementById('advisorSendBtn');
+  const reviewLimit = Number(document.getElementById('advisorReviewLimit')?.value || 1500);
+  const messages = document.getElementById('advisorMessages');
+  messages.insertAdjacentHTML('beforeend', `<article class="advisor-message owner"><div class="advisor-message-label"><i class="bi bi-person-fill"></i> أنت</div><div class="advisor-message-content">${advisorFormat(message)}</div></article><article class="advisor-message assistant advisor-thinking"><div class="advisor-message-label"><span><i class="bi bi-stars"></i></span> مستشار صوف</div><div class="advisor-thinking-row"><span></span><span></span><span></span><b>يقرأ حتى ${reviewLimit.toLocaleString('ar-IQ')} رسالة ويبحث عن الأنماط…</b></div></article>`);
+  messages.scrollTop = messages.scrollHeight;
   button.disabled = true;
-  button.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span>يحلل المحادثات…</span>';
+  button.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span>جاري التحليل العميق…</span>';
   try {
     const response = await fetch(adminApi('/api/advisor/chat'), {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message})
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message, review_limit: reviewLimit})
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || 'فشل رد المستشار');
@@ -83,7 +111,7 @@ async function sendAdvisorMessage(event) {
   } finally {
     advisorBusy = false;
     button.disabled = false;
-    button.innerHTML = '<i class="bi bi-send-fill"></i><span>إرسال للمستشار</span>';
+    button.innerHTML = '<i class="bi bi-send-fill"></i><span>إرسال وتحليل</span>';
   }
 }
 

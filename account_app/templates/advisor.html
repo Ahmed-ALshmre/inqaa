@@ -18,16 +18,32 @@
   <div><strong>وضع الموافقة اليدوية مفعّل</strong><span>المستشار يحلل ويقترح فقط. لا تُضاف قاعدة ولا تتغير تعليمات الرد قبل موافقتك الصريحة.</span></div>
 </section>
 
+<section class="advisor-overview">
+  <article><i class="bi bi-chat-square-text"></i><div><strong id="advisorMessageMetric">0</strong><span>رسالة مع المستشار</span></div></article>
+  <article><i class="bi bi-hourglass-split"></i><div><strong id="advisorPendingMetric">0</strong><span>اقتراح ينتظر قرارك</span></div></article>
+  <article><i class="bi bi-memory"></i><div><strong id="advisorApprovedMetric">0</strong><span>بند في الذاكرة</span></div></article>
+</section>
+
 <div class="advisor-layout">
   <section class="advisor-chat-card">
     <div class="advisor-chat-head">
-      <div><strong>المحادثة الخاصة</strong><span id="advisorStats">جاري تحميل السجل…</span></div>
-      <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadAdvisor()"><i class="bi bi-arrow-clockwise"></i></button>
+      <div class="advisor-chat-identity"><span class="advisor-avatar"><i class="bi bi-stars"></i></span><div><strong>مستشار صوف</strong><span id="advisorStats">جاري تحميل السجل…</span></div></div>
+      <span class="advisor-online"><i></i> جاهز للتحليل</span>
     </div>
     <div class="advisor-messages" id="advisorMessages"></div>
     <form class="advisor-composer" id="advisorForm">
-      <textarea id="advisorInput" rows="3" placeholder="مثال: راجع محادثات اليوم، أين يختلط على النظام اختيار المنتج؟"></textarea>
-      <button type="submit" id="advisorSendBtn"><i class="bi bi-send-fill"></i><span>إرسال للمستشار</span></button>
+      <div class="advisor-compose-main">
+        <div class="advisor-quick-prompts">
+          <button type="button" onclick="setAdvisorPrompt('حلل أسباب ضياع الطلبات والأخطاء المتكررة في المحادثات')">أسباب ضياع الطلبات</button>
+          <button type="button" onclick="setAdvisorPrompt('راجع دقة اختيار المنتجات والصور والأسعار في المحادثات')">دقة المنتجات</button>
+          <button type="button" onclick="setAdvisorPrompt('قارن المحادثات التي انتهت بطلب مع المحادثات التي انسحب منها الزبون')">مقارنة المبيعات</button>
+        </div>
+        <textarea id="advisorInput" rows="3" placeholder="اكتب ما تريد مناقشته أو اطلب تحليل سير العمل…"></textarea>
+      </div>
+      <div class="advisor-compose-actions">
+        <label><span>نطاق المراجعة</span><select id="advisorReviewLimit"><option value="500">500 رسالة</option><option value="1500" selected>1,500 رسالة</option><option value="2500">2,500 رسالة — أعمق</option></select></label>
+        <button type="submit" id="advisorSendBtn"><i class="bi bi-send-fill"></i><span>إرسال وتحليل</span></button>
+      </div>
     </form>
   </section>
 
@@ -41,5 +57,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/advisor.js?v=1"></script>
+<script src="/static/js/advisor.js?v=2"></script>
 {% endblock %}
