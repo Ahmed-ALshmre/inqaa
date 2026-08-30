@@ -405,6 +405,7 @@ DEFAULT_MAIN_RULES_PROMPT = """قواعد عامة صارمة:
 23) قبل تثبيت طلب متعدد القطع لخّص العناصر باختصار واطلب تأكيداً واحداً إذا لم يؤكد الزبون الطلب بعد.
 24) اقرأ آخر رد أرسله المتجر قبل صياغة الرد الحالي. لا تعِد الترحيب، ولا تعِد نفس السؤال أو نفس تفاصيل المنتج. ابنِ ردك فقط على المعلومة الجديدة التي قالها الزبون، وإذا أجاب عن سؤال سابق انتقل مباشرة إلى المعلومة الناقصة التالية للحجز.
 25) افهم المقصود من كامل المحادثة لا من آخر جملة وحدها. أي تصحيح جديد من الزبون (المنتج، القياس، اللون، الجنس، الهاتف أو العنوان) يلغي المعلومة القديمة فوراً، ولا تجادل الزبون أو تتمسك بالاختيار السابق.
+26) ميّز بدقة بين الوزن وقياس الملابس عند إنشاء الطلب: إذا قالت الزبونة وزن/كيلو اجعل size_type="weight"، وإذا قالت قياس/مقاس أو رقماً مثل قياس 44 اجعل size_type="size". لا تحوّل القياس إلى وزن ولا الوزن إلى قياس.
 
 قاعدة الترحيب: {greeting_rule}"""
 DEFAULT_MAIN_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخر:
@@ -414,7 +415,7 @@ DEFAULT_MAIN_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخ�
   "create_order": false,
   "order": {
     "customer_name":"","phone":"","province":"","address":"","notes":"",
-    "items":[{"product_id":"","product_name":"","color":"","size":"","quantity":1}]
+    "items":[{"product_id":"","product_name":"","color":"","size":"","size_type":"size|weight","quantity":1}]
   },
   "confidence": 0
 }"""
@@ -978,6 +979,31 @@ def init_db():
             error_text           TEXT,
             created_at           TEXT DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS advisor_chat_messages (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            role                 TEXT NOT NULL,
+            content              TEXT NOT NULL,
+            analysis_text        TEXT,
+            conversations_count  INTEGER DEFAULT 0,
+            created_at           TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS advisor_memory_proposals (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_message_id    INTEGER,
+            title                TEXT NOT NULL,
+            content              TEXT NOT NULL,
+            proposal_type        TEXT DEFAULT 'rule',
+            apply_target         TEXT DEFAULT 'memory',
+            reason               TEXT,
+            status               TEXT DEFAULT 'pending',
+            created_at           TEXT DEFAULT CURRENT_TIMESTAMP,
+            reviewed_at          TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_advisor_proposals_status
+        ON advisor_memory_proposals(status, id);
 
         CREATE TABLE IF NOT EXISTS customer_tags (
             sender_id            TEXT PRIMARY KEY,
@@ -3003,7 +3029,7 @@ def format_order_for_telegram(order):
             items = []
     item_quantities = {}
     option_values = []
-    weight_based = True
+    option_types = []
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -3012,10 +3038,23 @@ def format_order_for_telegram(order):
         item_quantities[name] = item_quantities.get(name, 0) + quantity
         if item.get("size"):
             option_values.extend([str(item["size"]).strip()] * quantity)
-        product = find_product_by_id(item.get("product_id")) if item.get("product_id") else None
-        size_description = str((product or {}).get("sizes") or "").lower()
-        if not any(word in size_description for word in ("كيلو", "وزن")):
-            weight_based = False
+            explicit_type = str(item.get("size_type") or item.get("measurement_type") or "").strip().lower()
+            if explicit_type in {"weight", "وزن"}:
+                option_types.extend(["weight"] * quantity)
+            elif explicit_type in {"size", "measurement", "قياس", "مقاس"}:
+                option_types.extend(["size"] * quantity)
+            else:
+                size_value = str(item["size"]).strip().lower()
+                product = find_product_by_id(item.get("product_id")) if item.get("product_id") else None
+                size_description = str((product or {}).get("sizes") or "").lower()
+                inferred_weight = any(word in size_value for word in ("كيلو", "وزن"))
+                numeric_size = size_value.translate(_ARABIC_DIGIT_TRANS)
+                if not inferred_weight and re.fullmatch(r"\d{2,3}", numeric_size):
+                    # Common clothing sizes (for example 44) must not be labelled as weight.
+                    inferred_weight = int(numeric_size) > 60
+                elif not inferred_weight:
+                    inferred_weight = any(word in size_description for word in ("كيلو", "وزن"))
+                option_types.extend(["weight" if inferred_weight else "size"] * quantity)
     item_lines = [
         name + (f" × {quantity}" if quantity > 1 else "")
         for name, quantity in item_quantities.items()
@@ -3033,11 +3072,11 @@ def format_order_for_telegram(order):
         product_line,
         location,
         str(order.get("phone") or "").strip(),
-        str(int(order.get("total_amount") or order.get("price") or 0)),
+        f"{int(order.get('total_amount') or order.get('price') or 0)} مع التوصيل",
     ]
     if option_values:
         unique_options = list(dict.fromkeys(option_values))
-        if weight_based:
+        if option_types and all(option_type == "weight" for option_type in option_types):
             label = "الوزن"
         else:
             label = "القياسات" if len(unique_options) > 1 else "القياس"
@@ -4538,6 +4577,55 @@ def select_customer_context_product(text, customer_products):
     return None
 
 
+def select_product_mentioned_in_reply(reply, customer_products):
+    """Select the product actually described by the assistant's reply.
+
+    A catalog search may expose several products to the model. The product used for
+    an outgoing image must follow the model's chosen product, not an older binding.
+    """
+    def context_text(value):
+        return (
+            _catalog_text(value).lower()
+            .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+        )
+
+    normalized_reply = context_text(reply)
+    if not normalized_reply or not customer_products:
+        return None
+
+    scored = []
+    for product in customer_products:
+        score = 0
+        name = context_text(product.get("product_name") or "")
+        if name and name in normalized_reply:
+            score += 100
+
+        fabric = context_text(product.get("fabric") or "")
+        fabric_words = [word for word in _catalog_words(fabric) if len(word) >= 4]
+        if fabric_words and any(word in normalized_reply for word in fabric_words):
+            score += 25
+
+        raw_price = str(product.get("price") or "").translate(_ARABIC_DIGIT_TRANS)
+        price_digits = re.sub(r"\D", "", raw_price)
+        if price_digits:
+            reply_digits = normalized_reply.translate(_ARABIC_DIGIT_TRANS)
+            thousands = str(int(price_digits) // 1000) if int(price_digits) >= 1000 else ""
+            if price_digits in reply_digits:
+                score += 40
+            elif thousands and re.search(rf"(?<!\d){re.escape(thousands)}\s*(?:الف|الاف)(?!\w)", reply_digits):
+                score += 40
+
+        if score:
+            scored.append((score, product))
+
+    if not scored:
+        return None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    if len(scored) > 1 and scored[0][0] == scored[1][0]:
+        return None
+    return scored[0][1]
+
+
 def analyze_image_with_ai(image_url, candidate_products):
     if not is_store_feature_enabled("vision_enabled", VISION_ENABLED):
         print("[Vision] Disabled by VISION_ENABLED=0.", flush=True)
@@ -5315,6 +5403,7 @@ _INSTRUCTIONS_FILE  = os.path.join(os.path.dirname(__file__), "instructions.txt"
 _PLAYBOOK_FILE      = os.path.join(os.path.dirname(__file__), "gemini_sales_playbook.md")
 _PRODUCT_AI_SUMMARY_FILE = os.path.join(os.path.dirname(__file__), "product_ai_summary.txt")
 _FORBIDDEN_RULES_FILE = os.path.join(os.path.dirname(__file__), "forbidden_rules.txt")
+_ADVISOR_MEMORY_FILE = os.path.join(os.path.dirname(__file__), "advisor_memory.md")
 
 AI_COMMAND_FILES = {
     "instructions": {
@@ -6115,6 +6204,7 @@ def normalize_order_items(order_data, matched_product=None, products=None):
             "product_name": order_data.get("product_name") or (matched_product or {}).get("product_name", ""),
             "color": order_data.get("color", ""),
             "size": order_data.get("size", ""),
+            "size_type": order_data.get("size_type", ""),
             "quantity": order_data.get("quantity", 1),
         }]
 
@@ -6144,6 +6234,7 @@ def normalize_order_items(order_data, matched_product=None, products=None):
             "product_name": product_name,
             "color": str(raw.get("color") or "").strip(),
             "size": str(raw.get("size") or "").strip(),
+            "size_type": str(raw.get("size_type") or raw.get("measurement_type") or "").strip().lower(),
             "quantity": quantity,
         })
     return items
@@ -6191,9 +6282,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         price_digits = re.sub(r"[^0-9]", "", str(product.get("price") or ""))
         product_total += (int(price_digits) if price_digits else 0) * int(item.get("quantity") or 1)
     delivery_fee = get_delivery_settings(db).get("all_provinces_fee", DEFAULT_DELIVERY_FEE)
-    # The Telegram importer expects the merchandise amount exactly as staff
-    # write it; delivery remains a separate policy and is not added here.
-    total_amount = product_total
+    total_amount = product_total + int(delivery_fee or 0)
 
     duplicate = find_duplicate_order(db, sender_id, phone, product_id, address)
     if duplicate:
@@ -6963,6 +7052,16 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             },
         }
 
+    reply = ai_result.get("reply") or FALLBACK_REPLY
+    reply_product = select_product_mentioned_in_reply(reply, customer_products)
+    if reply_product and reply_product.get("product_id") != (matched_product or {}).get("product_id"):
+        log(10, "PRODUCT CONTEXT", "Reply selected a different product; aligning product and image", {
+            "previous_product_id": (matched_product or {}).get("product_id"),
+            "reply_product_id": reply_product.get("product_id"),
+        })
+        matched_product = reply_product
+        match_method = "reply_product_context"
+
     if matched_product:
         link_source = (matched_product or {}).get("source") or ""
         if match_method == "image_recognition":
@@ -6980,7 +7079,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             source=link_source or "process_webhook_after_main_ai",
         )
 
-    reply = ai_result.get("reply") or FALLBACK_REPLY
     if is_ai_handoff_reply(reply):
         try:
             set_customer_ai_enabled(db, ev["sender_id"], False)
@@ -7142,6 +7240,24 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             }
     else:
         log(12, "RETRY", "Reply accepted. No retry needed.")
+
+    # The checker retry may have changed the offered product. Align once more
+    # immediately before building an order or attaching an image.
+    final_reply_product = select_product_mentioned_in_reply(reply, customer_products)
+    if final_reply_product and final_reply_product.get("product_id") != (matched_product or {}).get("product_id"):
+        matched_product = final_reply_product
+        match_method = "reply_product_context"
+        complete_customer_product_link(
+            db,
+            ev["sender_id"],
+            matched_product,
+            match_method,
+            confidence=matched_product.get("confidence") or 100,
+            source="process_webhook_after_main_ai",
+        )
+        log(12, "PRODUCT CONTEXT", "Final reply and outgoing media realigned", {
+            "product_id": matched_product.get("product_id"),
+        })
 
     # ── STEP 13: Create order when requested ─────────────────────────────────
     order_created = False
@@ -8033,6 +8149,12 @@ def settings_smart_reviewer_page():
     return _admin_page("settings/smart_reviewer.html")
 
 
+@app.route("/advisor")
+@app.route("/settings/advisor")
+def advisor_page():
+    return _admin_page("advisor.html")
+
+
 @app.route("/settings/channels")
 def settings_channels_page():
     return _admin_page("settings/channels.html")
@@ -8308,6 +8430,7 @@ def api_export_full_backup():
             (_PLAYBOOK_FILE, "ai/gemini_sales_playbook.md"),
             (_PRODUCT_AI_SUMMARY_FILE, "ai/product_ai_summary.txt"),
             (_FORBIDDEN_RULES_FILE, "ai/forbidden_rules.txt"),
+            (_ADVISOR_MEMORY_FILE, "ai/advisor_memory.md"),
         ):
             add_file(bundle, path, name)
         add_directory(bundle, UPLOADS_DIR, "images/uploads")
@@ -8411,6 +8534,11 @@ def api_import_full_backup():
             finally:
                 source_db.close()
 
+            # Backups from older releases do not contain newer tables. Run the
+            # idempotent schema initializer immediately so the restored system
+            # is usable without waiting for a Railway restart.
+            init_db()
+
             restored_products = 0
             if "products.json" in names:
                 products = json.loads(bundle.read("products.json").decode("utf-8-sig"))
@@ -8429,6 +8557,7 @@ def api_import_full_backup():
                 ("ai/gemini_sales_playbook.md", _PLAYBOOK_FILE),
                 ("ai/product_ai_summary.txt", _PRODUCT_AI_SUMMARY_FILE),
                 ("ai/forbidden_rules.txt", _FORBIDDEN_RULES_FILE),
+                ("ai/advisor_memory.md", _ADVISOR_MEMORY_FILE),
             )
             for archive_name, destination in single_files:
                 if archive_name in names:
@@ -8441,6 +8570,7 @@ def api_import_full_backup():
                 _restore_directory_from_backup(bundle, "images/catalog", CATALOG_IMAGE_DIR),
                 _restore_directory_from_backup(bundle, "images/products", PRODUCT_IMAGE_DIR),
             ))
+            _advisor_sync_memory_file(get_db())
         return jsonify({
             "ok": True,
             "message": "تمت استعادة النسخة الكاملة بنجاح",
@@ -10151,6 +10281,235 @@ def run_ai_self_analysis(db, start_date=None, end_date=None):
         import traceback
         traceback.print_exc()
         return {"ok": False, "error": f"حدث خطأ أثناء إجراء التحليل: {exc}"}
+
+
+def _advisor_sync_memory_file(db):
+    rows = db.execute(
+        """SELECT id, title, content, proposal_type, apply_target, reason, reviewed_at
+           FROM advisor_memory_proposals
+           WHERE status='approved'
+           ORDER BY id"""
+    ).fetchall()
+    lines = [
+        "# ذاكرة مستشار صوف",
+        "",
+        "> لا يدخل أي بند إلى هذه الذاكرة إلا بعد موافقة المشرف من صفحة المستشار.",
+        "",
+    ]
+    for row in rows:
+        lines.extend([
+            f"## {row['title']}",
+            f"- النوع: {row['proposal_type'] or 'rule'}",
+            f"- الهدف: {row['apply_target'] or 'memory'}",
+            f"- تاريخ الموافقة: {row['reviewed_at'] or '-'}",
+            "",
+            str(row["content"] or "").strip(),
+            "",
+        ])
+        if row["reason"]:
+            lines.extend([f"**السبب:** {row['reason']}", ""])
+    content = "\n".join(lines).rstrip() + "\n"
+    temp_path = _ADVISOR_MEMORY_FILE + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as memory_file:
+        memory_file.write(content)
+    os.replace(temp_path, _ADVISOR_MEMORY_FILE)
+    return content
+
+
+def _advisor_conversation_snapshot(db, message_limit=300):
+    rows = db.execute(
+        """SELECT m.sender_id, m.direction, m.message_type, m.text, m.created_at,
+                  COALESCE(c.name, '') AS customer_name, COALESCE(c.lead_stage, '') AS lead_stage
+           FROM messages m
+           LEFT JOIN customers c ON c.sender_id=m.sender_id
+           ORDER BY m.id DESC LIMIT ?""",
+        (message_limit,),
+    ).fetchall()
+    rows = list(reversed(rows))
+    sender_ids = list(dict.fromkeys(row["sender_id"] for row in rows))
+    transcript = []
+    current_sender = None
+    for row in rows:
+        if row["sender_id"] != current_sender:
+            current_sender = row["sender_id"]
+            transcript.append(
+                f"\n[محادثة: {row['customer_name'] or current_sender} | {current_sender} | المرحلة: {row['lead_stage'] or '-'}]"
+            )
+        role = "الزبون" if row["direction"] == "incoming" else "الموظف"
+        content = (row["text"] or f"[{row['message_type'] or 'رسالة'}]").strip()
+        transcript.append(f"{role}: {content[:700]}")
+    orders_count = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+    problems_count = db.execute("SELECT COUNT(*) FROM problem_reports").fetchone()[0]
+    return {
+        "conversation_count": len(sender_ids),
+        "message_count": len(rows),
+        "orders_count": orders_count,
+        "problems_count": problems_count,
+        "transcript": "\n".join(transcript),
+    }
+
+
+def _advisor_call_model(db, user_message):
+    if not OPENROUTER_KEY:
+        raise RuntimeError("مفتاح نموذج الذكاء الاصطناعي غير متوفر")
+    snapshot = _advisor_conversation_snapshot(db)
+    approved_memory = _advisor_sync_memory_file(db)
+    history_rows = db.execute(
+        "SELECT role, content FROM advisor_chat_messages ORDER BY id DESC LIMIT 24"
+    ).fetchall()
+    history = [
+        {"role": row["role"], "content": row["content"]}
+        for row in reversed(history_rows)
+        if row["role"] in {"user", "assistant"}
+    ]
+    system_prompt = """أنت مستشار تحسين داخلي لنظام صوف للمبيعات وخدمة العملاء. تتحدث فقط مع مالك النظام، لا مع الزبائن.
+حلّل سير العمل والمحادثات السابقة، واشرح الأخطاء والفرص بدقة وبالعربية الواضحة. يمكنك اقتراح قواعد وذاكرة وتحسينات، لكن ممنوع أن تطبق أو تغيّر أي شيء بنفسك. كل اقتراح يجب أن ينتظر موافقة المالك.
+أرجع JSON فقط بالشكل التالي:
+{
+  "reply":"ردك الحواري على المالك",
+  "analysis":"نتيجة التحليل والأدلة المختصرة",
+  "proposals":[
+    {"title":"عنوان", "content":"قاعدة أو معرفة محددة قابلة للتطبيق", "proposal_type":"rule|workflow|memory", "apply_target":"active_rule|memory", "reason":"لماذا تقترحها"}
+  ]
+}
+لا تقترح قاعدة عامة مبهمة. لا تدّع تطبيق أي اقتراح. إذا كان المالك يناقش فقط ولا يطلب تغييراً، يجوز إرجاع proposals فارغة."""
+    context = (
+        f"إحصاءات العينة: {snapshot['conversation_count']} محادثة، {snapshot['message_count']} رسالة، "
+        f"{snapshot['orders_count']} طلب، {snapshot['problems_count']} مشكلة.\n\n"
+        f"الذاكرة الموافق عليها فقط:\n{approved_memory[-12000:]}\n\n"
+        f"عينة المحادثات السابقة:\n{snapshot['transcript'][-50000:]}\n\n"
+        f"رسالة المالك الحالية: {user_message}"
+    )
+    response = requests.post(
+        OPENROUTER_URL,
+        headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json"},
+        json={
+            "model": get_ai_model(db, "main_model", MAIN_MODEL),
+            "messages": [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": context}],
+            "max_tokens": get_ai_max_tokens(db, "main", 1800),
+            "temperature": 0.25,
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    raw = response.json()["choices"][0]["message"]["content"]
+    parsed = _parse_ai_json(raw) if isinstance(raw, str) else raw
+    if not isinstance(parsed, dict) or not str(parsed.get("reply") or "").strip():
+        raise RuntimeError("لم يرجع المستشار رداً صالحاً")
+    parsed["_snapshot"] = snapshot
+    return parsed
+
+
+@app.route("/api/advisor", methods=["GET"])
+@_dash_require
+def api_advisor_state():
+    db = get_db()
+    messages = db.execute(
+        "SELECT * FROM advisor_chat_messages ORDER BY id DESC LIMIT 100"
+    ).fetchall()
+    proposals = db.execute(
+        "SELECT * FROM advisor_memory_proposals ORDER BY id DESC LIMIT 100"
+    ).fetchall()
+    approved_count = db.execute(
+        "SELECT COUNT(*) FROM advisor_memory_proposals WHERE status='approved'"
+    ).fetchone()[0]
+    return jsonify({
+        "ok": True,
+        "messages": [dict(row) for row in reversed(messages)],
+        "proposals": [dict(row) for row in proposals],
+        "approved_count": approved_count,
+        "memory_file": "advisor_memory.md",
+    })
+
+
+@app.route("/api/advisor/chat", methods=["POST"])
+@_dash_require
+def api_advisor_chat():
+    db = get_db()
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message") or "").strip()
+    if not message:
+        return jsonify({"ok": False, "error": "اكتب رسالة للمستشار أولاً"}), 400
+    now = now_baghdad_iso()
+    db.execute(
+        "INSERT INTO advisor_chat_messages(role, content, created_at) VALUES ('user', ?, ?)",
+        (message, now),
+    )
+    db.commit()
+    try:
+        result = _advisor_call_model(db, message)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    snapshot = result.pop("_snapshot")
+    assistant_content = str(result.get("reply") or "").strip()
+    analysis_text = str(result.get("analysis") or "").strip()
+    cur = db.execute(
+        """INSERT INTO advisor_chat_messages
+           (role, content, analysis_text, conversations_count, created_at)
+           VALUES ('assistant', ?, ?, ?, ?)""",
+        (assistant_content, analysis_text, snapshot["conversation_count"], now_baghdad_iso()),
+    )
+    assistant_id = cur.lastrowid
+    proposal_ids = []
+    for proposal in (result.get("proposals") or [])[:8]:
+        if not isinstance(proposal, dict):
+            continue
+        title = str(proposal.get("title") or "اقتراح تحسين").strip()[:180]
+        content = str(proposal.get("content") or "").strip()
+        if not content:
+            continue
+        proposal_type = str(proposal.get("proposal_type") or "rule").strip().lower()
+        apply_target = str(proposal.get("apply_target") or "memory").strip().lower()
+        if apply_target not in {"memory", "active_rule"}:
+            apply_target = "memory"
+        proposal_cur = db.execute(
+            """INSERT INTO advisor_memory_proposals
+               (source_message_id, title, content, proposal_type, apply_target, reason, status, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)""",
+            (assistant_id, title, content, proposal_type, apply_target, str(proposal.get("reason") or "").strip(), now_baghdad_iso()),
+        )
+        proposal_ids.append(proposal_cur.lastrowid)
+    db.commit()
+    return jsonify({"ok": True, "assistant_id": assistant_id, "proposal_ids": proposal_ids})
+
+
+@app.route("/api/advisor/proposals/<int:proposal_id>/<action>", methods=["POST"])
+@_dash_require
+def api_advisor_review_proposal(proposal_id, action):
+    if action not in {"approve", "reject"}:
+        return jsonify({"ok": False, "error": "إجراء غير صالح"}), 400
+    db = get_db()
+    proposal = db.execute(
+        "SELECT * FROM advisor_memory_proposals WHERE id=?", (proposal_id,)
+    ).fetchone()
+    if not proposal:
+        return jsonify({"ok": False, "error": "الاقتراح غير موجود"}), 404
+    if proposal["status"] != "pending":
+        return jsonify({"ok": False, "error": "تمت مراجعة هذا الاقتراح سابقاً"}), 409
+    now = now_baghdad_iso()
+    status = "approved" if action == "approve" else "rejected"
+    db.execute(
+        "UPDATE advisor_memory_proposals SET status=?, reviewed_at=? WHERE id=?",
+        (status, now, proposal_id),
+    )
+    if action == "approve" and proposal["apply_target"] == "active_rule":
+        db.execute(
+            """INSERT INTO active_ai_rules
+               (source_suggestion_id, rule_type, rule_text, priority, active, created_at, updated_at)
+               VALUES (NULL, ?, ?, 5, 1, ?, ?)""",
+            (proposal["proposal_type"] or "advisor", proposal["content"], now, now),
+        )
+    db.commit()
+    _advisor_sync_memory_file(db)
+    return jsonify({"ok": True, "status": status})
+
+
+@app.route("/api/advisor/memory")
+@_dash_require
+def api_advisor_memory_file():
+    db = get_db()
+    _advisor_sync_memory_file(db)
+    return send_file(_ADVISOR_MEMORY_FILE, mimetype="text/markdown", as_attachment=bool(request.args.get("download")), download_name="advisor_memory.md")
 
 
 @app.route("/api/evaluation")

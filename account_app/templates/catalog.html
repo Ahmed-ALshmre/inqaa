@@ -4,11 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#1f2937">
-  <title>إعدادات الكتالوج - لمسة ستور</title>
+  <title>إعدادات الكتالوج — صوف</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=6">
+  <link rel="icon" href="/static/icons/icon-192.png?v=6">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=5">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=15">
   <style>
     body.catalog-page { background: var(--chat-bg); color: var(--text); }
     .catalog-layout {
@@ -113,7 +116,7 @@
   <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
     <div class="nav-main d-flex align-items-center gap-2">
       <span class="navbar-brand fw-bold fs-6 mb-0">
-        <i class="bi bi-images me-2"></i>إعدادات الكتالوج
+        <img class="app-brand-logo me-2" src="/static/icons/icon-192.png?v=6" alt="شعار صوف">إعدادات الكتالوج
       </span>
     </div>
     <div class="nav-actions d-flex align-items-center gap-2">
@@ -320,5 +323,7 @@
 
   loadCatalogImages();
   </script>
+  {% include '_mobile_nav.html' %}
+  <script src="/static/js/mobile_app.js?v=2"></script>
 </body>
 </html>

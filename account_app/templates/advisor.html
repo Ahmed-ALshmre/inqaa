@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}مستشار صوف{% endblock %}
+{% block content %}
+<section class="admin-page-head advisor-page-head">
+  <div>
+    <p class="admin-kicker">Soof AI Advisor</p>
+    <h1>مستشار صوف</h1>
+    <p>ناقش سير العمل مع الذكاء الاصطناعي، راجع تحليله، ثم وافق أو ارفض كل قاعدة قبل أن تدخل الذاكرة.</p>
+  </div>
+  <div class="admin-actions-row">
+    <a class="btn btn-outline-primary" href="/api/advisor/memory" target="_blank"><i class="bi bi-journal-text"></i> فتح الذاكرة</a>
+    <a class="btn btn-outline-secondary" href="/api/advisor/memory?download=1"><i class="bi bi-download"></i> تنزيل الملف</a>
+  </div>
+</section>
+
+<section class="advisor-safety-note">
+  <i class="bi bi-shield-lock-fill"></i>
+  <div><strong>وضع الموافقة اليدوية مفعّل</strong><span>المستشار يحلل ويقترح فقط. لا تُضاف قاعدة ولا تتغير تعليمات الرد قبل موافقتك الصريحة.</span></div>
+</section>
+
+<div class="advisor-layout">
+  <section class="advisor-chat-card">
+    <div class="advisor-chat-head">
+      <div><strong>المحادثة الخاصة</strong><span id="advisorStats">جاري تحميل السجل…</span></div>
+      <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadAdvisor()"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+    <div class="advisor-messages" id="advisorMessages"></div>
+    <form class="advisor-composer" id="advisorForm">
+      <textarea id="advisorInput" rows="3" placeholder="مثال: راجع محادثات اليوم، أين يختلط على النظام اختيار المنتج؟"></textarea>
+      <button type="submit" id="advisorSendBtn"><i class="bi bi-send-fill"></i><span>إرسال للمستشار</span></button>
+    </form>
+  </section>
+
+  <aside class="advisor-proposals-card">
+    <div class="advisor-proposals-head">
+      <div><strong>الاقتراحات والذاكرة</strong><span>راجع كل بند بصورة مستقلة</span></div>
+      <span class="advisor-memory-count" id="advisorMemoryCount">0</span>
+    </div>
+    <div class="advisor-proposals" id="advisorProposals"></div>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/advisor.js?v=1"></script>
+{% endblock %}

@@ -24,6 +24,7 @@ from account_app.app import (
     load_products_from_file,
     reject_current_binding,
     save_message,
+    select_product_mentioned_in_reply,
     _should_send_image,
     should_use_auto_product,
     update_customer_intelligence,
@@ -165,6 +166,32 @@ class SalesCoreTests(unittest.TestCase):
             {"text": "ممكن ترسلين صورته؟", "ref": "", "ad_id": ""},
         ))
 
+    def test_reply_product_controls_image_in_two_product_conversation(self):
+        products = [
+            {
+                "product_id": "P004", "product_name": "سوت ابو الورد",
+                "price": "10000", "fabric": "قماش فرسان درجة أولى",
+                "image_url": "https://example.com/p004.jpg",
+            },
+            {
+                "product_id": "P003", "product_name": "سوت قياس خاص",
+                "price": "17000", "fabric": "لينن، خامة مريحة وعملية",
+                "image_url": "https://example.com/p003.jpg",
+            },
+        ]
+        selected = select_product_mentioned_in_reply(
+            "متوفر سوت قياس خاص يلبس للـ130 وسعره 17 ألف وقماشه لينن، أدزلج صورته؟",
+            products,
+        )
+        self.assertEqual(selected["product_id"], "P003")
+        self.assertEqual(selected["image_url"], "https://example.com/p003.jpg")
+
+        selected = select_product_mentioned_in_reply(
+            "سوت أبو الورد بـ10 آلاف يلبس للـ85 كيلو",
+            products,
+        )
+        self.assertEqual(selected["product_id"], "P004")
+
     def test_telegram_text_removes_links(self):
         cleaned = clean_telegram_text(
             "تفاصيل المنتج https://example.com/product/1\nwww.example.com/image.jpg"
@@ -222,8 +249,8 @@ class SalesCoreTests(unittest.TestCase):
         result, _ = create_order_if_valid(self.db, self.sender_id, {"order": {
             "phone": "07701234567", "province": "بغداد", "address": "المنصور",
             "items": [
-                {"product_id": "P001", "color": "أسود", "size": "70 كيلو", "quantity": 2},
-                {"product_id": "P003", "color": "زيتي", "size": "90 كيلو", "quantity": 1},
+                {"product_id": "P001", "color": "أسود", "size": "70", "size_type": "weight", "quantity": 2},
+                {"product_id": "P003", "color": "زيتي", "size": "90", "size_type": "weight", "quantity": 1},
             ],
         }}, None)
         self.assertTrue(result)
@@ -232,7 +259,7 @@ class SalesCoreTests(unittest.TestCase):
         booking = _save.call_args.args[0]
         self.assertEqual(booking["product_total"], 56000)
         self.assertEqual(booking["delivery_fee"], 5000)
-        self.assertEqual(booking["total_amount"], 56000)
+        self.assertEqual(booking["total_amount"], 61000)
 
     def test_incomplete_order_is_rejected(self):
         result, reply = create_order_if_valid(self.db, self.sender_id, {"order": {
@@ -269,7 +296,7 @@ class SalesCoreTests(unittest.TestCase):
             "فستان انيقه × 2\n"
             "بغداد / المنصور قرب السوق\n"
             "07701234567\n"
-            "40000\n"
+            "40000 مع التوصيل\n"
             "القياسات: 40، 42"
         ))
         self.assertNotIn("http", message)
@@ -281,16 +308,39 @@ class SalesCoreTests(unittest.TestCase):
             "address": "حي الجهاد / قرب السوق",
             "total_amount": 38000,
             "items": [
-                {"product_id": "P001", "product_name": "سوت ملكي", "quantity": 1, "size": "75"},
-                {"product_id": "P003", "product_name": "دشداشة أم السوتاج", "quantity": 1, "size": "75"},
+                {"product_id": "P001", "product_name": "سوت ملكي", "quantity": 1, "size": "75", "size_type": "weight"},
+                {"product_id": "P003", "product_name": "دشداشة أم السوتاج", "quantity": 1, "size": "75", "size_type": "weight"},
             ],
         })
         self.assertEqual(weight_message, (
             "سوت ملكي + دشداشة أم السوتاج\n"
             "بغداد / حي الجهاد / قرب السوق\n"
             "07800000000\n"
-            "38000\n"
+            "38000 مع التوصيل\n"
             "الوزن: 75"
+        ))
+
+    def test_telegram_total_includes_delivery_and_size_44_stays_measurement(self):
+        message = format_order_for_telegram({
+            "phone": "07825020843",
+            "province": "الأنبار",
+            "address": "فلوجة حي الوحدة خلف مأكولات أحمد ياسين شارع جامع عبد الرحمن",
+            "product_total": 17000,
+            "delivery_fee": 5000,
+            "total_amount": 22000,
+            "items": [
+                {
+                    "product_name": "كيلوت", "quantity": 1,
+                    "size": "44", "size_type": "size",
+                },
+            ],
+        })
+        self.assertEqual(message, (
+            "كيلوت\n"
+            "الأنبار / فلوجة حي الوحدة خلف مأكولات أحمد ياسين شارع جامع عبد الرحمن\n"
+            "07825020843\n"
+            "22000 مع التوصيل\n"
+            "القياس: 44"
         ))
 
     def test_store_name_is_extracted_from_manychat(self):
@@ -334,6 +384,38 @@ class MultiStoreIntegrationTests(unittest.TestCase):
         self.db.execute("DELETE FROM app_settings WHERE key LIKE ?", (f"%{self.marker}%",))
         self.db.commit()
         self.ctx.pop()
+
+    @patch("account_app.app._advisor_sync_memory_file", return_value="")
+    def test_advisor_proposal_changes_nothing_before_explicit_approval(self, _sync_memory):
+        marker = "advisor-rule-" + uuid.uuid4().hex
+        cur = self.db.execute(
+            """INSERT INTO advisor_memory_proposals
+               (title, content, proposal_type, apply_target, reason, status)
+               VALUES (?, ?, 'rule', 'active_rule', 'اختبار', 'pending')""",
+            ("قاعدة اختبار", marker),
+        )
+        proposal_id = cur.lastrowid
+        self.db.commit()
+        try:
+            before = self.db.execute(
+                "SELECT COUNT(*) FROM active_ai_rules WHERE rule_text=?", (marker,)
+            ).fetchone()[0]
+            self.assertEqual(before, 0)
+
+            response = self.client.post(f"/api/advisor/proposals/{proposal_id}/approve")
+            self.assertEqual(response.status_code, 200)
+            after = self.db.execute(
+                "SELECT COUNT(*) FROM active_ai_rules WHERE rule_text=? AND active=1", (marker,)
+            ).fetchone()[0]
+            self.assertEqual(after, 1)
+            status = self.db.execute(
+                "SELECT status FROM advisor_memory_proposals WHERE id=?", (proposal_id,)
+            ).fetchone()[0]
+            self.assertEqual(status, "approved")
+        finally:
+            self.db.execute("DELETE FROM active_ai_rules WHERE rule_text=?", (marker,))
+            self.db.execute("DELETE FROM advisor_memory_proposals WHERE id=?", (proposal_id,))
+            self.db.commit()
 
     @patch("account_app.app.threading.Thread")
     def test_webhooks_namespace_same_manychat_customer_by_store(self, thread_cls):

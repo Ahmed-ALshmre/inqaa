@@ -4,17 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#6d2854">
-  <title>تسجيل الدخول — لمسة ستور</title>
+  <title>تسجيل الدخول — صوف</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=6">
+  <link rel="icon" href="/static/icons/icon-192.png?v=6">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=8">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=15">
 </head>
 <body class="login-page">
   <main class="login-shell">
     <section class="login-card">
-      <div class="login-brand-mark"><i class="bi bi-bag-heart-fill"></i></div>
+      <div class="login-brand-mark"><img src="/static/icons/icon-192.png?v=6" alt="شعار صوف"></div>
       <p class="login-kicker">لوحة المبيعات الذكية</p>
-      <h1>لمسة ستور</h1>
+      <h1>صوف</h1>
       <p class="login-copy">أديري المحادثات والطلبات والمنتجات من مكان واحد.</p>
       {% if error %}<div class="login-error"><i class="bi bi-exclamation-circle"></i>{{ error }}</div>{% endif %}
       <form method="post" class="login-form">

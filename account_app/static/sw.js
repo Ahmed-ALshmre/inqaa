@@ -1,10 +1,11 @@
 /* Minimal service worker — needed for installability + offline fallback */
-const CACHE_NAME = 'sales-dashboard-v5';
+const CACHE_NAME = 'soof-mobile-v7';
 const APP_SHELL = [
-  '/static/css/dashboard.css?v=5',
-  '/static/js/dashboard.js?v=5',
-  '/static/icons/icon-192.png',
-  '/static/icons/icon-512.png',
+  '/static/css/dashboard.css?v=15',
+  '/static/js/dashboard.js?v=13',
+  '/static/js/mobile_app.js?v=2',
+  '/static/icons/icon-192.png?v=6',
+  '/static/icons/icon-512.png?v=6',
 ];
 
 self.addEventListener('install', (event) => {
