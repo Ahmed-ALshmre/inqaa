@@ -2458,6 +2458,7 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans Arabic',s
 .app-brand-logo { width:36px; height:36px; object-fit:cover; border-radius:11px; flex:0 0 auto; }
 .login-brand-mark img { width:100%; height:100%; object-fit:cover; border-radius:24px; }
 .app-back-btn { display:none; width:40px; height:40px; place-items:center; border:0; border-radius:12px; color:#fff; background:rgba(255,255,255,.12); }
+.mobile-chat-back{display:none}
 .mobile-app-nav { display:none; }
 .app-navigating body { opacity:.78; transform:scale(.997); }
 body { transition:opacity .14s ease, transform .14s ease; }
@@ -2474,6 +2475,10 @@ body { transition:opacity .14s ease, transform .14s ease; }
   .mobile-app-nav a i { font-size:1.15rem; }
   .mobile-app-nav a.active { color:var(--primary); background:var(--primary-soft); }
   .mobile-app-nav a:active { transform:scale(.94); }
+  body.mobile-conversation-open .mobile-app-nav{transform:translateY(130%);opacity:0;pointer-events:none}
+  body.mobile-conversation-open .main-container{height:calc(var(--app-viewport-height,100dvh) - var(--navbar-h))!important}
+  body.mobile-conversation-open .toast-container{bottom:12px!important}
+  .mobile-chat-back{width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;border:0;border-radius:13px;background:var(--primary-soft);color:var(--primary);font-size:1.05rem}
   .admin-main { padding-bottom:calc(96px + env(safe-area-inset-bottom))!important; }
   body:not(.login-page) { overscroll-behavior-y:contain; }
   .main-container { height:calc(100dvh - var(--navbar-h) - 78px)!important; }
@@ -2688,6 +2693,20 @@ button,a,input,select,textarea { touch-action:manipulation; }
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* Advisor experience v3 — clearer hierarchy and calmer workspace */
+.advisor-page-head{position:relative;overflow:hidden;padding:24px 26px!important;border:1px solid #cce5dc;border-radius:24px;background:linear-gradient(135deg,#f0faf6 0%,#fff 58%,#eef8f5 100%);box-shadow:0 14px 42px rgba(25,82,69,.08)}
+.advisor-page-head::after{content:'';position:absolute;inset:auto -70px -90px auto;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(42,157,143,.14),transparent 68%);pointer-events:none}
+.advisor-page-head>div:first-child{position:relative;z-index:1;max-width:780px}.advisor-page-head .admin-kicker{display:flex;align-items:center;gap:6px}.advisor-page-head p{max-width:720px;margin-bottom:0}.advisor-page-head .admin-actions-row{position:relative;z-index:1}.advisor-page-head .btn{border-radius:13px;font-weight:800}
+.advisor-capabilities{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}.advisor-capabilities span{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #d9ece5;border-radius:999px;background:rgba(255,255,255,.72);color:#416a60;font-size:.72rem;font-weight:800}.advisor-capabilities i{color:var(--primary)}
+.advisor-safety-note{margin-top:-4px;padding:11px 15px;border-radius:14px}.advisor-safety-note>i{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:#dff5e9;font-size:1rem}.advisor-safety-note strong{font-size:.82rem}.advisor-safety-note span{font-size:.74rem}
+.advisor-overview{gap:10px}.advisor-overview article{padding:12px 14px;border-radius:15px;box-shadow:none}.advisor-overview article>i{width:38px;height:38px;border-radius:12px}.advisor-overview strong{font-size:1.05rem}
+.advisor-layout{grid-template-columns:minmax(0,2fr) minmax(315px,.85fr);align-items:stretch}.advisor-chat-card,.advisor-proposals-card{border-radius:20px;box-shadow:0 12px 38px rgba(26,70,61,.08)}.advisor-chat-card{min-height:680px}.advisor-chat-head{padding:14px 17px;background:linear-gradient(90deg,#f4fbf8,#fff)}
+.advisor-messages{background-color:#f8fbfa;background-image:radial-gradient(rgba(18,112,90,.055) 1px,transparent 1px);background-size:18px 18px}.advisor-message{margin-bottom:16px}.advisor-message.owner{box-shadow:0 8px 20px rgba(15,118,110,.18)}
+.advisor-composer{grid-template-columns:minmax(0,1fr) 188px;gap:12px;padding:14px 16px}.advisor-input-wrap{position:relative}.advisor-input-wrap textarea{padding-bottom:30px}.advisor-input-hint{position:absolute;right:14px;bottom:9px;color:#8a9d98;font-size:.62rem;pointer-events:none}.advisor-compose-actions select{height:40px}.advisor-compose-actions>button{min-height:52px;box-shadow:0 8px 18px rgba(15,118,110,.2);transition:transform .15s ease,box-shadow .15s ease}.advisor-compose-actions>button:hover{transform:translateY(-1px);box-shadow:0 11px 24px rgba(15,118,110,.25)}
+.advisor-proposals-card{grid-template-rows:auto auto 1fr}.advisor-proposals-head strong{display:flex;align-items:center;gap:7px}.advisor-proposals-head strong i{color:var(--primary)}.advisor-proposal-filters{display:flex;gap:5px;padding:9px 10px;border-bottom:1px solid var(--border);background:#fff}.advisor-proposal-filters button{flex:1;padding:7px 5px;border:0;border-radius:9px;background:transparent;color:var(--text-muted);font:800 .66rem 'Noto Sans Arabic',sans-serif;transition:.15s}.advisor-proposal-filters button:hover{background:#f2f8f5}.advisor-proposal-filters button.active{background:var(--primary-soft);color:var(--primary)}.advisor-proposals{padding:12px}.advisor-proposal{padding:14px;border-radius:15px}.advisor-proposal.pending{border-right:4px solid #e5ac3c}.advisor-proposal.approved{border-right:4px solid #2b9a69}.advisor-proposal.rejected{border-right:4px solid #9aa9a4}.advisor-proposal-actions .btn{flex:1;border-radius:10px}
+@media(max-width:900px){.advisor-layout{grid-template-columns:1fr}.advisor-proposals-card{min-height:380px}.advisor-proposals{max-height:520px}}
+@media(max-width:576px){.advisor-page-head{padding:18px 16px!important;border-radius:19px}.advisor-page-head h1::before{width:34px;height:34px}.advisor-capabilities{gap:5px}.advisor-capabilities span{padding:5px 8px;font-size:.65rem}.advisor-safety-note{margin-bottom:12px}.advisor-overview{display:flex;overflow-x:auto;padding-bottom:3px}.advisor-overview article{flex:0 0 78%;min-width:220px}.advisor-chat-card{min-height:calc(100dvh - 150px);border-radius:17px}.advisor-chat-head{position:sticky;top:0;z-index:2}.advisor-messages{max-height:58dvh}.advisor-composer{grid-template-columns:1fr}.advisor-compose-actions{grid-template-columns:1fr 1fr}.advisor-compose-actions>button{grid-column:1/-1}.advisor-input-hint{display:none}.advisor-proposal-filters{position:sticky;top:0;z-index:2}.advisor-proposal-actions{flex-direction:column}.advisor-page-head .admin-actions-row{display:grid;grid-template-columns:1fr 1fr}}
 
 .conversation-store-badge.store-khuyoot {
   color: #17644b;

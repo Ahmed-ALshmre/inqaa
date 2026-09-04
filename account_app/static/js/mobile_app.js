@@ -13,13 +13,16 @@
   }
 
   window.appGoBack = function () {
+    const previousPath = sessionStorage.getItem('soof.previousPath');
     if (history.length > 1 && document.referrer.startsWith(location.origin)) history.back();
+    else if (previousPath && previousPath !== location.pathname + location.search) location.href = previousPath;
     else location.href = '/dashboard';
   };
 
   document.addEventListener('click', function (event) {
     const link = event.target.closest('a[href^="/"]');
     if (!link || link.target || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    sessionStorage.setItem('soof.previousPath', location.pathname + location.search);
     document.documentElement.classList.add('app-navigating');
   });
 

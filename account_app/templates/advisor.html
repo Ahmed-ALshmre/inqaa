@@ -3,9 +3,14 @@
 {% block content %}
 <section class="admin-page-head advisor-page-head">
   <div>
-    <p class="admin-kicker">Soof AI Advisor</p>
+    <p class="admin-kicker"><i class="bi bi-stars"></i> Soof AI Advisor</p>
     <h1>مستشار صوف</h1>
-    <p>ناقش سير العمل مع الذكاء الاصطناعي، راجع تحليله، ثم وافق أو ارفض كل قاعدة قبل أن تدخل الذاكرة.</p>
+    <p>تحدث معه بصورة طبيعية؛ يقرأ سجل حديثكما وذاكرته ورسائل الزبائن القديمة، ويحلل قاعدة البيانات عندما تطلب منه ذلك.</p>
+    <div class="advisor-capabilities">
+      <span><i class="bi bi-database-check"></i> يقرأ قاعدة البيانات</span>
+      <span><i class="bi bi-clock-history"></i> يتذكر الحديث السابق</span>
+      <span><i class="bi bi-journal-check"></i> يقترح ذاكرة جديدة</span>
+    </div>
   </div>
   <div class="admin-actions-row">
     <a class="btn btn-outline-primary" href="/api/advisor/memory" target="_blank"><i class="bi bi-journal-text"></i> فتح الذاكرة</a>
@@ -13,7 +18,7 @@
   </div>
 </section>
 
-<section class="advisor-safety-note">
+<section class="advisor-safety-note" aria-label="حماية الذاكرة">
   <i class="bi bi-shield-lock-fill"></i>
   <div><strong>وضع الموافقة اليدوية مفعّل</strong><span>المستشار يحلل ويقترح فقط. لا تُضاف قاعدة ولا تتغير تعليمات الرد قبل موافقتك الصريحة.</span></div>
 </section>
@@ -28,34 +33,45 @@
   <section class="advisor-chat-card">
     <div class="advisor-chat-head">
       <div class="advisor-chat-identity"><span class="advisor-avatar"><i class="bi bi-stars"></i></span><div><strong>مستشار صوف</strong><span id="advisorStats">جاري تحميل السجل…</span></div></div>
-      <span class="advisor-online"><i></i> جاهز للتحليل</span>
+      <span class="advisor-online"><i></i> جاهز للمحادثة</span>
     </div>
     <div class="advisor-messages" id="advisorMessages"></div>
     <form class="advisor-composer" id="advisorForm">
       <div class="advisor-compose-main">
         <div class="advisor-quick-prompts">
+          <button type="button" onclick="setAdvisorPrompt('ماذا تتذكر عن المتجر وطريقة عملي؟')">ماذا تتذكر؟</button>
+          <button type="button" onclick="setAdvisorPrompt('اقرأ رسائل الزبائن القديمة وأجب عن سؤالي بناءً عليها: ')">اسأل عن المحادثات</button>
           <button type="button" onclick="setAdvisorPrompt('حلل أسباب ضياع الطلبات والأخطاء المتكررة في المحادثات')">أسباب ضياع الطلبات</button>
           <button type="button" onclick="setAdvisorPrompt('راجع دقة اختيار المنتجات والصور والأسعار في المحادثات')">دقة المنتجات</button>
           <button type="button" onclick="setAdvisorPrompt('قارن المحادثات التي انتهت بطلب مع المحادثات التي انسحب منها الزبون')">مقارنة المبيعات</button>
         </div>
-        <textarea id="advisorInput" rows="3" placeholder="اكتب ما تريد مناقشته أو اطلب تحليل سير العمل…"></textarea>
+        <div class="advisor-input-wrap">
+          <textarea id="advisorInput" rows="3" placeholder="تحدث مع مستشار صوف أو اطلب منه قراءة المحادثات وتحليل البيانات…"></textarea>
+          <span class="advisor-input-hint">Enter للإرسال · Shift + Enter لسطر جديد</span>
+        </div>
       </div>
       <div class="advisor-compose-actions">
+        <label><span>طريقة الرد</span><select id="advisorMode"><option value="chat" selected>محادثة مباشرة</option><option value="analysis">تحليل عميق</option></select></label>
         <label><span>نطاق المراجعة</span><select id="advisorReviewLimit"><option value="500">500 رسالة</option><option value="1500" selected>1,500 رسالة</option><option value="2500">2,500 رسالة — أعمق</option></select></label>
-        <button type="submit" id="advisorSendBtn"><i class="bi bi-send-fill"></i><span>إرسال وتحليل</span></button>
+        <button type="submit" id="advisorSendBtn"><i class="bi bi-send-fill"></i><span>إرسال</span></button>
       </div>
     </form>
   </section>
 
   <aside class="advisor-proposals-card">
     <div class="advisor-proposals-head">
-      <div><strong>الاقتراحات والذاكرة</strong><span>راجع كل بند بصورة مستقلة</span></div>
+      <div><strong><i class="bi bi-journal-bookmark-fill"></i> الاقتراحات والذاكرة</strong><span>راجع كل بند بصورة مستقلة</span></div>
       <span class="advisor-memory-count" id="advisorMemoryCount">0</span>
+    </div>
+    <div class="advisor-proposal-filters" id="advisorProposalFilters">
+      <button type="button" class="active" data-filter="all" onclick="setAdvisorProposalFilter('all', this)">الكل</button>
+      <button type="button" data-filter="pending" onclick="setAdvisorProposalFilter('pending', this)">بانتظار القرار</button>
+      <button type="button" data-filter="approved" onclick="setAdvisorProposalFilter('approved', this)">الذاكرة</button>
     </div>
     <div class="advisor-proposals" id="advisorProposals"></div>
   </aside>
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/advisor.js?v=2"></script>
+<script src="/static/js/advisor.js?v=3"></script>
 {% endblock %}

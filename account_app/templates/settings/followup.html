@@ -5,7 +5,7 @@
   <div>
     <p class="admin-kicker">Follow-up</p>
     <h1>إعدادات المتابعة التلقائية</h1>
-    <p>تحكم كامل بتشغيل المتابعات. عند الإيقاف لن تتم جدولة أو إرسال أي متابعة جديدة.</p>
+    <p>الذكاء الاصطناعي يراجع المحادثات تلقائياً حسب نسبة الاهتمام ويرسل متابعة مناسبة دون أي توليد يدوي.</p>
   </div>
 </section>
 
@@ -17,7 +17,18 @@
     </label>
 
     <label>
-      الحد الأقصى للمتابعات لكل زبون يوميًا
+      أقل نسبة اهتمام للمتابعة (%)
+      <input class="form-control" type="number" min="0" max="100" id="followupMinInterestScore">
+      <small style="color:var(--text-muted)">لن يتابع النظام الزبائن الذين تقل نسبة اهتمامهم عن هذه القيمة.</small>
+    </label>
+
+    <label>
+      مراجعة المحادثات كل (دقيقة)
+      <input class="form-control" type="number" min="10" max="1440" id="followupReviewInterval">
+    </label>
+
+    <label>
+      الحد الأقصى للرسائل لكل زبون يومياً
       <input class="form-control" type="number" min="1" max="10" id="followupMaxPerDay">
     </label>
 
@@ -32,12 +43,12 @@
     </label>
 
     <label>
-      تأخير المتابعة الافتراضي بالدقائق
+      مدة الانتظار قبل إرسال المتابعة (دقيقة)
       <input class="form-control" type="number" min="1" max="10080" id="followupDelay">
     </label>
 
     <div class="admin-note">
-      الرسائل تُولّد الآن آلياً بواسطة AI لكل زبون بناءً على محادثته الأخيرة، لا حاجة لقالب يدوي
+      يعمل النظام تلقائياً: يراجع سياق المحادثة ونسبة الاهتمام، ويتأكد أن الزبون لم يرفض ولم يحجز، ثم يكتب ويرسل رسالة عراقية مناسبة.
     </div>
 
     <div class="admin-note">
@@ -46,9 +57,6 @@
 
     <div class="admin-actions-row">
       <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> حفظ</button>
-      <button class="btn btn-outline-secondary" type="button" id="sendDueFollowups">
-        <i class="bi bi-send"></i> إرسال المستحق الآن
-      </button>
       <button class="btn btn-outline-danger" type="button" id="cancelPendingFollowups">
         <i class="bi bi-x-circle"></i> إلغاء كل المتابعات المعلقة
       </button>
@@ -58,36 +66,7 @@
   </form>
 </section>
 
-<section class="admin-panel mt-3">
-  <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
-    <div>
-      <h2 class="h6 mb-1">رسائل مخصصة لكل زبون</h2>
-      <div class="small" style="color:var(--text-muted)">
-        الرسائل الفردية تُولّد تلقائياً من النظام؛ يمكنك معاينة رسالة المتابعة لكل زبون قبل الإرسال
-      </div>
-    </div>
-    <button class="btn btn-outline-secondary btn-sm" type="button" id="reloadCustomerFollowups">
-      <i class="bi bi-arrow-clockwise"></i> تحديث الزبائن
-    </button>
-  </div>
-
-  <div class="input-group input-group-sm mb-3">
-    <span class="input-group-text border-0"><i class="bi bi-search"></i></span>
-    <input class="form-control border-0" id="customerFollowupSearch"
-      placeholder="بحث باسم الزبون، الرقم، آخر رسالة..." oninput="renderCustomerFollowups()">
-  </div>
-
-  <div class="admin-note mb-3">
-    المتغيرات المتاحة: {customer_name} و {product_name} و {stage}. عند الحفظ يتم تحديث المتابعة المعلقة للزبون إن وجدت.
-  </div>
-
-  <div id="customerFollowupList" class="followup-customer-list">
-    <div class="text-center py-4" style="color:var(--text-muted)">جاري تحميل الزبائن...</div>
-  </div>
-
-  <div class="admin-status" id="customerFollowupStatus"></div>
-</section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/followup_settings.js?v=2"></script>
+<script src="/static/js/followup_settings.js?v=3"></script>
 {% endblock %}

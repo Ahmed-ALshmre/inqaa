@@ -220,6 +220,45 @@ class SalesCoreTests(unittest.TestCase):
         self.assertNotIn("P001", notification)
         self.assertNotIn("هذا موجود", notification)
 
+    @patch("account_app.app.send_telegram_message", return_value=True)
+    def test_problem_alert_includes_urgent_reason_and_order(self, send_message):
+        from account_app.app import send_problem_to_telegram
+
+        send_problem_to_telegram({
+            "sender_id": self.sender_id,
+            "customer_name": "زبونة اختبار",
+            "reason": "تأخر الطلب أو لم يصل للزبون",
+            "message_text": "وين طلبي؟",
+            "order_id": 77,
+        })
+        alert = send_message.call_args.args[0]
+        self.assertIn("عاجل", alert)
+        self.assertIn("تأخر الطلب", alert)
+        self.assertIn("77", alert)
+
+    def test_returned_order_phrases_are_classified(self):
+        from account_app.app import classify_customer_problem
+
+        self.assertEqual(
+            classify_customer_problem("الطلب راجع ورجعته لأن ما عجبني"),
+            "مشكلة في المنتج أو رغبة بإرجاع/استبدال",
+        )
+
+    def test_followup_settings_enable_automatic_reviewer(self):
+        from account_app.app import get_smart_reviewer_settings, save_followup_settings
+
+        settings = save_followup_settings(self.db, {
+            "enabled": True,
+            "min_interest_score": 65,
+            "review_interval_minutes": 30,
+            "max_per_day": 1,
+            "default_delay_minutes": 15,
+        })
+        self.assertTrue(settings["enabled"])
+        self.assertEqual(settings["min_interest_score"], 65)
+        self.assertEqual(settings["review_interval_minutes"], 30)
+        self.assertTrue(get_smart_reviewer_settings(self.db)["enabled"])
+
     def test_recognized_image_supersedes_default_binding(self):
         products = load_products_from_file()
         complete_customer_product_link(

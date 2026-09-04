@@ -55,6 +55,16 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStats();
   loadProducts();
   pollConvTimer = setInterval(() => { loadConversations(false); loadStats(); }, 8000);
+  if (INITIAL_SENDER_ID && window.innerWidth <= 768) {
+    history.replaceState({...(history.state || {}), dashboardConversation: INITIAL_SENDER_ID}, '', location.href);
+  }
+});
+
+window.addEventListener('popstate', () => {
+  if (window.innerWidth > 768) return;
+  const historySender = history.state?.dashboardConversation || '';
+  if (historySender && historySender !== currentSenderId) selectConversation(historySender);
+  else if (currentSenderId && !historySender) closeMobileConversation(true);
 });
 
 // ══ PWA Install ═══════════════════════════════════════════════════════════
@@ -281,7 +291,7 @@ function renderConversations() {
     list = list.filter(c => c.lead_stage === 'booked');
   }
   else if (currentFilter === 'problems') {
-    list = list.filter(c => Number(c.problem_count || 0) > 0);
+    list = list.filter(c => Number(c.human_attention_count || 0) > 0);
   }
   else if (currentFilter === 'unanswered') {
     list = list.filter(c => Number(c.unanswered || 0) === 1 || c.last_direction === 'incoming');
@@ -301,7 +311,7 @@ function renderConversations() {
     const emptyText = currentFilter === 'booked'
       ? 'لا توجد محادثات تم فيها تثبيت طلب'
       : currentFilter === 'problems'
-        ? 'لا توجد مشاكل مفتوحة'
+        ? 'لا توجد محادثات تحتاج تدخلاً بشرياً'
       : currentFilter === 'unanswered'
         ? 'لا توجد رسائل بدون رد'
         : 'لا توجد محادثات';
@@ -314,7 +324,7 @@ function renderConversations() {
     const time    = fmtTime(c.last_time);
     const active  = c.sender_id === currentSenderId ? 'active' : '';
     const badge   = c.pending_reviews_count > 0
-      ? `<span class="badge bg-danger" style="font-size:9px;">${c.pending_reviews_count}</span>` : '';
+      ? `<span class="badge bg-danger" title="${esc(c.human_review_reason || 'تحتاج تدخلاً بشرياً')}" style="font-size:9px;"><i class="bi bi-person-exclamation"></i> ${c.pending_reviews_count}</span>` : '';
     const problemBadge = c.problem_count > 0
       ? `<span class="badge bg-warning text-dark" title="${esc(c.problem_reason || 'مشكلة مفتوحة')}" style="font-size:9px;"><i class="bi bi-exclamation-triangle-fill"></i> ${c.problem_count}</span>` : '';
     const adBadge = (c.ad_id || c.ref)
@@ -352,6 +362,15 @@ function renderConversations() {
 async function selectConversation(senderId) {
   currentSenderId = senderId;
   closeAllPanels();
+
+  if (window.innerWidth <= 768) {
+    document.body.classList.add('mobile-conversation-open');
+    if (history.state?.dashboardConversation !== senderId) {
+      const url = new URL(location.href);
+      url.searchParams.set('sender_id', senderId);
+      history.pushState({...(history.state || {}), dashboardConversation: senderId}, '', url);
+    }
+  }
 
   document.getElementById('chatPlaceholder').style.display  = 'none';
   document.getElementById('chatContent').style.display      = 'flex';
@@ -929,6 +948,30 @@ async function askAI(options = {}) {
   }
 }
 
+function resetConversationView() {
+  currentSenderId = null;
+  currentCustomer = null;
+  document.body.classList.remove('mobile-conversation-open');
+  if (pollMsgTimer) {
+    clearInterval(pollMsgTimer);
+    pollMsgTimer = null;
+  }
+  document.getElementById('chatContent').style.display = 'none';
+  document.getElementById('chatPlaceholder').style.display = 'flex';
+  document.getElementById('controlContent').style.display = 'none';
+  document.getElementById('controlPlaceholder').style.display = 'block';
+  renderConversations();
+}
+
+function closeMobileConversation(fromPopState = false) {
+  if (window.innerWidth > 768) return;
+  if (!fromPopState && history.state?.dashboardConversation) {
+    history.back();
+    return;
+  }
+  resetConversationView();
+}
+
 function applyReplyShortcut(type) {
   const templates = {
     price: 'السعر موضح حسب الموديل المرتبط. تحبين أثبت لج الطلب؟',
@@ -1445,16 +1488,14 @@ async function deleteConversation() {
     const res = await apiFetch(`/api/conversations/${encodeURIComponent(senderId)}`, { method: 'DELETE' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حذف المحادثة');
-    currentSenderId = null;
-    currentCustomer = null;
-    if (pollMsgTimer) {
-      clearInterval(pollMsgTimer);
-      pollMsgTimer = null;
+    resetConversationView();
+    if (window.innerWidth <= 768 && history.state?.dashboardConversation) {
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete('sender_id');
+      const cleanState = {...(history.state || {})};
+      delete cleanState.dashboardConversation;
+      history.replaceState(cleanState, '', cleanUrl);
     }
-    document.getElementById('chatContent').style.display = 'none';
-    document.getElementById('chatPlaceholder').style.display = 'flex';
-    document.getElementById('controlContent').style.display = 'none';
-    document.getElementById('controlPlaceholder').style.display = 'block';
     showToast('تم حذف المحادثة', 'success');
     await loadConversations(false);
     await loadStats();

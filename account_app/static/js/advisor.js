@@ -1,4 +1,6 @@
 let advisorBusy = false;
+let advisorProposalFilter = 'all';
+let advisorProposalCache = [];
 
 function advisorEsc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -42,12 +44,16 @@ function proposalStatusLabel(status) {
 }
 
 function renderAdvisorProposals(proposals) {
+  advisorProposalCache = proposals || [];
   const container = document.getElementById('advisorProposals');
-  if (!proposals.length) {
+  const visible = advisorProposalFilter === 'all'
+    ? advisorProposalCache
+    : advisorProposalCache.filter((proposal) => proposal.status === advisorProposalFilter);
+  if (!visible.length) {
     container.innerHTML = '<div class="advisor-empty compact"><i class="bi bi-lightbulb"></i><span>لا توجد اقتراحات بعد</span></div>';
     return;
   }
-  container.innerHTML = proposals.map((proposal) => `
+  container.innerHTML = visible.map((proposal) => `
     <article class="advisor-proposal ${advisorEsc(proposal.status)}">
       <div class="advisor-proposal-top">
         <span class="advisor-proposal-type"><i class="bi ${proposal.apply_target === 'active_rule' ? 'bi-lightning-charge-fill' : 'bi-memory'}"></i> ${proposal.apply_target === 'active_rule' ? 'قاعدة تشغيل' : 'ذاكرة'}</span>
@@ -62,6 +68,14 @@ function renderAdvisorProposals(proposals) {
       </div>` : ''}
     </article>
   `).join('');
+}
+
+function setAdvisorProposalFilter(filter, button) {
+  advisorProposalFilter = filter;
+  document.querySelectorAll('#advisorProposalFilters button').forEach((item) => {
+    item.classList.toggle('active', item === button);
+  });
+  renderAdvisorProposals(advisorProposalCache);
 }
 
 async function loadAdvisor() {
@@ -93,14 +107,18 @@ async function sendAdvisorMessage(event) {
   advisorBusy = true;
   const button = document.getElementById('advisorSendBtn');
   const reviewLimit = Number(document.getElementById('advisorReviewLimit')?.value || 1500);
+  const mode = document.getElementById('advisorMode')?.value || 'chat';
   const messages = document.getElementById('advisorMessages');
-  messages.insertAdjacentHTML('beforeend', `<article class="advisor-message owner"><div class="advisor-message-label"><i class="bi bi-person-fill"></i> أنت</div><div class="advisor-message-content">${advisorFormat(message)}</div></article><article class="advisor-message assistant advisor-thinking"><div class="advisor-message-label"><span><i class="bi bi-stars"></i></span> مستشار صوف</div><div class="advisor-thinking-row"><span></span><span></span><span></span><b>يقرأ حتى ${reviewLimit.toLocaleString('ar-IQ')} رسالة ويبحث عن الأنماط…</b></div></article>`);
+  const thinkingText = mode === 'analysis'
+    ? `يقرأ حتى ${reviewLimit.toLocaleString('ar-IQ')} رسالة ويحلل الأنماط…`
+    : 'يقرأ سجل حديثكما وذاكرته والبيانات المرتبطة بسؤالك…';
+  messages.insertAdjacentHTML('beforeend', `<article class="advisor-message owner"><div class="advisor-message-label"><i class="bi bi-person-fill"></i> أنت</div><div class="advisor-message-content">${advisorFormat(message)}</div></article><article class="advisor-message assistant advisor-thinking"><div class="advisor-message-label"><span><i class="bi bi-stars"></i></span> مستشار صوف</div><div class="advisor-thinking-row"><span></span><span></span><span></span><b>${thinkingText}</b></div></article>`);
   messages.scrollTop = messages.scrollHeight;
   button.disabled = true;
-  button.innerHTML = '<span class="spinner-border spinner-border-sm"></span><span>جاري التحليل العميق…</span>';
+  button.innerHTML = `<span class="spinner-border spinner-border-sm"></span><span>${mode === 'analysis' ? 'جاري التحليل…' : 'يفكر…'}</span>`;
   try {
     const response = await fetch(adminApi('/api/advisor/chat'), {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message, review_limit: reviewLimit})
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message, review_limit: reviewLimit, mode})
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || 'فشل رد المستشار');
@@ -111,7 +129,7 @@ async function sendAdvisorMessage(event) {
   } finally {
     advisorBusy = false;
     button.disabled = false;
-    button.innerHTML = '<i class="bi bi-send-fill"></i><span>إرسال وتحليل</span>';
+    button.innerHTML = '<i class="bi bi-send-fill"></i><span>إرسال</span>';
   }
 }
 

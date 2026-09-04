@@ -1024,6 +1024,7 @@ def init_db():
         "followup_stop_on_order": "1",
         "followup_stop_on_rejection": "1",
         "followup_default_delay_minutes": "20",
+        "followup_min_interest_score": "50",
         "followup_message_template": "",
         "smart_reviewer_enabled": "0",
         "smart_reviewer_interval_minutes": "60",
@@ -1551,6 +1552,10 @@ def get_followup_settings(db=None):
             1,
             10080,
         ),
+        "min_interest_score": _setting_int(
+            get_app_setting("followup_min_interest_score", "50", db), 50, 0, 100,
+        ),
+        "review_interval_minutes": get_smart_reviewer_settings(db)["interval_minutes"],
         "message_template": get_app_setting("followup_message_template", "", db),
     }
 
@@ -1561,6 +1566,8 @@ def save_followup_settings(db, data):
     stop_on_order = bool(data.get("stop_on_order", True))
     stop_on_rejection = bool(data.get("stop_on_rejection", True))
     delay = _setting_int(data.get("default_delay_minutes"), 20, 1, 10080)
+    min_interest_score = _setting_int(data.get("min_interest_score"), 50, 0, 100)
+    review_interval_minutes = _setting_int(data.get("review_interval_minutes"), 60, 10, 1440)
     message_template = str(data.get("message_template") or "")
     for key, value in (
         ("followup_enabled", "1" if enabled else "0"),
@@ -1568,9 +1575,14 @@ def save_followup_settings(db, data):
         ("followup_stop_on_order", "1" if stop_on_order else "0"),
         ("followup_stop_on_rejection", "1" if stop_on_rejection else "0"),
         ("followup_default_delay_minutes", str(delay)),
+        ("followup_min_interest_score", str(min_interest_score)),
         ("followup_message_template", message_template),
     ):
         set_store_setting(db, key, value)
+    save_smart_reviewer_settings(db, {
+        "enabled": enabled,
+        "interval_minutes": review_interval_minutes,
+    })
     return get_followup_settings(db)
 
 
@@ -1707,6 +1719,46 @@ def schedule_followup_if_needed(db, sender_id, stage="conversation", product=Non
             scheduled_at,
             now,
             json.dumps(meta or {}, ensure_ascii=False),
+        ),
+    )
+    db.commit()
+    return cur.lastrowid
+
+
+def schedule_ai_review_followup(db, sender_id, message, interest_score, delay_minutes=None):
+    """Queue the exact message approved by the AI reviewer while enforcing follow-up limits."""
+    settings = get_followup_settings(db)
+    message = str(message or "").strip()
+    if not settings["enabled"] or not sender_id or not message:
+        return None
+    day_start, day_end = _followup_day_bounds()
+    today_count = db.execute(
+        """SELECT COUNT(*) FROM followups
+           WHERE sender_id=? AND created_at >= ? AND created_at < ?
+             AND status IN ('pending', 'sent')""",
+        (sender_id, day_start, day_end),
+    ).fetchone()[0]
+    if today_count >= settings["max_per_day"]:
+        return None
+    pending = db.execute(
+        "SELECT id FROM followups WHERE sender_id=? AND status='pending' ORDER BY id DESC LIMIT 1",
+        (sender_id,),
+    ).fetchone()
+    if pending:
+        return pending["id"]
+    delay = settings["default_delay_minutes"] if delay_minutes is None else max(1, int(delay_minutes))
+    now = now_baghdad_iso()
+    scheduled_at = (datetime.now(BAGHDAD_TZ) + timedelta(minutes=delay)).isoformat()
+    cur = db.execute(
+        """INSERT INTO followups
+           (sender_id, stage, message_text, status, scheduled_at, created_at, meta_json)
+           VALUES (?, 'ai_interest_review', ?, 'pending', ?, ?, ?)""",
+        (
+            sender_id,
+            message,
+            scheduled_at,
+            now,
+            json.dumps({"automatic_ai_review": True, "interest_score": interest_score}, ensure_ascii=False),
         ),
     )
     db.commit()
@@ -3141,8 +3193,25 @@ def send_problem_to_telegram(problem):
         print("[Telegram] No problems chat configured. Problem message skipped.", flush=True)
         return False
 
+    customer = str(problem.get("customer_name") or problem.get("sender_id") or "غير معروف").strip()
+    reason = str(problem.get("reason") or "مشكلة بعد تثبيت الطلب").strip()
+    message = str(problem.get("message_text") or "").strip()
+    product = str(problem.get("product_name") or problem.get("product_id") or "").strip()
+    order_id = problem.get("order_id")
+    details = [
+        "🚨 عاجل — مشكلة بعد الحجز تحتاج تدخلاً بشرياً",
+        f"السبب: {reason}",
+        f"الزبون: {customer}",
+    ]
+    if order_id:
+        details.append(f"رقم الطلب: {order_id}")
+    if product:
+        details.append(f"المنتج: {product}")
+    if message:
+        details.append(f"رسالة الزبون: {message}")
+    details.append("يرجى فتح المحادثة وحل المشكلة بأسرع وقت.")
     return send_telegram_message(
-        "🔔 توجد حالة تحتاج تدخلك\nراجع صفحة المشاكل في لوحة الإدارة.",
+        "\n".join(details),
         chat_id=chat_id,
         label="problem",
     )
@@ -3219,7 +3288,7 @@ def send_telegram_photo(photo_url, caption="", chat_id=None, label="notification
         return False
 
 
-def create_human_review(db, ev, reason, candidates=None):
+def create_human_review(db, ev, reason, candidates=None, notify_telegram=True):
     now = now_baghdad_iso()
     candidates = candidates or []
     db.execute(
@@ -3239,9 +3308,15 @@ def create_human_review(db, ev, reason, candidates=None):
     db.commit()
     review_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
 
-    send_telegram_message(
-        f"🔔 توجد محادثة تحتاج تدخلك\nرقم المراجعة: {review_id}\nراجع لوحة الإدارة."
-    )
+    if notify_telegram:
+        send_telegram_message(
+            "\n".join((
+                "🔔 توجد محادثة تحتاج تدخلك",
+                f"السبب: {reason or 'يحتاج الذكاء الاصطناعي إلى مساعدة بشرية'}",
+                f"رقم المراجعة: {review_id}",
+                "راجع المحادثة في لوحة الإدارة.",
+            ))
+        )
     return review_id
 
 
@@ -5741,6 +5816,8 @@ _PROBLEM_DISSATISFACTION_KEYWORDS = (
     "رديء", "سيء", "مو حلو", "خامة سيئة", "الخامة مو",
     "قياس غلط", "المقاس غلط", "لون غلط", "ناقص", "ارجاع",
     "أرجاع", "اريد ارجع", "أريد أرجع", "استبدال", "بدلولي",
+    "رجعته", "رجعت الطلب", "رجعت المنتج", "اريد ارجعه", "أريد أرجعه",
+    "ما اريده", "ما أريده", "طلب راجع", "الطلب راجع",
 )
 
 _PROBLEM_OBJECTION_KEYWORDS = (
@@ -5776,6 +5853,17 @@ def classify_customer_problem(text: str):
     if _text_contains_any(normalized, _HUMAN_HANDOFF_KEYWORDS):
         return "شكوى أو طلب تدخل بشري"
     return None
+
+
+def get_latest_customer_order(db, sender_id):
+    """Return the latest confirmed order; problem escalation is post-booking only."""
+    if not sender_id:
+        return None
+    row = db.execute(
+        "SELECT * FROM orders WHERE sender_id=? ORDER BY id DESC LIMIT 1",
+        (sender_id,),
+    ).fetchone()
+    return dict(row) if row else None
 
 
 def determine_intent(ev, customer_products, matched_product):
@@ -6934,9 +7022,17 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     # ── STEP 09.5: Local intent router (no external AI call) ────────────────
     routing = determine_intent(ev, customer_products, matched_product)
+    latest_order = get_latest_customer_order(db, ev["sender_id"])
+    is_post_order_problem = bool(latest_order and routing.get("problem_reason"))
+    routing["is_post_order_problem"] = is_post_order_problem
+    if routing.get("problem_reason") and not latest_order:
+        # التأخير/الإرجاع/عدم الرضا تصبح حالة عاجلة فقط بعد وجود حجز فعلي.
+        routing["needs_human"] = False
+        routing["reason"] = "pre_order_message_not_escalated"
     log(9, "INTENT", "Local intent decision", routing)
 
-    if routing.get("intent") == "complaint":
+    if is_post_order_problem:
+        problem_id = None
         try:
             problem_id, problem_created = create_problem_report(
                 db,
@@ -6946,9 +7042,39 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             )
             problem = db.execute("SELECT * FROM problem_reports WHERE id=?", (problem_id,)).fetchone()
             if problem and problem_created:
-                send_problem_to_telegram(dict(problem))
+                problem_payload = dict(problem)
+                problem_payload["order_id"] = latest_order.get("id")
+                send_problem_to_telegram(problem_payload)
         except Exception as exc:
             print(f"[Problems] Could not create/send problem report: {exc}", flush=True)
+
+        review_id = has_pending_human_review(db, ev["sender_id"])
+        if not review_id:
+            review_id = create_human_review(
+                db,
+                ev,
+                routing.get("problem_reason") or "مشكلة بعد الحجز",
+                notify_telegram=False,
+            )
+        log(9, "POST-ORDER PROBLEM", "Urgent case isolated for human intervention", {
+            "order_id": latest_order.get("id"),
+            "human_review_id": review_id,
+            "reason": routing.get("problem_reason"),
+        })
+        return {
+            "sender_id": ev["sender_id"],
+            "page_id": ev["page_id"],
+            "platform": ev["platform"],
+            "reply": "",
+            "send_image": False,
+            "meta": {
+                "skipped": True,
+                "reason": "post_order_problem_needs_human",
+                "problem_id": problem_id,
+                "human_review_id": review_id,
+                "order_id": latest_order.get("id"),
+            },
+        }
 
     # إذا الزبون لديه سياق منتج → ربط أقوى من الذاكرة
     if routing.get("has_product_context") and not matched_product and customer_products:
@@ -8684,9 +8810,16 @@ def api_conversations():
              WHERE hr.sender_id = c.sender_id AND hr.status = 'pending') AS pending_reviews_count,
             (SELECT COUNT(*) FROM problem_reports pr
              WHERE pr.sender_id = c.sender_id AND COALESCE(pr.status, 'open') IN ('open', 'needs_attention')) AS problem_count,
+            ((SELECT COUNT(*) FROM problem_reports pr
+              WHERE pr.sender_id = c.sender_id AND COALESCE(pr.status, 'open') IN ('open', 'needs_attention'))
+             + (SELECT COUNT(*) FROM human_reviews hr
+                WHERE hr.sender_id = c.sender_id AND hr.status = 'pending')) AS human_attention_count,
             (SELECT reason FROM problem_reports pr
              WHERE pr.sender_id = c.sender_id AND COALESCE(pr.status, 'open') IN ('open', 'needs_attention')
              ORDER BY id DESC LIMIT 1) AS problem_reason,
+            (SELECT reason FROM human_reviews hr
+             WHERE hr.sender_id = c.sender_id AND hr.status = 'pending'
+             ORDER BY id DESC LIMIT 1) AS human_review_reason,
             (SELECT COALESCE(MAX(id), 0) FROM messages
              WHERE sender_id = c.sender_id
                AND direction = 'incoming'
@@ -10351,21 +10484,60 @@ def _advisor_conversation_snapshot(db, message_limit=1500):
     }
 
 
-def _advisor_call_model(db, user_message, message_limit=1500):
+def _advisor_database_context(db):
+    """Build a live, read-only map of the business database without exposing secrets."""
+    table_counts = {}
+    for table in (
+        "customers", "messages", "orders", "products", "problem_reports",
+        "human_reviews", "followups", "customer_product_interests",
+    ):
+        try:
+            table_counts[table] = int(db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+        except sqlite3.Error:
+            table_counts[table] = 0
+    lead_stages = [dict(row) for row in db.execute(
+        """SELECT COALESCE(lead_stage, 'new') AS stage, COUNT(*) AS count
+           FROM customers GROUP BY COALESCE(lead_stage, 'new') ORDER BY count DESC"""
+    ).fetchall()]
+    order_statuses = [dict(row) for row in db.execute(
+        """SELECT COALESCE(status, 'new') AS status, COUNT(*) AS count
+           FROM orders GROUP BY COALESCE(status, 'new') ORDER BY count DESC"""
+    ).fetchall()]
+    top_products = [dict(row) for row in db.execute(
+        """SELECT COALESCE(product_name, product_id, 'غير محدد') AS product, COUNT(*) AS count
+           FROM orders GROUP BY COALESCE(product_name, product_id, 'غير محدد')
+           ORDER BY count DESC LIMIT 10"""
+    ).fetchall()]
+    recent_problems = [dict(row) for row in db.execute(
+        """SELECT reason, status, created_at FROM problem_reports
+           ORDER BY id DESC LIMIT 12"""
+    ).fetchall()]
+    return json.dumps({
+        "table_counts": table_counts,
+        "lead_stages": lead_stages,
+        "order_statuses": order_statuses,
+        "top_ordered_products": top_products,
+        "recent_problems": recent_problems,
+    }, ensure_ascii=False)
+
+
+def _advisor_call_model(db, user_message, message_limit=1500, mode="chat"):
     if not OPENROUTER_KEY:
         raise RuntimeError("مفتاح نموذج الذكاء الاصطناعي غير متوفر")
     snapshot = _advisor_conversation_snapshot(db, message_limit=message_limit)
     approved_memory = _advisor_sync_memory_file(db)
+    database_context = _advisor_database_context(db)
     history_rows = db.execute(
-        "SELECT role, content FROM advisor_chat_messages ORDER BY id DESC LIMIT 36"
+        "SELECT role, content FROM advisor_chat_messages ORDER BY id DESC LIMIT 100"
     ).fetchall()
     history = [
         {"role": row["role"], "content": row["content"]}
         for row in reversed(history_rows)
         if row["role"] in {"user", "assistant"}
     ]
-    system_prompt = """أنت مستشار تحسين داخلي لنظام صوف للمبيعات وخدمة العملاء. تتحدث فقط مع مالك النظام، لا مع الزبائن.
-حلّل سير العمل والمحادثات السابقة، واشرح الأخطاء والفرص بدقة وبالعربية الواضحة. يمكنك اقتراح قواعد وذاكرة وتحسينات، لكن ممنوع أن تطبق أو تغيّر أي شيء بنفسك. كل اقتراح يجب أن ينتظر موافقة المالك.
+    system_prompt = """أنت مستشار صوف الداخلي وصديق عمل دائم لمالك النظام، ولا تتحدث مع الزبائن.
+تستطيع إجراء محادثة طبيعية مباشرة، وتقرأ سجل نقاشك القديم مع المالك، وذاكرتك المعتمدة، وملخص قاعدة البيانات الحية، ورسائل الزبائن القديمة المرفقة. لا تحوّل كل سؤال إلى تقرير تحليل. في وضع chat أجب حوارياً واجعل analysis فارغاً إلا إذا طلب المالك تحليلاً صراحة. في وضع analysis قدّم تحليلاً عميقاً بالأدلة.
+يمكنك اقتراح كتابة معرفة جديدة في ذاكرتك، خصوصاً عندما يقول المالك احفظ/تذكر/اكتب في ذاكرتك، لكن لا تطبق قاعدة تشغيل قبل موافقته. اجعل بند الذاكرة المقترح دقيقاً وقابلاً للمراجعة.
 أرجع JSON فقط بالشكل التالي:
 {
   "reply":"ردك الحواري على المالك",
@@ -10374,9 +10546,10 @@ def _advisor_call_model(db, user_message, message_limit=1500):
     {"title":"عنوان", "content":"قاعدة أو معرفة محددة قابلة للتطبيق", "proposal_type":"rule|workflow|memory", "apply_target":"active_rule|memory", "reason":"لماذا تقترحها"}
   ]
 }
-حلّل الأنماط المتكررة وليس الحالات المنفردة فقط، وقارن بين المحادثات الناجحة والمتعثرة. اذكر أرقاماً أو أمثلة مختصرة من العينة عندما تتوفر.
-رتّب analysis إلى: ملخص تنفيذي، ملاحظات مثبتة، أسباب، فرص تحسين، ومخاطر. لا تقترح قاعدة عامة مبهمة. لا تدّع تطبيق أي اقتراح. إذا كان المالك يناقش فقط ولا يطلب تغييراً، يجوز إرجاع proposals فارغة."""
+عند طلب التحليل، حلّل الأنماط المتكررة وقارن بين المحادثات الناجحة والمتعثرة واذكر أدلة مختصرة. لا تدّع تطبيق أي اقتراح. إذا كان المالك يتحدث فقط، أرجع analysis فارغاً وproposals فارغة."""
     context = (
+        f"الوضع الحالي: {mode}.\n\n"
+        f"ملخص قاعدة البيانات الحية (قراءة فقط):\n{database_context}\n\n"
         f"إحصاءات العينة: {snapshot['conversation_count']} محادثة، {snapshot['message_count']} رسالة، "
         f"{snapshot['orders_count']} طلب، {snapshot['problems_count']} مشكلة.\n\n"
         f"الذاكرة الموافق عليها فقط:\n{approved_memory[-12000:]}\n\n"
@@ -10431,6 +10604,9 @@ def api_advisor_chat():
     db = get_db()
     data = request.get_json(silent=True) or {}
     message = str(data.get("message") or "").strip()
+    mode = str(data.get("mode") or "chat").strip().lower()
+    if mode not in {"chat", "analysis"}:
+        mode = "chat"
     try:
         review_limit = max(200, min(int(data.get("review_limit") or 1500), 2500))
     except (TypeError, ValueError):
@@ -10444,7 +10620,7 @@ def api_advisor_chat():
     )
     db.commit()
     try:
-        result = _advisor_call_model(db, message, message_limit=review_limit)
+        result = _advisor_call_model(db, message, message_limit=review_limit, mode=mode)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 502
     snapshot = result.pop("_snapshot")
@@ -10561,21 +10737,26 @@ def api_generate_evaluation_suggestions():
 def run_smart_reviewer_cycle(db):
     try:
         settings = get_smart_reviewer_settings(db)
-        if not settings.get("enabled"):
+        followup_settings = get_followup_settings(db)
+        if not settings.get("enabled") or not followup_settings.get("enabled"):
             return
             
         interval_minutes = settings.get("interval_minutes", 60)
         now = datetime.now(BAGHDAD_TZ)
-        cutoff_time = (now - timedelta(minutes=interval_minutes)).isoformat()
-        active_cutoff_time = (now - timedelta(minutes=15)).isoformat()
+        conversation_cutoff = (now - timedelta(days=30)).isoformat()
+        active_cutoff_time = (now - timedelta(minutes=interval_minutes)).isoformat()
         
+        min_interest_score = int(followup_settings.get("min_interest_score", 50))
         rows = db.execute("""
-            SELECT sender_id, MAX(created_at) as last_msg_time
-            FROM messages
-            WHERE created_at >= ?
-            GROUP BY sender_id
+            SELECT m.sender_id, MAX(m.created_at) as last_msg_time,
+                   COALESCE(c.lead_score, 0) AS lead_score
+            FROM messages m
+            JOIN customers c ON c.sender_id=m.sender_id
+            WHERE m.created_at >= ?
+              AND COALESCE(c.lead_score, 0) >= ?
+            GROUP BY m.sender_id
             HAVING last_msg_time <= ?
-        """, (cutoff_time, active_cutoff_time)).fetchall()
+        """, (conversation_cutoff, min_interest_score, active_cutoff_time)).fetchall()
         
         sender_ids = [row["sender_id"] for row in rows]
         if not sender_ids:
@@ -10583,10 +10764,12 @@ def run_smart_reviewer_cycle(db):
             
         tags_rows = db.execute("SELECT sender_id, last_review_time FROM customer_tags WHERE sender_id IN ({})".format(",".join("?" * len(sender_ids))), sender_ids).fetchall()
         reviewed_map = {row["sender_id"]: row["last_review_time"] for row in tags_rows}
+        score_map = {row["sender_id"]: int(row["lead_score"] or 0) for row in rows}
+        last_message_map = {row["sender_id"]: str(row["last_msg_time"] or "") for row in rows}
         
         for sender_id in sender_ids:
             last_review = reviewed_map.get(sender_id)
-            if last_review and last_review > cutoff_time:
+            if last_review and str(last_review) >= last_message_map.get(sender_id, ""):
                 continue
             latest_incoming = _latest_incoming_message(db, sender_id)
             if latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
@@ -10615,7 +10798,7 @@ def run_smart_reviewer_cycle(db):
                 FROM messages
                 WHERE sender_id = ? AND created_at >= ?
                 ORDER BY created_at ASC
-            """, (sender_id, cutoff_time)).fetchall()
+            """, (sender_id, conversation_cutoff)).fetchall()
             
             transcript = []
             for m in msgs:
@@ -10624,10 +10807,12 @@ def run_smart_reviewer_cycle(db):
                 transcript.append(f"{role}: {content}")
             
             transcript_str = "\n".join(transcript)
+            interest_score = score_map.get(sender_id, 0)
             
             system_prompt = (
                 "You are an AI sales reviewer and customer success manager.\n"
                 "Review the following conversation transcript between a Customer and an Iraqi e-commerce AI Assistant.\n"
+                f"The system interest score for this customer is {interest_score}%. The configured minimum is {min_interest_score}%.\n"
                 "1. Assign a short Arabic tag describing the customer's intent (e.g., 'يريد الشراء', 'فضولي', 'متردد', 'تم الشراء', 'منزعج').\n"
                 "2. Decide if the customer needs a proactive follow-up message to encourage a sale or provide help.\n"
                 "3. If they need a follow-up, write a highly personalized, friendly, and natural Arabic message (Iraqi dialect) based strictly on their previous conversation context. Do not sound like a bot.\n"
@@ -10685,15 +10870,12 @@ def run_smart_reviewer_cycle(db):
                 """, (sender_id, tag, now.isoformat(), 1 if needs_followup else 0, followup_msg, now.isoformat()))
                 db.commit()
                 
-                if needs_followup and followup_msg:
-                    success, mc_response = send_manychat_message(sender_id, {"type": "text", "text": followup_msg})
-                    if success:
-                        save_message(db, sender_id, "outgoing", "text", followup_msg, None, None, None, {"smart_followup": True})
-                        db.execute("UPDATE customer_tags SET followup_sent=1 WHERE sender_id=?", (sender_id,))
-                        db.commit()
-                        print(f"[SmartReviewer] Sent dynamic followup to {sender_id}")
-                    else:
-                        print(f"[SmartReviewer] Failed to send followup to {sender_id}: {mc_response}")
+                if needs_followup and followup_msg and interest_score >= min_interest_score:
+                    followup_id = schedule_ai_review_followup(
+                        db, sender_id, followup_msg, interest_score,
+                    )
+                    if followup_id:
+                        print(f"[SmartReviewer] Queued automatic followup #{followup_id} for {sender_id}")
                 
             except Exception as e:
                 print(f"[SmartReviewer] AI review failed for {sender_id}: {e}")
@@ -10708,6 +10890,7 @@ def start_smart_reviewer_thread():
             try:
                 db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
                 db.row_factory = sqlite3.Row
+                send_due_followups(db)
                 run_smart_reviewer_cycle(db)
                 db.close()
             except Exception as e:
@@ -11410,6 +11593,7 @@ def api_mark_reviewed(sender_id):
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 _app_bootstrapped = False
+_background_jobs_started = False
 
 
 def bootstrap_app(load_clip=False):
@@ -11429,9 +11613,14 @@ def bootstrap_app(load_clip=False):
 
 bootstrap_app(load_clip=False)
 
+# Gunicorn imports the module and never enters __main__. Start the automatic
+# reviewer here as well so production follow-ups do not depend on a manual action.
+if os.environ.get("ENABLE_BACKGROUND_JOBS", "1") == "1" and "pytest" not in sys.modules:
+    _background_jobs_started = True
+    start_smart_reviewer_thread()
+
 
 if __name__ == "__main__":
     bootstrap_app(load_clip=True)
     port = int(os.environ.get("PORT", "5000"))
-    start_smart_reviewer_thread()
     app.run(host="0.0.0.0", port=port, debug=False)
