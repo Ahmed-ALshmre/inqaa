@@ -35,6 +35,10 @@ from account_app.app import (
     get_store_settings,
     send_catalog_to_customer,
     manychat_api_key_for_page,
+    post_order_acknowledgement_reply,
+    _normalize_product,
+    product_image_variants,
+    select_product_image_urls,
 )
 
 
@@ -324,6 +328,49 @@ class SalesCoreTests(unittest.TestCase):
         }}, None)
         self.assertIsNone(result)
         self.assertIn("المحافظة", reply)
+
+    def test_post_order_acknowledgements_are_safe_and_changes_are_not(self):
+        self.assertTrue(post_order_acknowledgement_reply("تمام"))
+        self.assertTrue(post_order_acknowledgement_reply("تسلمين 🌸"))
+        self.assertEqual(post_order_acknowledgement_reply("خليلي وحدة نيلي"), "")
+        self.assertEqual(post_order_acknowledgement_reply("٥ رصاصي وحدة نيلي"), "")
+
+    @patch("account_app.app.find_duplicate_order", return_value={"id": 77})
+    def test_duplicate_order_does_not_repeat_confirmation(self, _duplicate):
+        result, reply = create_order_if_valid(self.db, self.sender_id, {"order": {
+            "phone": "07701234567", "province": "بغداد", "address": "المنصور",
+            "items": [{"product_id": "P001", "color": "أسود", "size": "70"}],
+        }}, None)
+        self.assertTrue(result)
+        self.assertIsNone(reply)
+
+    def test_product_image_colors_survive_normalization_and_select_correct_image(self):
+        product = _normalize_product({
+            "store_id": "default", "product_id": "COLOR-1", "product_name": "اختبار",
+            "image_url": ["https://example.com/navy.jpg", "https://example.com/gray.jpg"],
+            "image_colors": {
+                "https://example.com/navy.jpg": "نيلي",
+                "https://example.com/gray.jpg": "رصاصي",
+            },
+        })
+        self.assertEqual(product["image_colors"]["https://example.com/navy.jpg"], "نيلي")
+        self.assertEqual(product_image_variants(product), [
+            {"url": "https://example.com/navy.jpg", "color": "نيلي"},
+            {"url": "https://example.com/gray.jpg", "color": "رصاصي"},
+        ])
+        self.assertEqual(
+            select_product_image_urls(product, "أريد صورة اللون النيلي"),
+            ["https://example.com/navy.jpg"],
+        )
+        self.assertEqual(select_product_image_urls(product, "وردي"), [])
+
+    def test_legacy_product_without_image_colors_remains_compatible(self):
+        product = _normalize_product({
+            "product_id": "OLD-1", "product_name": "قديم",
+            "image_url": "https://example.com/old.jpg",
+        })
+        self.assertEqual(product["image_colors"], {})
+        self.assertEqual(select_product_image_urls(product), ["https://example.com/old.jpg"])
 
     def test_duplicate_customer_event_is_detected_semantically(self):
         save_message(

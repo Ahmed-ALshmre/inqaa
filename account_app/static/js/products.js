@@ -1,6 +1,7 @@
 const DASH_KEY = new URLSearchParams(window.location.search).get('key') || '';
 let allProducts = [];
 let currentProductId = null;
+let productImageColors = {};
 
 const fields = {
   product_id: 'productId',
@@ -110,6 +111,7 @@ function renderProducts() {
 
 function newProduct(rerender = true) {
   currentProductId = null;
+  productImageColors = {};
   document.getElementById('productForm').reset();
   document.getElementById('productStatus').value = 'active';
   document.getElementById('productId').disabled = false;
@@ -127,6 +129,7 @@ function editProduct(productId) {
     document.getElementById(id).value = product[key] || '';
   }
   document.getElementById('productImages').value = imageText(product.image_url);
+  productImageColors = normalizeImageColors(product.image_colors, imageLines());
   document.getElementById('productId').disabled = true;
   document.getElementById('formTitle').textContent = `تعديل ${product.product_name || product.product_id}`;
   document.getElementById('deleteProductBtn').style.display = '';
@@ -246,6 +249,7 @@ function collectPayload() {
     payload[key] = document.getElementById(id).value.trim();
   }
   payload.image_url = imageLines();
+  payload.image_colors = normalizeImageColors(productImageColors, payload.image_url);
   return payload;
 }
 
@@ -261,6 +265,21 @@ function imageText(value) {
   return value || '';
 }
 
+function normalizeImageColors(value, urls) {
+  const colors = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return Object.fromEntries((urls || [])
+    .filter(url => String(colors[url] || '').trim())
+    .map(url => [url, String(colors[url]).trim()]));
+}
+
+function setProductImageColor(index, color) {
+  const url = imageLines()[index];
+  if (!url) return;
+  const value = String(color || '').trim();
+  if (value) productImageColors[url] = value;
+  else delete productImageColors[url];
+}
+
 async function uploadProductImages(input) {
   const files = Array.from(input.files || []);
   if (!files.length) return;
@@ -274,6 +293,7 @@ async function uploadProductImages(input) {
     if (!response.ok) throw new Error(result.error || 'فشل رفع الصور');
     const urls = [...imageLines(), ...(result.image_urls || [])];
     document.getElementById('productImages').value = [...new Set(urls)].join('\n');
+    productImageColors = normalizeImageColors(productImageColors, imageLines());
     renderImagePreview();
     progress.textContent = `تم رفع ${result.image_urls?.length || files.length} صورة بنجاح`;
     showToast('تم رفع الصور وإضافتها إلى المنتج');
@@ -287,7 +307,8 @@ async function uploadProductImages(input) {
 
 function removeProductImage(index) {
   const urls = imageLines();
-  urls.splice(index, 1);
+  const [removedUrl] = urls.splice(index, 1);
+  delete productImageColors[removedUrl];
   document.getElementById('productImages').value = urls.join('\n');
   renderImagePreview();
 }
@@ -301,8 +322,14 @@ function renderImagePreview() {
   }
   el.innerHTML = urls.map((url, index) => `
     <div class="product-image-tile">
-      <img src="${escAttr(url)}" alt="صورة المنتج" loading="lazy" onerror="this.closest('.product-image-tile').classList.add('image-error')">
-      <button type="button" onclick="removeProductImage(${index})" title="حذف الصورة"><i class="bi bi-x-lg"></i></button>
+      <div class="product-image-frame">
+        <img src="${escAttr(url)}" alt="صورة المنتج" loading="lazy" onerror="this.closest('.product-image-tile').classList.add('image-error')">
+        <button type="button" onclick="removeProductImage(${index})" title="حذف الصورة"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <label class="product-image-color-label" for="productImageColor${index}">لون هذه الصورة</label>
+      <input class="form-control form-control-sm product-image-color" id="productImageColor${index}"
+        value="${escAttr(productImageColors[url] || '')}" placeholder="مثال: وردي"
+        oninput="setProductImageColor(${index}, this.value)">
     </div>`).join('');
 }
 

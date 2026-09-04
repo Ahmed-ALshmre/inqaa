@@ -369,7 +369,11 @@ async function selectConversation(senderId) {
     if (history.state?.dashboardConversation !== senderId) {
       const url = new URL(location.href);
       url.searchParams.set('sender_id', senderId);
-      history.pushState({...(history.state || {}), dashboardConversation: senderId}, '', url);
+      history.pushState({
+        ...(history.state || {}),
+        dashboardConversation: senderId,
+        dashboardConversationPushed: true,
+      }, '', url);
     }
   }
 
@@ -961,14 +965,28 @@ function resetConversationView() {
   document.getElementById('chatPlaceholder').style.display = 'flex';
   document.getElementById('controlContent').style.display = 'none';
   document.getElementById('controlPlaceholder').style.display = 'block';
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebarPanel')?.classList.add('open');
+    document.getElementById('controlPanel')?.classList.remove('open');
+    document.getElementById('dashboardDrawer')?.classList.remove('open');
+    document.getElementById('mobileOverlay')?.classList.add('show');
+  }
   renderConversations();
 }
 
 function closeMobileConversation(fromPopState = false) {
   if (window.innerWidth > 768) return;
-  if (!fromPopState && history.state?.dashboardConversation) {
+  if (!fromPopState && history.state?.dashboardConversationPushed) {
     history.back();
     return;
+  }
+  if (!fromPopState) {
+    const url = new URL(location.href);
+    url.searchParams.delete('sender_id');
+    const nextState = {...(history.state || {})};
+    delete nextState.dashboardConversation;
+    delete nextState.dashboardConversationPushed;
+    history.replaceState(nextState, '', url);
   }
   resetConversationView();
 }

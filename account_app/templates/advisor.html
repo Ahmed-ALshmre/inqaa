@@ -3,7 +3,7 @@
 {% block content %}
 <section class="admin-page-head advisor-page-head">
   <div>
-    <p class="admin-kicker"><i class="bi bi-stars"></i> Soof AI Advisor</p>
+    <p class="admin-kicker"><i class="bi bi-chat-square-text"></i> Soof AI Advisor</p>
     <h1>مستشار صوف</h1>
     <p>تحدث معه بصورة طبيعية؛ يقرأ سجل حديثكما وذاكرته ورسائل الزبائن القديمة، ويحلل قاعدة البيانات عندما تطلب منه ذلك.</p>
     <div class="advisor-capabilities">
@@ -32,8 +32,11 @@
 <div class="advisor-layout">
   <section class="advisor-chat-card">
     <div class="advisor-chat-head">
-      <div class="advisor-chat-identity"><span class="advisor-avatar"><i class="bi bi-stars"></i></span><div><strong>مستشار صوف</strong><span id="advisorStats">جاري تحميل السجل…</span></div></div>
-      <span class="advisor-online"><i></i> جاهز للمحادثة</span>
+      <div class="advisor-chat-identity"><span class="advisor-avatar">ص</span><div><strong>مستشار صوف</strong><span id="advisorStats">جاري تحميل السجل…</span></div></div>
+      <div class="advisor-chat-status">
+        <span class="advisor-model-badge" id="advisorModelBadge"><i class="bi bi-cpu"></i> جاري تحديد النموذج…</span>
+        <span class="advisor-online"><i></i> جاهز للمحادثة</span>
+      </div>
     </div>
     <div class="advisor-messages" id="advisorMessages"></div>
     <form class="advisor-composer" id="advisorForm">
@@ -63,6 +66,13 @@
       <div><strong><i class="bi bi-journal-bookmark-fill"></i> الاقتراحات والذاكرة</strong><span>راجع كل بند بصورة مستقلة</span></div>
       <span class="advisor-memory-count" id="advisorMemoryCount">0</span>
     </div>
+    <details class="advisor-memory-priority" open>
+      <summary><span><i class="bi bi-layers-half"></i> أولوية المعرفة</span><i class="bi bi-chevron-down"></i></summary>
+      <div class="advisor-priority-list" id="advisorPriorityList">
+        <div class="advisor-priority-loading">جاري تحميل ترتيب المصادر…</div>
+      </div>
+      <p><i class="bi bi-shield-check"></i> لا يستخدم المستشار أي اقتراح قبل موافقتك.</p>
+    </details>
     <div class="advisor-proposal-filters" id="advisorProposalFilters">
       <button type="button" class="active" data-filter="all" onclick="setAdvisorProposalFilter('all', this)">الكل</button>
       <button type="button" data-filter="pending" onclick="setAdvisorProposalFilter('pending', this)">بانتظار القرار</button>
@@ -73,5 +83,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/advisor.js?v=3"></script>
+<script src="/static/js/advisor.js?v=5"></script>
 {% endblock %}
