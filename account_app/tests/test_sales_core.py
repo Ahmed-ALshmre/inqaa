@@ -82,6 +82,23 @@ class SalesCoreTests(unittest.TestCase):
             self.db.execute("DELETE FROM stores WHERE store_id IN (?,?)", (store_a, store_b))
             self.db.commit()
 
+    def test_golden_threads_store_has_isolated_wholesale_prompt(self):
+        store = self.db.execute(
+            "SELECT name, webhook_key FROM stores WHERE store_id=?",
+            ("golden-threads",),
+        ).fetchone()
+        self.assertIsNotNone(store)
+        self.assertEqual(store["name"], "خيوط الذهب جملة")
+        self.assertEqual(store["webhook_key"], "golden-threads")
+
+        wholesale_prompt = get_app_setting(
+            "prompt_main_rules", "", self.db, "golden-threads"
+        )
+        default_prompt = get_app_setting("prompt_main_rules", "", self.db, "default")
+        self.assertIn("هذا متجر جملة وليس مفرداً", wholesale_prompt)
+        self.assertIn("ممنوع استخدام أسماء أو منتجات", wholesale_prompt)
+        self.assertNotEqual(wholesale_prompt, default_prompt)
+
     def test_purchase_intent_becomes_hot(self):
         update_customer_intelligence(self.db, self.sender_id, "شكد السعر وهل متوفر؟")
         state = update_customer_intelligence(self.db, self.sender_id, "اريد احجز وهذا رقمي 07701234567")

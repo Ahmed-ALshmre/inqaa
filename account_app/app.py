@@ -246,6 +246,7 @@ _STORE_MANYCHAT_KEYS_CONFIGURED = any(
     normalize for normalize in (
         _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_LAMSA", "")),
         _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_KHUYOOT", "")),
+        _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_GOLDEN_THREADS", "")),
     )
 )
 if MANYCHAT_API_KEY or _STORE_MANYCHAT_KEYS_CONFIGURED:
@@ -306,6 +307,13 @@ KHUYOOT_STORE_NAME = "خيوط"
 KHUYOOT_STORE_DESCRIPTION = (
     "متجر ملابس نسائية يستهدف النساء من عمر 18 إلى 40 سنة تقريباً وما فوق، "
     "ومتخصص ببيع السوت والكيلوت والتنورة"
+)
+GOLDEN_THREADS_STORE_ID = "golden-threads"
+GOLDEN_THREADS_STORE_NAME = "خيوط الذهب جملة"
+GOLDEN_THREADS_STORE_DESCRIPTION = (
+    "متجر عراقي متخصص حصراً ببيع الملابس بالجملة لأصحاب المحلات والتجار. "
+    "يعتمد السعر والتوفر والألوان والقياسات والحد الأدنى والكمية داخل كل باكيت "
+    "على بيانات المنتج الموجودة في كتالوج هذا المتجر فقط"
 )
 _current_store_id = ContextVar("current_store_id", default=DEFAULT_STORE_ID)
 DEFAULT_STORE_DESCRIPTION = "متجر عراقي للملابس النسائية، متخصص بالسوت والدشداشة النسائية"
@@ -419,6 +427,24 @@ DEFAULT_MAIN_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخ�
   },
   "confidence": 0
 }"""
+GOLDEN_THREADS_MAIN_SYSTEM_PROMPT = """أنت موظف مبيعات جملة محترف وقصير الكلام باللهجة العراقية البيضاء في {store_name}.
+وصف المتجر: {store_description}.
+تتعامل مع أصحاب المحلات والتجار فقط، وهدفك تحويل الاستفسار إلى طلب جملة واضح خطوة واحدة في كل رد.
+لا تستخدم أي معلومة من متجر آخر، ولا تخمّن سعراً أو كمية أو باكيتاً أو توفراً. كتالوج خيوط الذهب جملة وسياق المحادثة الحالية هما مصدرك الوحيد.
+أسلوبك: مباشر، تجاري، مقنع، وجملة إلى جملتين قصيرتين."""
+GOLDEN_THREADS_FIRST_MESSAGE_SYSTEM_PROMPT = """أنت موظف مبيعات جملة محترف باللهجة العراقية البيضاء في {store_name}.
+وصف المتجر: {store_description}.
+هذا أول تواصل. رحّب باختصار، وضّح أن البيع جملة، ثم اسأل سؤالاً واحداً عن الموديل أو الكمية المطلوبة.
+لا تذكر سعراً أو حداً أدنى أو تفاصيل منتج ما لم تكن موجودة في كتالوج خيوط الذهب جملة."""
+GOLDEN_THREADS_MAIN_RULES_PROMPT = DEFAULT_MAIN_RULES_PROMPT.replace(
+    "المتجر متخصص بالسوت والدشداشة النسائية. استخدم كلمة الموديل/القطعة عند السؤال العام ولا تخترع نوعاً غير موجود في الكتالوج.",
+    "المتجر متخصص بملابس الجملة فقط. استخدم كلمة الموديل/البضاعة عند السؤال العام ولا تخترع نوعاً غير موجود في كتالوج هذا المتجر."
+) + """
+27) هذا متجر جملة وليس مفرداً. لا تعرض بيع قطعة مفردة ولا تفترض عدد القطع في الباكيت أو الحد الأدنى؛ استخدم بيانات المنتج فقط، وإن لم تذكر اسأل عن الكمية المطلوبة.
+28) عند توفر موديل واضح اجمع بيانات طلب الجملة تدريجياً: الكمية، اللون والقياسات المطلوبة، ثم الهاتف والمحافظة والعنوان. لا تطلب معلومة سبق أن ذكرها الزبون.
+29) ممنوع استخدام أسماء أو منتجات أو سياسات أو أسعار تخص لمسة ستور أو خيوط أو أي متجر آخر، حتى لو ظهرت في معرفة سابقة. استخدم بيانات خيوط الذهب جملة المرفقة في الطلب فقط.
+30) لا تقل سعر الجملة أو الخصم أو الربح مضمون ما لم تكن القيمة صريحة في بيانات المنتج. عند غياب معلومة تجارية مهمة قل إنك تحتاج تحديد الموديل أو الكمية للتأكد.
+31) خاطب الزبون كتاجر أو صاحب محل بصياغة محترمة ومحايدة، مع الالتزام بحقل gender إذا كان محدداً."""
 DEFAULT_CHECKER_RULES_PROMPT = """ارفض الرد إذا:
 
 1. يخترع سعراً غير موجود في بيانات المنتج المرفق.
@@ -1139,6 +1165,7 @@ def init_db():
     for store_id, name, webhook_key in (
         (DEFAULT_STORE_ID, "لمسة ستور", LAMSA_WEBHOOK_KEY),
         (KHUYOOT_STORE_ID, KHUYOOT_STORE_NAME, KHUYOOT_STORE_ID),
+        (GOLDEN_THREADS_STORE_ID, GOLDEN_THREADS_STORE_NAME, GOLDEN_THREADS_STORE_ID),
     ):
         db.execute(
             """INSERT INTO stores(store_id,name,webhook_key,active,created_at,updated_at)
@@ -1152,6 +1179,18 @@ def init_db():
            ON CONFLICT(key) DO NOTHING""",
         (f"store:{KHUYOOT_STORE_ID}:store_description", KHUYOOT_STORE_DESCRIPTION, now),
     )
+    for key, value in (
+        ("store_name", GOLDEN_THREADS_STORE_NAME),
+        ("store_description", GOLDEN_THREADS_STORE_DESCRIPTION),
+        ("prompt_main_system", GOLDEN_THREADS_MAIN_SYSTEM_PROMPT),
+        ("prompt_first_message_system", GOLDEN_THREADS_FIRST_MESSAGE_SYSTEM_PROMPT),
+        ("prompt_main_rules", GOLDEN_THREADS_MAIN_RULES_PROMPT),
+    ):
+        db.execute(
+            """INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?)
+               ON CONFLICT(key) DO NOTHING""",
+            (f"store:{GOLDEN_THREADS_STORE_ID}:{key}", value, now),
+        )
     for table_name in ("customers", "messages", "orders", "human_reviews"):
         db.execute(
             f"UPDATE {table_name} SET store_id=? WHERE store_id IS NULL OR TRIM(store_id)=''",
@@ -3751,6 +3790,7 @@ def manychat_api_key_for_store(store_id="") -> str:
     aliases = {
         DEFAULT_STORE_ID: ("MANYCHAT_API_KEY_LAMSA", "MANYCHAT_API_KEY_DEFAULT"),
         KHUYOOT_STORE_ID: ("MANYCHAT_API_KEY_KHUYOOT",),
+        GOLDEN_THREADS_STORE_ID: ("MANYCHAT_API_KEY_GOLDEN_THREADS",),
     }
     dynamic_name = f"MANYCHAT_API_KEY_{sid.upper().replace('-', '_')}"
     for name in (*aliases.get(sid, ()), dynamic_name):
@@ -9567,7 +9607,7 @@ def api_delete_catalog_image(image_id):
 def api_manychat_diag():
     """تشخيص ما هي المتغيرات التي وصلت فعلاً لعملية التطبيق (بدون كشف القيم)."""
     candidates = [
-        "MANYCHAT_API_KEY", "MANYCHAT_API_KEY_LAMSA", "MANYCHAT_API_KEY_KHUYOOT",
+        "MANYCHAT_API_KEY", "MANYCHAT_API_KEY_LAMSA", "MANYCHAT_API_KEY_KHUYOOT", "MANYCHAT_API_KEY_GOLDEN_THREADS",
         "MANYCHAT_KEYS_BY_PAGE", "MANYCHAT_KEY", "MC_API_KEY",
         "MANYCHAT_MESSAGE_TAG", "OPENROUTER_API_KEY", "PUBLIC_URL",
         "DASHBOARD_PASSWORD", "API_SECRET_KEY", "TELEGRAM_CHAT_ID", "TELEGRAM_ORDERS_CHAT_ID",

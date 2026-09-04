@@ -265,7 +265,7 @@ function filterCustomers() {
 }
 
 function setConversationStoreFilter(storeId) {
-  currentStoreFilter = ['all', 'default', 'khuyoot'].includes(storeId) ? storeId : 'all';
+  currentStoreFilter = String(storeId || 'all');
   renderConversations();
 }
 
@@ -340,8 +340,9 @@ function renderConversations() {
           : '';
     const preview = esc(c.last_message || '...');
     const storeId = c.store_id || 'default';
-    const storeName = c.store_name || (storeId === 'khuyoot' ? 'خيوط' : 'لمسة ستور');
-    const storeBadgeClass = storeId === 'khuyoot' ? 'store-khuyoot' : 'store-lamsa';
+    const knownStoreNames = {default: 'لمسة ستور', khuyoot: 'خيوط', 'golden-threads': 'خيوط الذهب جملة'};
+    const storeName = c.store_name || knownStoreNames[storeId] || storeId;
+    const storeBadgeClass = storeId === 'khuyoot' ? 'store-khuyoot' : (storeId === 'golden-threads' ? 'store-golden-threads' : 'store-lamsa');
     return `
       <div class="customer-item ${active}" onclick="selectConversation('${c.sender_id}')">
         <div class="cust-avatar">${init}</div>

@@ -2713,3 +2713,9 @@ button,a,input,select,textarea { touch-action:manipulation; }
   background: #e4f7ef;
   border: 1px solid #a9dfca;
 }
+
+.conversation-store-badge.store-golden-threads {
+  color: #75520a;
+  background: #fff5d8;
+  border: 1px solid #e7c86f;
+}
