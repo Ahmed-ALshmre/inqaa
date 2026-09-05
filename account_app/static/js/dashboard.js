@@ -7,7 +7,9 @@ let currentSenderId   = null;
 let currentCustomer   = null;
 let allConversations  = [];
 let currentFilter     = 'all';
-let currentStoreFilter = 'all';
+let currentStoreFilter = DASH_PARAMS.get('store_id') || 'all';
+let inboxRequest = null;
+let inboxSearchTimer;
 let searchQuery       = '';
 let convLimit = 20;
 let convOffset = 0;
@@ -15,9 +17,13 @@ let isLoadingMoreConv = false;
 let hasMoreConv = true;
 let pollConvTimer     = null;
 let pollMsgTimer      = null;
+let messageRequest = null;
+const messageCache = new Map();
+let renderedMessageSender = null;
 let uploadedImageUrl  = null;
 let aiPendingReply    = null;
 let allProducts       = [];
+let productRequestVersion = 0;
 let globalAIEnabled   = true;
 let currentConversationAIEnabled = true;
 let audioUnlocked     = false;
@@ -48,13 +54,16 @@ function apiFetch(url, opts = {}) {
 // ── Boot ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', unlockAudioOnce, { once: true });
+  const messagesArea = document.getElementById('messagesArea');
+  for (const type of ['wheel', 'touchmove']) messagesArea.addEventListener(type, () => { messagesArea.dataset.followLatest = '0'; }, {passive:true});
   const custEl = document.getElementById('customerList');
   if (custEl) custEl.addEventListener('scroll', onCustomerListScroll);
   syncConversationFilterUI();
+  loadInboxStores();
   loadConversations();
   loadStats();
   loadProducts();
-  pollConvTimer = setInterval(() => { loadConversations(false); loadStats(); }, 8000);
+  pollConvTimer = setInterval(() => { if (!document.hidden && !inboxRequest) { loadConversations(false); loadStats(); } }, 4000);
   if (INITIAL_SENDER_ID && window.innerWidth <= 768) {
     history.replaceState({...(history.state || {}), dashboardConversation: INITIAL_SENDER_ID}, '', location.href);
   }
@@ -101,6 +110,7 @@ async function installPWA() {
 
 // ══ Mobile Panels ══════════════════════════════════════════════════════════
 function toggleSidebar() {
+  if (window.innerWidth <= 768) { toggleDashboardDrawer(); return; }
   const sb = document.getElementById('sidebarPanel');
   const ov = document.getElementById('mobileOverlay');
   const cp = document.getElementById('controlPanel');
@@ -149,6 +159,10 @@ function closeAllPanels() {
 
 // ══ Conversations ══════════════════════════════════════════════════════════
 async function loadConversations(showSpinner = true, isLoadMore = false) {
+  if (isLoadMore && inboxRequest) return;
+  inboxRequest?.abort();
+  const controller = new AbortController();
+  inboxRequest = controller;
   if (showSpinner && !isLoadMore) {
     document.getElementById('customerList').innerHTML =
       '<div class="text-center py-5" style="color:var(--text-muted)">' +
@@ -159,11 +173,15 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
     if (isLoadMore) isLoadingMoreConv = true;
     
     let fetchLimit = isLoadMore ? convLimit : Math.max(convLimit, allConversations.length);
-    let fetchOffset = isLoadMore ? convOffset + convLimit : 0;
+    let fetchOffset = isLoadMore ? allConversations.length : 0;
     
     const previousPending = new Map(allConversations.map(c => [c.sender_id, c.pending_reviews_count || 0]));
     const previousProblems = new Map(allConversations.map(c => [c.sender_id, c.problem_count || 0]));
-    const res  = await apiFetch(`/api/conversations?limit=${fetchLimit}&offset=${fetchOffset}`);
+    const params = inboxQuery();
+    params.set("limit", fetchLimit);
+    params.set("offset", fetchOffset);
+    const res = await apiFetch(`/api/conversations?${params}`, {signal: controller.signal});
+    if (!res.ok) throw new Error("فشل تحميل المحادثات");
     const data = await res.json();
     
     if (isLoadMore) {
@@ -181,6 +199,8 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
       if (allConversations.length < fetchLimit && allConversations.length > 0) hasMoreConv = false;
       else if (allConversations.length === 0) hasMoreConv = false;
     }
+    hasMoreConv = Boolean(data.has_more);
+    document.getElementById("inboxConnection").textContent = "محدّث الآن";
     if (!showSpinner) {
       for (const c of allConversations) {
         const prev = previousPending.get(c.sender_id) || pendingReviewsBySender[c.sender_id] || 0;
@@ -232,13 +252,15 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
       }
     }
   } catch (e) {
+    if (e.name === "AbortError") return;
+    document.getElementById("inboxConnection").textContent = "تعذر التحديث";
     console.error("loadConversations error:", e);
     if (showSpinner) {
       showToast('فشل تحميل المحادثات', 'danger');
-      document.getElementById('customerList').innerHTML = `<div class="text-danger p-3 small text-start" dir="ltr" style="white-space:pre-wrap;">${e.stack || e.message || e}</div>`;
+      document.getElementById('customerList').innerHTML = `<div class="text-danger p-3 small text-start" dir="ltr" style="white-space:pre-wrap;">تعذر تحميل المحادثات. <button class="btn btn-sm btn-light" onclick="loadConversations()">إعادة المحاولة</button></div>`;
     }
   } finally {
-    if (isLoadMore) isLoadingMoreConv = false;
+    if (inboxRequest === controller) { inboxRequest = null; isLoadingMoreConv = false; }
   }
 }
 
@@ -256,17 +278,54 @@ function setFilter(f, btn = null) {
   const requested = String(f || btn?.dataset?.filter || 'all').trim();
   currentFilter = requested || 'all';
   syncConversationFilterUI();
-  renderConversations();
+  refreshInboxFilters();
 }
 
-function filterCustomers() {
-  searchQuery = document.getElementById('searchInput').value.toLowerCase();
-  renderConversations();
+const inboxFields = {stage:'filterStage', platform:'filterPlatform', province:'filterProvince', ai:'filterAI', date_from:'filterFrom', date_to:'filterTo', sort:'filterSort'};
+function inboxQuery() {
+  const params = new URLSearchParams({status:currentFilter});
+  if (currentStoreFilter !== 'all') params.set('store_id', currentStoreFilter);
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) params.set('q', q);
+  for (const [key,id] of Object.entries(inboxFields)) {
+    const value = document.getElementById(id).value.trim();
+    if (value && value !== 'all' && value !== 'latest') params.set(key,value);
+  }
+  return params;
 }
-
-function setConversationStoreFilter(storeId) {
-  currentStoreFilter = String(storeId || 'all');
-  renderConversations();
+async function loadInboxStores() {
+  try {
+    const res = await apiFetch('/api/stores');
+    if (!res.ok) throw new Error('stores');
+    const data = await res.json();
+    const select = document.getElementById('conversationStoreFilter');
+    select.replaceChildren(new Option('كل المتاجر','all'), ...data.stores.map(s => new Option(s.name,s.store_id)));
+    select.value = currentStoreFilter;
+  } catch { showToast('تعذر تحميل قائمة المتاجر؛ أعد تحديث الصفحة', 'warning'); }
+}
+function refreshInboxFilters() {
+  clearTimeout(inboxSearchTimer);
+  const from = document.getElementById('filterFrom');
+  const to = document.getElementById('filterTo');
+  to.setCustomValidity(from.value && to.value && from.value > to.value ? 'يجب أن يكون تاريخ النهاية بعد البداية' : '');
+  if (!to.reportValidity()) return;
+  const count = [...inboxQuery()].filter(([k,v]) => k !== 'sort' && v !== 'all').length;
+  document.getElementById('activeFilterCount').textContent = count ? `(${count})` : '';
+  allConversations = []; convOffset = 0; hasMoreConv = true;
+  loadConversations();
+}
+function scheduleInboxSearch() { clearTimeout(inboxSearchTimer); inboxSearchTimer = setTimeout(refreshInboxFilters,300); }
+function filterCustomers() { scheduleInboxSearch(); }
+function setConversationStoreFilter(storeId) { currentStoreFilter = storeId || 'all'; refreshInboxFilters(); }
+function resetInboxFilters() {
+  currentFilter = 'all'; currentStoreFilter = 'all';
+  document.getElementById('conversationStoreFilter').value = 'all';
+  document.getElementById('searchInput').value = '';
+  for (const id of Object.values(inboxFields)) {
+    const el = document.getElementById(id);
+    if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
+  }
+  syncConversationFilterUI(); refreshInboxFilters();
 }
 
 function onCustomerListScroll() {
@@ -283,30 +342,9 @@ function renderConversations() {
   syncConversationFilterUI();
   let list = allConversations;
 
-  if (currentStoreFilter !== 'all') {
-    list = list.filter(c => (c.store_id || 'default') === currentStoreFilter);
-  }
-
-  if (currentFilter === 'booked') {
-    list = list.filter(c => c.lead_stage === 'booked');
-  }
-  else if (currentFilter === 'problems') {
-    list = list.filter(c => Number(c.human_attention_count || 0) > 0);
-  }
-  else if (currentFilter === 'unanswered') {
-    list = list.filter(c => Number(c.unanswered || 0) === 1 || c.last_direction === 'incoming');
-  }
-
-  if (searchQuery) {
-    list = list.filter(c =>
-      (c.sender_id || '').toLowerCase().includes(searchQuery) ||
-      (c.name || '').toLowerCase().includes(searchQuery) ||
-      (c.store_name || '').toLowerCase().includes(searchQuery)
-    );
-  }
-
   const el = document.getElementById('customerList');
 
+  document.getElementById('inboxResultCount').textContent = `${list.length} محادثة${hasMoreConv ? ' · مرّر لعرض المزيد' : ''}`;
   if (!list.length) {
     const emptyText = currentFilter === 'booked'
       ? 'لا توجد محادثات تم فيها تثبيت طلب'
@@ -319,7 +357,7 @@ function renderConversations() {
     return;
   }
 
-  el.innerHTML = list.map(c => {
+  const markup = list.map(c => {
     const init    = (c.name || c.sender_id || '؟').slice(0, 2).toUpperCase();
     const time    = fmtTime(c.last_time);
     const active  = c.sender_id === currentSenderId ? 'active' : '';
@@ -340,12 +378,12 @@ function renderConversations() {
           : '';
     const preview = esc(c.last_message || '...');
     const storeId = c.store_id || 'default';
-    const knownStoreNames = {default: 'لمسة ستور', khuyoot: 'خيوط', 'golden-threads': 'خيوط الذهب جملة'};
+    const knownStoreNames = {default: 'لمسة ستور', khuyoot: 'خيوط', 'golden-threads': 'خيوط الذهب جملة', 'al-fatena': 'الفاتنة'};
     const storeName = c.store_name || knownStoreNames[storeId] || storeId;
     const storeBadgeClass = storeId === 'khuyoot' ? 'store-khuyoot' : (storeId === 'golden-threads' ? 'store-golden-threads' : 'store-lamsa');
     return `
-      <div class="customer-item ${active}" onclick="selectConversation('${c.sender_id}')">
-        <div class="cust-avatar">${init}</div>
+      <div class="customer-item ${active}" role="button" tabindex="0" data-sender="${esc(c.sender_id)}" onclick="selectConversation(this.dataset.sender)" onkeydown="if(event.key==='Enter'){selectConversation(this.dataset.sender)}">
+        <div class="cust-avatar">${esc(init)}</div>
         <div class="cust-info">
           <div class="cust-name">${esc(c.name || c.sender_id)} ${adBadge}</div>
           <div><span class="conversation-store-badge ${storeBadgeClass}"><i class="bi bi-shop"></i> ${esc(storeName)}</span></div>
@@ -357,6 +395,7 @@ function renderConversations() {
         </div>
       </div>`;
   }).join('');
+  if (el.innerHTML !== markup) { const top = el.scrollTop; el.innerHTML = markup; el.scrollTop = top; }
 }
 
 // ══ Select Conversation ════════════════════════════════════════════════════
@@ -385,7 +424,8 @@ async function selectConversation(senderId) {
   const conv = allConversations.find(c => c.sender_id === senderId) || {};
   currentCustomer = conv;
   currentConversationAIEnabled = conv.ai_enabled !== 0 && conv.ai_enabled !== false;
-  await loadProducts(conv.store_id || 'default');
+  const messagesReady = loadMessages(senderId);
+  const productsReady = loadProducts(conv.store_id || 'default');
 
   const init = (conv.name || senderId || '؟').slice(0, 2).toUpperCase();
   document.getElementById('chatAvatar').textContent   = init;
@@ -434,7 +474,8 @@ async function selectConversation(senderId) {
   }
 
   renderConversations();
-  await loadMessages(senderId);
+  await Promise.all([messagesReady, productsReady]);
+  if (currentSenderId !== senderId) return;
   await loadCustomerInstructions(senderId);
   if ((conv.pending_reviews_count || 0) > 0) {
     showHumanIntervention();
@@ -444,66 +485,136 @@ async function selectConversation(senderId) {
 
   if (pollMsgTimer) clearInterval(pollMsgTimer);
   pollMsgTimer = setInterval(() => {
-    if (currentSenderId) loadMessages(currentSenderId, false);
-  }, 8000);
+    if (currentSenderId && !document.hidden) loadMessages(currentSenderId, false);
+  }, 1500);
 }
 
 // ══ Messages ═══════════════════════════════════════════════════════════════
-async function loadMessages(senderId, scroll = true) {
+async function loadMessages(senderId, scroll = true, older = false) {
+  if (!senderId) return;
+  if (messageRequest?.sender === senderId && !older) return;
+  messageRequest?.controller.abort();
+  const controller = new AbortController();
+  const pending = {sender: senderId, controller};
+  messageRequest = pending;
+  const cached = messageCache.get(senderId) || {messages: [], hasOlder: false};
+  if (scroll && senderId === currentSenderId) renderMessages(cached.messages, true, senderId);
+  const status = document.getElementById('chatUpdateStatus');
+  if (status && !cached.messages.length) status.textContent = 'جاري تحميل الرسائل…';
+  const params = new URLSearchParams();
+  if (cached.messages.length) params.set(older ? 'before_id' : 'after_id', older ? cached.messages[0].id : cached.messages[cached.messages.length - 1].id);
   try {
-    const res  = await apiFetch(`/api/conversations/${senderId}/messages`);
+    const res = await apiFetch(`/api/conversations/${encodeURIComponent(senderId)}/messages?${params}`, {signal: controller.signal});
+    if (!res.ok) throw new Error('messages');
     const data = await res.json();
-    const messages = data.messages || [];
-    const incoming = messages.filter(m => m.direction === 'incoming');
-    const latestIncoming = incoming.reduce((max, m) => Math.max(max, Number(m.id || 0)), 0);
-    const latestIncomingImage = incoming
-      .filter(m => m.message_type === 'image' || m.image_url)
-      .reduce((max, m) => Math.max(max, Number(m.id || 0)), 0);
-    const prevIncoming = latestIncomingBySender[senderId] || 0;
-    const prevImage = latestImageIdBySender[senderId] || 0;
-
-    const isCurrentlyOpen = senderId === currentSenderId;
-    if (!scroll && latestIncomingImage && latestIncomingImage > prevImage && prevImage > 0) {
-      if (!isCurrentlyOpen) playDashboardSound('image');
-      if (isCurrentlyOpen) showHumanIntervention();
-    } else if (!scroll && latestIncoming && latestIncoming > prevIncoming) {
-      if (!isCurrentlyOpen) playDashboardSound('message');
+    const merged = new Map(cached.messages.map(m => [m.id, m]));
+    (data.messages || []).forEach(m => merged.set(m.id, m));
+    const messages = [...merged.values()].sort((a,b) => a.id-b.id);
+    const hasOlder = older || !cached.messages.length ? Boolean(data.has_more) : cached.hasOlder;
+    messageCache.set(senderId, {messages,hasOlder});
+    if (messageCache.size > 10) {
+      for (const key of messageCache.keys()) { if (key !== currentSenderId && key !== senderId) {messageCache.delete(key); break;} }
     }
-    latestIncomingBySender[senderId] = Math.max(prevIncoming, latestIncoming);
-    latestImageIdBySender[senderId] = Math.max(prevImage, latestIncomingImage);
-    renderMessages(messages, scroll);
-  } catch (e) {}
+    if (senderId === currentSenderId) {
+      renderMessages(messages, scroll && !older, senderId);
+      const more = document.getElementById('loadOlderMessages');
+      if (more) more.hidden = !hasOlder;
+      if (status) status.textContent = 'محدّثة الآن';
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError' && senderId === currentSenderId && status) status.textContent = 'تعذر التحديث · ستتم إعادة المحاولة';
+  } finally {
+    if (messageRequest === pending) messageRequest = null;
+  }
 }
 
-function renderMessages(msgs, scroll = true) {
+function safeMediaUrl(value) {
+  try {
+    const url = new URL(String(value || ''), location.origin);
+    return ['http:','https:'].includes(url.protocol) ? url.href : '';
+  } catch { return ''; }
+}
+
+function mediaLoaded(element) {
+  const holder = element.closest('.message-media');
+  holder?.classList.remove('is-loading','has-error');
   const area = document.getElementById('messagesArea');
+  if (area?.dataset.followLatest === '1') requestAnimationFrame(() => { area.scrollTop = area.scrollHeight; });
+}
+function mediaFailed(element) {
+  const holder = element.closest('.message-media');
+  holder?.classList.remove('is-loading');
+  holder?.classList.add('has-error');
+}
+function retryMedia(button) {
+  const holder = button.closest('.message-media');
+  const media = holder.querySelector('img,audio,video');
+  holder.classList.remove('has-error'); holder.classList.add('is-loading');
+  if (media.tagName === 'IMG') media.src = media.dataset.src;
+  else media.load();
+}
 
-  if (!msgs.length) {
-    area.innerHTML = '<div class="text-center small py-4" style="color:var(--text-muted)">لا توجد رسائل بعد</div>';
-    return;
+function messageMarkup(m) {
+  const media = Array.isArray(m.media) ? m.media : (messageImageUrl(m) ? [{type:'image',url:messageImageUrl(m)}] : []);
+  let content = '';
+  for (const item of media) {
+    const url = safeMediaUrl(item.url);
+    if (!url) continue;
+    const escaped = esc(url);
+    const kind = ['image','audio','video'].includes(item.type) ? item.type : 'file';
+    const failure = `<div class="media-error">تعذر فتح المرفق؛ قد يكون الرابط منتهي الصلاحية.<button type="button" onclick="retryMedia(this)">إعادة المحاولة</button><a href="${escaped}" target="_blank" rel="noopener noreferrer">فتح الرابط</a></div>`;
+    if (kind === 'image') {
+      content += `<div class="message-media image-media is-loading"><span class="media-loading" role="status"><span class="spinner-border spinner-border-sm"></span> تحميل الصورة…</span><img src="${escaped}" data-src="${escaped}" class="msg-image" alt="صورة في المحادثة" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="mediaLoaded(this)" onerror="mediaFailed(this)" onclick="openLightbox(this.dataset.src)">${failure}</div>`;
+    } else if (kind === 'audio' || kind === 'video') {
+      const label = kind === 'audio' ? 'تسجيل صوتي' : 'مقطع فيديو';
+      content += `<div class="message-media ${kind}-media"><div class="media-label">${label}</div><${kind} controls preload="metadata" src="${escaped}" aria-label="${label}" onloadedmetadata="mediaLoaded(this)" onerror="mediaFailed(this)" onwaiting="this.closest('.message-media').classList.add('is-loading')" oncanplay="mediaLoaded(this)"></${kind}><span class="media-loading" role="status">جاري التحميل…</span>${failure}</div>`;
+    } else {
+      content += `<a class="message-file" href="${escaped}" target="_blank" rel="noopener noreferrer"><i class="bi bi-paperclip"></i> فتح المرفق</a>`;
+    }
   }
+  if (m.text && !media.some(item => item.url === m.text.trim())) content += `<div class="msg-bubble">${esc(m.text)}</div>`;
+  if (!content) content = '<div class="msg-bubble">[رسالة بلا نص أو مرفق متاح]</div>';
+  return content + `<span class="msg-time">${esc(fmtDatetime(m.created_at))}</span>`;
+}
 
-  area.innerHTML = msgs.map(m => {
-    const dir  = m.direction === 'incoming' ? 'incoming' : 'outgoing';
-    const time = fmtDatetime(m.created_at);
-    const imgUrl = messageImageUrl(m);
-    let content = '';
-
-    if (imgUrl) {
-      content += `<img src="${esc(imgUrl)}" class="msg-image mb-1"
-        onclick="openLightbox(${esc(jsString(imgUrl))})"
-        onerror="this.outerHTML='<div class=\\'msg-image-error\\'><i class=\\'bi bi-image\\' style=\\'font-size:24px\\'></i><br>تعذر عرض الصورة<br><a href=\\'${esc(imgUrl)}\\' target=\\'_blank\\' rel=\\'noopener\\'>فتح الصورة</a></div>'"
-        alt="صورة" loading="lazy" referrerpolicy="no-referrer">`;
+function renderMessages(messages, scroll = true, sender = currentSenderId) {
+  const area = document.getElementById('messagesArea');
+  const changedSender = renderedMessageSender !== sender;
+  if (changedSender) { area.replaceChildren(); renderedMessageSender = sender; }
+  const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 100;
+  const oldHeight = area.scrollHeight, oldTop = area.scrollTop;
+  const existing = new Map([...area.querySelectorAll('[data-message-id]')].map(el => [Number(el.dataset.messageId),el]));
+  area.querySelector('.messages-empty')?.remove();
+  let added = false, prepended = false;
+  for (const m of messages) {
+    const signature = JSON.stringify(m);
+    let node = existing.get(m.id);
+    if (!node) {
+      node = document.createElement('div');
+      node.className = `msg-wrapper ${m.direction === 'incoming' ? 'incoming' : 'outgoing'}`;
+      node.dataset.messageId = m.id;
+      const next = [...area.children].find(el => Number(el.dataset.messageId) > m.id);
+      area.insertBefore(node, next || null);
+      added = true; prepended ||= Boolean(next);
     }
-    if (m.text && m.text !== imgUrl) {
-      content += `<div class="msg-bubble">${esc(m.text)}</div>`;
+    if (node.dataset.signature !== signature) {
+      node.innerHTML = messageMarkup(m);
+      node.dataset.signature = signature;
+      node.querySelectorAll('img').forEach(img => { if (img.complete && img.naturalWidth) mediaLoaded(img); });
     }
-    if (!content) content = '<div class="msg-bubble" style="color:var(--text-muted)"><small>[رسالة فارغة]</small></div>';
+  }
+  if (!messages.length) area.innerHTML = '<div class="messages-empty text-center small py-4">لا توجد رسائل محمّلة بعد</div>';
+  if (scroll || changedSender || (atBottom && added && !prepended)) {
+    area.dataset.followLatest = '1';
+    area.scrollTop = area.scrollHeight;
+    document.getElementById('newMessagesButton').hidden = true;
+  } else if (prepended) { area.dataset.followLatest = '0'; area.scrollTop = oldTop + area.scrollHeight - oldHeight; }
+  else if (added) document.getElementById('newMessagesButton').hidden = false;
+}
 
-    return `<div class="msg-wrapper ${dir}">${content}<span class="msg-time">${time}</span></div>`;
-  }).join('');
-
-  if (scroll) area.scrollTop = area.scrollHeight;
+function scrollToLatestMessage() {
+  const area = document.getElementById('messagesArea'); area.dataset.followLatest = '1'; area.scrollTop = area.scrollHeight;
+  document.getElementById('newMessagesButton').hidden = true;
 }
 
 // ══ Human Intervention (single unified dialog) ════════════════════════════
@@ -849,20 +960,20 @@ async function sendMessage(text = null, imgUrl = null) {
 
   if (!txt && !img) { showToast('اكتب رسالة أو ارفع صورة', 'warning'); return; }
 
+  const sendingTo = currentSenderId;
   _setSendingState(true);
   try {
-    const res  = await apiFetch(`/api/conversations/${currentSenderId}/send`, {
+    const res  = await apiFetch(`/api/conversations/${encodeURIComponent(sendingTo)}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: txt, image_url: img }),
     });
     const data = await res.json();
     if (data.ok) {
-      document.getElementById('messageInput').value = '';
-      clearImage();
+      if (currentSenderId === sendingTo && document.getElementById('messageInput').value.trim() === txt) { document.getElementById('messageInput').value = ''; clearImage(); }
       if (data.warning) showToast(data.warning, 'warning');
       else showToast('تم الإرسال', 'success');
-      await loadMessages(currentSenderId);
+      await loadMessages(sendingTo, currentSenderId === sendingTo);
       return true;
     } else {
       const detail = data.warning || data.error || 'ManyChat لم يؤكد الإرسال';
@@ -965,12 +1076,7 @@ function resetConversationView() {
   document.getElementById('chatPlaceholder').style.display = 'flex';
   document.getElementById('controlContent').style.display = 'none';
   document.getElementById('controlPlaceholder').style.display = 'block';
-  if (window.innerWidth <= 768) {
-    document.getElementById('sidebarPanel')?.classList.add('open');
-    document.getElementById('controlPanel')?.classList.remove('open');
-    document.getElementById('dashboardDrawer')?.classList.remove('open');
-    document.getElementById('mobileOverlay')?.classList.add('show');
-  }
+  closeAllPanels();
   renderConversations();
 }
 
@@ -1170,9 +1276,11 @@ async function setCustomerGenderQuick(gender) {
 
 // ══ Products ═══════════════════════════════════════════════════════════════
 async function loadProducts(storeId = 'default') {
+  const version = ++productRequestVersion;
   try {
     const res  = await apiFetch(`/api/products?store_id=${encodeURIComponent(storeId || 'default')}`);
     const data = await res.json();
+    if (version !== productRequestVersion) return;
     allProducts = data.products || [];
     const opts = allProducts.map(p =>
       `<option value="${esc(p.product_id)}">${esc(p.product_name)} — ${esc(p.price)} (${esc(p.stock)})</option>`
@@ -1543,13 +1651,9 @@ function jsString(s) {
 }
 
 function messageImageUrl(m) {
-  const explicit = (m.image_url || '').trim();
-  if (explicit) return explicit;
-
-  const text = (m.text || '').trim();
-  if (/^https?:\/\/\S+\.(?:png|jpe?g|gif|webp)(?:\?\S*)?$/i.test(text)) return text;
-  if (/^https?:\/\/(?:scontent|.*\.fbcdn\.net|.*facebook).*$/i.test(text)) return text;
-  return '';
+  const candidate = String(m.image_url || m.text || '').trim();
+  if (/audioclip|\.(?:mp4|mp3|ogg|m4a|aac|wav|webm)(?:[?#]|$)/i.test(candidate)) return '';
+  return /\.(?:png|jpe?g|gif|webp)(?:[?#]|$)/i.test(candidate) ? safeMediaUrl(candidate) : '';
 }
 
 function productImageList(product) {

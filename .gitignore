@@ -45,3 +45,9 @@ Thumbs.db
 .venv/
 venv/
 env/
+
+# Local customer-data reviews and private media links
+.codex-db-analysis/
+تقرير-إصلاح-المرفقات-وسرعة-المحادثات.md
+تقرير-تحليل-قاعدة-البيانات.md
+تقرير-مراجعة-المحادثات-بعد-الحجز-2026-09-05.md

@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/dashboard.css?v=18">
+  {% block styles %}{% endblock %}
 </head>
 <body class="admin-shell">
   <nav class="admin-topbar">
@@ -39,12 +40,14 @@
 
   <div class="admin-overlay" id="adminOverlay" onclick="closeAdminNav()"></div>
   <aside class="admin-sidebar" id="adminSidebar">
+    <div class="p-3"><label for="globalStoreSelect" class="small mb-2">المتجر الحالي</label><select id="globalStoreSelect" class="form-select form-select-sm" disabled><option>جاري تحميل المتاجر…</option></select></div>
     <div class="admin-sidebar-title">التنقل</div>
     <a href="/dashboard"><i class="bi bi-chat-heart"></i> المحادثات والعملاء</a>
     <a href="/orders"><i class="bi bi-receipt"></i> الطلبات</a>
     <a href="/products"><i class="bi bi-box-seam"></i> المنتجات</a>
     <a href="/settings"><i class="bi bi-gear"></i> الإعدادات</a>
     <div class="admin-sidebar-title mt-3">الإعدادات</div>
+    <a href="/settings/stores"><i class="bi bi-shop"></i> إدارة المتاجر</a>
     <a href="/settings/ai"><i class="bi bi-robot"></i> الذكاء الاصطناعي</a>
     <a href="/advisor"><i class="bi bi-chat-square-heart"></i> مستشار صوف</a>
     <a href="/settings/auto-product"><i class="bi bi-magic"></i> المنتج الافتراضي</a>
@@ -62,7 +65,7 @@
   {% include '_mobile_nav.html' %}
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/static/js/admin_pages.js?v=5"></script>
+  <script src="/static/js/admin_pages.js?v=6"></script>
   <script src="/static/js/mobile_app.js?v=3"></script>
   {% block scripts %}{% endblock %}
 </body>

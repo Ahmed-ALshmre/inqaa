@@ -22,6 +22,10 @@ from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
+try:
+    from .media import extract_media, media_type, message_media
+except ImportError:
+    from media import extract_media, media_type, message_media
 from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
@@ -99,6 +103,7 @@ else:
 _clip_model: object = None
 _clip_processor: object = None
 _sender_locks = {}
+_sender_intake_locks = {}
 _sender_locks_guard = threading.Lock()
 
 # تحميل .env: override=False حتى لا يمسح متغيرات المضيف (Railway) عند MANYCHAT_API_KEY= فارغ في الملف
@@ -258,7 +263,7 @@ if PUBLIC_URL:
 else:
     print("[Config] ⚠️  PUBLIC_URL not set — image URLs may resolve to localhost", flush=True)
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
-DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "35"))   # ثواني انتظار قبل الرد (لجمع كل رسائل الزبون قبل تشغيل الموديل)
+DEBOUNCE_DELAY     = int(os.environ.get("DEBOUNCE_DELAY", "6"))   # ثواني انتظار قبل الرد (لجمع كل رسائل الزبون قبل تشغيل الموديل)
 ASYNC_WEBHOOK      = os.environ.get("ASYNC_WEBHOOK", "1") == "1"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -315,6 +320,9 @@ GOLDEN_THREADS_STORE_DESCRIPTION = (
     "يعتمد السعر والتوفر والألوان والقياسات والحد الأدنى والكمية داخل كل باكيت "
     "على بيانات المنتج الموجودة في كتالوج هذا المتجر فقط"
 )
+ALFATENA_STORE_ID = "al-fatena"
+ALFATENA_STORE_NAME = "الفاتنة"
+ALFATENA_STORE_DESCRIPTION = "متجر متخصص بملابس النساء والعبايات والسوتات"
 _current_store_id = ContextVar("current_store_id", default=DEFAULT_STORE_ID)
 DEFAULT_STORE_DESCRIPTION = "متجر عراقي للملابس النسائية، متخصص بالسوت والدشداشة النسائية"
 DEFAULT_STORE_PROVINCES = "جميع محافظات العراق"
@@ -1118,6 +1126,11 @@ def init_db():
         db.commit()
         print(f"[DB] Migration: added {table}.{column} column.", flush=True)
 
+    _add_column_if_missing("messages", "media_json", "TEXT")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id,id)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_direction_id ON messages(sender_id,direction,id)")
+    db.commit()
+
     for column, definition in (
         ("source", "TEXT DEFAULT 'unknown'"),
         ("status", "TEXT DEFAULT 'active'"),
@@ -1167,6 +1180,7 @@ def init_db():
         (DEFAULT_STORE_ID, "لمسة ستور", LAMSA_WEBHOOK_KEY),
         (KHUYOOT_STORE_ID, KHUYOOT_STORE_NAME, KHUYOOT_STORE_ID),
         (GOLDEN_THREADS_STORE_ID, GOLDEN_THREADS_STORE_NAME, GOLDEN_THREADS_STORE_ID),
+        (ALFATENA_STORE_ID, ALFATENA_STORE_NAME, ALFATENA_STORE_ID),
     ):
         db.execute(
             """INSERT INTO stores(store_id,name,webhook_key,active,created_at,updated_at)
@@ -1180,6 +1194,15 @@ def init_db():
            ON CONFLICT(key) DO NOTHING""",
         (f"store:{KHUYOOT_STORE_ID}:store_description", KHUYOOT_STORE_DESCRIPTION, now),
     )
+    for key, value in (
+        ("store_name", ALFATENA_STORE_NAME),
+        ("store_description", ALFATENA_STORE_DESCRIPTION),
+    ):
+        db.execute(
+            """INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?)
+               ON CONFLICT(key) DO NOTHING""",
+            (f"store:{ALFATENA_STORE_ID}:{key}", value, now),
+        )
     for key, value in (
         ("store_name", GOLDEN_THREADS_STORE_NAME),
         ("store_description", GOLDEN_THREADS_STORE_DESCRIPTION),
@@ -1297,13 +1320,15 @@ def resolve_webhook_store(db, data, route_store_key=""):
         sid = row["store_id"] if row else DEFAULT_STORE_ID
     else:
         sid = DEFAULT_STORE_ID
-    display_name = name or (DEFAULT_STORE_NAME if sid == DEFAULT_STORE_ID else sid)
-    return ensure_store(db, sid, display_name, page_id, explicit)
+    existing = get_store(db, sid) or {}
+    display_name = name or existing.get("name") or (DEFAULT_STORE_NAME if sid == DEFAULT_STORE_ID else sid)
+    return ensure_store(db, sid, display_name, page_id, existing.get("webhook_key") or explicit)
 
 
 @app.before_request
 def bind_request_to_conversation_store():
     """Bind dashboard conversation actions to their owning store before AI/product access."""
+    g.store_context_token = _current_store_id.set(DEFAULT_STORE_ID)
     requested = request.args.get("store_id") or request.headers.get("X-Store-ID")
     if requested:
         _current_store_id.set(_safe_store_id(requested))
@@ -1320,6 +1345,13 @@ def bind_request_to_conversation_store():
             _current_store_id.set(_safe_store_id(row["store_id"]))
     except Exception:
         _current_store_id.set(DEFAULT_STORE_ID)
+
+@app.teardown_request
+def reset_request_store_context(error=None):
+    token = g.pop("store_context_token", None)
+    if token is not None:
+        _current_store_id.reset(token)
+
 
 PRODUCT_FIELDS = (
     "store_id", "product_id", "ref", "ad_id", "product_name", "keywords", "category",
@@ -2426,6 +2458,8 @@ _PRODUCT_OBJECTION_KEYWORDS = (
 def is_product_objection(text):
     normalized = str(text or "").strip().lower()
     if not normalized:
+        return False
+    if is_conditional_return_question(normalized):
         return False
     if normalized in {"لا", "لاا", "كلا", "no"}:
         return True
@@ -3936,50 +3970,29 @@ def extract_store_name_from_manychat(data):
 
 
 def _looks_like_image_url(value):
-    text = str(value or "").strip()
-    if not text:
-        return False
-    lowered = text.lower()
-    return (
-        lowered.startswith("http")
-        and (
-            any(ext in lowered for ext in (".jpg", ".jpeg", ".png", ".webp", ".gif"))
-            or "scontent" in lowered
-            or "cdn" in lowered
-            or "image" in lowered
-            or "photo" in lowered
-        )
-    )
+    return media_type(value) == "image"
+
+
+def resolve_incoming_media(data, text=""):
+    media = extract_media(data, text)
+    for item in media:
+        host = (urlparse(item["url"]).hostname or "").lower()
+        trusted = host == "lookaside.fbsbx.com" or host.endswith((".fbcdn.net", ".fbsbx.com", ".cdninstagram.com"))
+        if item["type"] != "file" or not trusted:
+            continue
+        try:
+            response = requests.head(item["url"], timeout=3, allow_redirects=False)
+            if response.status_code == 200:
+                kind = media_type(item["url"], response.headers.get("Content-Type", ""))
+                if kind in ("image", "audio", "video"): item["type"] = kind
+            response.close()
+        except requests.RequestException:
+            pass
+    return media
 
 
 def extract_image_url_from_manychat_data(data):
-    keys = (
-        "last_input_image_url", "image_url", "last_input_image",
-        "last_input_attachment_url", "attachment_url", "photo_url",
-        "picture_url", "last_image_url", "url", "file_url", "media_url",
-        "ig_last_input_image_url", "instagram_image_url",
-    )
-    for key in keys:
-        value = (data or {}).get(key)
-        if _looks_like_image_url(value):
-            return str(value).strip()
-
-    for value in (data or {}).values():
-        if _looks_like_image_url(value):
-            return str(value).strip()
-        if isinstance(value, dict):
-            nested = extract_image_url_from_manychat_data(value)
-            if nested:
-                return nested
-        if isinstance(value, list):
-            for item in value:
-                if _looks_like_image_url(item):
-                    return str(item).strip()
-                if isinstance(item, dict):
-                    nested = extract_image_url_from_manychat_data(item)
-                    if nested:
-                        return nested
-    return ""
+    return next((m["url"] for m in extract_media(data) if m["type"] == "image"), "")
 
 
 def send_image_to_facebook(sender_id: str, image_url: str, page_id: str = "", platform: str = "facebook") -> bool:
@@ -4211,27 +4224,38 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
             finally:
                 memory_db.close()
 
+    media = extract_media(raw_payload if direction == "incoming" else {}, text or "", image_url or "")
+    images = [m["url"] for m in media if m["type"] == "image"]
+    image_url = images[0] if images else None
+    if media and (not text or any(m["url"] == text.strip() for m in media)):
+        kinds = {m["type"] for m in media}
+        message_type = next(iter(kinds)) if len(kinds) == 1 else "attachment"
     now = now_baghdad_iso()
-    db.execute(
+    cursor = db.execute(
         """INSERT INTO messages
-           (sender_id, direction, message_type, text, image_url, ad_id, ref, raw_payload, created_at, store_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (
-            sender_id, direction, message_type, text, image_url,
-            ad_id, ref, json.dumps(raw_payload, ensure_ascii=False), now, current_store_id(),
-        ),
+           (sender_id, direction, message_type, text, image_url, ad_id, ref, raw_payload, created_at, store_id, media_json)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (sender_id, direction, message_type, text, image_url, ad_id, ref,
+         json.dumps(raw_payload, ensure_ascii=False), now, current_store_id(), json.dumps(media, ensure_ascii=False)),
     )
     db.commit()
-    print(f"[Message] Saved {direction}/{message_type} for {sender_id}", flush=True)
+    return cursor.lastrowid
 
 
 def load_history(db, sender_id, limit=MAX_HISTORY):
     rows = db.execute(
-        "SELECT direction, message_type, text, image_url, created_at "
+        "SELECT id, direction, message_type, text, image_url, created_at, media_json, raw_payload "
         "FROM messages WHERE sender_id=? ORDER BY id DESC LIMIT ?",
         (sender_id, limit),
     ).fetchall()
-    return [dict(r) for r in reversed(rows)]
+    history = []
+    for row in reversed(rows):
+        item = dict(row)
+        item["media"] = message_media(row)
+        item.pop("raw_payload", None)
+        item.pop("media_json", None)
+        history.append(item)
+    return history
 
 
 def get_conversation_history(db, sender_id, limit=10):
@@ -4287,7 +4311,7 @@ def latest_incoming_message(db, sender_id):
     return dict(row) if row else {}
 
 
-def is_recent_duplicate_incoming(db, sender_id, text="", image_url="", seconds=120):
+def is_recent_duplicate_incoming(db, sender_id, text="", image_url="", seconds=120, media=None):
     """Detect the same customer event arriving through two webhook paths."""
     normalized_text = " ".join(re.findall(r"\w+", str(text or "").lower()))
     normalized_image = str(image_url or "").strip()
@@ -4295,17 +4319,20 @@ def is_recent_duplicate_incoming(db, sender_id, text="", image_url="", seconds=1
         return False
     cutoff = (datetime.now(BAGHDAD_TZ) - timedelta(seconds=seconds)).replace(microsecond=0).isoformat()
     rows = db.execute(
-        """SELECT text, image_url FROM messages
+        """SELECT text, image_url, media_json, direction, raw_payload FROM messages
            WHERE sender_id=? AND direction='incoming' AND created_at>=?
            ORDER BY id DESC LIMIT 10""",
         (sender_id, cutoff),
     ).fetchall()
     for row in rows:
+        if media is not None:
+            old_media = message_media(row)
+            identity = lambda items: sorted((m["type"], m["url"]) for m in items)
+            if identity(media) != identity(old_media):
+                continue
         old_text = " ".join(re.findall(r"\w+", str(row["text"] or "").lower()))
         old_image = str(row["image_url"] or "").strip()
-        if normalized_text and old_text == normalized_text:
-            return True
-        if normalized_image and old_image == normalized_image:
+        if normalized_text == old_text and normalized_image == old_image:
             return True
     return False
 
@@ -4350,12 +4377,9 @@ def extract_facebook_event(body):
     postback  = event.get("postback", {})
     quick_reply = message.get("quick_reply", {})
 
-    attachments = message.get("attachments", [])
-    image_url   = None
-    for att in attachments:
-        if att.get("type") == "image":
-            image_url = att.get("payload", {}).get("url")
-            break
+    media = extract_media(message)
+    attachments = [{"type": m["type"], "payload": {"url": m["url"]}} for m in media]
+    image_url = next((m["url"] for m in media if m["type"] == "image"), None)
     if image_url:
         image_flow(
             "01_received_from_customer",
@@ -4415,7 +4439,8 @@ def detect_message_type(ev):
     if ev["image_url"]:
         return "image"
     if ev["attachments"] and not ev["image_url"]:
-        return "attachment"
+        kinds = {a.get("type") for a in ev["attachments"]}
+        return next(iter(kinds)) if len(kinds) == 1 else "attachment"
     if ev["text"]:
         return "emoji" if _is_emoji_only(ev["text"]) else "text"
     return "unknown"
@@ -5683,9 +5708,10 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
         return False
 
     sent = False
-    if reply:
-        sent = send_text_to_facebook(sender_id, reply, page_id, platform)
-        print(f"[WebhookSend] Text sent directly to FB={sent}", flush=True)
+    for part in approved_reply_parts(result, reply):
+        delivered = send_text_to_facebook(sender_id, part, page_id, platform)
+        sent = sent or delivered
+        if not delivered: break
 
     img_urls = result.get("product_image_urls") or result.get("image_urls") or []
     if not img_urls and result.get("product_image_url"):
@@ -5943,9 +5969,20 @@ def _text_contains_any(text: str, keywords) -> bool:
     return any(k in lowered for k in keywords)
 
 
+def is_conditional_return_question(text):
+    """Distinguish asking about inspection/returns from reporting an actual fault."""
+    text = str(text or "").strip().lower()
+    hypothetical = re.search(r"(?:^|\s)(?:اذا|إذا|لو|في حال)(?:\s|$)", text)
+    return_terms = ("ارجع", "أرجع", "يرجع", "ترجع", "معجب", "يعجب", "مو نفس", "ما اجه نفس", "ما إجه نفس")
+    actual_problem = ("استلمت", "وصلني", "وصلتني", "رجعته", "رجعت الطلب", "اريد الغي", "أريد ألغي", "الغوا الطلب")
+    return bool(hypothetical and any(w in text for w in return_terms) and not any(w in text for w in actual_problem))
+
+
 def classify_customer_problem(text: str):
     normalized = re.sub(r"\s+", " ", str(text or "").strip().lower())
     if not normalized:
+        return None
+    if is_conditional_return_question(normalized):
         return None
     if _text_contains_any(normalized, _PROBLEM_DELAY_KEYWORDS):
         return "تأخر الطلب أو لم يصل للزبون"
@@ -6009,6 +6046,138 @@ def post_order_acknowledgement_reply(text):
     return ""
 
 
+CONVERSATION_SALES_GUIDE = """
+[فهم المحادثة وإكمال الحجز]
+اقرأ الأسئلة غير المجابة كرسالة واحدة مترابطة. تصحيح الزبون الأخير للقياس أو اللون أو العدد يتقدم على المعلومة السابقة.
+أجب عن سؤاله أولاً ثم اقترح خطوة حجز واحدة مناسبة، ولا تكرر طلب بيانات سبق أن أعطاها. لا تدّع ندرة أو خصماً غير مسجلين.
+قبل تثبيت الحجز تأكد من المنتج والكمية واللون والقياس وبيانات التوصيل، ولا تعتبر السؤال أو الشكر موافقة شراء جديدة.
+إذا تردد في السعر اشرح القيمة والفحص حسب السياسة، واقترح بديلاً متاحاً مناسباً إن وجد، دون ضغط أو وعود غير موثقة.
+عند وجود عدة صور لا تفترض أنها نفس القطعة؛ استخدم المرفقات والسياق لتوضيح اختياره، واسأل عن الناقص فقط.
+يمكن استخدام reply_parts اختيارياً: قائمة من رسالة إلى ثلاث رسائل قصيرة مرتبة (الجواب ثم التفاصيل ثم سؤال واحد)، إذا كان ذلك أسهل للزبون من رسالة طويلة. لا تكرر المعلومات ولا تقسّم جملة واحدة.
+إذا استخدمت reply_parts اجعل reply النص الكامل نفسه مفصولاً بسطرين. هذه الرسائل تُرسل دفعة متتابعة، وليست متابعة مؤجلة.
+"""
+
+
+def normalize_ai_reply_parts(result):
+    parts = result.get("reply_parts")
+    if isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts):
+        clean = []
+        for part in parts:
+            part = part.strip()
+            if part and (not clean or part != clean[-1]): clean.append(part)
+        if len(clean) > 3: clean = clean[:2] + ["\n\n".join(clean[2:])]
+        if clean:
+            result["reply_parts"] = clean
+            result["reply"] = "\n\n".join(clean)
+    return result
+
+
+def approved_reply_parts(result, reply):
+    parts = result.get("reply_parts") or []
+    if isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and "\n\n".join(parts) == reply:
+        return parts
+    return [reply] if reply else []
+
+
+POST_ORDER_SERVICE_RULES = """
+سياسة متابعة الطلب المثبت (تتقدم على تعليمات البيع القديمة المتعارضة):
+- استمر في المحادثة بعد الحجز. أجب عن الأسئلة العادية واللون والقياس والخامة وسياسة الفحص والدفع والشكر ولا تحولها لموظف لمجرد وجود طلب.
+- السؤال الشرطي «إذا مو نفس الصورة أرجعه؟» سؤال عن السياسة، وليس إلغاءً أو شكوى عن قطعة مستلمة.
+- اقرأ كل الرسائل غير المجابة معاً، ولا تكتف بالشكر إذا سبقته أسئلة لم تجب عنها.
+- بيانات الطلب المحفوظ هي المرجع. حالة new تعني مسجل فقط؛ لا تعني شُحن أو وصل للمندوب. لا تخترع موعد وصول أو تتبع أو اتصال بالمندوب.
+- السعر الحالي في الكتالوج ليس إثباتاً لسعر الطلب القديم. لا تسمِّ مبلغاً إجمالياً مؤكداً إلا من بيانات الطلب المحفوظة أو اتفاق واضح في المحادثة. يمكنك عرض حساب تقديري موضح أنه حسب الأسعار الحالية عند اكتمال القطع والكميات.
+- لا تنشئ طلباً جديداً ولا تغيّر الطلب المثبت ولا تقل تم التعديل أو تم الإلغاء أو سجلنا استعجالاً؛ هذا المسار للرد والمتابعة فقط.
+- إذا طلب الزبون تغييراً تنفيذياً واضحاً في طلب مثبت أو تتبعاً غير متاح أو إرجاعاً فعلياً أو مسألة لا تستطيع الإجابة عنها، اجمع الناقص أولاً إن أمكن ثم اجعل requires_human=true مع handoff_reason يشرح المطلوب. لا تحول سؤال معرفة أو طلب توضيح يمكن إجابته.
+- يمكن متابعة استفسارات شراء جديد ومقارنة المنتجات وجمع الخيارات، لكن تثبيت طلب إضافي مستقل يحتاج معالجة منفصلة، ولا تعِد تثبيت الطلب القديم.
+- مراجعة بشرية معلقة تخص الإجراء المطلوب فقط؛ استمر بالإجابة عن الأسئلة الأخرى المتاحة ولا تعِد إنشاء المراجعة لنفس الحالة.
+- أرجع نفس صيغة JSON مع create_order=false وrequires_human (true/false) وhandoff_reason. عند القدرة على الرد اجعل requires_human=false.
+"""
+
+
+def handle_post_order_message(db, ev, customer, history, products, customer_products, order, conversation_history=None):
+    """Continue after-sales chat without silently pausing or mutating booked orders."""
+    event = dict(ev)
+    event["_post_order"] = dict(order)
+    review_id = has_pending_human_review(db, ev["sender_id"])
+    event["_post_order"]["pending_human_review_id"] = review_id
+    matched = select_customer_context_product(ev.get("text", ""), customer_products) if customer_products else None
+    matched = matched or (customer_products[0] if customer_products else None)
+    instructions, rules = load_ai_config(db, sender_id=ev["sender_id"])
+    unanswered = []
+    for message in history:
+        if message.get("direction") == "outgoing":
+            unanswered = []
+        elif message.get("direction") == "incoming":
+            unanswered.append(message.get("text") or "")
+    if not unanswered:
+        unanswered = [ev.get("text") or ""]
+    acknowledgement = post_order_acknowledgement_reply(ev.get("text"))
+    courtesy_only = bool(acknowledgement and all(post_order_acknowledgement_reply(t) for t in unanswered))
+    if courtesy_only:
+        result = {"reply": acknowledgement}
+    else:
+        result = call_main_ai(
+            event, "text", customer, history, products, matched, None, instructions, rules,
+            customer_products=customer_products, conversation_history=conversation_history,
+        )
+    reply = str(result.get("reply") or "").strip()
+    reason = ""
+    if result.get("failed") or not reply:
+        reason = "تعذر الرد بعد الحجز: " + str(result.get("failure_reason") or "empty_reply")
+    elif result.get("requires_human") is True or result.get("create_order") is True:
+        reason = str(result.get("handoff_reason") or "طلب إجراء على حجز مثبت يحتاج معالجة موظف")
+    elif is_ai_handoff_reply(reply):
+        reason = "استفسار بعد الحجز يحتاج معلومات غير متاحة للمساعد"
+    # No model reply can claim an operational change which this path never executes.
+    unsupported_action = r"(?:تم|ثبتنا|سجلنا|غيّرنا|غيرنا|ألغينا|الغينا|عدّلنا|عدلنا|ضفنا|أضفنا).{0,18}(?:تعديل|تغيير|إلغاء|الغاء|استعجال|ملاحظة|رقم|العنوان|اللون|القياس|الكمية)"
+    if re.search(unsupported_action, reply):
+        reason = "طلب تعديل أو متابعة تنفيذية يحتاج تأكيداً من الموظف"
+    if not reason and not courtesy_only and is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db):
+        check = local_reply_validation(reply, matched, customer_products)
+        if check.get("approved", True):
+            check = check_reply(reply, event, matched, None, instructions, rules, history, products, customer_products=customer_products)
+        if not check.get("approved", True):
+            corrected = call_main_ai(
+                event, "text", customer, history, products, matched, None, instructions, rules,
+                fix_instruction=check.get("fix_instruction") or check.get("problem"),
+                customer_products=customer_products, conversation_history=conversation_history,
+            )
+            reply = str(corrected.get("reply") or "").strip()
+            result = corrected
+            if (corrected.get("failed") or not reply or corrected.get("requires_human") is True
+                    or corrected.get("create_order") is True or is_ai_handoff_reply(reply)
+                    or re.search(unsupported_action, reply)):
+                reason = "تعذر اعتماد جواب دقيق بعد محاولة التصحيح"
+            else:
+                check = local_reply_validation(reply, matched, customer_products)
+                if check.get("approved", True):
+                    check = check_reply(reply, event, matched, None, instructions, rules, history, products, customer_products=customer_products)
+                if not check.get("approved", True):
+                    reason = "جواب ما بعد الحجز لم يجتز التحقق بعد التصحيح"
+    if reason:
+        if not review_id:
+            review_id = create_human_review(db, ev, reason, notify_telegram=True)
+        reply = "هذا الطلب يحتاج تأكد من فريق المتجر، وسجلت رسالتج للمراجعة. أگدر أجاوبج هنا عن تفاصيل القطعة وسياسة المتجر المتوفرة 🌸"
+    # A pending action is not a blanket stop on all future customer questions.
+    reply_parts = approved_reply_parts(result, reply)
+    for part in reply_parts:
+        save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None,
+                     {"post_order_followup": True, "order_id": order["id"], "human_review_id": review_id if reason else None})
+        save_conversation_message(db, ev["sender_id"], "assistant", part)
+    image_urls = []
+    asks_for_image = re.search(r"(?:دز|دزي|ارسل|أرسل|ابعث|أبعث|اريد|أريد|ممكن|شوف).{0,30}(?:صور|صورت)", ev.get("text", ""))
+    if not reason and matched and asks_for_image:
+        image_urls = select_product_image_urls(matched, str(result.get("image_color") or ""))
+        for image_url in image_urls:
+            save_message(db, ev["sender_id"], "outgoing", "image", None, image_url, None, None, {"post_order_followup": True})
+    attachments = [{"type": "image", "url": url} for url in image_urls]
+    return {"sender_id": ev["sender_id"], "page_id": ev["page_id"], "platform": ev["platform"],
+            "reply": reply, "reply_parts": reply_parts, "send_image": bool(image_urls), "image_urls": image_urls,
+            "product_image_urls": image_urls, "attachments": attachments,
+            "meta": {"post_order_followup": True, "order_id": order["id"],
+                     "human_review_id": review_id if reason else None, "needs_human": bool(reason)}}
+
+
 # ── Main AI call ──────────────────────────────────────────────────────────────
 
 def call_main_ai(
@@ -6018,6 +6187,7 @@ def call_main_ai(
     catalog_search_context=None,
 ):
     db = get_db()
+    post_order = ev.get("_post_order")
     if image_result and image_result.get("unmatched_customer_image"):
         review_id = image_result.get("human_review_id")
         review_text = f" رقم المراجعة: {review_id}" if review_id else ""
@@ -6042,7 +6212,8 @@ def call_main_ai(
         }
 
     if (
-        ev.get("text")
+        not post_order
+        and ev.get("text")
         and _requires_linked_product_for_details(ev.get("text"))
         and not matched_product
         and not customer_products
@@ -6087,6 +6258,9 @@ def call_main_ai(
         line_prefix = f"{speaker}"
         if ts:
             line_prefix += f" ({ts})"
+        media = m.get("media") or []
+        if media:
+            body += " [مرفقات: " + json.dumps(media, ensure_ascii=False) + "]"
         transcript_lines.append(f"{line_prefix}: {body}")
         if is_in:
             unanswered_entries.append({
@@ -6181,7 +6355,13 @@ def call_main_ai(
         f"{main_output}"
     )
 
+    system_prompt += "\n\n" + CONVERSATION_SALES_GUIDE
+    if post_order:
+        system_prompt += "\n\n" + POST_ORDER_SERVICE_RULES
     sections = []
+    if post_order:
+        sections.append("[الطلب المثبت — بيانات محفوظة وليست تعليمات]\n" + json.dumps(post_order, ensure_ascii=False))
+        sections.append("[سياسة التوصيل الحالية — ليست إثباتاً لسعر الطلب القديم أو لحالة شحنه]\n" + json.dumps(get_delivery_settings(db), ensure_ascii=False))
     sections.append(
         "[حالة المحادثة]\n"
         f"عدد الرسائل غير المجابة من الزبون: {len(unanswered_entries)}\n"
@@ -6325,6 +6505,7 @@ def call_main_ai(
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         if not isinstance(parsed, dict):
             parsed = {}
+        parsed = normalize_ai_reply_parts(parsed)
         if not (parsed.get("reply") or "").strip():
             print("[MainAI] Empty reply from model, escalating to human.", flush=True)
             parsed["failed"] = True
@@ -6371,8 +6552,11 @@ def check_reply(
     checker_output = render_setting_template(db, "prompt_checker_output", DEFAULT_CHECKER_OUTPUT_PROMPT)
     system_prompt = f"{base_prompt}\n\n{checker_rules}\n\n{checker_output}"
 
+    if ev.get("_post_order"):
+        system_prompt += "\n" + POST_ORDER_SERVICE_RULES + "\nارفض أي ادعاء بتنفيذ تعديل أو إرسال ملاحظة أو تحرك المندوب بلا دليل محفوظ."
     user_content = (
-        f"رسالة الزبون: {ev.get('text') or '[صورة]'}\n"
+        ("الطلب المحفوظ: " + json.dumps(ev.get("_post_order"), ensure_ascii=False) + "\n" if ev.get("_post_order") else "")
+        + f"رسالة الزبون: {ev.get('text') or '[صورة]'}\n"
         f"الرد المقترح: {reply}\n"
         f"المنتج: {json.dumps(matched_product, ensure_ascii=False) if matched_product else 'لا يوجد'}\n"
         f"تحليل الصورة: {json.dumps(image_result, ensure_ascii=False) if image_result else 'لا يوجد'}\n"
@@ -6581,7 +6765,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
 
 # ── Main webhook processor ────────────────────────────────────────────────────
 
-def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_images: bool = True):
+def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_images: bool = True, incoming_message_id=None):
     t_start = time.time()
 
     # ── STEP 01: Incoming message ─────────────────────────────────────────────
@@ -6598,7 +6782,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                .get("messaging", [{}])[0]
                .get("message", {})
                .get("mid", ""))
-    if mid:
+    if mid and not incoming_message_id:
         existing = db.execute("SELECT mid FROM processed_messages WHERE mid=?", (mid,)).fetchone()
         if existing:
             log(2, "DEDUP", f"Duplicate message detected (mid={mid[:30]}...). Skipping.")
@@ -6613,8 +6797,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         )
         db.commit()
 
-    if is_recent_duplicate_incoming(
-        db, ev["sender_id"], ev.get("text"), ev.get("image_url"),
+    if not incoming_message_id and is_recent_duplicate_incoming(
+        db, ev["sender_id"], ev.get("text"), ev.get("image_url"), media=extract_media({"attachments": ev.get("attachments", [])}),
     ):
         log(2, "DEDUP", "Same customer message arrived again through another webhook; skipping.")
         return {
@@ -6659,11 +6843,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 05: Save incoming message ────────────────────────────────────────
     log(5, "SAVE MSG", "Saving incoming message to database...")
     conversation_history = get_conversation_history(db, ev["sender_id"], limit=10)
-    save_message(
-        db, ev["sender_id"], "incoming", message_type,
-        ev["text"], ev["image_url"], ev["ad_id"], ev["ref"], body,
-    )
-    save_conversation_message(db, ev["sender_id"], "user", ev["text"])
+    if not incoming_message_id:
+        incoming_message_id = save_message(
+            db, ev["sender_id"], "incoming", message_type,
+            ev["text"], ev["image_url"], ev["ad_id"], ev["ref"], body,
+        )
+        save_conversation_message(db, ev["sender_id"], "user", ev["text"])
     customer_intelligence = update_customer_intelligence(db, ev["sender_id"], ev.get("text"))
     customer = get_or_create_customer(db, ev["sender_id"], ev["page_id"], ev["platform"])
     log(5, "CUSTOMER INTELLIGENCE", "Updated gender and purchase intent", customer_intelligence)
@@ -6735,6 +6920,16 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             "meta": {"skipped": True, "reason": reason, "human_review_id": review_id},
         }
 
+    if message_type in ("audio", "video", "file", "attachment") and not ev.get("image_url"):
+        review_id = has_pending_human_review(db, ev["sender_id"])
+        if not review_id:
+            review_id = create_human_review(db, ev, "مرفق يحتاج استماعاً أو قراءة بشرية: " + message_type)
+        reply = "وصل المرفق عيني 🌸 حتى أجاوبج بدقة، ممكن تكتبين الطلب أو السؤال؟ والمرفق متاح لفريق المتجر للمراجعة."
+        save_message(db, ev["sender_id"], "outgoing", "text", reply, None, None, None, {"media_review": True})
+        save_conversation_message(db, ev["sender_id"], "assistant", reply)
+        return {"sender_id": ev["sender_id"], "page_id": ev["page_id"], "platform": ev["platform"],
+                "reply": reply, "send_image": False, "meta": {"media_review": True, "human_review_id": review_id}}
+
     # ── STEP 05.5: Debounce — انتظر حتى ينتهي الزبون من إرسال رسائله ────────
     # نهدف إلى جمع كل ما يرسله الزبون (نص + صورة + رسائل متفرقة) قبل تشغيل الموديل
     # حتى يفهم السياق كاملاً ويعطي رداً واحداً دقيقاً بدلاً من ردود مكررة.
@@ -6792,6 +6987,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
          for p in products])
 
     customer_products = load_customer_products(db, ev["sender_id"])
+    latest_order = get_latest_customer_order(db, ev["sender_id"])
+    if latest_order and message_type != "image":
+        return handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
     first_incoming = incoming_message_count(db, ev["sender_id"]) == 1
     active_binding = get_active_product_binding(db, ev["sender_id"])
 
@@ -7153,68 +7351,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 09.5: Local intent router (no external AI call) ────────────────
     routing = determine_intent(ev, customer_products, matched_product)
     latest_order = get_latest_customer_order(db, ev["sender_id"])
-
-    # Do not reopen an already-booked order from the old conversation context.
-    # Safe courtesy messages get a short answer; all substantive messages wait
-    # for a person, since they may change color, quantity, size, or address.
-    if (
-        latest_order
-        and str(latest_order.get("status") or "new").lower() == "new"
-        and not routing.get("problem_reason")
-    ):
-        pending_post_order_review = has_pending_human_review(db, ev["sender_id"])
-        if pending_post_order_review:
-            log(9, "POST-ORDER REVIEW", "Waiting silently for the pending human review", {
-                "human_review_id": pending_post_order_review,
-                "order_id": latest_order.get("id"),
-            })
-            return {
-                "sender_id": ev["sender_id"], "page_id": ev["page_id"],
-                "platform": ev["platform"], "reply": "", "send_image": False,
-                "meta": {
-                    "skipped": True, "reason": "post_order_waiting_for_human",
-                    "human_review_id": pending_post_order_review,
-                    "order_id": latest_order.get("id"),
-                },
-            }
-
-        acknowledgement = post_order_acknowledgement_reply(ev.get("text"))
-        if acknowledgement:
-            save_message(
-                db, ev["sender_id"], "outgoing", "text",
-                acknowledgement, None, None, None,
-                {"reply": acknowledgement, "post_order_acknowledgement": True},
-            )
-            save_conversation_message(db, ev["sender_id"], "assistant", acknowledgement)
-            log(9, "POST-ORDER ACK", "Sent a safe acknowledgement without reopening the order")
-            return {
-                "sender_id": ev["sender_id"], "page_id": ev["page_id"],
-                "platform": ev["platform"], "reply": acknowledgement,
-                "send_image": False,
-                "meta": {"post_order_acknowledgement": True, "order_id": latest_order.get("id")},
-            }
-
-        review_id = create_human_review(
-            db, ev,
-            "رسالة بعد تثبيت الطلب تحتاج مراجعة بشرية (قد تكون تعديل لون/كمية/قياس/عنوان)",
-            notify_telegram=True,
-        )
-        try:
-            set_customer_ai_enabled(db, ev["sender_id"], False)
-        except Exception as exc:
-            print(f"[PostOrder] Could not pause AI: {exc}", flush=True)
-        log(9, "POST-ORDER HUMAN", "Message routed to a human with no automatic reply", {
-            "human_review_id": review_id, "order_id": latest_order.get("id"),
-            "text": ev.get("text"),
-        })
-        return {
-            "sender_id": ev["sender_id"], "page_id": ev["page_id"],
-            "platform": ev["platform"], "reply": "", "send_image": False,
-            "meta": {
-                "skipped": True, "reason": "post_order_message_needs_human",
-                "human_review_id": review_id, "order_id": latest_order.get("id"),
-            },
-        }
 
     is_post_order_problem = bool(latest_order and routing.get("problem_reason"))
     routing["is_post_order_problem"] = is_post_order_problem
@@ -7616,12 +7752,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     # ── STEP 14: Save outgoing reply ─────────────────────────────────────────
     log(14, "SAVE REPLY", "Saving outgoing reply to database...")
-    save_message(
-        db, ev["sender_id"], "outgoing", "text",
-        reply, None, None, None,
-        {"reply": reply, "product_image_url": outgoing_image_url},
-    )
-    save_conversation_message(db, ev["sender_id"], "assistant", reply)
+    reply_parts = approved_reply_parts(ai_result, reply)
+    for part in reply_parts:
+        save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None, {"reply": part})
+        save_conversation_message(db, ev["sender_id"], "assistant", part)
     for img_url in outgoing_image_urls:
         save_message(
             db, ev["sender_id"], "outgoing", "image",
@@ -7650,6 +7784,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         "page_id":   ev["page_id"],
         "platform":  ev["platform"],
         "reply":     reply,
+        "reply_parts": reply_parts,
     }
     # إرسال الصورة فقط عند الطلب أو دخول إعلان
     final = attach_product_image_payload(
@@ -7817,19 +7952,16 @@ def manychat_webhook(store_key=""):
 
     subscriber_id = str(data.get("id") or data.get("subscriber_id") or data.get("user_id") or "")
     internal_sender_id = f"{store_id}::{subscriber_id}" if subscriber_id else ""
-    text = (
-        data.get("last_input_text")
-        or data.get("text")
-        or data.get("message")
-        or data.get("last_text")
-        or ""
-    ).strip()
+    text_value = data.get("last_input_text") or data.get("text") or data.get("message") or data.get("last_text") or ""
+    if isinstance(text_value, dict): text_value = text_value.get("text") or ""
+    text = str(text_value).strip()
     first_name = data.get("first_name", "") or ""
     last_name = data.get("last_name", "") or ""
     store_name = extract_store_name_from_manychat(data) or (get_store(db, store_id) or {}).get("name", "")
     platform = detect_manychat_platform(data)
     page_id = str(data.get("page_id") or "")
-    image_url = extract_image_url_from_manychat_data(data)
+    media = resolve_incoming_media(data, text)
+    image_url = next((m["url"] for m in media if m["type"] == "image"), None)
     ref = data.get("ref") or ""
     ad_id = data.get("ad_id") or ""
 
@@ -7871,10 +8003,7 @@ def manychat_webhook(store_key=""):
                 "message": {
                     "mid": f"manychat_{store_id}_{subscriber_id}_{timestamp_ms}",
                     "text": text,
-                    "attachments": ([{
-                        "type": "image",
-                        "payload": {"url": image_url},
-                    }] if image_url else []),
+                    "attachments": [{"type": m["type"], "payload": {"url": m["url"]}} for m in media],
                 },
                 "referral": {
                     "ref": ref,
@@ -7925,21 +8054,36 @@ def manychat_webhook(store_key=""):
 
 
 def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id=None):
-    """Serialize one customer's webhooks before semantic de-duplication."""
+    """Persist incoming data first; waiting for AI must never delay dashboard messages."""
     with app.app_context():
         db = get_db()
-        acquired = acquire_sender_lock(db, subscriber_id)
-        if not acquired:
+        ev = extract_facebook_event(fake_body)
+        _current_store_id.set(ev.get("store_id") or DEFAULT_STORE_ID)
+        with _sender_locks_guard:
+            intake_lock = _sender_intake_locks.setdefault(subscriber_id, threading.Lock())
+        with intake_lock:
+            media = extract_media({"attachments": ev.get("attachments", [])})
+            if is_recent_duplicate_incoming(db, subscriber_id, ev.get("text"), ev.get("image_url"), media=media):
+                return
+            get_or_create_customer(db, subscriber_id, ev.get("page_id"), platform)
+            saved_id = save_message(db, subscriber_id, "incoming", detect_message_type(ev),
+                                    ev.get("text"), ev.get("image_url"), ev.get("ad_id"), ev.get("ref"), fake_body)
+            save_conversation_message(db, subscriber_id, "user", ev.get("text"))
+        if DEBOUNCE_DELAY > 0:
+            time.sleep(DEBOUNCE_DELAY)
+        if not acquire_sender_lock(db, subscriber_id):
             return
         try:
-            return _process_manychat_webhook_async_locked(
-                fake_body, subscriber_id, platform, outbound_subscriber_id or subscriber_id,
-            )
+            latest = db.execute("SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='incoming'", (subscriber_id,)).fetchone()[0]
+            if latest != saved_id:
+                return
+            return _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform,
+                                                          outbound_subscriber_id or subscriber_id, incoming_message_id=saved_id)
         finally:
             release_sender_lock(db, subscriber_id)
 
 
-def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, outbound_subscriber_id=None):
+def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, outbound_subscriber_id=None, incoming_message_id=None):
     """يعالج رسائل ManyChat في الخلفية مع debounce ثم يُرسل الرد عبر ManyChat API."""
     with app.app_context():
         db = get_db()
@@ -7947,8 +8091,9 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
             result = process_webhook(
                 db,
                 fake_body,
-                use_debounce=True,
+                use_debounce=not bool(incoming_message_id),
                 send_direct_facebook_images=False,
+                incoming_message_id=incoming_message_id,
             )
         except Exception as exc:
             import traceback
@@ -7978,8 +8123,9 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
 
         # إرسال النص أولاً ثم الصور
         if reply_text:
-            sent = send_reply_via_manychat(outbound_subscriber_id or subscriber_id, reply_text, platform)
-            print(f"[ManyChatAsync] reply sent={sent} | {reply_text[:80]}", flush=True)
+            for part in approved_reply_parts(result, reply_text):
+                sent = send_reply_via_manychat(outbound_subscriber_id or subscriber_id, part, platform)
+                if not sent: break
         else:
             print(f"[ManyChatAsync] No reply to send (debounced/skipped/handoff).", flush=True)
 
@@ -8993,10 +9139,40 @@ def api_import_database():
 @app.route("/api/conversations")
 @_dash_require
 def api_conversations():
-    limit = int(request.args.get("limit", 20))
-    offset = int(request.args.get("offset", 0))
+    try:
+        limit = max(1, int(request.args.get("limit", 20)))
+        offset = max(0, int(request.args.get("offset", 0)))
+    except ValueError:
+        return jsonify({"error": "Invalid pagination"}), 400
+    conditions, params = [], []
+    for arg, column in (("store_id", "store_id"), ("stage", "lead_stage"), ("platform", "platform"), ("province", "province")):
+        value = request.args.get(arg, "").strip()
+        if value and value != "all":
+            conditions.append(f"{column} = ?")
+            params.append(value)
+    status = request.args.get("status", "all")
+    if status == "booked": conditions.append("lead_stage = 'booked'")
+    elif status == "problems": conditions.append("human_attention_count > 0")
+    elif status == "unanswered": conditions.append("unanswered = 1")
+    if request.args.get("ai") in ("0", "1"):
+        conditions.append("ai_enabled = ?")
+        params.append(int(request.args["ai"]))
+    query = request.args.get("q", "").strip()
+    if query:
+        columns = ("sender_id", "name", "phone", "store_name", "product_names", "last_message")
+        conditions.append("(" + " OR ".join(f"instr(lower(COALESCE({c},'')), lower(?)) > 0" for c in columns) + ")")
+        params.extend([query] * len(columns))
+    for arg, operator in (("date_from", ">="), ("date_to", "<=")):
+        value = request.args.get(arg, "")
+        if value:
+            try: datetime.strptime(value, "%Y-%m-%d")
+            except ValueError: return jsonify({"error": "Invalid date"}), 400
+            conditions.append(f"substr(last_time,1,10) {operator} ?")
+            params.append(value)
+    where = " AND ".join(conditions) or "1=1"
+    sort = {"oldest": "last_time ASC, sender_id ASC", "score": "lead_score DESC, last_time DESC, sender_id ASC"}.get(request.args.get("sort"), "last_time DESC, sender_id ASC")
     db = get_db()
-    rows = db.execute("""
+    base_query = """
         SELECT
             c.sender_id,
             c.name,
@@ -9010,7 +9186,7 @@ def api_conversations():
             COALESCE(c.lead_stage, 'new') AS lead_stage,
             m.text       AS last_message,
             m.direction  AS last_direction,
-            m.created_at AS last_time,
+            COALESCE(m.created_at, c.last_seen_at, '') AS last_time,
             COALESCE(c.platform, 'facebook') AS platform,
             CASE
               WHEN (
@@ -9066,22 +9242,39 @@ def api_conversations():
               AND COALESCE(status, 'active')='active'
             ORDER BY last_seen_at DESC LIMIT 1
         )
-        ORDER BY COALESCE(m.created_at, c.last_seen_at, '') DESC
-        LIMIT ? OFFSET ?
-    """, (limit, offset)).fetchall()
-    return jsonify({"conversations": [dict(r) for r in rows]})
+    """
+    rows = db.execute(f"SELECT * FROM ({base_query}) WHERE {where} ORDER BY {sort} LIMIT ? OFFSET ?", params + [limit + 1, offset]).fetchall()
+    return jsonify({"conversations": [dict(r) for r in rows[:limit]], "has_more": len(rows) > limit})
 
 
 @app.route("/api/conversations/<sender_id>/messages")
 @_dash_require
 def api_conversation_messages(sender_id):
     db = get_db()
-    rows = db.execute(
-        "SELECT id, direction, message_type, text, image_url, ad_id, created_at "
-        "FROM messages WHERE sender_id=? ORDER BY id DESC LIMIT 50",
-        (sender_id,),
-    ).fetchall()
-    return jsonify({"messages": list(reversed([dict(r) for r in rows]))})
+    try:
+        after = max(0, int(request.args.get("after_id", 0)))
+        before = max(0, int(request.args.get("before_id", 0)))
+    except ValueError:
+        return jsonify({"error": "invalid cursor"}), 400
+    if after and before:
+        return jsonify({"error": "use one cursor"}), 400
+    where, params = "sender_id=?", [sender_id]
+    if after: where += " AND id>?"; params.append(after)
+    if before: where += " AND id<?"; params.append(before)
+    direction = "ASC" if after else "DESC"
+    rows = db.execute(f"SELECT * FROM messages WHERE {where} ORDER BY id {direction} LIMIT 101", params).fetchall()
+    more = len(rows) > 100
+    rows = rows[:100]
+    if not after: rows = list(reversed(rows))
+    messages = []
+    for row in rows:
+        item = {key: row[key] for key in ("id","direction","message_type","text","image_url","ad_id","created_at")}
+        item["media"] = message_media(row)
+        item["image_url"] = next((m["url"] for m in item["media"] if m["type"] == "image"), None)
+        if item["media"] and len({m["type"] for m in item["media"]}) == 1:
+            item["message_type"] = item["media"][0]["type"]
+        messages.append(item)
+    return jsonify({"messages": messages, "has_more": more})
 
 
 @app.route("/api/conversations/<sender_id>", methods=["DELETE"])
@@ -9195,18 +9388,18 @@ def api_send_message(sender_id):
 
     db  = get_db()
     customer = db.execute(
-        "SELECT page_id, COALESCE(platform, 'facebook') AS platform FROM customers WHERE sender_id=?",
+        "SELECT page_id, store_id, COALESCE(platform, 'facebook') AS platform FROM customers WHERE sender_id=?",
         (sender_id,),
     ).fetchone()
     page_id = customer["page_id"] if customer else ""
     platform = customer["platform"] if customer else "facebook"
-    now = now_baghdad_iso()
-    db.execute(
-        "INSERT INTO messages (sender_id, direction, message_type, text, image_url, created_at) "
-        "VALUES (?, 'outgoing', 'text', ?, ?, ?)",
-        (sender_id, text or None, image_url or None, now),
-    )
-    db.commit()
+    owner_store = (customer["store_id"] if customer else None) or current_store_id()
+    token = _current_store_id.set(owner_store)
+    try:
+        save_message(db, sender_id, "outgoing", "image" if image_url and not text else "text",
+                     text or None, image_url or None, None, None, {"manual_reply": True})
+    finally:
+        _current_store_id.reset(token)
 
     text_result = None
     image_result = None

@@ -1,0 +1,49 @@
+/* Inbox layout scoped to the messaging page. */
+.messenger-page { --sidebar-w:370px; --primary:#176d65; --text:#203d38; --text-muted:#647c76; }
+.messenger-page .inbox-heading {display:flex;align-items:center;justify-content:space-between;padding:22px 18px 12px;gap:12px;background:#fff}
+.inbox-heading h1 {font-size:25px;font-weight:800;margin:3px 0}.inbox-heading small {font-size:11px;color:#647c76}
+#inboxConnection {font-size:10px;background:#eaf5ef;color:#276950;padding:6px 10px;border-radius:30px;white-space:nowrap}
+.messenger-page .sidebar {background:#fff!important;min-height:0}
+.messenger-page .sidebar>.p-2 {padding:10px 16px!important;background:#fff!important}
+.messenger-page .sidebar .input-group {border-radius:14px;background:#f0f5f3;padding:5px;overflow:hidden}
+.messenger-page #conversationFilters {display:flex;gap:6px;flex-wrap:wrap;padding:8px}
+.messenger-page #conversationFilters button {flex:1 1 auto;border:0;border-radius:20px!important;font-size:11px;padding:8px 10px;background:#f1f5f3;color:#536a63}
+.messenger-page #conversationFilters button.active {background:#176d65;color:white;box-shadow:0 3px 8px #176d6520}
+.inbox-filters {padding:10px 16px;border-bottom:1px solid #e9efec;background:#fff}
+.inbox-filters summary {font-size:12px;color:#42635a;cursor:pointer;padding:4px;list-style:none}
+.inbox-filter-grid {display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:12px;max-height:260px;overflow:auto}
+.inbox-filter-grid label {font-size:11px;color:#647c76;min-width:0}
+.inbox-filter-grid input,.inbox-filter-grid select {display:block;width:100%;min-width:0;background:#f8faf9;color:#203d38;border:1px solid #dce8e3;border-radius:9px;padding:8px 5px;font:inherit;margin-top:4px;min-height:36px}
+.inbox-result-line {font-size:10px;padding:9px 18px;color:#647c76;background:#fff}
+.messenger-page .customer-list {overflow-y:auto;flex:1;min-height:0;scrollbar-width:thin}
+.messenger-page .customer-item {margin:3px 9px;padding:14px 10px;border-radius:14px;border-bottom:1px solid #eef3f0;transition:background .15s;content-visibility:auto;contain-intrinsic-size:auto 108px}
+.messenger-page .customer-item.active {background:#e8f4ee!important;border-right:3px solid #176d65}
+.messenger-page .cust-avatar {width:46px;height:46px;flex-shrink:0;background:#e5f0eb!important;color:#236154!important;border-radius:16px;font-size:15px}
+.messenger-page .cust-name {font-size:13px;font-weight:700}.messenger-page .cust-preview {font-size:11px;line-height:1.8}.messenger-page .cust-time {font-size:10px;color:#789087}
+.messenger-page .conversation-store-badge {font-size:9px;background:#edf3f0;color:#526e63;border:0;margin:3px 0}
+.messenger-page .chat-header {background:#ffffff!important;border-bottom:1px solid #e4ece7!important;box-shadow:0 2px 10px #1e493504;padding:16px!important}
+.messenger-page .messages-area {background:radial-gradient(#cadbd144 .8px,transparent .8px),#f4f8f5!important;background-size:19px 19px!important}
+.messenger-page .chat-placeholder {background:#f4f8f5;color:#527266;text-align:center;padding:24px}.messenger-page .chat-placeholder h2 {font-size:24px;font-weight:700}.messenger-page .chat-placeholder p {font-size:13px}
+.messenger-page .input-area {background:#fff!important;padding:12px 16px!important;border-top:1px solid #e4ece7}
+.messenger-page .input-textarea {border-radius:16px!important;background:#f5f8f6!important;padding:12px!important}
+.messenger-page .reply-shortcuts {gap:7px}.messenger-page .reply-shortcuts button {border-radius:20px!important}
+.messenger-page .customer-item:focus-visible,.inbox-filters summary:focus-visible {outline:2px solid #176d65;outline-offset:-2px}
+@media(min-width:1200px){.messenger-page .control-panel{width:290px;min-width:290px}.messenger-page .main-container{padding:12px;gap:12px;background:#eaf1ed}.messenger-page .sidebar,.messenger-page .chat-panel,.messenger-page .control-panel{border-radius:20px;overflow:hidden;border:1px solid #dfe9e3}.messenger-page .control-panel{overflow-y:auto}}
+@media(max-width:768px){.messenger-page .inbox-heading{padding:14px 18px 8px}.inbox-heading h1{font-size:23px}.messenger-page .customer-item{margin:2px 8px;padding:13px 10px}.messenger-page .chat-header{padding:8px 10px!important}.messenger-page .input-area{padding:8px!important}.inbox-filter-grid{max-height:210px}}
+@media(prefers-reduced-motion:reduce){.messenger-page *{transition:none!important;scroll-behavior:auto!important}}
+
+@media(max-width:768px){
+ .messenger-page:not(.mobile-conversation-open) .sidebar {position:relative!important;inset:auto!important;transform:none!important;display:flex!important;width:100%!important;max-width:none!important;height:100%!important;z-index:1;box-shadow:none!important}
+ .messenger-page:not(.mobile-conversation-open) .chat-panel {display:none!important}
+ .messenger-page.mobile-conversation-open .sidebar {display:none!important}
+ .messenger-page.mobile-conversation-open .chat-panel {display:flex!important;width:100%!important}
+ .messenger-page .main-container {padding:0!important;gap:0!important}
+}
+
+.chat-sync-bar{display:flex;justify-content:space-between;gap:10px;padding:5px 14px;background:#fff;color:#6b8078;font-size:10px;min-height:25px}
+.chat-sync-bar button,.media-error button{border:0;border-radius:8px;background:#e6f1eb;color:#176d65;padding:4px 9px}
+.message-media{position:relative;max-width:100%;margin-bottom:5px;border-radius:16px;overflow:hidden;background:#eef4f0;min-width:160px}
+.image-media.is-loading{min-height:140px}.message-media .msg-image{display:block;margin:0;min-width:100px;max-width:100%;height:auto}.message-media .media-loading{display:none;align-items:center;justify-content:center;gap:9px;font-size:11px;color:#527266;padding:12px}.message-media.is-loading .media-loading{display:flex}
+.image-media.is-loading .media-loading{position:absolute;inset:0;pointer-events:none}.media-error{display:none;padding:14px;font-size:11px;max-width:280px;color:#8f4141}.media-error a,.media-error button{display:inline-block;margin:8px 4px 0}.message-media.has-error .media-error{display:block}.message-media.has-error img{display:none}
+.media-label{padding:8px 12px;font-size:11px;color:#42665b}.audio-media{width:290px}.message-media audio{display:block;width:100%;height:48px}.message-media video{display:block;max-width:100%;max-height:320px}.message-file{display:block;padding:12px;border-radius:12px;background:#eaf1ed;color:#176d65}.new-messages-button{align-self:center;border:0;border-radius:20px;padding:7px 16px;background:#176d65;color:#fff;font-size:11px}
+@media(max-width:768px){.audio-media{width:260px}.message-media{max-width:100%}}

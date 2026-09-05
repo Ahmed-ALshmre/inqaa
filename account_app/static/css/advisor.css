@@ -1,0 +1,42 @@
+/* Message text is formatted into blocks in JS; template whitespace is not content. */
+.advisor-message { white-space:normal; overflow-wrap:anywhere; }
+.advisor-message.assistant > .advisor-message-label .advisor-message-author,
+.advisor-message.assistant > .advisor-message-label .advisor-message-evidence {
+  display:inline-flex; width:auto; height:auto; margin:0; background:transparent;
+}
+.advisor-message.assistant > .advisor-message-label .advisor-message-author { color:#1c6554; }
+.advisor-message-label { flex-wrap:wrap; }
+.advisor-text-bullet > span { min-width:0; }
+.advisor-text-gap { height:3px; }
+.advisor-chat-card { display:flex; flex-direction:column; min-height:0; height:760px; max-height:900px; }
+.advisor-chat-head,.advisor-composer { flex-shrink:0; }
+.advisor-messages { flex:1 1 0; min-height:0; max-height:none; overflow-y:auto; overscroll-behavior-y:auto; touch-action:pan-y; }
+.advisor-layout { align-items:start; min-height:0; }
+.advisor-proposals-card { min-height:0; }
+@media(max-width:900px) {
+  .advisor-chat-card { height:calc(var(--app-viewport-height,100dvh) - 180px); min-height:340px; scroll-margin-block:65px 90px; }
+  .advisor-composer { scroll-margin-bottom:90px; }
+  body.app-keyboard-open .advisor-composer { scroll-margin-bottom:10px; }
+  .advisor-layout { margin-bottom:0; }
+  .advisor-page-head { padding:14px!important; }
+  .advisor-capabilities { margin-top:8px; }
+  .advisor-overview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:visible; gap:6px; }
+  .advisor-overview article { min-width:0; padding:8px; gap:4px; }
+  .advisor-overview article>i { display:none; }
+  .advisor-overview span { font-size:.65rem; }
+  .advisor-chat-head { position:static; padding:9px 10px; gap:6px; }
+  .advisor-avatar { width:32px; height:32px; }
+  .advisor-model-badge { max-width:120px; padding:4px 6px; }
+  .advisor-composer { grid-template-columns:1fr; padding:8px; gap:6px; }
+  .advisor-compose-actions { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:6px; align-items:end; }
+  .advisor-compose-actions label { min-width:0; }
+  .advisor-compose-actions select { width:100%; min-width:0; height:36px; }
+  .advisor-compose-actions>button { grid-column:auto; min-height:38px; padding:6px 10px; }
+  .advisor-compose-main textarea { min-height:48px; height:56px; max-height:100px; padding:8px 10px; font-size:16px; resize:none; }
+  .advisor-input-hint { display:none; }
+  .advisor-messages { padding:8px; }
+  .advisor-message.assistant,.advisor-message.owner { width:100%; }
+  .advisor-message.assistant>.advisor-message-content { padding:10px 12px; }
+  .advisor-text-bullet { padding:6px; }
+  body.app-keyboard-open .advisor-quick-prompts { display:none; }
+}

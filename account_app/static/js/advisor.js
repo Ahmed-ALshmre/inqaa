@@ -17,7 +17,7 @@ function advisorInlineFormat(value) {
 }
 
 function advisorFormat(value) {
-  return advisorEsc(value).split(/\r?\n/).map((line) => {
+  return advisorEsc(value).trim().replace(/\n\s*\n(?:\s*\n)+/g, '\n\n').split(/\r?\n/).map((line) => {
     const clean = line.trim();
     if (!clean) return '<div class="advisor-text-gap"></div>';
     if (/^[-ـ—]{3,}$/.test(clean)) return '<hr class="advisor-text-divider">';
@@ -50,8 +50,10 @@ async function copyAdvisorMessage(index, button) {
 }
 
 function renderAdvisorMessages(messages) {
-  advisorMessageCache = messages || [];
   const container = document.getElementById('advisorMessages');
+  const followLatest = !advisorMessageCache.length || container.scrollHeight - container.scrollTop - container.clientHeight < 70;
+  const previousTop = container.scrollTop;
+  advisorMessageCache = messages || [];
   if (!messages.length) {
     container.innerHTML = '<div class="advisor-empty"><i class="bi bi-chat-heart"></i><strong>ابدأ النقاش مع مستشار صوف</strong><span>يمكنك طلب مراجعة محادثات سابقة أو مناقشة قاعدة وتحسين طريقة العمل.</span></div>';
     return;
@@ -70,7 +72,7 @@ function renderAdvisorMessages(messages) {
       </footer>
     </article>
   `).join('');
-  container.scrollTop = container.scrollHeight;
+  container.scrollTop = followLatest ? container.scrollHeight : previousTop;
 }
 
 function renderAdvisorConfig(config = {}) {
@@ -190,6 +192,13 @@ async function reviewAdvisorProposal(id, action) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const keepComposerVisible = () => {
+    if (window.innerWidth <= 900 && document.activeElement?.id === 'advisorInput') {
+      requestAnimationFrame(() => document.getElementById('advisorForm')?.scrollIntoView({block: 'nearest'}));
+    }
+  };
+  document.getElementById('advisorInput')?.addEventListener('focus', keepComposerVisible);
+  window.visualViewport?.addEventListener('resize', keepComposerVisible, {passive: true});
   document.getElementById('advisorForm')?.addEventListener('submit', sendAdvisorMessage);
   document.getElementById('advisorInput')?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
