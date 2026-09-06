@@ -252,6 +252,7 @@ _STORE_MANYCHAT_KEYS_CONFIGURED = any(
         _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_LAMSA", "")),
         _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_KHUYOOT", "")),
         _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_GOLDEN_THREADS", "")),
+        _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_AL_FATENA", "")),
     )
 )
 if MANYCHAT_API_KEY or _STORE_MANYCHAT_KEYS_CONFIGURED:
@@ -3913,6 +3914,8 @@ def manychat_api_key_for_page(page_id, store_id="") -> str:
         key = m.get(pid)
         if key:
             return key
+    if _safe_store_id(store_id or current_store_id()) == ALFATENA_STORE_ID:
+        return ""
     return current_manychat_api_key()
 
 
@@ -4025,7 +4028,8 @@ def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "fac
     sender_store_id = _safe_store_id(sender_store_id or current_store_id())
     api_key = manychat_api_key_for_page(page_id, sender_store_id)
     if not api_key:
-        msg = "MANYCHAT_API_KEY not set"
+        key_name = f"MANYCHAT_API_KEY_{sender_store_id.upper().replace('-', '_')}"
+        msg = f"Missing ManyChat key for store {sender_store_id}: configure {key_name} and redeploy"
         print(f"[ManyChat] {msg}", flush=True)
         return {"ok": False, "status_code": 0, "status": "missing_key", "message": msg, "response": None}
     if not subscriber_id:
@@ -8117,6 +8121,25 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
             return
 
         reply_text = (result.get("reply") or "").strip()
+        event = extract_facebook_event(fake_body)
+        store_id = event.get("store_id") or DEFAULT_STORE_ID
+        raw_recipient = str(outbound_subscriber_id or subscriber_id).split("::", 1)[-1]
+        recipient = f"{store_id}::{raw_recipient}"
+        page_id = event.get("page_id") or ""
+
+        def deliver(messages):
+            delivery = _post_manychat_send(recipient, messages, platform=platform,
+                                           page_id=page_id, store_id=store_id, label="auto-reply")
+            if not delivery.get("ok"):
+                reason = (f"فشل إرسال رد ManyChat للمتجر {store_id}: "
+                          f"{delivery.get('status')} HTTP {delivery.get('status_code')} — "
+                          f"{delivery.get('message') or 'لم يؤكد ManyChat قبول الرسالة'}")
+                token = _current_store_id.set(store_id)
+                try:
+                    create_human_review(db, event, reason, [], notify_telegram=False)
+                finally:
+                    _current_store_id.reset(token)
+            return delivery.get("ok", False)
         image_urls = result.get("product_image_urls") or result.get("image_urls") or []
         if not image_urls and result.get("product_image_url"):
             image_urls = [result.get("product_image_url")]
@@ -8124,14 +8147,16 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
         # إرسال النص أولاً ثم الصور
         if reply_text:
             for part in approved_reply_parts(result, reply_text):
-                sent = send_reply_via_manychat(outbound_subscriber_id or subscriber_id, part, platform)
-                if not sent: break
+                if not deliver([{"type": "text", "text": part}]):
+                    return
         else:
             print(f"[ManyChatAsync] No reply to send (debounced/skipped/handoff).", flush=True)
 
         if image_urls and result.get("send_image"):
             for image_url in image_urls:
-                ok = send_image_via_manychat(outbound_subscriber_id or subscriber_id, image_url, platform=platform)
+                ok = deliver([{"type": "image", "url": image_url}])
+                if not ok:
+                    return
                 print(f"[ManyChatAsync] image sent={ok} url={image_url}", flush=True)
 
 
@@ -9979,7 +10004,7 @@ def api_delete_catalog_image(image_id):
 def api_manychat_diag():
     """تشخيص ما هي المتغيرات التي وصلت فعلاً لعملية التطبيق (بدون كشف القيم)."""
     candidates = [
-        "MANYCHAT_API_KEY", "MANYCHAT_API_KEY_LAMSA", "MANYCHAT_API_KEY_KHUYOOT", "MANYCHAT_API_KEY_GOLDEN_THREADS",
+        "MANYCHAT_API_KEY", "MANYCHAT_API_KEY_LAMSA", "MANYCHAT_API_KEY_KHUYOOT", "MANYCHAT_API_KEY_GOLDEN_THREADS", "MANYCHAT_API_KEY_AL_FATENA",
         "MANYCHAT_KEYS_BY_PAGE", "MANYCHAT_KEY", "MC_API_KEY",
         "MANYCHAT_MESSAGE_TAG", "OPENROUTER_API_KEY", "PUBLIC_URL",
         "DASHBOARD_PASSWORD", "API_SECRET_KEY", "TELEGRAM_CHAT_ID", "TELEGRAM_ORDERS_CHAT_ID",

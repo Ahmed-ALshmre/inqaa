@@ -114,4 +114,24 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual([c.args[1] for c in send.call_args_list],['القياس متوفر','شنو اللون المطلوب؟'])
         self.assertEqual(self.m.approved_reply_parts(result,'جواب مصحح'),['جواب مصحح'])
 
+    def test_fatena_missing_key_does_not_use_another_account(self):
+        with patch.dict(os.environ, {'MANYCHAT_API_KEY_AL_FATENA': '', 'MANYCHAT_KEYS_BY_PAGE': ''}), patch.object(self.m, 'current_manychat_api_key', return_value='other-account'):
+            self.assertEqual(self.m.manychat_api_key_for_page('', 'al-fatena'), '')
+        with patch.dict(os.environ, {'MANYCHAT_API_KEY_AL_FATENA': 'fatena-test-key'}):
+            self.assertEqual(self.m.manychat_api_key_for_page('', 'al-fatena'), 'fatena-test-key')
+
+    def test_async_delivery_keeps_store_and_reports_failure(self):
+        body=self.body([], 'hello')
+        body['entry'][0]['_store_id']='al-fatena'
+        body['entry'][0]['messaging'][0]['sender']['id']='al-fatena::123'
+        result={'reply':'first\n\nsecond','reply_parts':['first','second'], 'send_image':True,'image_urls':['https://example.test/a.jpg']}
+        with patch.object(self.m,'process_webhook',return_value=result), patch.object(self.m,'_post_manychat_send',return_value={'ok':False,'status':'error','status_code':400,'message':'Subscriber not found'}) as send, patch.object(self.m,'create_human_review') as review:
+            self.m._process_manychat_webhook_async_locked(body,'al-fatena::123','facebook','123')
+            send.assert_called_once()
+            self.assertEqual(send.call_args.args[0],'al-fatena::123')
+            self.assertEqual(send.call_args.kwargs['page_id'],'page')
+            self.assertEqual(send.call_args.kwargs['store_id'],'al-fatena')
+            review.assert_called_once()
+            self.assertIn('Subscriber not found',review.call_args.args[2])
+
 if __name__=='__main__':unittest.main()
