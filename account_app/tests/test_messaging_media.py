@@ -134,4 +134,24 @@ class MessagingMediaTests(unittest.TestCase):
             review.assert_called_once()
             self.assertIn('Subscriber not found',review.call_args.args[2])
 
+    @patch('account_app.app.threading.Thread')
+    def test_fatena_whatsapp_survives_webhook_and_event(self, thread):
+        self.client.post('/manychat/webhook/al-fatena', json={'subscriber_id':self.sender,'text':'hello'})
+        body=thread.call_args.kwargs['args'][0]
+        self.assertEqual(self.m.extract_facebook_event(body)['platform'],'whatsapp')
+        self.assertEqual(self.m.manychat_content_type('whatsapp'),'whatsapp')
+        self.assertEqual(self.m.detect_manychat_platform({'platform':'facebook','whatsapp_phone':'123'}),'facebook')
+        self.assertEqual(self.m.detect_manychat_platform({'whatsapp_phone':'123'}),'whatsapp')
+
+    def test_whatsapp_send_uses_correct_channel_without_messenger_tag(self):
+        from unittest.mock import Mock
+        response=Mock(ok=True,status_code=200)
+        response.json.return_value={'status':'success'}
+        with patch.object(self.m,'manychat_api_key_for_page',return_value='test'), patch.object(self.m.requests,'post',return_value=response) as send:
+            result=self.m._post_manychat_send('al-fatena::123',[{'type':'text','text':'hello'}],platform='whatsapp',message_tag='ACCOUNT_UPDATE')
+            self.assertTrue(result['ok'])
+            payload=send.call_args.kwargs['json']
+            self.assertEqual(payload['data']['content']['type'],'whatsapp')
+            self.assertNotIn('message_tag',payload)
+
 if __name__=='__main__':unittest.main()

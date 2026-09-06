@@ -3817,6 +3817,8 @@ def is_instagram_platform(platform: str = "") -> bool:
 
 
 def manychat_content_type(platform: str = "") -> str:
+    if str(platform or "").strip().lower() in ("whatsapp", "wa"):
+        return "whatsapp"
     return "instagram" if is_instagram_platform(platform) else "messenger"
 
 
@@ -3919,7 +3921,17 @@ def manychat_api_key_for_page(page_id, store_id="") -> str:
     return current_manychat_api_key()
 
 
-def detect_manychat_platform(data):
+def detect_manychat_platform(data, default="facebook"):
+    for key in ("platform", "channel", "source", "social_channel", "messenger_type"):
+        value = str((data or {}).get(key) or "").strip().lower()
+        if value in ("whatsapp", "wa", "whatsapp_business"):
+            return "whatsapp"
+        if value in ("facebook", "messenger", "fb"):
+            return "facebook"
+        if value in ("instagram", "ig"):
+            return "instagram"
+    if any((data or {}).get(key) for key in ("whatsapp_phone", "whatsapp_id", "wa_id")):
+        return "whatsapp"
     ig_keys = (
         "ig_id", "ig_username", "ig_last_interaction", "ig_last_seen",
         "instagram_id", "instagram_username",
@@ -3944,7 +3956,7 @@ def detect_manychat_platform(data):
             if str(key).lower().startswith(("ig_", "instagram_")) and value:
                 return "instagram"
 
-    return "facebook"
+    return default
 
 
 def extract_store_name_from_manychat(data):
@@ -4039,6 +4051,8 @@ def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "fac
         return {"ok": False, "status_code": 0, "status": "empty_messages", "message": "no messages to send", "response": None}
 
     content_type = manychat_content_type(platform)
+    if content_type == "whatsapp":
+        message_tag = ""
     if content_type == "messenger" and message_tag:
         print(
             "[ManyChat] Ignoring message_tag for Facebook Messenger; tags are no longer supported.",
@@ -4078,7 +4092,7 @@ def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "fac
         retried_with_tag = ""
         if (
             not ok
-            and content_type != "messenger"
+            and content_type == "instagram"
             and not message_tag
             and MANYCHAT_DEFAULT_MESSAGE_TAG
             and isinstance(body, dict)
@@ -4363,6 +4377,8 @@ def extract_referral(event):
 
 def detect_message_platform(body):
     obj = str((body or {}).get("object") or "").strip().lower()
+    if "whatsapp" in obj:
+        return "whatsapp"
     if "instagram" in obj:
         return "instagram"
     return "facebook"
@@ -7962,7 +7978,7 @@ def manychat_webhook(store_key=""):
     first_name = data.get("first_name", "") or ""
     last_name = data.get("last_name", "") or ""
     store_name = extract_store_name_from_manychat(data) or (get_store(db, store_id) or {}).get("name", "")
-    platform = detect_manychat_platform(data)
+    platform = detect_manychat_platform(data, default="whatsapp" if store_id == ALFATENA_STORE_ID else "facebook")
     page_id = str(data.get("page_id") or "")
     media = resolve_incoming_media(data, text)
     image_url = next((m["url"] for m in media if m["type"] == "image"), None)
@@ -7996,7 +8012,7 @@ def manychat_webhook(store_key=""):
 
     timestamp_ms = int(datetime.now(BAGHDAD_TZ).timestamp() * 1000)
     fake_body = {
-        "object": "instagram" if is_instagram_platform(platform) else "page",
+        "object": platform if platform in ("instagram", "whatsapp") else "page",
         "entry": [{
             "id": page_id,
             "_store_id": store_id,
@@ -9418,6 +9434,11 @@ def api_send_message(sender_id):
     ).fetchone()
     page_id = customer["page_id"] if customer else ""
     platform = customer["platform"] if customer else "facebook"
+    requested_platform = str(data.get("platform") or "").strip().lower()
+    if requested_platform:
+        if requested_platform not in ("facebook", "instagram", "whatsapp"):
+            return jsonify({"error": "Unsupported platform"}), 400
+        platform = requested_platform
     owner_store = (customer["store_id"] if customer else None) or current_store_id()
     token = _current_store_id.set(owner_store)
     try:
