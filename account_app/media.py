@@ -38,7 +38,7 @@ def extract_media(data, text='', image_url=''):
         kind = media_type(url, hint)
         if kind:
             previous = found.get(url)
-            if not previous or kind in ('audio', 'video'):
+            if not previous or (previous['type'] == 'file' and kind != 'file') or kind in ('audio', 'video'):
                 found[url] = {'type': kind, 'url': url}
     def visit(value, hint='', depth=0):
         if depth > 12:
@@ -88,4 +88,8 @@ def message_media(message):
     if row.get('direction') == 'incoming':
         try: raw = json.loads(row.get('raw_payload') or '{}')
         except (ValueError, TypeError): pass
-    return extract_media(raw, row.get('text') or '', row.get('image_url') or '')
+    result = extract_media(raw, row.get('text') or '', row.get('image_url') or '')
+    for item in result:
+        if item['type'] == 'file':
+            item['type'] = media_type(item['url'], row.get('message_type')) or 'file'
+    return result

@@ -47,3 +47,6 @@
 .image-media.is-loading .media-loading{position:absolute;inset:0;pointer-events:none}.media-error{display:none;padding:14px;font-size:11px;max-width:280px;color:#8f4141}.media-error a,.media-error button{display:inline-block;margin:8px 4px 0}.message-media.has-error .media-error{display:block}.message-media.has-error img{display:none}
 .media-label{padding:8px 12px;font-size:11px;color:#42665b}.audio-media{width:290px}.message-media audio{display:block;width:100%;height:48px}.message-media video{display:block;max-width:100%;max-height:320px}.message-file{display:block;padding:12px;border-radius:12px;background:#eaf1ed;color:#176d65}.new-messages-button{align-self:center;border:0;border-radius:20px;padding:7px 16px;background:#176d65;color:#fff;font-size:11px}
 @media(max-width:768px){.audio-media{width:260px}.message-media{max-width:100%}}
+.inbox-filter-panel { flex-shrink: 0; max-height: 650px; overflow: hidden; opacity: 1; transition: max-height .2s ease, opacity .2s ease; }
+.inbox-filter-panel.is-collapsed { max-height: 0; opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .inbox-filter-panel { transition: none; } }

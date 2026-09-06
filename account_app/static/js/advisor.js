@@ -2,6 +2,43 @@ let advisorBusy = false;
 let advisorProposalFilter = 'all';
 let advisorProposalCache = [];
 let advisorMessageCache = [];
+let advisorMemoryVersion = null;
+
+async function loadAdvisorMemory() {
+  const response = await fetch(adminApi('/api/advisor/memory?format=json'));
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'تعذر تحميل الذاكرة');
+  advisorMemoryVersion = data.version;
+  document.getElementById('advisorMemoryText').value = data.content;
+  document.getElementById('advisorMemoryText').disabled = false;
+  document.getElementById('advisorMemorySave').disabled = false;
+  document.getElementById('advisorMemoryStatus').textContent = 'الملف المحفوظ معتمد. أي تعديل جديد يحتاج حفظاً.';
+}
+
+async function saveAdvisorMemory() {
+  const button = document.getElementById('advisorMemorySave');
+  button.disabled = true;
+  try {
+    const response = await fetch(adminApi('/api/advisor/memory'), {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:document.getElementById('advisorMemoryText').value, version:advisorMemoryVersion})});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'تعذر حفظ الذاكرة');
+    advisorMemoryVersion = data.version;
+    document.getElementById('advisorMemoryStatus').textContent = 'تم الحفظ والاعتماد. سيقرأ المستشار الملف في رده التالي.';
+  } catch (error) { document.getElementById('advisorMemoryStatus').textContent = error.message; }
+  finally { button.disabled = advisorMemoryVersion === null; }
+}
+
+function downloadAdvisorMemoryDraft() {
+  const url = URL.createObjectURL(new Blob([document.getElementById('advisorMemoryText').value], {type:'text/markdown;charset=utf-8'}));
+  const link = document.createElement('a'); link.href=url; link.download='advisor_memory.md'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url),1000);
+}
+
+function scrollAdvisorToLatest() {
+  const messages = document.getElementById('advisorMessages');
+  messages.scrollTop = messages.scrollHeight;
+  messages.lastElementChild?.scrollIntoView({block:'nearest'});
+}
 
 function advisorEsc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -192,6 +229,17 @@ async function reviewAdvisorProposal(id, action) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  loadAdvisorMemory().catch(error => { document.getElementById('advisorMemoryStatus').textContent = error.message; });
+  document.getElementById('advisorMemoryText').addEventListener('input', () => { document.getElementById('advisorMemoryStatus').textContent = 'تعديلات غير محفوظة؛ اضغط حفظ واعتماد.'; });
+  document.getElementById('advisorMemoryImport').addEventListener('change', async event => {
+    const file = event.target.files[0];
+    if (!file || advisorMemoryVersion === null) return;
+    if (file.size > 96000) { document.getElementById('advisorMemoryStatus').textContent = 'الملف كبير؛ الحد 24000 حرف.'; return; }
+    const content = await file.text();
+    if (content.length > 24000) { document.getElementById('advisorMemoryStatus').textContent = 'الحد 24000 حرف.'; return; }
+    document.getElementById('advisorMemoryText').value = content;
+    document.getElementById('advisorMemoryStatus').textContent = 'تم استيراد النص؛ اضغط حفظ واعتماد لتطبيقه.';
+  });
   const keepComposerVisible = () => {
     if (window.innerWidth <= 900 && document.activeElement?.id === 'advisorInput') {
       requestAnimationFrame(() => document.getElementById('advisorForm')?.scrollIntoView({block: 'nearest'}));
@@ -201,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.visualViewport?.addEventListener('resize', keepComposerVisible, {passive: true});
   document.getElementById('advisorForm')?.addEventListener('submit', sendAdvisorMessage);
   document.getElementById('advisorInput')?.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !window.matchMedia('(pointer: coarse)').matches) {
       event.preventDefault();
       document.getElementById('advisorForm')?.requestSubmit();
     }

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}مستشار صوف{% endblock %}
-{% block styles %}<link rel="stylesheet" href="/static/css/advisor.css?v=1">{% endblock %}
+{% block styles %}<link rel="stylesheet" href="/static/css/advisor.css?v=2">{% endblock %}
 {% block content %}
 <section class="admin-page-head advisor-page-head">
   <div>
@@ -21,8 +21,21 @@
 
 <section class="advisor-safety-note" aria-label="حماية الذاكرة">
   <i class="bi bi-shield-lock-fill"></i>
-  <div><strong>وضع الموافقة اليدوية مفعّل</strong><span>المستشار يحلل ويقترح فقط. لا تُضاف قاعدة ولا تتغير تعليمات الرد قبل موافقتك الصريحة.</span></div>
+  <div><strong>ذاكرة تحت سيطرتك</strong><span>كتابتك تُعتمد عند الحفظ. اقتراحات المستشار تحتاج موافقتك قبل اعتمادها.</span></div>
 </section>
+
+<details class="admin-panel advisor-memory-editor" id="advisorMemoryEditor">
+  <summary><strong><i class="bi bi-pencil-square"></i> تعديل ملف ذاكرة المستشار</strong></summary>
+  <p class="small mt-3">اكتب معلومات المتجر وطريقة العمل هنا. «حفظ واعتماد» يجعل المستشار يقرأها من الرد التالي. هذا الملف خاص بالمستشار؛ تعليمات موظف المبيعات مستقلة.</p>
+  <label for="advisorMemoryText" class="form-label">محتوى advisor_memory.md</label>
+  <textarea id="advisorMemoryText" class="form-control" rows="10" maxlength="24000" disabled placeholder="جاري تحميل الذاكرة…"></textarea>
+  <div class="admin-actions-row mt-3">
+    <button type="button" class="btn btn-primary" id="advisorMemorySave" onclick="saveAdvisorMemory()" disabled>حفظ واعتماد</button>
+    <label class="btn btn-outline-secondary mb-0">استيراد ملف<input type="file" id="advisorMemoryImport" accept=".md,.txt,text/plain,text/markdown" hidden></label>
+    <button type="button" class="btn btn-outline-secondary" onclick="downloadAdvisorMemoryDraft()">تنزيل النص المكتوب</button>
+  </div>
+  <p class="small mt-2 mb-0" id="advisorMemoryStatus" role="status">جاري تحميل الملف…</p>
+</details>
 
 <section class="advisor-overview">
   <article><i class="bi bi-chat-square-text"></i><div><strong id="advisorMessageMetric">0</strong><span>رسالة مع المستشار</span></div></article>
@@ -39,7 +52,8 @@
         <span class="advisor-online"><i></i> جاهز للمحادثة</span>
       </div>
     </div>
-    <div class="advisor-messages" id="advisorMessages"></div>
+    <div class="advisor-messages" id="advisorMessages" tabindex="0" role="region" aria-label="رسائل المستشار"></div>
+    <button class="btn btn-sm btn-light advisor-latest" type="button" onclick="scrollAdvisorToLatest()">آخر رسالة <i class="bi bi-arrow-down"></i></button>
     <form class="advisor-composer" id="advisorForm">
       <div class="advisor-compose-main">
         <div class="advisor-quick-prompts">
@@ -84,5 +98,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/advisor.js?v=6"></script>
+<script src="/static/js/advisor.js?v=8"></script>
 {% endblock %}

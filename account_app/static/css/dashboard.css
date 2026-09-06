@@ -2462,7 +2462,7 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans Arabic',s
 .login-brand-mark img { width:100%; height:100%; object-fit:cover; border-radius:24px; }
 .app-back-btn { display:none; width:40px; height:40px; place-items:center; border:0; border-radius:12px; color:#fff; background:rgba(255,255,255,.12); }
 .mobile-chat-back{display:none}
-.mobile-app-nav { display:none; }
+.mobile-app-nav { display:none!important; }
 .app-navigating body { opacity:.78; transform:scale(.997); }
 body { transition:opacity .14s ease, transform .14s ease; }
 
@@ -2482,10 +2482,10 @@ body { transition:opacity .14s ease, transform .14s ease; }
   body.mobile-conversation-open .main-container{height:calc(var(--app-viewport-height,100dvh) - var(--navbar-h))!important}
   body.mobile-conversation-open .toast-container{bottom:12px!important}
   .mobile-chat-back{width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;border:0;border-radius:13px;background:var(--primary-soft);color:var(--primary);font-size:1.05rem}
-  .admin-main { padding-bottom:calc(96px + env(safe-area-inset-bottom))!important; }
+  .admin-main { padding-bottom:calc(16px + env(safe-area-inset-bottom))!important; }
   body:not(.login-page) { overscroll-behavior-y:contain; }
-  .main-container { height:calc(100dvh - var(--navbar-h) - 78px)!important; }
-  .toast-container { bottom:82px!important; }
+  .main-container { height:calc(var(--app-viewport-height,100dvh) - var(--navbar-h))!important; }
+  .toast-container { bottom:calc(12px + env(safe-area-inset-bottom))!important; }
   .orders-page .navbar-custom .nav-actions,.products-page .navbar-custom .nav-actions { top:64px!important; bottom:auto!important; }
   .orders-page .orders-layout,.products-page .products-layout { margin-top:70px; }
 }
@@ -2665,7 +2665,7 @@ button,a,input,select,textarea { touch-action:manipulation; }
 .admin-sidebar.open,.dashboard-drawer.open,.sidebar.open,.control-panel.open { will-change:transform; }
 
 @media(max-width:768px){
-  :root { --mobile-nav-space:84px; }
+  :root { --mobile-nav-space:16px; }
   body { min-height:var(--app-viewport-height,100dvh); }
   .admin-topbar,.navbar-custom { padding-top:env(safe-area-inset-top)!important; }
   .admin-topbar { min-height:calc(58px + env(safe-area-inset-top)); padding-inline:10px!important; }
@@ -2759,4 +2759,8 @@ button,a,input,select,textarea { touch-action:manipulation; }
   color: #75520a;
   background: #fff5d8;
   border: 1px solid #e7c86f;
+}
+
+@media(max-width:768px) {
+  body.admin-shell .admin-main { padding-top:calc(62px + env(safe-area-inset-top))!important; }
 }

@@ -61,6 +61,83 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual(media,[{'type':'audio','url':'https://cdn.test/opaque'}])
         self.assertEqual(extract_media({'image_url':'javascript:alert(1)'}),[])
 
+    def test_specific_image_hint_overrides_opaque_file(self):
+        url = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=photo'
+        self.assertEqual(extract_media({'attachments': [{'type':'file','url':url}], 'image_url':url}), [{'type':'image','url':url}])
+
+    def test_owner_memory_edits_survive_reads_and_are_versioned(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(self.m, '_ADVISOR_MEMORY_FILE', str(Path(directory)/'advisor_memory.md')):
+            path = Path(directory)/'advisor_memory.md'
+            path.write_text('ذاكرة مكتوبة يدوياً', encoding='utf-8')
+            initial = self.client.get('/api/advisor/memory?format=json').get_json()
+            self.assertEqual(initial['content'], 'ذاكرة مكتوبة يدوياً')
+            response = self.client.put('/api/advisor/memory', json={'content':'تعليمات المالك الجديدة','version':initial['version']})
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(self.m._advisor_sync_memory_file(self.db),'تعليمات المالك الجديدة')
+            self.assertEqual(Path(str(path)+'.previous').read_text(encoding='utf-8'),'ذاكرة مكتوبة يدوياً')
+            self.assertEqual(self.client.put('/api/advisor/memory',json={'content':'قديم','version':initial['version']}).status_code,409)
+            self.assertIn('تعليمات المالك الجديدة',self.client.get('/api/advisor/memory?download=1').data.decode('utf-8'))
+
+    def test_advisor_receives_owner_file_without_truncation(self):
+        content = 'معلومة مهمة في البداية\n' + 'س'*13000
+        with tempfile.TemporaryDirectory() as directory, patch.object(self.m, '_ADVISOR_MEMORY_FILE', str(Path(directory)/'advisor_memory.md')), patch.object(self.m,'OPENROUTER_KEY','test'), patch.object(self.m.requests,'post') as post:
+            Path(directory,'advisor_memory.md').write_text(content,encoding='utf-8')
+            post.return_value.json.return_value = {'choices':[{'message':{'content':'{"reply":"تم"}'}}]}
+            self.m._advisor_call_model(self.db,'ماذا تتذكر؟')
+            sent = post.call_args.kwargs['json']['messages'][-1]['content']
+            self.assertIn(content,sent)
+
+    def test_album_links_all_products_and_ignores_old_ad(self):
+        products = [{'product_id':'album-A','product_name':'A','stock':'متوفر'}, {'product_id':'album-B','product_name':'B','stock':'متوفر'}]
+        ev = {'sender_id':self.sender, 'text':'', 'ad_id':'old-ad', 'attachments':[{'type':'image','url':'https://img.test/a.jpg'}, {'type':'image','url':'https://img.test/b.jpg'}]}
+        matches = [{'product_found':True,'product_id':p['product_id']} for p in products]
+        with patch.object(self.m,'match_customer_image_with_catalog',side_effect=matches):
+            product, method, result = self.m.match_product(self.db,ev,products)
+        active = self.m.load_customer_products(self.db,self.sender)
+        self.assertEqual({p['product_id'] for p in active}, {'album-A','album-B'})
+        self.assertEqual(result['product_ids'], ['album-A','album-B'])
+
+    def test_image_correction_replaces_previous_product(self):
+        old = {'product_id':'old','product_name':'Old','stock':'متوفر'}
+        new = {'product_id':'new','product_name':'New','stock':'متوفر'}
+        self.m.complete_customer_product_link(self.db,self.sender,old,'manual')
+        ev = {'sender_id':self.sender,'text':'مو هذا','image_url':'https://img.test/new.jpg'}
+        with patch.object(self.m,'match_customer_image_with_catalog',return_value={'product_found':True,'product_id':'new'}):
+            self.m.match_product(self.db,ev,[old,new])
+        self.assertEqual([p['product_id'] for p in self.m.load_customer_products(self.db,self.sender)], ['new'])
+
+    def test_auto_reply_does_not_remove_other_album_products(self):
+        products = [{'product_id':'keep-A','product_name':'A'}, {'product_id':'keep-B','product_name':'B'}]
+        for product in products:
+            self.m.complete_customer_product_link(self.db,self.sender,product,'image_recognition',preserve_existing=True)
+        with patch.object(self.m,'is_ai_enabled',return_value=False):
+            self.m.auto_reply_after_product_link(self.db,self.sender,products[-1])
+        self.assertEqual({p['product_id'] for p in self.m.load_customer_products(self.db,self.sender)}, {'keep-A','keep-B'})
+
+    @patch('account_app.app.resolve_incoming_media')
+    def test_old_opaque_attachment_can_be_reclassified(self,resolve):
+        url = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=old'
+        self.db.execute("INSERT INTO messages(sender_id,direction,message_type,media_json) VALUES(?,'incoming','file',?)", (self.sender, '[{"type":"file","url":"'+url+'"}]'))
+        self.db.commit()
+        mid = self.db.execute('SELECT max(id) FROM messages WHERE sender_id=?',(self.sender,)).fetchone()[0]
+        resolve.return_value = [{'type':'audio','url':url}]
+        response = self.client.post(f'/api/conversations/{self.sender}/messages/{mid}/media')
+        self.assertEqual(response.get_json()['media'][0]['type'],'audio')
+        self.assertEqual(self.client.get(f'/api/conversations/{self.sender}/messages').get_json()['messages'][0]['message_type'],'audio')
+        self.assertEqual(self.client.post(f'/api/conversations/other/messages/{mid}/media').status_code,404)
+
+    @patch('account_app.app.requests.get')
+    @patch('account_app.app.requests.head')
+    def test_head_unsupported_falls_back_to_stream_headers(self,head,get):
+        head.return_value.status_code = 405
+        response = get.return_value.__enter__.return_value
+        response.status_code = 206
+        response.headers = {'Content-Type':'image/jpeg'}
+        media = self.m.resolve_incoming_media({'attachment_url':'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=fallback'})
+        self.assertEqual(media[0]['type'],'image')
+        self.assertTrue(get.call_args.kwargs['stream'])
+        self.assertFalse(get.call_args.kwargs['allow_redirects'])
+
     @patch('account_app.app.requests.head')
     def test_opaque_meta_media_uses_content_type(self,head):
         head.return_value.status_code=200;head.return_value.headers={'Content-Type':'audio/ogg'}

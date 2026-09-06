@@ -328,9 +328,21 @@ function resetInboxFilters() {
   syncConversationFilterUI(); refreshInboxFilters();
 }
 
+let inboxScrollAnchor = 0;
 function onCustomerListScroll() {
   const el = document.getElementById('customerList');
   if (!el) return;
+  const panel = document.getElementById('inboxFilterPanel');
+  const top = Math.max(0, el.scrollTop);
+  const delta = top - inboxScrollAnchor;
+  if (top < 12 || Math.abs(delta) > 18) {
+    if (panel && !panel.contains(document.activeElement)) {
+      const hidden = top > 80 && delta > 0;
+      panel.classList.toggle('is-collapsed', hidden);
+      panel.inert = hidden;
+    }
+    inboxScrollAnchor = top;
+  }
   if (el.scrollHeight - el.scrollTop <= el.clientHeight + 100) {
     if (!isLoadingMoreConv && hasMoreConv) {
       loadConversations(false, true);
@@ -577,6 +589,23 @@ function messageMarkup(m) {
   return content + `<span class="msg-time">${esc(fmtDatetime(m.created_at))}</span>`;
 }
 
+const resolvingMedia = new Set();
+async function resolveMessageMedia(message, sender, node) {
+  const key = `${sender}:${message.id}`;
+  if (resolvingMedia.has(key) || !message.media?.some(item => item.type === 'file')) return;
+  resolvingMedia.add(key);
+  try {
+    const response = await apiFetch(`/api/conversations/${encodeURIComponent(sender)}/messages/${message.id}/media`, {method:'POST'});
+    if (!response.ok) throw new Error('media lookup failed');
+    const data = await response.json();
+    message.media = data.media;
+    if (sender === currentSenderId && node.isConnected) {
+      node.innerHTML = messageMarkup(message);
+      node.dataset.signature = JSON.stringify(message);
+    }
+  } catch (_) { resolvingMedia.delete(key); }
+}
+
 function renderMessages(messages, scroll = true, sender = currentSenderId) {
   const area = document.getElementById('messagesArea');
   const changedSender = renderedMessageSender !== sender;
@@ -601,6 +630,7 @@ function renderMessages(messages, scroll = true, sender = currentSenderId) {
       node.innerHTML = messageMarkup(m);
       node.dataset.signature = signature;
       node.querySelectorAll('img').forEach(img => { if (img.complete && img.naturalWidth) mediaLoaded(img); });
+      resolveMessageMedia(m, sender, node);
     }
   }
   if (!messages.length) area.innerHTML = '<div class="messages-empty text-center small py-4">لا توجد رسائل محمّلة بعد</div>';

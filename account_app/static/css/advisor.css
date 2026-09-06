@@ -14,29 +14,39 @@
 .advisor-layout { align-items:start; min-height:0; }
 .advisor-proposals-card { min-height:0; }
 @media(max-width:900px) {
-  .advisor-chat-card { height:calc(var(--app-viewport-height,100dvh) - 180px); min-height:340px; scroll-margin-block:65px 90px; }
-  .advisor-composer { scroll-margin-bottom:90px; }
+  .advisor-chat-card { height:auto; max-height:none; min-height:0; scroll-margin-block:60px 16px; }
+  .advisor-composer { scroll-margin-bottom:16px; }
   body.app-keyboard-open .advisor-composer { scroll-margin-bottom:10px; }
-  .advisor-layout { margin-bottom:0; }
+  .advisor-layout { grid-template-columns:minmax(0,1fr); margin-bottom:0; gap:14px; }
   .advisor-page-head { padding:14px!important; }
   .advisor-capabilities { margin-top:8px; }
   .advisor-overview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); overflow:visible; gap:6px; }
   .advisor-overview article { min-width:0; padding:8px; gap:4px; }
   .advisor-overview article>i { display:none; }
   .advisor-overview span { font-size:.65rem; }
-  .advisor-chat-head { position:static; padding:9px 10px; gap:6px; }
+  .advisor-chat-head { position:static; padding:9px 10px; gap:6px; flex-wrap:wrap; }
   .advisor-avatar { width:32px; height:32px; }
   .advisor-model-badge { max-width:120px; padding:4px 6px; }
   .advisor-composer { grid-template-columns:1fr; padding:8px; gap:6px; }
   .advisor-compose-actions { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:6px; align-items:end; }
   .advisor-compose-actions label { min-width:0; }
   .advisor-compose-actions select { width:100%; min-width:0; height:36px; }
-  .advisor-compose-actions>button { grid-column:auto; min-height:38px; padding:6px 10px; }
+  .advisor-compose-actions>button { grid-column:auto; min-width:0; min-height:44px; padding:6px 10px; }
   .advisor-compose-main textarea { min-height:48px; height:56px; max-height:100px; padding:8px 10px; font-size:16px; resize:none; }
   .advisor-input-hint { display:none; }
-  .advisor-messages { padding:8px; }
+  .advisor-messages { flex:none; height:55svh; min-height:240px; max-height:560px; padding:8px; overflow-y:auto; overscroll-behavior-y:auto; }
+  .advisor-proposals { max-height:none; overflow:visible; }
+  .advisor-compose-main,.advisor-input-wrap,.advisor-chat-identity,.advisor-chat-status { min-width:0; }
+  .advisor-quick-prompts { display:flex; flex-wrap:wrap; overflow:visible; gap:6px; }
+  .advisor-composer .advisor-quick-prompts button { min-width:0; white-space:normal; min-height:36px; flex:1 1 120px; }
+  .advisor-compose-actions select { font-size:16px; }
   .advisor-message.assistant,.advisor-message.owner { width:100%; }
   .advisor-message.assistant>.advisor-message-content { padding:10px 12px; }
   .advisor-text-bullet { padding:6px; }
   body.app-keyboard-open .advisor-quick-prompts { display:none; }
+}
+@media(max-width:390px) {
+  .advisor-compose-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .advisor-compose-actions>button { grid-column:1 / -1; }
+  .advisor-chat-status { width:100%; flex-direction:row; justify-content:space-between; }
 }
