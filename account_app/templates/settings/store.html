@@ -12,6 +12,7 @@
 <section class="admin-panel">
   <label class="form-label" for="storeSettingsStoreSelect">المتجر</label>
   <select class="form-select mb-3" id="storeSettingsStoreSelect"></select>
+  <a class="btn btn-outline-primary mb-3" href="/settings/delivery?store_id={{ request.args.get('store_id', 'default') }}">تعديل أجور ومدة توصيل هذا المتجر</a>
   <form id="storeSettingsForm" class="admin-form">
     <label class="form-label">اسم المتجر</label>
     <input class="form-control" id="storeName">

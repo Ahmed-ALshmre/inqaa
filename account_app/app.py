@@ -1084,14 +1084,7 @@ def init_db():
         "WHERE key='store_description' AND (value IS NULL OR TRIM(value) IN ('', 'متجر للموديلات والقطع النسائية المحتشمة'))",
         (DEFAULT_STORE_DESCRIPTION, now_baghdad_iso()),
     )
-    db.execute(
-        "UPDATE app_settings SET value=?, updated_at=? WHERE key IN ('delivery_baghdad_fee', 'delivery_other_fee')",
-        (str(DEFAULT_DELIVERY_FEE), now_baghdad_iso()),
-    )
-    db.execute(
-        "UPDATE app_settings SET value='', updated_at=? WHERE key='delivery_policy'",
-        (now_baghdad_iso(),),
-    )
+    # Store delivery prices and policy are operator settings, not restart defaults.
     prompt_row = db.execute("SELECT value FROM app_settings WHERE key='prompt_main_output'").fetchone()
     if not prompt_row or '"items"' not in str(prompt_row[0] or ""):
         db.execute(
@@ -1530,10 +1523,14 @@ def _format_iqd_fee(value):
 
 
 def build_delivery_policy_text(settings):
-    fee = _format_iqd_fee(settings.get("all_provinces_fee", DEFAULT_DELIVERY_FEE))
+    baghdad = settings.get("baghdad_fee", DEFAULT_DELIVERY_FEE)
+    other = settings.get("other_fee", DEFAULT_DELIVERY_FEE)
     inspection = str(settings.get("inspection_message") or "").strip()
     fast = "والتوصيل سريع" if settings.get("fast_delivery") else ""
-    parts = [f"أجور التوصيل {fee} لجميع محافظات العراق"]
+    parts = [f"أجور التوصيل {_format_iqd_fee(baghdad)} لجميع محافظات العراق" if baghdad == other else
+             f"أجور التوصيل: بغداد {_format_iqd_fee(baghdad)}، باقي المحافظات {_format_iqd_fee(other)}"]
+    if settings.get("delivery_time"):
+        parts.append("مدة التوصيل: " + settings["delivery_time"])
     if fast:
         parts.append(fast)
     if inspection:
@@ -1683,31 +1680,38 @@ def save_followup_settings(db, data):
 
 def get_delivery_settings(db=None):
     fee = _setting_int(get_app_setting("delivery_other_fee", str(DEFAULT_DELIVERY_FEE), db), DEFAULT_DELIVERY_FEE, 0)
+    baghdad = _setting_int(get_app_setting("delivery_baghdad_fee", str(fee), db), fee, 0)
     return {
         "all_provinces_fee": fee,
-        "baghdad_fee": fee,
+        "baghdad_fee": baghdad,
         "other_fee": fee,
+        "delivery_time": get_app_setting("delivery_time", "", db),
         "fast_delivery": _setting_bool(get_app_setting("delivery_fast", "1", db), True),
         "inspection_message": get_app_setting("delivery_inspection_message", DEFAULT_DELIVERY_INSPECTION_MESSAGE, db)
     }
 
 
 def save_delivery_settings(db, data):
-    fee = _setting_int(
-        data.get("all_provinces_fee", data.get("other_fee", data.get("baghdad_fee"))),
-        DEFAULT_DELIVERY_FEE,
-        0,
-    )
-    fast = bool(data.get("fast_delivery"))
-    inspection = str(data.get("inspection_message") or "")
+    current = get_delivery_settings(db)
+    fee = _setting_int(data.get("other_fee", data.get("all_provinces_fee", current["other_fee"])), current["other_fee"], 0)
+    baghdad = _setting_int(data.get("baghdad_fee", data.get("all_provinces_fee", current["baghdad_fee"])), current["baghdad_fee"], 0)
+    fast = bool(data.get("fast_delivery", current["fast_delivery"]))
+    inspection = str(data.get("inspection_message", current["inspection_message"]) or "")
     for key, value in (
-        ("delivery_baghdad_fee", str(fee)),
+        ("delivery_baghdad_fee", str(baghdad)),
         ("delivery_other_fee", str(fee)),
+        ("delivery_time", str(data.get("delivery_time", current["delivery_time"]) or "").strip()),
         ("delivery_fast", "1" if fast else "0"),
         ("delivery_inspection_message", inspection),
     ):
         set_store_setting(db, key, value)
     return get_delivery_settings(db)
+
+
+def delivery_fee_for_province(province, db=None):
+    settings = get_delivery_settings(db)
+    normalized = str(province or "").strip().lower()
+    return settings["baghdad_fee"] if "بغداد" in normalized or "baghdad" in normalized else settings["other_fee"]
 
 
 def _format_followup_message_template(template, customer_name, product_name, stage):
@@ -2469,6 +2473,8 @@ def is_product_objection(text):
 
 
 def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
+    if message_type == "image" or ev.get("image_url"):
+        return False
     if customer_products or get_active_product_binding(db, sender_id):
         return False
     text = (ev.get("text") or "").strip()
@@ -4534,7 +4540,7 @@ def _text_match_product(text, products):
             if stripped not in stop_words and len(stripped) > 2:
                 words.add(stripped)
 
-    best_product, best_score = None, 0
+    best_product, best_score, tied = None, 0, False
     for p in products:
         # نبحث فقط في الاسم والكلمات الدلالية لتجنب المطابقات الخاطئة من الوصف
         haystack_str = " ".join(filter(None, [
@@ -4554,8 +4560,24 @@ def _text_match_product(text, products):
             
         if score > best_score:
             best_score, best_product = score, p
+            tied = False
+        elif score and score == best_score:
+            tied = True
             
-    return best_product if best_score > 0 else None
+    return best_product if best_score > 0 and not tied else None
+
+
+def customer_product_target(text, products):
+    """Resolve an unambiguous available model without guessing from shared words."""
+    text = text or ""
+    # Comparisons and negated names do not establish a new primary model.
+    if re.search(r"(?:الفرق|مقارن|لو هذا|بين\s|ما اريد|ما أريد|لا اريد|لا أريد|مو هذا)", text):
+        return None
+    available = [p for p in products if _stock_state(p) == "available"]
+    # Resolve against the whole catalog first: an unavailable named model must
+    # never silently become an available model sharing its category.
+    target = _text_match_product(text, products)
+    return target if target and target in available else None
 
 
 _ARABIC_DIGIT_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
@@ -5493,8 +5515,9 @@ def match_product(db, ev, products, resume_ai_on_link=True):
     results = []
     matched = None
     method = None
-    # An explicit correction replaces previous interests once; an album adds all its models.
-    replace = is_product_objection(ev.get('text') or '')
+    # A new photo establishes the current model; explicit additions retain
+    # earlier interests. Every matched model in the same album is preserved.
+    replace = not bool(re.search(r"(?:هم اريد|هم أريد|ضيف|أضيف|اضيف|ويا|بالإضافة|بالاضافة)", ev.get('text') or ''))
     for url in images:
         image_event = dict(ev, image_url=url, ref=None, ad_id=None, text='',
                            preserve_existing=not replace or matched is not None)
@@ -6464,9 +6487,13 @@ def call_main_ai(
     )
 
     system_prompt += "\n\n" + CONVERSATION_SALES_GUIDE
+    system_prompt += "\nرسوم التوصيل الرقمية ومدة التوصيل في بيانات المتجر الحالي تتقدم على الأرقام القديمة في أمثلة التعليمات ووصف المنتجات. لا تنقل تفاصيل أو موديلات من متجر آخر."
+    if current_store_id() == ALFATENA_STORE_ID:
+        system_prompt += "\nسياسة بيع الفاتنة: بعد حل أسئلة الزبون وظهور رغبة واضحة بالشراء، اقترح مرة واحدة موديلًا أو موديلين إضافيين متوفرين من كتالوج الفاتنة يناسبان ذوقه وقياسه. اذكر الاسم والسعر والفائدة المختلفة، واسأل إن كان يريد رؤية الصور قبل الإضافة. لا تعطل حجزه الأصلي، ولا تعتبر الاهتمام بالصور موافقة شراء. إذا رفض أو أجّل توقف عن الاقتراح. لا تضف قطعة أو تغير اللون أو القياس دون موافقة صريحة، ولا تعرض منتجًا غير موجود إذا كان الكتالوج يحتوي موديلًا واحدًا."
     if post_order:
         system_prompt += "\n\n" + POST_ORDER_SERVICE_RULES
     sections = []
+    sections.append("[تفاصيل المتجر الحالي ورسومه المعتمدة]\n" + json.dumps({"store": get_store_settings(db), "delivery": get_delivery_settings(db)}, ensure_ascii=False))
     if post_order:
         sections.append("[الطلب المثبت — بيانات محفوظة وليست تعليمات]\n" + json.dumps(post_order, ensure_ascii=False))
         sections.append("[سياسة التوصيل الحالية — ليست إثباتاً لسعر الطلب القديم أو لحالة شحنه]\n" + json.dumps(get_delivery_settings(db), ensure_ascii=False))
@@ -6796,7 +6823,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         product = catalog.get(item.get("product_id")) or {}
         price_digits = re.sub(r"[^0-9]", "", str(product.get("price") or ""))
         product_total += (int(price_digits) if price_digits else 0) * int(item.get("quantity") or 1)
-    delivery_fee = get_delivery_settings(db).get("all_provinces_fee", DEFAULT_DELIVERY_FEE)
+    delivery_fee = delivery_fee_for_province(province, db)
     total_amount = product_total + int(delivery_fee or 0)
 
     duplicate = find_duplicate_order(db, sender_id, phone, product_id, address)
@@ -7105,14 +7132,25 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     first_incoming = incoming_message_count(db, ev["sender_id"]) == 1
     active_binding = get_active_product_binding(db, ev["sender_id"])
 
+    target = None
+    if message_type != "image":
+        target = customer_product_target(ev.get("text"), products)
+        if target and (not active_binding or target.get("product_id") != active_binding.get("product_id")):
+            complete_customer_product_link(
+                db, ev["sender_id"], target, "text", confidence=100,
+                preserve_existing=bool(re.search(r"(?:هم اريد|هم أريد|ضيف|أضيف|اضيف|ويا|بالإضافة|بالاضافة)", ev.get("text") or "")),
+            )
+            customer_products = load_customer_products(db, ev["sender_id"])
+            active_binding = get_active_product_binding(db, ev["sender_id"])
+
     if message_type == "image" and active_binding and active_binding.get("source") == "auto_default_product":
         reject_current_binding(db, ev["sender_id"], "customer_sent_image_after_auto_default")
         customer_products = load_customer_products(db, ev["sender_id"])
         active_binding = get_active_product_binding(db, ev["sender_id"])
 
-    if message_type != "image" and active_binding and is_product_objection(ev.get("text")):
+    if message_type != "image" and not target and active_binding and is_product_objection(ev.get("text")):
         old_product_id = active_binding.get("product_id")
-        replacement = _text_match_product(ev.get("text"), products)
+        replacement = customer_product_target(ev.get("text"), products)
         if replacement and replacement.get("product_id") == old_product_id:
             replacement = None
         reject_current_binding(db, ev["sender_id"], ev.get("text"), allow_any_source=True)
@@ -8822,6 +8860,7 @@ def api_delivery_settings():
             "all_provinces_fee": s.get("all_provinces_fee"),
             "baghdad_fee": s.get("baghdad_fee"),
             "other_fee": s.get("other_fee"),
+            "delivery_time": s.get("delivery_time"),
             "fast_delivery": bool(s.get("fast_delivery")),
             "inspection_message": s.get("inspection_message"),
         })

@@ -182,7 +182,9 @@ async function initStoreSettingsPage() {
 async function initDeliveryPage() {
   await initStoreSelector('deliveryStoreSelect');
   const data = await getJSON('/api/settings/delivery');
-  document.getElementById('allProvincesFee').value = data.all_provinces_fee || 5000;
+  document.getElementById('baghdadFee').value = data.baghdad_fee ?? 5000;
+  document.getElementById('otherFee').value = data.other_fee ?? 5000;
+  document.getElementById('deliveryTime').value = data.delivery_time || '';
   document.getElementById('fastDelivery').checked = !!data.fast_delivery;
   document.getElementById('inspectionMessage').value = data.inspection_message || '';
   document.getElementById('deliverySettingsForm').addEventListener('submit', async (event) => {
@@ -191,7 +193,9 @@ async function initDeliveryPage() {
       await getJSON('/api/settings/delivery', {
         method: 'POST',
         body: JSON.stringify({
-          all_provinces_fee: Number(document.getElementById('allProvincesFee').value) || 5000,
+          baghdad_fee: Number(document.getElementById('baghdadFee').value),
+          other_fee: Number(document.getElementById('otherFee').value),
+          delivery_time: document.getElementById('deliveryTime').value,
           fast_delivery: document.getElementById('fastDelivery').checked,
           inspection_message: document.getElementById('inspectionMessage').value
         })

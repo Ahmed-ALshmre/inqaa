@@ -106,6 +106,24 @@ class MessagingMediaTests(unittest.TestCase):
             self.m.match_product(self.db,ev,[old,new])
         self.assertEqual([p['product_id'] for p in self.m.load_customer_products(self.db,self.sender)], ['new'])
 
+    def test_new_photo_changes_focus_without_explicit_correction(self):
+        old = {'product_id':'old','product_name':'Old','stock':'متوفر'}
+        new = {'product_id':'new','product_name':'New','stock':'متوفر'}
+        for caption, expected in [('', {'new'}), ('ضيفي هذا ويا الطلب', {'old','new'})]:
+            self.m.complete_customer_product_link(self.db,self.sender,old,'manual')
+            ev = {'sender_id':self.sender,'text':caption,'image_url':'https://img.test/new.jpg'}
+            with patch.object(self.m,'match_customer_image_with_catalog',return_value={'product_found':True,'product_id':'new'}):
+                self.m.match_product(self.db,ev,[old,new])
+            self.assertEqual({p['product_id'] for p in self.m.load_customer_products(self.db,self.sender)}, expected)
+
+    def test_text_target_requires_unique_available_model(self):
+        products = [dict(product_id=str(i), product_name='سوت موديل'+str(i), stock='متوفر') for i in range(25)]
+        self.assertEqual(self.m.customer_product_target('اريد سوت موديل24',products)['product_id'], '24')
+        self.assertIsNone(self.m.customer_product_target('اريد سوت',products))
+        self.assertIsNone(self.m.customer_product_target('ما اريد سوت موديل24',products))
+        products[-1]['stock']='غير متوفر'
+        self.assertIsNone(self.m.customer_product_target('اريد سوت موديل24',products))
+
     def test_auto_reply_does_not_remove_other_album_products(self):
         products = [{'product_id':'keep-A','product_name':'A'}, {'product_id':'keep-B','product_name':'B'}]
         for product in products:
@@ -288,5 +306,26 @@ class MessagingMediaTests(unittest.TestCase):
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
         self.assertEqual(len(result['reply_parts']),4)
         self.assertEqual(result['reply'],'\n\n'.join(parts))
+
+    def test_delivery_fees_are_separate_by_store_and_destination(self):
+        for sid,baghdad,other in [('al-fatena',3000,7000),('khuyoot',0,4500)]:
+            token=self.m._current_store_id.set(sid)
+            try:
+                self.m.save_delivery_settings(self.db,{'baghdad_fee':baghdad,'other_fee':other,'delivery_time':'مدة اختبار'})
+            finally:self.m._current_store_id.reset(token)
+        for sid,baghdad,other in [('al-fatena',3000,7000),('khuyoot',0,4500)]:
+            token=self.m._current_store_id.set(sid)
+            try:
+                self.assertEqual(self.m.delivery_fee_for_province('بغداد',self.db),baghdad)
+                self.assertEqual(self.m.delivery_fee_for_province('بابل',self.db),other)
+                self.assertEqual(self.m.get_delivery_settings(self.db)['delivery_time'],'مدة اختبار')
+                self.m.save_delivery_settings(self.db,{'fast_delivery':False})
+                self.assertEqual(self.m.delivery_fee_for_province('بغداد',self.db),baghdad)
+            finally:self.m._current_store_id.reset(token)
+
+    def test_photo_never_rebinds_automatic_product_before_matching(self):
+        with patch.object(self.m,'get_auto_product_settings',return_value={'enabled':True}), patch.object(self.m,'get_active_product_binding',return_value=None):
+            self.assertFalse(self.m.should_use_auto_product(self.db,self.sender,{'image_url':'https://example.test/new.jpg'},'image',[]))
+            self.assertTrue(self.m.should_use_auto_product(self.db,self.sender,{'text':'مرحبا'},'text',[]))
 
 if __name__=='__main__':unittest.main()
