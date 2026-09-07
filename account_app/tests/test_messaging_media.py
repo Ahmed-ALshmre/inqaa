@@ -212,8 +212,12 @@ class MessagingMediaTests(unittest.TestCase):
             self.assertIn('Subscriber not found',review.call_args.args[2])
 
     @patch('account_app.app.threading.Thread')
-    def test_fatena_whatsapp_survives_webhook_and_event(self, thread):
+    def test_fatena_defaults_to_facebook_and_preserves_explicit_channel(self, thread):
         self.client.post('/manychat/webhook/al-fatena', json={'subscriber_id':self.sender,'text':'hello'})
+        body=thread.call_args.kwargs['args'][0]
+        self.assertEqual(self.m.extract_facebook_event(body)['platform'],'facebook')
+        self.assertEqual(self.m.manychat_content_type('facebook'),'messenger')
+        self.client.post('/manychat/webhook/al-fatena', json={'subscriber_id':self.sender,'text':'hello','platform':'whatsapp'})
         body=thread.call_args.kwargs['args'][0]
         self.assertEqual(self.m.extract_facebook_event(body)['platform'],'whatsapp')
         self.assertEqual(self.m.manychat_content_type('whatsapp'),'whatsapp')
@@ -230,5 +234,59 @@ class MessagingMediaTests(unittest.TestCase):
             payload=send.call_args.kwargs['json']
             self.assertEqual(payload['data']['content']['type'],'whatsapp')
             self.assertNotIn('message_tag',payload)
+
+    def test_photo_requests_resend_even_after_auto_image(self):
+        product={'image_url':['https://example.test/a.jpg','https://example.test/b.jpg']}
+        with patch.object(self.m,'get_active_product_binding',return_value={'source':'auto_default_product','image_sent':1}):
+            for text in ['وين صورتها؟','دزيلياه بصوره','تصوريلياه حتى اشوفه','أرسل صور','ممكن صورته']:
+                with self.subTest(text=text):
+                    self.assertTrue(self.m._should_send_image(self.db,self.sender,product,{'text':text}))
+            self.assertFalse(self.m._should_send_image(self.db,self.sender,product,{'text':'ممكن سعره؟'}))
+
+    def test_unlabelled_single_color_album_is_not_dropped(self):
+        product={'image_url':['https://example.test/a.jpg','https://example.test/b.jpg'],'colors':'اسود'}
+        self.assertEqual(len(self.m.select_product_image_urls(product,'أسود')),2)
+        self.assertEqual(self.m.select_product_image_urls(product,'احمر'),[])
+        product['colors']='اسود احمر'
+        self.assertEqual(self.m.select_product_image_urls(product,'اسود'),[])
+
+    def test_photo_promise_is_detected_when_last_customer_message_is_size(self):
+        self.assertTrue(self.m._promises_product_photo('من عيوني هذي صورة الفستان الأسود'))
+        self.assertTrue(self.m._promises_product_photo('ثواني وأدزلج الصور'))
+        self.assertFalse(self.m._promises_product_photo('الفحص عند الاستلام إذا مو نفس الصورة'))
+
+    def test_unreadable_media_is_saved_and_reviewed_without_customer_reply(self):
+        for kind, url in [('audio','https://example.test/a.ogg'),('video','https://example.test/a.mp4'),('file','https://example.test/a.pdf')]:
+            with self.subTest(kind=kind):
+                body=self.body([{'type':kind,'payload':{'url':url}}])
+                with patch.object(self.m,'is_ai_enabled',return_value=True), patch.object(self.m,'is_customer_ai_enabled',return_value=True), patch.object(self.m,'create_human_review',return_value=901) as review, patch.object(self.m,'has_pending_human_review',return_value=None), patch.object(self.m,'call_main_ai') as ai:
+                    response=self.m.process_webhook(self.db,body,use_debounce=False)
+                self.assertEqual(response['reply'],'')
+                self.assertFalse(response['send_image'])
+                self.assertTrue(response['meta']['waiting_for_human_action'])
+                review.assert_called_once();ai.assert_not_called()
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'",(self.sender,)).fetchone()[0],0)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='incoming'",(self.sender,)).fetchone()[0],3)
+
+    def test_sales_parts_keep_four_messages_without_repeating_combined_reply(self):
+        parts=['أهلاً بك.','السعر 17000 دينار.','القماش باربي.','أي قياس تحتاج؟']
+        result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
+        self.assertEqual(self.m.approved_reply_parts(result,result['reply']),parts)
+        with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
+            self.m.send_webhook_result_to_facebook(dict(result,sender_id=self.sender))
+            self.assertEqual([call.args[1] for call in send.call_args_list],parts)
+
+    def test_corrected_sales_text_is_split_without_old_claims(self):
+        result={'reply_parts':['باقي قطعتين','أحجز الآن']}
+        reply='السعر 17000 دينار. القماش باربي. أي قياس تحتاج؟'
+        self.assertEqual(self.m.approved_reply_parts(result,reply),['السعر 17000 دينار.','القماش باربي.','أي قياس تحتاج؟'])
+        self.assertEqual(self.m.approved_reply_parts({},'تدللين 🌷'),['تدللين 🌷'])
+        self.assertEqual(self.m.approved_reply_parts({},''),[])
+
+    def test_extra_sales_parts_keep_all_information_under_limit(self):
+        parts=['تحية','سعر','قماش','قياس','توصيل','سؤال']
+        result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
+        self.assertEqual(len(result['reply_parts']),4)
+        self.assertEqual(result['reply'],'\n\n'.join(parts))
 
 if __name__=='__main__':unittest.main()

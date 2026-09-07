@@ -3590,6 +3590,11 @@ def select_product_image_urls(product, requested_color=""):
         color = _normalize_color_match_text(item.get("color"))
         if color and (color in requested or requested in color):
             matched.append(item["url"])
+    # Unlabelled images are safe only when the catalogue names one matching color.
+    catalogue_color = _normalize_color_match_text((product or {}).get("colors"))
+    if not matched and variants and not any(item.get("color") for item in variants):
+        if catalogue_color and (catalogue_color == requested or catalogue_color == requested.removeprefix("ال")):
+            return [item["url"] for item in variants]
     return matched
 
 
@@ -3629,6 +3634,17 @@ def build_product_image_payload(product, image_urls=None):
     }
 
 
+def _requests_product_photo(text):
+    text = re.sub(r"[\u064b-\u065f\u0640]", "", str(text or ""))
+    return bool(re.search(r"صور|صوره|صورة|تصوير|تصوري|تصورين|photo|picture", text, re.I)) and not bool(
+        re.search(r"(?:لا|ما)\s+(?:اريد|أريد|تدز|ترسل).*صور", text)
+    )
+
+
+def _promises_product_photo(text):
+    return bool(re.search(r"(?:هذي|هذه|هاي|أدز|ادز|أرسل|ارسل|دزيت|أرفق|ارفق).{0,35}(?:صور|صوره|صورة)", str(text or "")))
+
+
 def _should_send_image(db, sender_id: str, product: dict, ev: dict) -> bool:
     """إرسال صورة المنتج فقط عند طلبها صراحة أو عند دخول الزبون من إعلان المنتج."""
     if not product or not product.get("image_url"):
@@ -3636,7 +3652,7 @@ def _should_send_image(db, sender_id: str, product: dict, ev: dict) -> bool:
 
     # An explicit request always wins, even when an automatic image was sent
     # earlier in the conversation and the customer asks to see it again.
-    if _is_product_info_request(ev.get("text", "")):
+    if _requests_product_photo(ev.get("text", "")):
         return True
 
     binding = get_active_product_binding(db, sender_id)
@@ -6126,7 +6142,18 @@ CONVERSATION_SALES_GUIDE = """
 عالج الاعتراض المحدد قبل سؤال الحجز. اعرض خيارين متاحين مناسبين عند الحيرة، واقترح قطعة إضافية فقط إن كانت مفيدة مع بيان سعرها.
 لا تخترع تقييمات أو خصومات أو مدة توصيل أو ندرة. احترم رفض الزبون ولا تلح بعد طلب التوقف. لا تدّع أنك إنسان إذا سُئلت عن هويتك.
 صور متعددة تعني خيارات متعددة وليست موافقة شراء؛ اسأل أي الموديلات يريد حجزها. عبارة «بدل/مو هذا» تعني استبدال الاختيار، و«هم/إضافة» تعني الحفاظ على السابق.
-يمكن استخدام reply_parts اختيارياً: قائمة من رسالة إلى ثلاث رسائل قصيرة مرتبة (الجواب ثم التفاصيل ثم سؤال واحد)، إذا كان ذلك أسهل للزبون من رسالة طويلة. لا تكرر المعلومات ولا تقسّم جملة واحدة.
+قواعد الأسلوب التالية تتقدم على أمثلة الإلحاح والندرة القديمة في تعليمات البيع، ولا تغير الأسعار أو سياسات المتجر المعتمدة.
+حلل نية الزبون من الرسائل غير المجابة وسياقها: استكشاف، مقارنة، سؤال محدد، اعتراض، استعداد للحجز، تأجيل، رفض، أو خدمة طلب سابق. كلمة موافقة قصيرة تجيب عن آخر سؤال؛ ليست إذناً تلقائياً بالحجز.
+أضف sales_state إلى نتيجة JSON كتصنيف موجز: intent وstage وobjection وmissing_fields وnext_step. لا تكتب شرح تفكيرك أو هذا التصنيف للزبون.
+طبّق البيع الاستشاري: أجب عن السؤال المباشر، ثم اربط فائدة مثبتة بحاجة الزبون، ثم سؤال واحد سهل مناسب لمرحلة الحوار. لا تستعرض كل معلومات المنتج دفعة واحدة، لكن أجب عن جميع الأسئلة التي طرحها فعلاً.
+بعد أغلب إجابات ما قبل البيع استخدم سؤالاً واحداً يدفع الحوار خطوة للأمام. لا تسأل نفس السؤال إذا أجاب عنه، ولا تختم الشكر أو الرفض أو طلب المهلة بسؤال بيع قسري.
+المقاس: استخدم جدول المنتج والمقاس الذي يلبسه الزبون، واسأل عن تفضيل واسع أو مضبوط حين يفيد الاختيار. الوزن تقدير لا ضمان؛ لا تخترع راحة القصة أو المطاط أو مقاساً أكبر غير متوفر.
+الألوان: اقترح خياراً أو خيارين من المتوفر حسب ذوقه، وفسر سبباً عملياً. لا تفترض مظهر الزبون ولا تدّع أن المنتج أجمل من الصورة أو مضمون الملاءمة.
+الاعتراض: افهم هل المشكلة في السعر أم القماش أم القياس أم الثقة أم التوصيل. اعترف بالمخاوف ثم قدم معلومة أو صورة صحيحة أو سياسة فحص معتمدة. لا تخترع ضماناً أو خصماً أو مراجعات أو ندرة.
+التأجيل: اقبل المهلة، ويمكن تلخيص الاختيار المتفق عليه باختصار مرة واحدة دون افتراض لون أو قياس. لا تنشئ حجزاً مؤقتاً ولا تعد بتذكير غير منفذ ولا تلاحق الزبون بالندرة.
+الإغلاق: انتقل لجمع البيانات بعد رغبة واضحة بالحجز؛ اطلب الناقص فقط واجمع حقول التواصل في رسالة قصيرة واحدة. إذا بقي اختيار غير محسوم اسأل عنه قبل الإنشاء. لا تقل تم الحجز قبل نجاح تسجيله.
+بعد الحجز انتقل للخدمة، لا تبدأ بيعاً جديداً من تلقاء نفسك. المرفق المفهوم يعالج طبيعياً؛ غير المفهوم يحال للبشر دون مطالبة الزبون بإعادة كتابته.
+استخدم reply_parts افتراضياً: رسالتان إلى أربع رسائل قصيرة مكتملة المعنى، غالباً جملة واحدة لكل رسالة: جواب مباشر، ثم فائدة أو توضيح عند الحاجة، ثم سؤال واحد. التحية أو الشكر البسيط يكفيهما جزء واحد. لا تقسّم الاسم والهاتف والعنوان إلى ثلاث رسائل منفصلة، ولا تكرر المعلومة أو السؤال بين الأجزاء.
 إذا استخدمت reply_parts اجعل reply النص الكامل نفسه مفصولاً بسطرين. هذه الرسائل تُرسل دفعة متتابعة، وليست متابعة مؤجلة.
 """
 
@@ -6138,7 +6165,7 @@ def normalize_ai_reply_parts(result):
         for part in parts:
             part = part.strip()
             if part and (not clean or part != clean[-1]): clean.append(part)
-        if len(clean) > 3: clean = clean[:2] + ["\n\n".join(clean[2:])]
+        if len(clean) > 4: clean = clean[:3] + ["\n\n".join(clean[3:])]
         if clean:
             result["reply_parts"] = clean
             result["reply"] = "\n\n".join(clean)
@@ -6149,7 +6176,13 @@ def approved_reply_parts(result, reply):
     parts = result.get("reply_parts") or []
     if isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and "\n\n".join(parts) == reply:
         return parts
-    return [reply] if reply else []
+    if not reply:
+        return []
+    # Split only approved text, including checker corrections; never restore stale AI parts.
+    chunks = [part.strip() for part in re.split(r"\n\s*\n|(?<=[.!؟?])\s+", reply) if part.strip()]
+    if len(chunks) > 4:
+        chunks = chunks[:3] + ["\n\n".join(chunks[3:])]
+    return chunks
 
 
 POST_ORDER_SERVICE_RULES = """
@@ -6231,16 +6264,18 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
         if not review_id:
             review_id = create_human_review(db, ev, reason, notify_telegram=True)
         reply = "هذا الطلب يحتاج تأكد من فريق المتجر، وسجلت رسالتج للمراجعة. أگدر أجاوبج هنا عن تفاصيل القطعة وسياسة المتجر المتوفرة 🌸"
+    image_urls = []
+    if not reason and matched and (_requests_product_photo(ev.get("text", "")) or _promises_product_photo(reply)):
+        image_urls = select_product_image_urls(matched, str(result.get("image_color") or ""))
+    if not image_urls and _promises_product_photo(reply):
+        reply = "ما عندي صورة مطابقة جاهزة للإرسال لهذا الموديل أو اللون حالياً. أحتاج أتأكد منها حتى ما أدزلج صورة مختلفة."
     # A pending action is not a blanket stop on all future customer questions.
     reply_parts = approved_reply_parts(result, reply)
     for part in reply_parts:
         save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None,
                      {"post_order_followup": True, "order_id": order["id"], "human_review_id": review_id if reason else None})
         save_conversation_message(db, ev["sender_id"], "assistant", part)
-    image_urls = []
-    asks_for_image = re.search(r"(?:دز|دزي|ارسل|أرسل|ابعث|أبعث|اريد|أريد|ممكن|شوف).{0,30}(?:صور|صورت)", ev.get("text", ""))
-    if not reason and matched and asks_for_image:
-        image_urls = select_product_image_urls(matched, str(result.get("image_color") or ""))
+    if image_urls:
         for image_url in image_urls:
             save_message(db, ev["sender_id"], "outgoing", "image", None, image_url, None, None, {"post_order_followup": True})
     attachments = [{"type": "image", "url": url} for url in image_urls]
@@ -6445,7 +6480,7 @@ def call_main_ai(
     )
     sections.append(
         "[كل رسائل الزبون غير المجابة منذ آخر رد للوكيل — مرتبة من الأقدم للأحدث]\n"
-        "أجب عنها كلها في ردٍ واحد متماسك بدون تكرار وبدون تجاهل أي رسالة منها:\n"
+        "أجب عنها كلها بإجابة مترابطة مقسمة إلى reply_parts قصيرة متتابعة، دون تكرار أو تجاهل:\n"
         f"{unanswered_block}"
     )
     sections.append(
@@ -6629,6 +6664,7 @@ def check_reply(
     checker_rules = render_setting_template(db, "prompt_checker_rules", DEFAULT_CHECKER_RULES_PROMPT)
     checker_output = render_setting_template(db, "prompt_checker_output", DEFAULT_CHECKER_OUTPUT_PROMPT)
     system_prompt = f"{base_prompt}\n\n{checker_rules}\n\n{checker_output}"
+    system_prompt += "\nتحقق من أن الرد يجيب عن أسئلة الزبون قبل طلب الحجز، ويحترم التأجيل والرفض، ولا يكرر طلب البيانات المعروفة. لا ترفض الإجابة لمجرد تقسيمها إلى رسائل قصيرة. ارفض صفات المنتج والندرة والضمانات غير المدعومة ببياناته."
 
     if ev.get("_post_order"):
         system_prompt += "\n" + POST_ORDER_SERVICE_RULES + "\nارفض أي ادعاء بتنفيذ تعديل أو إرسال ملاحظة أو تحرك المندوب بلا دليل محفوظ."
@@ -7002,11 +7038,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         review_id = has_pending_human_review(db, ev["sender_id"])
         if not review_id:
             review_id = create_human_review(db, ev, "مرفق يحتاج استماعاً أو قراءة بشرية: " + message_type)
-        reply = "وصل المرفق عيني 🌸 حتى أجاوبج بدقة، ممكن تكتبين الطلب أو السؤال؟ والمرفق متاح لفريق المتجر للمراجعة."
-        save_message(db, ev["sender_id"], "outgoing", "text", reply, None, None, None, {"media_review": True})
-        save_conversation_message(db, ev["sender_id"], "assistant", reply)
         return {"sender_id": ev["sender_id"], "page_id": ev["page_id"], "platform": ev["platform"],
-                "reply": reply, "send_image": False, "meta": {"media_review": True, "human_review_id": review_id}}
+                "reply": "", "send_image": False,
+                "meta": {"media_review": True, "human_review_id": review_id, "waiting_for_human_action": True}}
 
     # ── STEP 05.5: Debounce — انتظر حتى ينتهي الزبون من إرسال رسائله ────────
     # نهدف إلى جمع كل ما يرسله الزبون (نص + صورة + رسائل متفرقة) قبل تشغيل الموديل
@@ -7808,7 +7842,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         log(13, "ORDER", "No purchase order requested in this message")
 
     # قرار الصورة قبل حفظ الرد حتى لا تظهر "صورة" في الداشبورد مع كل رد نصي.
-    send_img = _should_send_image(db, ev["sender_id"], matched_product, ev)
+    send_img = _should_send_image(db, ev["sender_id"], matched_product, ev) or (
+        bool(matched_product) and _promises_product_photo(reply)
+    )
     requested_image_color = str(ai_result.get("image_color") or "").strip()
     if not requested_image_color:
         color_context = " ".join(filter(None, (ev.get("text"), reply)))
@@ -7829,6 +7865,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             "requested_color": requested_image_color,
         })
     outgoing_image_url = outgoing_image_urls[0] if outgoing_image_urls else None
+    if not outgoing_image_urls and _promises_product_photo(reply):
+        reply = "ما عندي صورة مطابقة جاهزة للإرسال لهذا الموديل أو اللون حالياً. أحتاج أتأكد منها حتى ما أدزلج صورة مختلفة."
 
     # ── STEP 14: Save outgoing reply ─────────────────────────────────────────
     log(14, "SAVE REPLY", "Saving outgoing reply to database...")
@@ -8038,7 +8076,7 @@ def manychat_webhook(store_key=""):
     first_name = data.get("first_name", "") or ""
     last_name = data.get("last_name", "") or ""
     store_name = extract_store_name_from_manychat(data) or (get_store(db, store_id) or {}).get("name", "")
-    platform = detect_manychat_platform(data, default="whatsapp" if store_id == ALFATENA_STORE_ID else "facebook")
+    platform = detect_manychat_platform(data)
     page_id = str(data.get("page_id") or "")
     media = resolve_incoming_media(data, text)
     image_url = next((m["url"] for m in media if m["type"] == "image"), None)
