@@ -290,7 +290,7 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'",(self.sender,)).fetchone()[0],0)
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='incoming'",(self.sender,)).fetchone()[0],3)
 
-    def test_sales_parts_send_one_complete_message(self):
+    def test_short_sales_reply_sends_one_complete_message(self):
         parts=['أهلاً بك.','السعر 17000 دينار.','القماش باربي.','أي قياس تحتاج؟']
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
         self.assertEqual(self.m.approved_reply_parts(result,result['reply']),[result['reply']])
@@ -308,8 +308,27 @@ class MessagingMediaTests(unittest.TestCase):
     def test_extra_sales_parts_keep_all_information_under_limit(self):
         parts=['تحية','سعر','قماش','قياس','توصيل','سؤال']
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
-        self.assertEqual(len(result['reply_parts']),4)
+        self.assertTrue(1 <= len(result['reply_parts']) <= 4)
         self.assertEqual(result['reply'],'\n\n'.join(parts))
+
+    def test_meaningful_parts_sent_once_in_order_for_every_store(self):
+        parts=['الفستان متوفر باللون الأسود والأحمر حسب الخيارات الموجودة للقطعة.',
+               'القماش باربي وتفاصيل الخامة الموجودة موضحة بهذا المنتج حتى تختارين براحتج.',
+               'الفحص عند الاستلام متاح حسب سياسة المتجر، وتكدرين تتأكدين من القطعة.',
+               'شنو القياس واللون اللي تحبين نكمل عليه حتى نراجع توفر الاختيار؟']
+        for store in ['default', 'khuyoot', 'golden-threads', 'al-fatena']:
+            token=self.m._current_store_id.set(store)
+            try:
+                result={'sender_id':self.sender,'reply':'\n\n'.join(parts),'reply_parts':parts}
+                self.assertEqual(self.m.approved_reply_parts(result,result['reply']),parts)
+                with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
+                    self.m.send_webhook_result_to_facebook(result)
+                self.assertEqual([call.args[1] for call in send.call_args_list],parts)
+                result['_single_message']=True
+                with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
+                    self.m.send_webhook_result_to_facebook(result)
+                self.assertEqual([call.args[1] for call in send.call_args_list],[result['reply']])
+            finally:self.m._current_store_id.reset(token)
 
     def test_delivery_fees_are_separate_by_store_and_destination(self):
         for sid,baghdad,other in [('al-fatena',3000,7000),('khuyoot',0,4500)]:

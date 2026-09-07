@@ -25,9 +25,11 @@ from zoneinfo import ZoneInfo
 import requests
 try:
     from .media import extract_media, media_type, message_media
+    from .reply_layout import approved_parts
     from .checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
     from media import extract_media, media_type, message_media
+    from reply_layout import approved_parts
     from checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
@@ -5988,12 +5990,14 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
 
-    save_message(
-        db, sender_id, "outgoing", "text",
-        reply, None, None, None,
-        {"auto_after_product_link": True, "product_id": matched_product.get("product_id"),
-         "checkout_proposal": ai_result.get("_checkout_proposal"), "checkout_draft": ai_result.get("order") if not order_created else None},
-    )
+    parts = approved_reply_parts(ai_result, reply)
+    for part in parts:
+        save_message(
+            db, sender_id, "outgoing", "text",
+            part, None, None, None,
+            {"auto_after_product_link": True, "product_id": matched_product.get("product_id"),
+             "checkout_proposal": ai_result.get("_checkout_proposal"), "checkout_draft": ai_result.get("order") if not order_created else None},
+        )
     save_conversation_message(db, sender_id, "assistant", reply)
     if not order_created:
         try:
@@ -6006,7 +6010,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
             )
         except Exception as exc:
             print(f"[FollowUp] Could not schedule after product link: {exc}", flush=True)
-    sent = send_text_to_facebook(sender_id, reply, ev["page_id"], ev["platform"])
+    sent = send_webhook_result_to_facebook({"sender_id": sender_id, "reply": reply,
+        "reply_parts": parts, "_single_message": bool(ai_result.get("_single_message")),
+        "page_id": ev["page_id"], "platform": ev["platform"]})
     print(f"[ProductLink] Auto reply sent={sent} to {sender_id}", flush=True)
     return {"sent": sent, "reply": reply, "reason": None if sent else "manychat_send_failed"}
 
@@ -6238,7 +6244,7 @@ CONVERSATION_SALES_GUIDE = """
 التأجيل: اقبل المهلة، ويمكن تلخيص الاختيار المتفق عليه باختصار مرة واحدة دون افتراض لون أو قياس. لا تنشئ حجزاً مؤقتاً ولا تعد بتذكير غير منفذ ولا تلاحق الزبون بالندرة.
 الإغلاق: انتقل لجمع البيانات بعد رغبة واضحة بالحجز؛ اطلب الناقص فقط واجمع حقول التواصل في رسالة قصيرة واحدة. إذا بقي اختيار غير محسوم اسأل عنه قبل الإنشاء. لا تقل تم الحجز قبل نجاح تسجيله.
 بعد الحجز انتقل للخدمة، لا تبدأ بيعاً جديداً من تلقاء نفسك. المرفق المفهوم يعالج طبيعياً؛ غير المفهوم يحال للبشر دون مطالبة الزبون بإعادة كتابته.
-اكتب رداً واحداً مختصراً ومتكاملاً في reply؛ لا تجزئه إلى رسائل متتابعة. اجمع جواب الزبون والسؤال الضروري في رسالة واحدة. تأكيد الحجز رسالة واحدة بعد نجاح الحفظ.
+قسّم الرد بذكاء إلى 1–4 رسائل عبر reply_parts، بحسب المعنى لا بحسب عدد الجمل، وهذه القاعدة لكل المتاجر. الرد القصير والشكر والتحية البسيطة رسالة واحدة. لرد أطول: الجواب المباشر أولاً، ثم توضيح مستقل مطلوب، ثم معالجة اعتراض إن وجد، ثم سؤال واحد مناسب للخطوة التالية؛ لا تملأ أربع رسائل إن لم يحتج الكلام إليها. اجمع التحية مع الجواب ولا ترسل تحية وحدها قبل الجواب. اجمع السعر وإجماليه، والقياس وتفسيره، وحقول الهاتف والمحافظة والعنوان؛ لا تقطع فكرة مترابطة أو قائمة بين رسالتين. تجنب تكرار المعلومات والأسئلة بين الأجزاء، ولا تبدأ كل جزء بتحية. تأكيد تثبيت الحجز بكل تفاصيله رسالة واحدة لا تقسم مطلقاً. اجعل reply النص الكامل نفسه واجمع reply_parts بفاصل سطرين. الأجزاء ترسل بالترتيب مرة واحدة دون إعادة النص الكامل بعدها.
 نتائج بحث المنتجات اقتراحات فقط وليست اختيارات الزبون. لا تضف قطعة إلى order.items لمجرد السؤال عنها. لا تخمن المنتج من فستان أو أسود أو رقم قياس. املأ order بتفاصيل القطع التي طلبها الزبون حتى قبل اكتمال الهاتف والعنوان، مع ترك الناقص فارغاً. إذا وصلت البيانات بعد طلبها ورغبة الحجز واضحة فأنشئ الطلب دون إعادة سؤال التثبيت. القياس 50 أو 52 اختيار غير محسوم وليس وزناً 50؛ لا تحسم أحدهما تلقائياً.
 """
 
@@ -6250,16 +6256,16 @@ def normalize_ai_reply_parts(result):
         for part in parts:
             part = part.strip()
             if part and (not clean or part != clean[-1]): clean.append(part)
-        if len(clean) > 4: clean = clean[:3] + ["\n\n".join(clean[3:])]
         if clean:
             result["reply_parts"] = clean
             result["reply"] = "\n\n".join(clean)
+            result["reply_parts"] = approved_reply_parts(result, result["reply"])
     return result
 
 
 def approved_reply_parts(result, reply):
-    """Send the final approved response once, including a complete checkout receipt."""
-    return [reply] if reply else []
+    """Apply the same semantic message layout in storage and every sender."""
+    return approved_parts(result, reply)
 
 
 POST_ORDER_SERVICE_RULES = """
@@ -6967,7 +6973,6 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
                                               for p in catalog_products if p.get("product_id") in {i["product_id"] for i in items}]
             proposal["_delivery_fee"] = delivery_fee
             ai_result["_checkout_proposal"] = proposal
-            ai_result["_single_message"] = True
             return None, checkout_receipt(order_data, items, catalog_products, delivery_fee,
                 "هذه القطع المقترحة للحجز، ولم يثبت الطلب بعد:") + "\nهل أثبت الطلب بهذه القطع والقياسات والأسعار؟"
 
@@ -7055,7 +7060,7 @@ def saved_checkout_reply(db, ev, reply, meta, payload=None):
     save_message(db, ev["sender_id"], "outgoing", "text", reply, None, None, None, payload or meta)
     save_conversation_message(db, ev["sender_id"], "assistant", reply)
     return {"sender_id": ev["sender_id"], "page_id": ev.get("page_id"), "platform": ev.get("platform"),
-            "reply": reply, "reply_parts": [reply], "send_image": False, "meta": meta}
+            "reply": reply, "reply_parts": [reply], "_single_message": True, "send_image": False, "meta": meta}
 
 
 def accept_checkout_proposal(db, ev, history, products):
@@ -8205,6 +8210,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         "platform":  ev["platform"],
         "reply":     reply,
         "reply_parts": reply_parts,
+        "_single_message": bool(ai_result.get("_single_message")),
     }
     # إرسال الصورة فقط عند الطلب أو دخول إعلان
     final = attach_product_image_payload(
