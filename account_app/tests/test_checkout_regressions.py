@@ -137,8 +137,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         result = {"order": {"items": self.data()["items"]}}
         created, reply = self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
         self.assertTrue(created)
-        self.assertIn("21,000", reply)
-        self.assertIn("قياس 44", reply)
+        self.assertEqual(reply, "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.")
         self.assertEqual(self.m.approved_reply_parts(result, reply), [reply])
 
     def test_new_contact_triggers_checkout_despite_false_model_flag(self):
@@ -204,7 +203,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_customer_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "call_main_ai", return_value=model_result) as ai:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
         self.assertIn("07701234567", ai.call_args.args[0]["text"])
-        self.assertIn("تم تثبيت الطلب", response["reply"])
+        self.assertEqual(response["reply"], self.m.DEFAULT_ORDER_CONFIRMATION_TEXT)
         self.assertEqual(response["reply_parts"], [response["reply"]])
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 1)
 
