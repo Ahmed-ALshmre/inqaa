@@ -89,6 +89,7 @@ class MessagingMediaTests(unittest.TestCase):
 
     def test_album_links_all_products_and_ignores_old_ad(self):
         products = [{'product_id':'album-A','product_name':'A','stock':'متوفر'}, {'product_id':'album-B','product_name':'B','stock':'متوفر'}]
+        catalog_patch = patch.object(self.m, 'load_products_from_file', return_value=products); catalog_patch.start(); self.addCleanup(catalog_patch.stop)
         ev = {'sender_id':self.sender, 'text':'', 'ad_id':'old-ad', 'attachments':[{'type':'image','url':'https://img.test/a.jpg'}, {'type':'image','url':'https://img.test/b.jpg'}]}
         matches = [{'product_found':True,'product_id':p['product_id']} for p in products]
         with patch.object(self.m,'match_customer_image_with_catalog',side_effect=matches):
@@ -100,6 +101,7 @@ class MessagingMediaTests(unittest.TestCase):
     def test_image_correction_replaces_previous_product(self):
         old = {'product_id':'old','product_name':'Old','stock':'متوفر'}
         new = {'product_id':'new','product_name':'New','stock':'متوفر'}
+        catalog_patch = patch.object(self.m, 'load_products_from_file', return_value=[old,new]); catalog_patch.start(); self.addCleanup(catalog_patch.stop)
         self.m.complete_customer_product_link(self.db,self.sender,old,'manual')
         ev = {'sender_id':self.sender,'text':'مو هذا','image_url':'https://img.test/new.jpg'}
         with patch.object(self.m,'match_customer_image_with_catalog',return_value={'product_found':True,'product_id':'new'}):
@@ -109,6 +111,7 @@ class MessagingMediaTests(unittest.TestCase):
     def test_new_photo_changes_focus_without_explicit_correction(self):
         old = {'product_id':'old','product_name':'Old','stock':'متوفر'}
         new = {'product_id':'new','product_name':'New','stock':'متوفر'}
+        catalog_patch = patch.object(self.m, 'load_products_from_file', return_value=[old,new]); catalog_patch.start(); self.addCleanup(catalog_patch.stop)
         for caption, expected in [('', {'new'}), ('ضيفي هذا ويا الطلب', {'old','new'})]:
             self.m.complete_customer_product_link(self.db,self.sender,old,'manual')
             ev = {'sender_id':self.sender,'text':caption,'image_url':'https://img.test/new.jpg'}
@@ -126,6 +129,7 @@ class MessagingMediaTests(unittest.TestCase):
 
     def test_auto_reply_does_not_remove_other_album_products(self):
         products = [{'product_id':'keep-A','product_name':'A'}, {'product_id':'keep-B','product_name':'B'}]
+        catalog_patch = patch.object(self.m, 'load_products_from_file', return_value=products); catalog_patch.start(); self.addCleanup(catalog_patch.stop)
         for product in products:
             self.m.complete_customer_product_link(self.db,self.sender,product,'image_recognition',preserve_existing=True)
         with patch.object(self.m,'is_ai_enabled',return_value=False):
@@ -206,7 +210,7 @@ class MessagingMediaTests(unittest.TestCase):
         result=self.m.normalize_ai_reply_parts({'reply_parts':['القياس متوفر','شنو اللون المطلوب؟']})
         result['sender_id']=self.sender
         self.m.send_webhook_result_to_facebook(result)
-        self.assertEqual([c.args[1] for c in send.call_args_list],['القياس متوفر','شنو اللون المطلوب؟'])
+        self.assertEqual([c.args[1] for c in send.call_args_list],[result['reply']])
         self.assertEqual(self.m.approved_reply_parts(result,'جواب مصحح'),['جواب مصحح'])
 
     def test_fatena_missing_key_does_not_use_another_account(self):
@@ -286,18 +290,18 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'",(self.sender,)).fetchone()[0],0)
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='incoming'",(self.sender,)).fetchone()[0],3)
 
-    def test_sales_parts_keep_four_messages_without_repeating_combined_reply(self):
+    def test_sales_parts_send_one_complete_message(self):
         parts=['أهلاً بك.','السعر 17000 دينار.','القماش باربي.','أي قياس تحتاج؟']
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
-        self.assertEqual(self.m.approved_reply_parts(result,result['reply']),parts)
+        self.assertEqual(self.m.approved_reply_parts(result,result['reply']),[result['reply']])
         with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
             self.m.send_webhook_result_to_facebook(dict(result,sender_id=self.sender))
-            self.assertEqual([call.args[1] for call in send.call_args_list],parts)
+            self.assertEqual([call.args[1] for call in send.call_args_list],[result['reply']])
 
-    def test_corrected_sales_text_is_split_without_old_claims(self):
+    def test_corrected_sales_text_stays_one_message_without_old_claims(self):
         result={'reply_parts':['باقي قطعتين','أحجز الآن']}
         reply='السعر 17000 دينار. القماش باربي. أي قياس تحتاج؟'
-        self.assertEqual(self.m.approved_reply_parts(result,reply),['السعر 17000 دينار.','القماش باربي.','أي قياس تحتاج؟'])
+        self.assertEqual(self.m.approved_reply_parts(result,reply),[reply])
         self.assertEqual(self.m.approved_reply_parts({},'تدللين 🌷'),['تدللين 🌷'])
         self.assertEqual(self.m.approved_reply_parts({},''),[])
 
@@ -326,6 +330,6 @@ class MessagingMediaTests(unittest.TestCase):
     def test_photo_never_rebinds_automatic_product_before_matching(self):
         with patch.object(self.m,'get_auto_product_settings',return_value={'enabled':True}), patch.object(self.m,'get_active_product_binding',return_value=None):
             self.assertFalse(self.m.should_use_auto_product(self.db,self.sender,{'image_url':'https://example.test/new.jpg'},'image',[]))
-            self.assertTrue(self.m.should_use_auto_product(self.db,self.sender,{'text':'مرحبا'},'text',[]))
+            self.assertFalse(self.m.should_use_auto_product(self.db,self.sender,{'text':'مرحبا'},'text',[]))
 
 if __name__=='__main__':unittest.main()

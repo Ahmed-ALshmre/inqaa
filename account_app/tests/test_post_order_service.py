@@ -61,10 +61,30 @@ class PostOrderServiceTests(unittest.TestCase):
         self.assertIsNone(self.m.has_pending_human_review(self.db,self.sender))
 
     @patch('account_app.app.requests.post')
+    def test_review_notices_are_internal_and_never_sent_or_saved_as_reply(self, post):
+        post.return_value.ok = True
+        notices = [
+            'هذا الطلب يحتاج تأكد من فريق المتجر، وسجلت رسالتج للمراجعة.',
+            'أگدر أجاوبج هنا عن تفاصيل القطعة وسياسة المتجر المتوفرة 🌸',
+            'طلبج مسجل مسبقاً. رسالتج موجودة بالمراجعة؛ ما تم تغيير الطلب بعد.',
+        ]
+        for notice in notices:
+            with self.subTest(notice=notice):
+                response, _ = self.handle({'reply': notice})
+                self.assertEqual(response['reply'], '')
+                self.assertEqual(response['reply_parts'], [])
+                self.assertTrue(response['meta']['human_review_id'])
+                with patch.object(self.m, 'send_text_to_facebook') as send:
+                    self.m.send_webhook_result_to_facebook(response)
+                send.assert_not_called()
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 0)
+        self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
+
+    @patch('account_app.app.requests.post')
     def test_action_review_does_not_silence_following_questions(self, post):
         post.return_value.ok = True
         response,_ = self.handle({'reply':'سأراجع تغيير رقم الهاتف','requires_human':True,'handoff_reason':'تغيير هاتف الطلب'})
-        self.assertTrue(response['reply']); self.assertTrue(response['meta']['needs_human'])
+        self.assertEqual(response['reply'], ''); self.assertTrue(response['meta']['needs_human'])
         review = response['meta']['human_review_id']
         again,_ = self.handle({'reply':'طلب تعديل','requires_human':True})
         self.assertEqual(again['meta']['human_review_id'],review)
@@ -110,7 +130,8 @@ class PostOrderServiceTests(unittest.TestCase):
     def test_model_failure_gets_visible_review_without_permanent_pause(self,post):
         post.return_value.ok=True
         response,_=self.handle({'failed':True,'failure_reason':'timeout','reply':''})
-        self.assertTrue(response['reply'])
+        self.assertEqual(response['reply'], '')
+        self.assertEqual(response['reply_parts'], [])
         self.assertTrue(response['meta']['human_review_id'])
         self.assertTrue(self.m.is_customer_ai_enabled(self.db,self.sender))
 

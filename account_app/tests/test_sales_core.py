@@ -132,7 +132,7 @@ class SalesCoreTests(unittest.TestCase):
         self.assertEqual(get_active_product_binding(self.db, self.sender_id)["product_id"], "P002")
 
     def test_new_customer_default_product_does_not_override_image(self):
-        self.assertTrue(should_use_auto_product(
+        self.assertFalse(should_use_auto_product(
             self.db, self.sender_id,
             {"text": "مرحبا", "image_url": "", "ref": "", "ad_id": ""},
             "text", [],
@@ -143,8 +143,8 @@ class SalesCoreTests(unittest.TestCase):
             "image", [],
         ))
 
-    def test_ad_customer_also_gets_default_product(self):
-        self.assertTrue(should_use_auto_product(
+    def test_unknown_ad_does_not_get_default_product(self):
+        self.assertFalse(should_use_auto_product(
             self.db, self.sender_id,
             {"text": "مرحبا", "image_url": "", "ref": "campaign", "ad_id": "123"},
             "text", [],
@@ -312,7 +312,7 @@ class SalesCoreTests(unittest.TestCase):
                 {"product_id": "P001", "color": "أسود", "size": "70", "size_type": "weight", "quantity": 2},
                 {"product_id": "P003", "color": "زيتي", "size": "90", "size_type": "weight", "quantity": 1},
             ],
-        }}, None)
+        }}, None, cart_confirmed=True)
         self.assertTrue(result)
         row = self.db.execute("SELECT order_items FROM orders WHERE sender_id=?", (self.sender_id,)).fetchone()
         self.assertEqual(len(json.loads(row[0])), 2)

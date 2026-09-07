@@ -25,8 +25,10 @@ from zoneinfo import ZoneInfo
 import requests
 try:
     from .media import extract_media, media_type, message_media
+    from .checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
     from media import extract_media, media_type, message_media
+    from checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
@@ -2366,8 +2368,8 @@ def load_customer_products(db, sender_id, limit=5):
            WHERE sender_id=?
              AND COALESCE(status, 'active')='active'
            ORDER BY last_seen_at DESC, id DESC
-           LIMIT ?""",
-        (sender_id, limit),
+            """,
+        (sender_id,),
     ).fetchall()
     products_by_id = {
         p.get("product_id"): p
@@ -2378,6 +2380,9 @@ def load_customer_products(db, sender_id, limit=5):
     for row in rows:
         memory = dict(row)
         product = dict(products_by_id.get(memory.get("product_id"), {}))
+        # Legacy search/default/reply guesses must not masquerade as a choice.
+        if not product or not product_binding_is_reliable(memory, product):
+            continue
         product.update({
             "product_id": memory.get("product_id"),
             "product_name": product.get("product_name") or memory.get("product_name"),
@@ -2391,19 +2396,33 @@ def load_customer_products(db, sender_id, limit=5):
             "image_sent": memory.get("image_sent") or 0,
         })
         result.append(product)
-    return result
+    return result[:limit]
+
+
+def product_binding_is_reliable(memory, product):
+    guessed = {"auto_default_product", "catalog_search", "reply_product_context"}
+    if memory.get("match_method") in guessed or memory.get("source") in guessed:
+        return False
+    old_name = str(memory.get("product_name") or "").strip()
+    return not old_name or old_name == str(product.get("product_name") or "").strip()
 
 
 def get_active_product_binding(db, sender_id):
-    row = db.execute(
+    rows = db.execute(
         """SELECT *
            FROM customer_product_interests
            WHERE sender_id=? AND COALESCE(status, 'active')='active'
            ORDER BY last_seen_at DESC, id DESC
-           LIMIT 1""",
+            """,
         (sender_id,),
-    ).fetchone()
-    return dict(row) if row else None
+    ).fetchall()
+    catalog = {p.get("product_id"): p for p in load_products_from_file()}
+    for row in rows:
+        memory = dict(row)
+        product = catalog.get(memory.get("product_id"))
+        if product and product_binding_is_reliable(memory, product):
+            return memory
+    return None
 
 
 def bind_customer_to_product(
@@ -2418,7 +2437,9 @@ def bind_customer_to_product(
         confidence=confidence, source=source or method,
         status="active", notes=notes,
     )
-    return get_active_product_binding(db, sender_id)
+    row = db.execute("SELECT * FROM customer_product_interests WHERE sender_id=? AND product_id=?",
+                     (sender_id, product.get("product_id"))).fetchone()
+    return dict(row) if row else None
 
 
 def reject_current_binding(db, sender_id, reason="", allow_any_source=False):
@@ -2480,7 +2501,9 @@ def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
     text = (ev.get("text") or "").strip()
     if text and is_product_objection(text):
         return False
-    return bool(get_auto_product_settings(db).get("enabled"))
+    # A campaign default is not evidence that this customer selected its model.
+    # Explicit text/ad/image matching below is the only way to establish a link.
+    return False
 
 
 def _is_contextual_product_question(text):
@@ -2729,16 +2752,30 @@ def infer_explicit_customer_gender(text):
     return ""
 
 
+def capture_customer_contact(db, sender_id, text):
+    row = db.execute("SELECT phone,province,address FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
+    previous = dict(row) if row else {}
+    fields = contact_fields(text, previous)
+    if "address" not in fields and "\n" in str(text or ""):
+        for line in str(text).splitlines():
+            fields.update(contact_fields(line, {**previous, **fields}))
+    for key, value in fields.items():
+        if key in {"phone", "province", "address"}:
+            db.execute(f"UPDATE customers SET {key}=? WHERE sender_id=?", (value, sender_id))
+    db.commit()
+    return fields
+
+
 def update_customer_intelligence(db, sender_id, text):
     """Update explicit gender plus a real-time, explainable purchase-intent score."""
     text = str(text or "").strip()
     normalized = text.lower()
     gender = infer_explicit_customer_gender(text)
     row = db.execute(
-        "SELECT COALESCE(lead_score,0) AS lead_score, gender FROM customers WHERE sender_id=?",
+        "SELECT *, COALESCE(lead_score,0) AS score_value FROM customers WHERE sender_id=?",
         (sender_id,),
     ).fetchone()
-    score = int(row["lead_score"] or 0) if row else 0
+    score = int(row["score_value"] or 0) if row else 0
     signals = (
         (("سعر", "بكم", "شكد"), 8),
         (("متوفر", "موجود", "قياس", "لون"), 10),
@@ -2749,8 +2786,8 @@ def update_customer_intelligence(db, sender_id, text):
         if any(word in normalized for word in keywords):
             score += points
     western_text = text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
-    phone_match = re.search(r"(?<!\d)(07\d{8,9})(?!\d)", re.sub(r"[\s\-()]", "", western_text))
-    phone = phone_match.group(1) if phone_match else ""
+    contact = contact_fields(text, dict(row) if row else {})
+    phone = contact.get("phone", "")
     digits = re.sub(r"\D", "", western_text)
     if len(digits) in {10, 11}:
         score += 30
@@ -2759,14 +2796,8 @@ def update_customer_intelligence(db, sender_id, text):
     has_order = bool(db.execute("SELECT 1 FROM orders WHERE sender_id=? LIMIT 1", (sender_id,)).fetchone())
     score = max(0, min(score, 100))
     stage = "booked" if has_order else ("hot" if score >= 60 else "warm" if score >= 15 else "new")
-    provinces = (
-        "بغداد", "البصرة", "نينوى", "الموصل", "أربيل", "دهوك", "السليمانية",
-        "كركوك", "الأنبار", "النجف", "كربلاء", "بابل", "واسط", "ميسان",
-        "ذي قار", "الناصرية", "المثنى", "الديوانية", "صلاح الدين", "ديالى",
-    )
-    province = next((name for name in provinces if name in text), "")
-    address_match = re.search(r"(?:عنواني|العنوان)\s*[:\-]?\s*(.{4,160})", text, re.IGNORECASE)
-    address = address_match.group(1).strip(" .،") if address_match else ""
+    province = contact.get("province", "")
+    address = contact.get("address", "")
     db.execute(
         """UPDATE customers SET
            gender=CASE WHEN ?!='' THEN ? ELSE gender END,
@@ -3825,6 +3856,11 @@ def is_ai_handoff_reply(reply: str) -> bool:
         "الادارة",
         "ثواني وأحول",
         "ثواني واحول",
+        "يحتاج تأكد من فريق المتجر",
+        "سجلت رسالتج للمراجعة",
+        "رسالتج موجودة بالمراجعة",
+        "رسالتج موجودة لفريق المتجر",
+        "أگدر أجاوبج هنا عن تفاصيل القطعة",
     ]
     apology_markers = ["أعتذر", "اعتذر", "ما اكدر", "ما أقدر", "لم أتمكن"]
     return any(marker in text for marker in handoff_markers) or (
@@ -4529,6 +4565,12 @@ def _strip_arabic_prefix(word):
 
 def _text_match_product(text, products):
     text_lower = text.lower()
+    code_matches = [p for p in products if p.get("product_id") and re.search(
+        r"(?<!\w)" + re.escape(str(p["product_id"]).lower()) + r"(?!\w)", text_lower)]
+    if len(code_matches) == 1:
+        return code_matches[0]
+    if len(code_matches) > 1:
+        return None
     raw_words = [w for w in re.split(r"\s+", text_lower) if len(w) > 2]
     # الكلمات الشائعة التي يجب تجاهلها لمنع الربط العشوائي للمنتجات
     stop_words = {"شنو", "شكد", "اريد", "هذا", "هذي", "عليكم", "السلام", "مرحبا", "ممكن", "عيني", "قلبي", "حبيبتي", "توصيل", "بغداد", "محافظات", "شلون", "شلونك", "شلونكم", "بشكد", "بيش", "سعر", "السعر", "عندكم", "عندج", "موجود", "موجودة", "يمكم", "هالمنتج", "هالقطعة", "القطعة", "قطعة"}
@@ -4540,6 +4582,10 @@ def _text_match_product(text, products):
             if stripped not in stop_words and len(stripped) > 2:
                 words.add(stripped)
 
+    # A category/color/size shared by several models does not identify a model.
+    generic = _PRODUCT_TYPE_TERMS | _GENERIC_PRODUCT_TERMS | _COLOR_TERMS | {"عباء", "فستان", "فساتين", "قياس", "قياسات", "اسود", "أسود"}
+    identifying = {w for w in words if _strip_arabic_prefix(w) not in generic and not w.isdigit()}
+
     best_product, best_score, tied = None, 0, False
     for p in products:
         # نبحث فقط في الاسم والكلمات الدلالية لتجنب المطابقات الخاطئة من الوصف
@@ -4549,6 +4595,8 @@ def _text_match_product(text, products):
         ])).lower()
         haystack_raw = [w for w in re.split(r"[\s,]+", haystack_str) if len(w) > 2]
         haystack_words = set(haystack_raw) | {_strip_arabic_prefix(w) for w in haystack_raw}
+        if not identifying.intersection(haystack_words):
+            continue
         
         # يجب أن تتطابق الكلمة تماماً مع كلمة في المنتج (ليس مجرد جزء من نص)
         score = sum(1 for w in words if w in haystack_words)
@@ -4809,6 +4857,10 @@ def build_product_recommendation_image_messages(matches, max_images_per_product=
 def remember_product_search_results(db, sender_id, matches, request_info):
     summary = _product_search_summary(request_info)
     for rank, item in reversed(list(enumerate(matches, 1))):
+        # Do not overwrite a customer's real choice, rejection or older evidence.
+        if db.execute("SELECT 1 FROM customer_product_interests WHERE sender_id=? AND product_id=?",
+                      (sender_id, item["product"].get("product_id"))).fetchone():
+            continue
         remember_customer_product(
             db,
             sender_id,
@@ -4816,7 +4868,7 @@ def remember_product_search_results(db, sender_id, matches, request_info):
             "catalog_search",
             confidence=item.get("score") or 70,
             source="catalog_search",
-            status="active",
+            status="suggested",
             notes=f"catalog_search_rank={rank}; query={summary}; reasons={','.join(item.get('reasons') or [])}",
         )
 
@@ -4840,28 +4892,30 @@ def select_customer_context_product(text, customer_products):
     ordered = _customer_products_display_order(customer_products)
     words = _catalog_words(text)
     for index, aliases in _ORDINAL_WORDS.items():
-        if any(alias in words for alias in aliases) and len(ordered) >= index:
+        ordinal_aliases = [alias for alias in aliases if alias.startswith("ال")]
+        if any(alias in words for alias in ordinal_aliases) and len(ordered) >= index:
             return ordered[index - 1]
 
-    normalized = _catalog_text(text).lower()
-    for product in ordered:
-        if product.get("product_id") and str(product.get("product_id")).lower() in normalized:
-            return product
-        name = _catalog_text(product.get("product_name") or "").lower()
-        if name and name in normalized:
-            return product
+    explicit = _text_match_product(text or "", ordered)
+    if explicit:
+        return explicit
 
     request_info = _extract_product_request(text)
+    if request_info.get("product_terms") and not any(
+        set(request_info["product_terms"]) & _catalog_words(" ".join(str(p.get(k) or "") for k in ("product_name", "category")))
+        for p in ordered
+    ):
+        return None
     if request_info.get("has_specific_filter"):
         matches = []
         for product in ordered:
             match = _product_matches_request(product, request_info)
             if match:
                 matches.append(match)
-        if matches:
+        if len(matches) == 1:
             matches.sort(key=lambda item: item["score"], reverse=True)
             return matches[0]["product"]
-    return None
+    return ordered[0] if len(ordered) == 1 else None
 
 
 def select_product_mentioned_in_reply(reply, customer_products):
@@ -5554,9 +5608,7 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
         ad_id_str = str(ad_id).strip()
         matched = next(
             (p for p in products
-             if str(p.get("ad_id") or "").strip() == ad_id_str
-             or ad_id_str in str(p.get("ad_id") or "")
-             or str(p.get("ad_id") or "") in ad_id_str),
+             if str(p.get("ad_id") or "").strip() == ad_id_str),
             None,
         )
         if matched:
@@ -5885,6 +5937,11 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         "platform": customer.get("platform") or "facebook",
     }
     message_type = latest.get("message_type") or "text"
+    latest_order = get_latest_customer_order(db, sender_id)
+    if latest_order:
+        result = handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
+        sent = send_webhook_result_to_facebook(result, sender_id)
+        return {"sent": sent, "reply": result.get("reply", ""), "reason": None if sent else "manychat_send_failed"}
     latest_text = (ev.get("text") or "").strip()
     if (
         history_loaded_after_latest
@@ -5922,15 +5979,20 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         return {"sent": False, "reply": "", "reason": "empty_or_handoff_reply"}
 
     order_created = False
-    if ai_result.get("create_order"):
+    ai_result.pop("_checkout_proposal", None)
+    restore_checkout_draft(db, ev, ai_result, matched_product)
+    if checkout_requested(db, ev, ai_result):
         order_created, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
         if order_reply:
             reply = order_reply
+        elif order_created:
+            reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
 
     save_message(
         db, sender_id, "outgoing", "text",
         reply, None, None, None,
-        {"auto_after_product_link": True, "product_id": matched_product.get("product_id")},
+        {"auto_after_product_link": True, "product_id": matched_product.get("product_id"),
+         "checkout_proposal": ai_result.get("_checkout_proposal"), "checkout_draft": ai_result.get("order") if not order_created else None},
     )
     save_conversation_message(db, sender_id, "assistant", reply)
     if not order_created:
@@ -6176,8 +6238,8 @@ CONVERSATION_SALES_GUIDE = """
 التأجيل: اقبل المهلة، ويمكن تلخيص الاختيار المتفق عليه باختصار مرة واحدة دون افتراض لون أو قياس. لا تنشئ حجزاً مؤقتاً ولا تعد بتذكير غير منفذ ولا تلاحق الزبون بالندرة.
 الإغلاق: انتقل لجمع البيانات بعد رغبة واضحة بالحجز؛ اطلب الناقص فقط واجمع حقول التواصل في رسالة قصيرة واحدة. إذا بقي اختيار غير محسوم اسأل عنه قبل الإنشاء. لا تقل تم الحجز قبل نجاح تسجيله.
 بعد الحجز انتقل للخدمة، لا تبدأ بيعاً جديداً من تلقاء نفسك. المرفق المفهوم يعالج طبيعياً؛ غير المفهوم يحال للبشر دون مطالبة الزبون بإعادة كتابته.
-استخدم reply_parts افتراضياً: رسالتان إلى أربع رسائل قصيرة مكتملة المعنى، غالباً جملة واحدة لكل رسالة: جواب مباشر، ثم فائدة أو توضيح عند الحاجة، ثم سؤال واحد. التحية أو الشكر البسيط يكفيهما جزء واحد. لا تقسّم الاسم والهاتف والعنوان إلى ثلاث رسائل منفصلة، ولا تكرر المعلومة أو السؤال بين الأجزاء.
-إذا استخدمت reply_parts اجعل reply النص الكامل نفسه مفصولاً بسطرين. هذه الرسائل تُرسل دفعة متتابعة، وليست متابعة مؤجلة.
+اكتب رداً واحداً مختصراً ومتكاملاً في reply؛ لا تجزئه إلى رسائل متتابعة. اجمع جواب الزبون والسؤال الضروري في رسالة واحدة. تأكيد الحجز رسالة واحدة بعد نجاح الحفظ.
+نتائج بحث المنتجات اقتراحات فقط وليست اختيارات الزبون. لا تضف قطعة إلى order.items لمجرد السؤال عنها. لا تخمن المنتج من فستان أو أسود أو رقم قياس. املأ order بتفاصيل القطع التي طلبها الزبون حتى قبل اكتمال الهاتف والعنوان، مع ترك الناقص فارغاً. إذا وصلت البيانات بعد طلبها ورغبة الحجز واضحة فأنشئ الطلب دون إعادة سؤال التثبيت. القياس 50 أو 52 اختيار غير محسوم وليس وزناً 50؛ لا تحسم أحدهما تلقائياً.
 """
 
 
@@ -6196,16 +6258,8 @@ def normalize_ai_reply_parts(result):
 
 
 def approved_reply_parts(result, reply):
-    parts = result.get("reply_parts") or []
-    if isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and "\n\n".join(parts) == reply:
-        return parts
-    if not reply:
-        return []
-    # Split only approved text, including checker corrections; never restore stale AI parts.
-    chunks = [part.strip() for part in re.split(r"\n\s*\n|(?<=[.!؟?])\s+", reply) if part.strip()]
-    if len(chunks) > 4:
-        chunks = chunks[:3] + ["\n\n".join(chunks[3:])]
-    return chunks
+    """Send the final approved response once, including a complete checkout receipt."""
+    return [reply] if reply else []
 
 
 POST_ORDER_SERVICE_RULES = """
@@ -6219,6 +6273,7 @@ POST_ORDER_SERVICE_RULES = """
 - إذا طلب الزبون تغييراً تنفيذياً واضحاً في طلب مثبت أو تتبعاً غير متاح أو إرجاعاً فعلياً أو مسألة لا تستطيع الإجابة عنها، اجمع الناقص أولاً إن أمكن ثم اجعل requires_human=true مع handoff_reason يشرح المطلوب. لا تحول سؤال معرفة أو طلب توضيح يمكن إجابته.
 - يمكن متابعة استفسارات شراء جديد ومقارنة المنتجات وجمع الخيارات، لكن تثبيت طلب إضافي مستقل يحتاج معالجة منفصلة، ولا تعِد تثبيت الطلب القديم.
 - مراجعة بشرية معلقة تخص الإجراء المطلوب فقط؛ استمر بالإجابة عن الأسئلة الأخرى المتاحة ولا تعِد إنشاء المراجعة لنفس الحالة.
+- الإحالة والمراجعة إجراءات داخلية فقط: لا ترسل للزبون إشعار إحالة أو مراجعة أو عبارة بديلة عنها. عند الحاجة للمراجعة اجعل reply فارغاً وrequires_human=true.
 - أرجع نفس صيغة JSON مع create_order=false وrequires_human (true/false) وhandoff_reason. عند القدرة على الرد اجعل requires_human=false.
 """
 
@@ -6230,7 +6285,7 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
     review_id = has_pending_human_review(db, ev["sender_id"])
     event["_post_order"]["pending_human_review_id"] = review_id
     matched = select_customer_context_product(ev.get("text", ""), customer_products) if customer_products else None
-    matched = matched or (customer_products[0] if customer_products else None)
+    matched = matched or (customer_products[0] if len(customer_products) == 1 else None)
     instructions, rules = load_ai_config(db, sender_id=ev["sender_id"])
     unanswered = []
     for message in history:
@@ -6258,8 +6313,7 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
     elif is_ai_handoff_reply(reply):
         reason = "استفسار بعد الحجز يحتاج معلومات غير متاحة للمساعد"
     # No model reply can claim an operational change which this path never executes.
-    unsupported_action = r"(?:تم|ثبتنا|سجلنا|غيّرنا|غيرنا|ألغينا|الغينا|عدّلنا|عدلنا|ضفنا|أضفنا).{0,18}(?:تعديل|تغيير|إلغاء|الغاء|استعجال|ملاحظة|رقم|العنوان|اللون|القياس|الكمية)"
-    if re.search(unsupported_action, reply):
+    if unsupported_order_action(reply):
         reason = "طلب تعديل أو متابعة تنفيذية يحتاج تأكيداً من الموظف"
     if not reason and not courtesy_only and is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db):
         check = local_reply_validation(reply, matched, customer_products)
@@ -6275,7 +6329,7 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
             result = corrected
             if (corrected.get("failed") or not reply or corrected.get("requires_human") is True
                     or corrected.get("create_order") is True or is_ai_handoff_reply(reply)
-                    or re.search(unsupported_action, reply)):
+                    or unsupported_order_action(reply)):
                 reason = "تعذر اعتماد جواب دقيق بعد محاولة التصحيح"
             else:
                 check = local_reply_validation(reply, matched, customer_products)
@@ -6286,7 +6340,8 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
     if reason:
         if not review_id:
             review_id = create_human_review(db, ev, reason, notify_telegram=True)
-        reply = "هذا الطلب يحتاج تأكد من فريق المتجر، وسجلت رسالتج للمراجعة. أگدر أجاوبج هنا عن تفاصيل القطعة وسياسة المتجر المتوفرة 🌸"
+        # Human review stays internal; no placeholder or replacement is sent.
+        reply = ""
     image_urls = []
     if not reason and matched and (_requests_product_photo(ev.get("text", "")) or _promises_product_photo(reply)):
         image_urls = select_product_image_urls(matched, str(result.get("image_color") or ""))
@@ -6359,6 +6414,16 @@ def call_main_ai(
             "order": {},
             "confidence": 100,
         }
+
+    if not post_order and not matched_product and customer_products:
+        text = ev.get("text") or ""
+        multiple_request = bool(re.search(r"مقارن|الفرق|بين|موديلين|قطعتين|الاثنين|كلهن|كلهم|هذني|هذولي|هذوله", text))
+        named = [p for p in customer_products if p.get("product_name") and p["product_name"] in text]
+        if not multiple_request and len(named) < 2:
+            clarification = ("عندج أكثر من موديل بالمحادثة؛ أي واحد تقصدين؟" if len(customer_products) > 1
+                             else "الموديل المذكور مو واضح من الاختيار السابق.")
+            return {"reply": clarification + " حدديه بالاسم أو الصورة حتى أعطيج التفاصيل الصحيحة.",
+                    "intent": "question", "create_order": False, "order": {}, "confidence": 100}
 
     if not OPENROUTER_KEY:
         print("[MainAI] No API key, escalating to human.", flush=True)
@@ -6790,8 +6855,50 @@ def order_items_summary(items):
         for item in (items or [])
     )
 
-def create_order_if_valid(db, sender_id, ai_result, matched_product):
-    order_data = ai_result.get("order") or {}
+def checkout_customer_data(db, sender_id, order_data):
+    data = dict(order_data or {})
+    row = db.execute("SELECT name,phone,province,address FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
+    customer = dict(row) if row else {}
+    for field in ("phone", "province", "address"):
+        data[field] = customer.get(field) or data.get(field) or ""
+    data["customer_name"] = data.get("customer_name") or customer.get("name") or ""
+    return data
+
+
+def checkout_lines(order_data, matched_product=None):
+    items = order_data.get("items")
+    if isinstance(items, list) and items:
+        return items
+    return [{"product_id": order_data.get("product_id") or (matched_product or {}).get("product_id"),
+             "product_name": order_data.get("product_name") or (matched_product or {}).get("product_name", ""),
+             "color": order_data.get("color"), "size": order_data.get("size"),
+             "size_type": order_data.get("size_type", ""), "quantity": order_data.get("quantity", 1)}]
+
+
+def checkout_receipt(data, items, catalog, delivery_fee, confirmation=""):
+    by_id = {p.get("product_id"): p for p in catalog}
+    lines, total = [], 0
+    for item in items:
+        product = by_id[item["product_id"]]
+        price = int(re.sub(r"\D", "", str(product.get("price") or "0")) or "0")
+        amount = price * item["quantity"]
+        total += amount
+        measurement = ("وزن " if item.get("size_type") == "weight" else "قياس ") + str(item.get("size") or "")
+        details = " / ".join(str(v) for v in (item.get("color"), measurement if item.get("size") else "") if v)
+        lines.append(f"{item['product_name']} ×{item['quantity']} — {details} — {amount:,} د.ع")
+    lines.extend([f"التوصيل: {int(delivery_fee):,} د.ع", f"المجموع: {total + int(delivery_fee):,} د.ع",
+                  f"العنوان: {data.get('province', '')} / {data.get('address', '')}", f"الهاتف: {data.get('phone', '')}"])
+    delivery_time = get_delivery_settings().get("delivery_time")
+    lines.append("مدة التوصيل: " + (str(delivery_time) if delivery_time else "يؤكدها فريق المتجر"))
+    if data.get("notes"):
+        lines.append("الملاحظة المطلوبة (تحتاج تأكيد المتجر): " + str(data["notes"]))
+    if confirmation:
+        lines.insert(0, confirmation)
+    return "\n".join(lines)
+
+
+def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_confirmed=False):
+    order_data = checkout_customer_data(db, sender_id, ai_result.get("order"))
     phone   = (order_data.get("phone")   or "").strip()
     province = (order_data.get("province") or "").strip()
     address = (order_data.get("address") or "").strip()
@@ -6801,8 +6908,24 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         print("[Order] Missing customer fields, not creating order.", flush=True)
         return None, f"حتى أثبت الطلب أحتاج {missing} 🌸"
 
+    valid_phone = phone_number(phone)
+    if not valid_phone:
+        return None, "رقم الهاتف غير مكتمل؛ أرسلي رقم موبايل عراقي صحيح حتى أثبت الطلب."
+    phone = order_data["phone"] = valid_phone
+    catalog_products = load_products_from_file()
+    raw_items = checkout_lines(order_data, matched_product)
+    error = order_line_error(raw_items, catalog_products)
+    if error:
+        return None, error
+    if not cart_confirmed:
+        customer_messages = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='incoming' AND message_type='text' ORDER BY id DESC LIMIT 60", (sender_id,)).fetchall()
+        error = measurement_history_error(raw_items, [row["text"] or "" for row in reversed(customer_messages)])
+        if error:
+            return None, error
     now = now_baghdad_iso()
-    items = normalize_order_items(order_data, matched_product)
+    items = normalize_order_items({"items": raw_items}, matched_product, catalog_products)
+    if len(items) != len(raw_items):
+        return None, "إحدى القطع غير متوفرة حالياً؛ نحتاج نراجع القطع قبل تثبيت الطلب."
     if not items:
         print("[Order] Missing linked product, not creating order.", flush=True)
         return None, "لازم أحدد المنتج أولاً حتى أثبت الطلب. دزيلي صورة/اسم الموديل 🌸"
@@ -6831,6 +6954,22 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
         print(f"[Order] Duplicate skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
         # The confirmation was already sent when this order was first created.
         return True, None
+
+    if not cart_confirmed:
+        linked_ids = {p.get("product_id") for p in load_customer_products(db, sender_id, limit=20)}
+        if matched_product:
+            linked_ids.add(matched_product.get("product_id"))
+        if len(items) == 1 and any(item.get("product_id") not in linked_ids for item in items):
+            return None, "قبل الحجز نحتاج نحدد الموديلات المطلوبة بالاسم أو الصورة؛ الاستفسار عن قطعة ما يضيفها للطلب."
+        if len(items) > 1:
+            proposal = dict(order_data, items=items)
+            proposal["_catalog_snapshot"] = [{k: p.get(k) for k in ("product_id", "product_name", "price", "colors", "sizes", "stock", "status")}
+                                              for p in catalog_products if p.get("product_id") in {i["product_id"] for i in items}]
+            proposal["_delivery_fee"] = delivery_fee
+            ai_result["_checkout_proposal"] = proposal
+            ai_result["_single_message"] = True
+            return None, checkout_receipt(order_data, items, catalog_products, delivery_fee,
+                "هذه القطع المقترحة للحجز، ولم يثبت الطلب بعد:") + "\nهل أثبت الطلب بهذه القطع والقياسات والأسعار؟"
 
     booking_data = {
         "created_at": now,
@@ -6897,14 +7036,103 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product):
     except Exception as exc:
         print(f"[FollowUp] Could not cancel followups after order: {exc}", flush=True)
 
-    save_booking_to_file(booking_data)
-    telegram_sent = send_order_to_telegram(booking_data)
+    try:
+        save_booking_to_file(booking_data)
+        telegram_sent = send_order_to_telegram(booking_data)
+    except Exception as exc:
+        telegram_sent = False
+        print(f"[Order] Saved, notification failed: {type(exc).__name__}", flush=True)
 
     print(f"[Order] Created for {sender_id}: {product_name} | telegram_sent={telegram_sent}", flush=True)
-    return True, get_order_confirmation_text(db)
+    ai_result["_single_message"] = True
+    return True, checkout_receipt(order_data, items, catalog_products, delivery_fee, get_order_confirmation_text(db))
 
 
 # ── Main webhook processor ────────────────────────────────────────────────────
+
+
+def saved_checkout_reply(db, ev, reply, meta, payload=None):
+    save_message(db, ev["sender_id"], "outgoing", "text", reply, None, None, None, payload or meta)
+    save_conversation_message(db, ev["sender_id"], "assistant", reply)
+    return {"sender_id": ev["sender_id"], "page_id": ev.get("page_id"), "platform": ev.get("platform"),
+            "reply": reply, "reply_parts": [reply], "send_image": False, "meta": meta}
+
+
+def accept_checkout_proposal(db, ev, history, products):
+    last = db.execute("SELECT id,raw_payload,created_at FROM messages WHERE sender_id=? AND direction='outgoing' ORDER BY id DESC LIMIT 1",
+                      (ev["sender_id"],)).fetchone()
+    if not last:
+        return None
+    try:
+        proposal = json.loads(last["raw_payload"] or "{}").get("checkout_proposal")
+        created = datetime.fromisoformat(last["created_at"])
+    except (ValueError, TypeError):
+        return None
+    if not proposal or datetime.now(created.tzinfo) - created > timedelta(hours=24):
+        return None
+    incoming = db.execute("SELECT text,message_type FROM messages WHERE sender_id=? AND direction='incoming' AND id>? ORDER BY id",
+                          (ev["sender_id"], last["id"])).fetchall()
+    # A correction or attachment in the same burst invalidates a bare 'yes'.
+    if not incoming or not all(r["message_type"] in {"text", "emoji"} and is_confirmation(r["text"]) for r in incoming):
+        return None
+    current = [{k: p.get(k) for k in ("product_id", "product_name", "price", "colors", "sizes", "stock", "status")}
+               for p in products if p.get("product_id") in {i["product_id"] for i in proposal["items"]}]
+    if current != proposal.get("_catalog_snapshot") or delivery_fee_for_province(proposal.get("province"), db) != proposal.get("_delivery_fee"):
+        return saved_checkout_reply(db, ev, "تغيرت بعض تفاصيل المنتجات أو الأسعار؛ نحتاج نراجع ملخص الطلب قبل تثبيته.", {"checkout_changed": True})
+    result = {"order": proposal}
+    created, reply = create_order_if_valid(db, ev["sender_id"], result, None, cart_confirmed=True)
+    if not reply:
+        reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
+    return saved_checkout_reply(db, ev, reply, {"order_created": bool(created), "cart_confirmed": True})
+
+
+def checkout_requested(db, ev, result):
+    if result.get("create_order") or re.search(r"(?:تم تثبيت|تم حجز|ثبتنا|ثبتنالج|ثبتت حجز)", str(result.get("reply") or "")):
+        return True
+    # Sending contact details in response to a checkout question completes that
+    # step; it does not require the model to ask the same question again.
+    text = str(ev.get("text") or "")
+    if not result.get("order"):
+        return False
+    if re.search(r"(?:ثبتي|ثبتلي|احجزي|احجزلي)", text) and not re.search(r"(?:لا|مو|ما)\s*(?:ثبتي|ثبتلي|احجزي|احجزلي)", text):
+        return True
+    last = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' ORDER BY id DESC LIMIT 1",
+                      (ev["sender_id"],)).fetchone()
+    asked_checkout = bool(last and re.search(r"(?:أثبت|اثبت|نثبت|أحجز|احجز|الحجز)", last["text"] or ""))
+    return asked_checkout and bool(contact_fields(text) or is_confirmation(text))
+
+
+def restore_checkout_draft(db, ev, result, matched_product):
+    """Carry known single-item options across contact-only replies, never corrections."""
+    if not matched_product:
+        return
+    text = str(ev.get("text") or "")
+    if re.search(r"قياس|مقاس|وزن|كيلو|لون|بدل|مو هذا|ما اريد|لا اريد|عوفي|ضيف", text):
+        return
+    if not contact_fields(text) and not is_confirmation(text):
+        return
+    last = db.execute("SELECT raw_payload,created_at FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' ORDER BY id DESC LIMIT 1", (ev["sender_id"],)).fetchone()
+    try:
+        draft = json.loads(last["raw_payload"] or "{}").get("checkout_draft") if last else None
+        created = datetime.fromisoformat(last["created_at"]) if last else None
+    except (ValueError, TypeError):
+        return
+    if not draft or not created or datetime.now(created.tzinfo) - created > timedelta(hours=24):
+        return
+    items = draft.get("items") or []
+    if len(items) != 1 or items[0].get("product_id") != matched_product.get("product_id"):
+        return
+    current = dict(result.get("order") or {})
+    current_items = current.get("items") or []
+    if any(i.get("product_id") and i.get("product_id") != matched_product.get("product_id") for i in current_items if isinstance(i, dict)):
+        return
+    if len(current_items) > 1:
+        return
+    item = dict(items[0])
+    if current_items and isinstance(current_items[0], dict):
+        item.update({k: v for k, v in current_items[0].items() if v not in (None, "")})
+    current["items"] = [item]
+    result["order"] = current
 
 def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_images: bool = True, incoming_message_id=None):
     t_start = time.time()
@@ -6990,6 +7218,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             ev["text"], ev["image_url"], ev["ad_id"], ev["ref"], body,
         )
         save_conversation_message(db, ev["sender_id"], "user", ev["text"])
+    pending_contact = db.execute(
+        "SELECT text FROM messages WHERE sender_id=? AND direction='incoming' AND message_type='text' "
+        "AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'),0) ORDER BY id",
+        (ev["sender_id"], ev["sender_id"])).fetchall()
+    for pending in pending_contact:
+        capture_customer_contact(db, ev["sender_id"], pending["text"])
     customer_intelligence = update_customer_intelligence(db, ev["sender_id"], ev.get("text"))
     customer = get_or_create_customer(db, ev["sender_id"], ev["page_id"], ev["platform"])
     log(5, "CUSTOMER INTELLIGENCE", "Updated gender and purchase intent", customer_intelligence)
@@ -7015,7 +7249,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             )
             if matched_product:
                 log(5, "CATALOG VISION", "Customer image linked while AI was disabled; no human review created", {
-                    "product_id": matched_product.get("product_id"),
+                    "product_id": (matched_product or {}).get("product_id"),
                     "match_method": match_method,
                     "ai_disabled_reason": reason,
                 })
@@ -7029,7 +7263,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                         "skipped": True,
                         "reason": reason,
                         "catalog_match": True,
-                        "product_id": matched_product.get("product_id"),
+                        "product_id": (matched_product or {}).get("product_id"),
                         "match_method": match_method,
                         "auto_reply": {"sent": False, "reply": "", "reason": reason},
                     },
@@ -7090,7 +7324,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 matched_product, match_method, image_result = match_product(db, ev, products_for_review)
                 if matched_product:
                     log(5, "DEBOUNCE/IMAGE", "Older image auto-linked before newer event processing", {
-                        "product_id": matched_product.get("product_id"),
+                        "product_id": (matched_product or {}).get("product_id"),
                         "match_method": match_method,
                     })
                 else:
@@ -7116,6 +7350,14 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 06: Load conversation history ───────────────────────────────────
     log(6, "HISTORY", "Loading latest customer messages...")
     history = load_history(db, ev["sender_id"])
+    unanswered_text = []
+    for message in history:
+        if message.get("direction") == "outgoing":
+            unanswered_text = []
+        elif message.get("direction") == "incoming" and message.get("message_type") == "text" and message.get("text"):
+            unanswered_text.append(message["text"])
+    if len(unanswered_text) > 1 and message_type != "image":
+        ev = dict(ev, text="\n".join(unanswered_text))
     log(6, "HISTORY", f"Loaded {len(history)} previous messages")
 
     # ── STEP 07: Load products ────────────────────────────────────────────────
@@ -7129,15 +7371,28 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     latest_order = get_latest_customer_order(db, ev["sender_id"])
     if latest_order and message_type != "image":
         return handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
+    if not latest_order and message_type != "image":
+        proposal_reply = accept_checkout_proposal(db, ev, history, products)
+        if proposal_reply:
+            return proposal_reply
+        if is_existing_order_followup(ev.get("text")):
+            review_id = has_pending_human_review(db, ev["sender_id"]) or create_human_review(
+                db, ev, "متابعة طلب سابق غير موجود في قاعدة الطلبات الحالية")
+            return {"sender_id": ev["sender_id"], "page_id": ev.get("page_id"), "platform": ev.get("platform"),
+                    "reply": "", "reply_parts": [], "send_image": False,
+                    "meta": {"existing_order_followup": True, "human_review_id": review_id, "needs_human": True}}
     first_incoming = incoming_message_count(db, ev["sender_id"]) == 1
     active_binding = get_active_product_binding(db, ev["sender_id"])
 
     target = None
     if message_type != "image":
         target = customer_product_target(ev.get("text"), products)
+        ad_matches = [p for p in products if any(ev.get(key) and str(p.get(key) or "").strip() == str(ev[key]).strip() for key in ("ref", "ad_id"))]
+        if not target and len(ad_matches) == 1:
+            target = ad_matches[0]
         if target and (not active_binding or target.get("product_id") != active_binding.get("product_id")):
             complete_customer_product_link(
-                db, ev["sender_id"], target, "text", confidence=100,
+                db, ev["sender_id"], target, "ad_id" if target in ad_matches else "text", confidence=100,
                 preserve_existing=bool(re.search(r"(?:هم اريد|هم أريد|ضيف|أضيف|اضيف|ويا|بالإضافة|بالاضافة)", ev.get("text") or "")),
             )
             customer_products = load_customer_products(db, ev["sender_id"])
@@ -7277,7 +7532,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 match_method=match_method,
             )
             log(8, "CATALOG VISION", "Customer image linked automatically; no human review created", {
-                "product_id": matched_product.get("product_id"),
+                "product_id": (matched_product or {}).get("product_id"),
                 "match_method": match_method,
             })
             auto_reply = auto_reply_after_product_link(
@@ -7301,7 +7556,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "meta": {
                     "message_type": message_type,
                     "catalog_match": True,
-                    "product_id": matched_product.get("product_id"),
+                    "product_id": (matched_product or {}).get("product_id"),
                     "match_method": match_method,
                     "auto_reply": auto_reply,
                 },
@@ -7426,11 +7681,11 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     match_method = None
     image_result = None
     if customer_products:
-        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
-        match_method = matched_product.get("match_method") or "manual"
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
+        match_method = (matched_product or {}).get("match_method") or "manual"
         log(8, "MANUAL PRODUCT", "Using manually linked product", {
-            "product_id"  : matched_product.get("product_id"),
-            "product_name": matched_product.get("product_name"),
+            "product_id"  : (matched_product or {}).get("product_id"),
+            "product_name": (matched_product or {}).get("product_name"),
             "match_method": match_method,
         })
     elif ev.get("ref") or ev.get("ad_id"):
@@ -7481,9 +7736,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # إذا طلب الزبون صورة/تفاصيل، ربط المنتج من الذاكرة إن لم يكن محدداً
     _image_requested = _is_product_info_request(ev.get("text", ""))
     if not matched_product and _image_requested and customer_products:
-        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
         log(10, "PRODUCT INFO", "Using remembered product for image/details request", {
-            "product_id": matched_product.get("product_id"),
+            "product_id": (matched_product or {}).get("product_id"),
         })
 
     # ربط حتمي للسياق: "شكد سعره/هذا متوفر/يلبس 2 سنة/ارجعه" تعني آخر منتج محفوظ.
@@ -7492,9 +7747,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         and customer_products
         and _is_contextual_product_question(ev.get("text", ""))
     ):
-        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
         log(10, "PRODUCT CONTEXT", "Using remembered product for contextual question", {
-            "product_id": matched_product.get("product_id"),
+            "product_id": (matched_product or {}).get("product_id"),
             "text": ev.get("text"),
         })
 
@@ -7557,8 +7812,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     # إذا الزبون لديه سياق منتج → ربط أقوى من الذاكرة
     if routing.get("has_product_context") and not matched_product and customer_products:
-        matched_product = select_customer_context_product(ev.get("text", ""), customer_products) or customer_products[0]
-        log(9, "ROUTER", f"Router confirmed product context → using {matched_product.get('product_id')}")
+        matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
+        log(9, "ROUTER", f"Router product context: {(matched_product or {}).get('product_id')}")
 
     # إذا طلب الكتالوج → سيتولاه الـ Main AI بناءً على routing
     # إذا يحتاج تدخل بشري → لا رد
@@ -7665,7 +7920,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             "reply_product_id": reply_product.get("product_id"),
         })
         matched_product = reply_product
-        match_method = "reply_product_context"
+        match_method = reply_product.get("match_method") or "matched_product_context"
 
     if matched_product:
         link_source = (matched_product or {}).get("source") or ""
@@ -7852,7 +8107,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     final_reply_product = select_product_mentioned_in_reply(reply, customer_products)
     if final_reply_product and final_reply_product.get("product_id") != (matched_product or {}).get("product_id"):
         matched_product = final_reply_product
-        match_method = "reply_product_context"
+        match_method = final_reply_product.get("match_method") or "matched_product_context"
         complete_customer_product_link(
             db,
             ev["sender_id"],
@@ -7863,12 +8118,15 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             preserve_existing=True,
         )
         log(12, "PRODUCT CONTEXT", "Final reply and outgoing media realigned", {
-            "product_id": matched_product.get("product_id"),
+            "product_id": (matched_product or {}).get("product_id"),
         })
 
     # ── STEP 13: Create order when requested ─────────────────────────────────
+    # Internal proposal metadata is authored only by the validator, never the AI.
+    ai_result.pop("_checkout_proposal", None)
+    restore_checkout_draft(db, ev, ai_result, matched_product)
     order_created = False
-    if ai_result.get("create_order"):
+    if checkout_requested(db, ev, ai_result):
         log(13, "ORDER", "AI requested creating a new order...")
         order_created, order_reply = create_order_if_valid(
             db, ev["sender_id"], ai_result, matched_product
@@ -7876,6 +8134,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         if order_reply:
             reply = order_reply
             log(13, "ORDER", "Order created and outgoing reply updated", {"reply": reply})
+        elif order_created:
+            reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
     else:
         log(13, "ORDER", "No purchase order requested in this message")
 
@@ -7883,6 +8143,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     send_img = _should_send_image(db, ev["sender_id"], matched_product, ev) or (
         bool(matched_product) and _promises_product_photo(reply)
     )
+    if order_created or ai_result.get("_checkout_proposal"):
+        send_img = False
     requested_image_color = str(ai_result.get("image_color") or "").strip()
     if not requested_image_color:
         color_context = " ".join(filter(None, (ev.get("text"), reply)))
@@ -7910,7 +8172,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     log(14, "SAVE REPLY", "Saving outgoing reply to database...")
     reply_parts = approved_reply_parts(ai_result, reply)
     for part in reply_parts:
-        save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None, {"reply": part})
+        save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None,
+                     {"reply": part, "checkout_proposal": ai_result.get("_checkout_proposal"),
+                      "checkout_draft": ai_result.get("order") if not order_created else None})
         save_conversation_message(db, ev["sender_id"], "assistant", part)
     for img_url in outgoing_image_urls:
         save_message(
@@ -8225,6 +8489,8 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
             saved_id = save_message(db, subscriber_id, "incoming", detect_message_type(ev),
                                     ev.get("text"), ev.get("image_url"), ev.get("ad_id"), ev.get("ref"), fake_body)
             save_conversation_message(db, subscriber_id, "user", ev.get("text"))
+            # Every message is captured before debounce discards older events.
+            capture_customer_contact(db, subscriber_id, ev.get("text"))
         if DEBOUNCE_DELAY > 0:
             time.sleep(DEBOUNCE_DELAY)
         if not acquire_sender_lock(db, subscriber_id):
@@ -12157,7 +12423,22 @@ def api_create_order(sender_id):
         ]
     if not raw_items and product_names:
         raw_items = [{"product_name": name, "quantity": 1} for name in product_names]
-    items = normalize_order_items({"items": raw_items})
+    # Manual checkout follows the same completeness rules as automatic checkout.
+    contact = checkout_customer_data(db, sender_id, data)
+    contact.update({key: data[key] for key in ("phone", "province", "address") if data.get(key)})
+    missing = [label for key, label in (("phone", "رقم الهاتف"), ("province", "المحافظة"), ("address", "العنوان")) if not contact.get(key)]
+    if missing:
+        return jsonify({"ok": False, "error": "أكمل " + " و".join(missing) + " قبل تثبيت الطلب"}), 400
+    if not phone_number(contact.get("phone")):
+        return jsonify({"ok": False, "error": "رقم الهاتف غير صحيح"}), 400
+    data.update({k: contact[k] for k in ("phone", "province", "address")})
+    catalog = load_products_from_file()
+    error = order_line_error(raw_items, catalog)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    items = normalize_order_items({"items": raw_items}, products=catalog)
+    if len(items) != len(raw_items):
+        return jsonify({"ok": False, "error": "إحدى القطع غير متوفرة؛ راجع الطلب قبل التثبيت"}), 400
     product_id_text = ", ".join(item["product_id"] for item in items if item.get("product_id"))
     product_name_text = order_items_summary(items)
     if not product_id_text and not product_name_text.strip():
@@ -12214,7 +12495,7 @@ def api_create_order(sender_id):
     db.commit()
     save_booking_to_file(order_info)
     telegram_sent = send_order_to_telegram(order_info)
-    confirm = get_order_confirmation_text(db)
+    confirm = checkout_receipt(data, items, catalog, delivery_fee_for_province(data.get("province"), db), get_order_confirmation_text(db))
     save_message(db, sender_id, "outgoing", "text", confirm, None, None, None, {"manual_order": True})
     customer = db.execute(
         "SELECT page_id, COALESCE(platform, 'facebook') AS platform FROM customers WHERE sender_id=?",
