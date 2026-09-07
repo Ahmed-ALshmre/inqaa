@@ -5958,10 +5958,6 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         conversation_history=conversation_history,
     )
     if ai_result.get("failed"):
-        try:
-            set_customer_ai_enabled(db, sender_id, False)
-        except Exception as exc:
-            print(f"[ProductLink] Could not pause AI after failure: {exc}", flush=True)
         create_human_review(
             db,
             {"sender_id": sender_id, "page_id": customer.get("page_id") or "", "platform": customer.get("platform") or "facebook",
@@ -5972,10 +5968,6 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         return {"sent": False, "reply": "", "reason": "ai_failed_human_required"}
     reply = (ai_result.get("reply") or "").strip()
     if not reply or is_ai_handoff_reply(reply):
-        try:
-            set_customer_ai_enabled(db, sender_id, False)
-        except Exception as exc:
-            print(f"[ProductLink] Could not pause AI on empty/handoff reply: {exc}", flush=True)
         return {"sent": False, "reply": "", "reason": "empty_or_handoff_reply"}
 
     order_created = False
@@ -7952,19 +7944,15 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     })
 
     # If the model couldn't produce a reply (no key / exception / empty),
-    # escalate to a human and pause AI for this conversation.
+    # review this message without disabling replies to subsequent messages.
     if ai_result.get("failed"):
         failure_reason = ai_result.get("failure_reason") or "ai_failed"
-        try:
-            set_customer_ai_enabled(db, ev["sender_id"], False)
-        except Exception as exc:
-            print(f"[MainAI] Could not pause AI for sender after failure: {exc}", flush=True)
         review_id = create_human_review(
             db, ev,
             f"AI could not produce a reply ({failure_reason}); human action required",
             build_product_vision_candidates(products, limit=10) if products else [],
         )
-        log(10, "MAIN AI", "AI failed → routed to human review, AI paused", {
+        log(10, "MAIN AI", "AI failed → message routed to human review", {
             "human_review_id": review_id,
             "failure_reason": failure_reason,
         })
@@ -8010,10 +7998,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         )
 
     if is_ai_handoff_reply(reply):
-        try:
-            set_customer_ai_enabled(db, ev["sender_id"], False)
-        except Exception as exc:
-            print(f"[MainAI] Could not pause AI on handoff reply: {exc}", flush=True)
         review_id = create_human_review(
             db,
             ev,
@@ -8077,16 +8061,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         )
         if ai_result.get("failed"):
             failure_reason = ai_result.get("failure_reason") or "ai_failed_on_retry"
-            try:
-                set_customer_ai_enabled(db, ev["sender_id"], False)
-            except Exception as exc:
-                print(f"[MainAI] Could not pause AI after retry failure: {exc}", flush=True)
             review_id = create_human_review(
                 db, ev,
                 f"AI retry could not produce a reply ({failure_reason}); human action required",
                 build_product_vision_candidates(products, limit=10) if products else [],
             )
-            log(12, "RETRY", "AI retry failed → human review, AI paused", {
+            log(12, "RETRY", "AI retry failed → message routed to human review", {
                 "human_review_id": review_id,
                 "failure_reason": failure_reason,
             })
@@ -8104,10 +8084,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             }
         reply = ai_result.get("reply") or FALLBACK_REPLY
         if is_ai_handoff_reply(reply):
-            try:
-                set_customer_ai_enabled(db, ev["sender_id"], False)
-            except Exception as exc:
-                print(f"[MainAI] Could not pause AI on retry handoff: {exc}", flush=True)
             review_id = create_human_review(
                 db,
                 ev,
@@ -8149,10 +8125,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
         if not checker_approved:
             log(12, "RETRY/CHECKER2", "Reply still rejected. Routing to human review — no auto reply.")
-            try:
-                set_customer_ai_enabled(db, ev["sender_id"], False)
-            except Exception as exc:
-                print(f"[MainAI] Could not pause AI after checker rejection: {exc}", flush=True)
             review_id = create_human_review(
                 db, ev,
                 f"AI reply rejected twice: {checker2.get('problem', 'unknown')}",
@@ -8328,10 +8300,6 @@ def process_single_webhook_in_background(body):
                         "ad_id": None,
                         "ref": None,
                     }
-                try:
-                    set_customer_ai_enabled(db, sender_id, False)
-                except Exception as inner:
-                    print(f"[AsyncWebhook] Could not pause AI: {inner}", flush=True)
                 try:
                     rid = create_human_review(
                         db, ev_fallback,

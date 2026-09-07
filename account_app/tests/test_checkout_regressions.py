@@ -145,6 +145,30 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.ev["text"] = "07701234567"
         self.assertTrue(self.m.checkout_requested(self.db, self.ev, {"create_order": False, "order": self.data()}))
 
+    def test_model_failure_does_not_disable_next_linked_product_question(self):
+        self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
+        self.ev['text'] = 'شنو تفاصيل هذا الموديل؟'
+        with patch.object(self.m, 'extract_facebook_event', return_value=self.ev), patch.object(self.m, 'is_ai_enabled', return_value=True), patch.object(self.m, 'is_store_feature_enabled', return_value=False), patch.object(self.m, 'call_main_ai', side_effect=[
+                {'failed': True, 'reply': '', 'failure_reason': 'exception:Timeout'},
+                {'reply': 'السعر 16000 دينار', 'create_order': False}]):
+            failed = self.m.process_webhook(self.db, {}, use_debounce=False)
+            self.assertEqual(failed['reply'], '')
+            self.assertTrue(self.m.has_pending_human_review(self.db, self.sender))
+            self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
+            self.ev['text'] = 'شكد السعر؟'
+            answered = self.m.process_webhook(self.db, {}, use_debounce=False)
+            self.assertEqual(answered['reply'], 'السعر 16000 دينار')
+            self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
+
+    def test_explicit_conversation_pause_is_still_respected(self):
+        self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
+        self.m.set_customer_ai_enabled(self.db, self.sender, False)
+        self.ev['text'] = 'شكد السعر؟'
+        with patch.object(self.m, 'extract_facebook_event', return_value=self.ev), patch.object(self.m, 'is_ai_enabled', return_value=True), patch.object(self.m, 'call_main_ai') as model:
+            result = self.m.process_webhook(self.db, {}, use_debounce=False)
+        self.assertEqual(result['reply'], '')
+        model.assert_not_called()
+
     def test_unknown_item_is_not_silently_dropped(self):
         data = self.data(True); data["items"][1]["product_id"] = "other-store"
         created, _ = self.m.create_order_if_valid(self.db, self.sender, {"order": data}, CATALOG[0])
