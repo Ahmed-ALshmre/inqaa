@@ -3854,8 +3854,6 @@ def is_ai_handoff_reply(reply: str) -> bool:
         "للإدارة",
         "للاادارة",
         "للادارة",
-        "الإدارة",
-        "الادارة",
         "ثواني وأحول",
         "ثواني واحول",
         "يحتاج تأكد من فريق المتجر",
@@ -3868,7 +3866,7 @@ def is_ai_handoff_reply(reply: str) -> bool:
     return any(marker in text for marker in handoff_markers) or (
         any(marker in text for marker in apology_markers)
         and ("الإدارة" in text or "الادارة" in text or "تفاصيل أدق" in text)
-    ) or "management" in lowered
+    ) or bool(re.search(r"(?:أحول|احول|حولت|نحول|راجع|مراجعة|تواصل|تواصلي).{0,30}(?:الإدارة|الادارة)", text)) or bool(re.search(r"(?:refer|transfer|escalat\w*|contact).{0,30}management", lowered))
 
 
 # ── ManyChat customer sender ──────────────────────────────────────────────────
@@ -6372,7 +6370,72 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
 
 # ── Main AI call ──────────────────────────────────────────────────────────────
 
+def known_product_question_reply(text, product):
+    """Answer only narrow factual questions using the selected catalog record."""
+    if not product:
+        return None
+    text = re.sub(r"[؟?!.،🌸]", "", str(text or "")).strip()
+    patterns = (
+        (r"(?:شكد|كم|شنو)\s+(?:السعر|سعره|سعرها|سعر القطعة)|(?:السعر|سعر)", "price", "السعر"),
+        (r"(?:شنو|ما هي|شنهي)\s+(?:الالوان|الألوان|الوانه|الوانها)(?: المتوفره| المتوفرة)?|(?:الألوان|الالوان)", "colors", "الألوان المتوفرة"),
+        (r"(?:شنو|ما هي|شنهي)\s+(?:القياسات|قياساته|قياساتها)(?: المتوفره| المتوفرة)?|القياسات", "sizes", "القياسات المسجلة"),
+        (r"(?:شنو|شنهي|ما هو)\s+(?:القماش|قماشه|قماشها|الخامة|نوع القماش)|(?:القماش|الخامة)", "fabric", "القماش"),
+    )
+    for pattern, field, label in patterns:
+        if re.fullmatch(pattern, text):
+            value = product.get(field)
+            if value is None or not str(value).strip():
+                return None
+            if field == "price":
+                price = str(value).replace(",", "").strip()
+                if not price.isdigit() or int(price) <= 0:
+                    return None
+                value = f"{int(price):,} د.ع"
+            return {"reply": f"{label}: {value} 🌸", "create_order": False,
+                    "requires_human": False, "order": {}, "intent": "product_question"}
+    return None
+
+
 def call_main_ai(
+    ev, message_type, customer, history, products,
+    matched_product, image_result, instructions_text, rules_list,
+    fix_instruction=None, customer_products=None, conversation_history=None,
+    catalog_search_context=None,
+):
+    # Answer only when the entire unanswered burst is this one factual question.
+    unanswered = []
+    for message in history or []:
+        if message.get("direction") == "outgoing":
+            unanswered = []
+        elif message.get("direction") == "incoming":
+            unanswered.append(message.get("text") or "")
+    question = ev.get("text") or ""
+    if (message_type == "text" and not image_result and not ev.get("image_url")
+            and all(t.strip() == question.strip() for t in unanswered)):
+        answer = known_product_question_reply(question, matched_product)
+        if answer:
+            return answer
+    args = (ev, message_type, customer, history, products, matched_product,
+            image_result, instructions_text, rules_list)
+    kwargs = dict(fix_instruction=fix_instruction, customer_products=customer_products,
+                  conversation_history=conversation_history, catalog_search_context=catalog_search_context)
+    result = _call_main_ai_once(*args, **kwargs)
+    needs_review = (result.get("failed") or result.get("requires_human") is True
+                    or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
+    if needs_review and not fix_instruction and not image_result:
+        kwargs["fix_instruction"] = (
+            "راجع قرار التحويل قبل اعتماده. أجب عن أسئلة السعر واللون والقياس والخامة والتوصيل والفحص "
+            "من بيانات المنتج والمتجر والطلب المرفقة. الربط الموجود صالح ولا يحتاج إعادة ربط يدوي. "
+            "إذا لم يتحدد الموديل أو الاختيار اسأل سؤال توضيح واحد ولا تخمن. "
+            "وجود مراجعة سابقة لا يمنع الإجابة عن سؤال مستقل. لا تعد بتنفيذ تعديل أو إلغاء أو تتبع "
+            "غير متاح؛ هذه الإجراءات تبقى للبشر. لا تخترع معلومة ناقصة ولا ترسل إشعار تحويل للزبون. "
+            "عند القدرة على الإجابة أعد requires_human=false."
+        )
+        result = _call_main_ai_once(*args, **kwargs)
+    return result
+
+
+def _call_main_ai_once(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
     fix_instruction=None, customer_products=None, conversation_history=None,
@@ -6558,6 +6621,7 @@ def call_main_ai(
     )
 
     system_prompt += "\n\n" + CONVERSATION_SALES_GUIDE
+    system_prompt += "\nالتحويل للبشر ليس جواباً افتراضياً: أجب من بيانات المنتج المرتبط والمتجر عن السعر والألوان والقياسات والخامة والتوصيل والفحص، قبل الحجز وبعده. وجود مراجعة قديمة لا يحول سؤالاً مستقلاً. إذا التبس الموديل أو الاختيار اسأل توضيحاً واحداً دون تخمين أو تحويل. احتفظ بالتدخل البشري للإجراءات التي لا تستطيع تنفيذها أو المعلومات الضرورية غير المتاحة فعلاً."
     system_prompt += "\nرسوم التوصيل الرقمية ومدة التوصيل في بيانات المتجر الحالي تتقدم على الأرقام القديمة في أمثلة التعليمات ووصف المنتجات. لا تنقل تفاصيل أو موديلات من متجر آخر."
     if current_store_id() == ALFATENA_STORE_ID:
         system_prompt += "\nسياسة بيع الفاتنة: بعد حل أسئلة الزبون وظهور رغبة واضحة بالشراء، اقترح مرة واحدة موديلًا أو موديلين إضافيين متوفرين من كتالوج الفاتنة يناسبان ذوقه وقياسه. اذكر الاسم والسعر والفائدة المختلفة، واسأل إن كان يريد رؤية الصور قبل الإضافة. لا تعطل حجزه الأصلي، ولا تعتبر الاهتمام بالصور موافقة شراء. إذا رفض أو أجّل توقف عن الاقتراح. لا تضف قطعة أو تغير اللون أو القياس دون موافقة صريحة، ولا تعرض منتجًا غير موجود إذا كان الكتالوج يحتوي موديلًا واحدًا."
