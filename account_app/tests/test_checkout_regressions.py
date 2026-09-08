@@ -286,6 +286,173 @@ class CheckoutRegressionTests(unittest.TestCase):
             text = self.m.checkout_receipt(self.data(), self.data()["items"], CATALOG, 5000)
         self.assertIn("مدة التوصيل: من يوم إلى يومين", text)
 
+    def test_dashboard_ai_suggestion_creates_order_only_on_send(self):
+        self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
+        self.incoming("ثبتي الطلب")
+        client = self.m.app.test_client()
+        with client.session_transaction() as session:
+            session["dashboard_authenticated"] = True
+        result = {"reply": "تم تثبيت الطلب", "create_order": True, "order": self.data()}
+        with patch.object(self.m, "call_main_ai", return_value=result), patch.object(self.m, "is_ai_enabled", return_value=True):
+            response = client.post(f"/api/conversations/{self.sender}/ask_ai", json={"allow_empty": True})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 0)
+        with patch.object(self.m, "send_text_via_manychat_detailed", return_value={"ok": True}) as send:
+            response = client.post(f"/api/conversations/{self.sender}/send", json={"text": result["reply"]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 1)
+        self.assertEqual(send.call_args.args[1], self.m.DEFAULT_ORDER_CONFIRMATION_TEXT)
+
+    def cache_dashboard_draft(self, result):
+        self.m.ai_reply_draft_table(self.db)
+        last_id = self.db.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=?", (self.sender,)).fetchone()[0]
+        self.db.execute("INSERT OR REPLACE INTO ai_reply_drafts VALUES(?,?,?,?,?)", (self.sender, result["reply"], json.dumps({"result": result, "product_id": "F1"}), last_id, self.m.now_baghdad_iso()))
+        self.db.commit()
+
+    def test_dashboard_incomplete_order_cannot_send_success_claim(self):
+        self.cache_dashboard_draft({"reply": "تم تثبيت الطلب", "create_order": True, "order": {}})
+        reply, meta, error = self.m.apply_dashboard_ai_checkout(self.db, self.sender, "تم تثبيت الطلب")
+        self.assertIsNone(error)
+        self.assertFalse(meta["order_created"])
+        self.assertNotIn("تم تثبيت", reply)
+        self.assertIn("أحتاج", reply)
+
+    def test_dashboard_stale_draft_is_rejected(self):
+        self.cache_dashboard_draft({"reply": "تم تثبيت الطلب", "create_order": True, "order": self.data()})
+        self.incoming("لا تثبتين")
+        _, _, error = self.m.apply_dashboard_ai_checkout(self.db, self.sender, "تم تثبيت الطلب")
+        self.assertTrue(error)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 0)
+
+    def test_new_image_ignores_old_ad_and_uses_product_image_fallback(self):
+        products = copy.deepcopy(CATALOG)
+        products[0]["ad_id"] = "old-ad"
+        ev = dict(self.ev, image_url="https://example.test/customer.jpg", ad_id="old-ad", text="شكد سعره")
+        with patch.object(self.m, "match_customer_image_with_catalog", return_value={"product_found": False}), patch.object(self.m, "confirm_with_vision", return_value={"product_id": "F2", "product_found": True}) as vision, patch.object(self.m, "is_store_feature_enabled", return_value=True):
+            product, method, _ = self.m.match_product(self.db, ev, products)
+        vision.assert_called_once()
+        self.assertEqual(product["product_id"], "F2")
+        self.assertEqual(method, "image_recognition")
+
+    def test_explicit_model_overrides_ad(self):
+        products = copy.deepcopy(CATALOG); products[0]["ad_id"] = "old-ad"
+        with patch.object(self.m, "_text_match_product", return_value=products[1]):
+            product, method, _ = self.m.match_product(self.db, dict(self.ev, text="فستان انيقة", ad_id="old-ad"), products)
+        self.assertEqual(product["product_id"], "F2")
+        self.assertEqual(method, "text")
+
+    def test_resume_existing_booking_request_creates_order(self):
+        self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
+        self.incoming("ثبتي الطلب")
+        self.m.set_customer_ai_enabled(self.db, self.sender, False)
+        client = self.m.app.test_client()
+        with client.session_transaction() as session:
+            session["dashboard_authenticated"] = True
+        result = {"reply": "تم تثبيت الطلب", "create_order": True, "order": self.data()}
+        with patch.object(self.m, "call_main_ai", return_value=result), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "send_webhook_result_to_facebook", return_value=True):
+            response = client.post(f"/api/conversations/{self.sender}/ai", json={"enabled": True})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 1)
+
+    def test_old_reviewed_image_does_not_silence_new_question(self):
+        self.m.save_message(self.db, self.sender, "incoming", "image", "", "https://example.test/old.jpg", None, None, {})
+        self.m.save_message(self.db, self.sender, "outgoing", "text", "تفضلي", None, None, None, {})
+        self.ev["text"] = "القماش شنو؟"
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_customer_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "call_main_ai", return_value={"reply": "أي موديل تقصدين؟", "create_order": False}) as ai:
+            response = self.m.process_webhook(self.db, {}, use_debounce=False)
+        ai.assert_called_once()
+        self.assertEqual(response["reply"], "أي موديل تقصدين؟")
+
+    def test_unmatched_image_asks_for_clarification_without_disabling_ai(self):
+        self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
+        self.ev.update(text="", image_url="https://example.test/new.jpg")
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "match_product", return_value=(None, None, {})), patch.object(self.m, "create_human_review", return_value=77):
+            response = self.m.process_webhook(self.db, {}, use_debounce=False)
+        self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
+        self.assertFalse(response["meta"]["ai_paused"])
+        self.assertIn("صورة أوضح", response["reply"])
+        self.assertIsNone(self.m.get_active_product_binding(self.db, self.sender))
+
+    def test_dashboard_send_accepts_confirmed_cart_once(self):
+        result = {"order": self.data(True)}
+        _, reply = self.m.create_order_if_valid(self.db, self.sender, result, None)
+        self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
+        self.incoming("تمام")
+        self.cache_dashboard_draft({"reply": "تم تثبيت الطلب", "create_order": True, "order": self.data(True)})
+        reply, meta, error = self.m.apply_dashboard_ai_checkout(self.db, self.sender, "تم تثبيت الطلب")
+        self.assertIsNone(error)
+        self.assertTrue(meta["order_created"])
+        self.assertTrue(meta["cart_confirmed"])
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 1)
+
+    def test_vision_request_contains_customer_and_product_images(self):
+        with patch.object(self.m, "OPENROUTER_KEY", "test-key"), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "_image_ref_for_openrouter", side_effect=lambda x: x), patch.object(self.m.requests, "post") as post:
+            post.return_value.json.return_value = {"choices": [{"message": {"content": "F1"}}]}
+            result = self.m.confirm_with_vision("https://example.test/customer.jpg", [dict(CATALOG[0], image_url="https://example.test/product.jpg")])
+        images = [x["image_url"]["url"] for x in post.call_args.kwargs["json"]["messages"][1]["content"] if x["type"] == "image_url"]
+        self.assertEqual(images, ["https://example.test/customer.jpg", "https://example.test/product.jpg"])
+        self.assertEqual(result["product_id"], "F1")
+
+    def simulate_customer_photo(self, product_index, fallback=False):
+        self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
+        selected = CATALOG[product_index]
+        self.ev.update(text="", image_url="https://images.test/customer-model.jpg", ad_id="old-ad")
+        recognized = {"product_found": True, "product_id": selected["product_id"], "confidence": 100}
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "match_customer_image_with_catalog", return_value={"product_found": False} if fallback else recognized), patch.object(self.m, "confirm_with_vision", return_value=recognized) as vision, patch.object(self.m, "call_main_ai", return_value={"reply": "الموديل متوفر، شنو القياس المطلوب؟", "create_order": False}) as ai, patch.object(self.m, "send_webhook_result_to_facebook", return_value=True) as send, patch.object(self.m, "create_human_review") as review:
+            response = self.m.process_webhook(self.db, {}, use_debounce=False)
+        self.assertEqual(ai.call_args.args[5]["product_id"], selected["product_id"])
+        self.assertTrue(response["meta"]["auto_reply"]["sent"])
+        send.assert_called_once()
+        review.assert_not_called()
+        self.assertEqual(vision.call_count, int(fallback))
+        self.assertEqual([p["product_id"] for p in self.m.load_customer_products(self.db, self.sender)], [selected["product_id"]])
+        self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM customer_product_interests WHERE sender_id=? AND product_id=?", (self.sender, selected["product_id"])).fetchone()[0], 1)
+        # Continue the actual webhook path with a follow-up question.
+        self.ev.update(text="شنو القياسات؟", image_url=None, ad_id=None, attachments=[])
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "call_main_ai", return_value={"reply": "القياسات من 38 إلى 52", "create_order": False}) as ai, patch.object(self.m, "create_human_review") as review:
+            followup = self.m.process_webhook(self.db, {}, use_debounce=False)
+        self.assertEqual(ai.call_args.args[5]["product_id"], selected["product_id"])
+        self.assertEqual(followup["reply"], "القياسات من 38 إلى 52")
+        review.assert_not_called()
+
+    def test_photo_same_model_continues_without_duplicate_binding(self):
+        self.simulate_customer_photo(0)
+
+    def test_photo_different_model_relinks_and_continues(self):
+        self.simulate_customer_photo(1)
+
+    def test_photo_same_model_fallback_continues(self):
+        self.simulate_customer_photo(0, fallback=True)
+
+    def test_photo_different_model_fallback_replaces_old_binding(self):
+        self.simulate_customer_photo(1, fallback=True)
+
+    def test_catalog_sends_and_records_only_images(self):
+        products = [dict(CATALOG[0], image_url="https://images.test/catalog.jpg")]
+        with patch.object(self.m, "load_active_products", return_value=products), patch.object(self.m, "send_manychat_messages", return_value=True) as send:
+            sent, reply, images = self.m.send_catalog_to_customer(self.db, self.sender)
+        self.assertTrue(sent)
+        self.assertEqual(reply, "")
+        self.assertTrue(images)
+        self.assertTrue(all(m["type"] == "image" and "text" not in m for m in send.call_args.args[1]))
+        rows = self.db.execute("SELECT message_type,text FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchall()
+        self.assertTrue(all(r["message_type"] == "image" and not r["text"] for r in rows))
+
+    def test_background_catalog_keeps_customer_store(self):
+        observed = []
+        def send(*args):
+            observed.append(self.m.current_store_id())
+            return True, "", []
+        token = self.m._current_store_id.set("default")
+        try:
+            with patch.object(self.m, "send_catalog_to_customer", side_effect=send):
+                self.m.send_catalog_to_customer_background(self.sender)
+            self.assertEqual(self.m.current_store_id(), "default")
+        finally:
+            self.m._current_store_id.reset(token)
+        self.assertEqual(observed, ["al-fatena"])
+
 
 if __name__ == "__main__":
     unittest.main()

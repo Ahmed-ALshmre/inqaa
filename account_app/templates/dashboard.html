@@ -188,6 +188,9 @@
           </span>
         </div>
         <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-sm btn-outline-primary" id="chatControlBtn" type="button" onclick="toggleControl()" title="لوحة التحكم" aria-label="لوحة التحكم" aria-controls="controlPanel">
+            <i class="bi bi-sliders" aria-hidden="true"></i>
+          </button>
           <button class="btn btn-sm btn-outline-warning" id="conversationAiBtn" onclick="toggleConversationAI()" title="إيقاف/تسليم AI لهذه المحادثة">
             <i class="bi bi-robot"></i>
             <span id="conversationAiText">AI</span>
@@ -276,7 +279,7 @@
   </div>
 
   <!-- Column 3: Control Panel -->
-  <div class="control-panel" id="controlPanel">
+  <div class="control-panel" id="controlPanel" tabindex="-1">
     <div id="controlPlaceholder" class="text-center p-5" style="color:var(--text-muted)">
       <i class="bi bi-sliders display-4 opacity-25"></i>
       <p class="mt-2 small">اختر محادثة</p>
@@ -343,7 +346,7 @@
               <i class="bi bi-link me-1"></i>ربط
             </button>
             <button class="btn btn-success btn-sm flex-grow-1" onclick="sendProductDetails()">
-              <i class="bi bi-send me-1"></i>إرسال تفاصيل
+              <i class="bi bi-images me-1"></i>إرسال صور المنتج
             </button>
           </div>
         </div>
@@ -581,7 +584,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=3"></script>
-<script src="/static/js/dashboard.js?v=17"></script>
+<script src="/static/js/dashboard.js?v=18"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

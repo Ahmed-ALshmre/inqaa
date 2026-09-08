@@ -128,6 +128,11 @@ function toggleControl() {
   const drawer = document.getElementById('dashboardDrawer');
   sb.classList.remove('open');
   drawer?.classList.remove('open');
+  if (window.innerWidth > 992) {
+    ov.classList.remove('show');
+    cp.focus({ preventScroll: true });
+    return;
+  }
   cp.classList.toggle('open');
   ov.classList.toggle('show', cp.classList.contains('open'));
 }
@@ -1368,19 +1373,29 @@ async function linkProduct() {
   }
 }
 
+let _isSendingProductDetails = false;
 async function sendProductDetails() {
-  if (!currentSenderId) return;
+  if (!currentSenderId || _isSendingProductDetails) return;
+  if (_isSending) { showToast('انتظر اكتمال الإرسال الحالي', 'warning'); return; }
+  const senderId = currentSenderId;
   const productIds = selectedValues(document.getElementById('productSelect'));
   if (!productIds.length) { showToast('اختر منتجاً واحداً على الأقل', 'warning'); return; }
-  for (const pid of productIds) {
-    const p = allProducts.find(x => x.product_id === pid);
-    if (!p) continue;
-    const text = `تدللين عيني 🌸\nهذا ${p.product_name}\nالسعر: ${p.price}\nالمقاسات: ${p.sizes || 'غير محدد'}`;
-    await sendMessage(text);
-    for (const url of productImageList(p)) {
-      await sendMessage(null, url);
+  const images = [...new Set(productIds.flatMap(pid => {
+    const product = allProducts.find(p => p.product_id === pid);
+    return product ? productImageList(product) : [];
+  }))];
+  if (!images.length) { showToast('لا توجد صور للمنتجات المختارة', 'warning'); return; }
+  _isSendingProductDetails = true;
+  try {
+    for (const url of images) {
+      if (currentSenderId !== senderId) {
+        showToast('توقف إرسال الصور لأن المحادثة تغيرت', 'warning');
+        break;
+      }
+      // An explicit empty string prevents attaching the composer draft.
+      if (!await sendMessage('', url)) break;
     }
-  }
+  } finally { _isSendingProductDetails = false; }
 }
 
 // ══ AI Instructions ════════════════════════════════════════════════════════
@@ -1619,10 +1634,10 @@ async function sendCatalog() {
     const res = await apiFetch(`/api/conversations/${currentSenderId}/send_catalog`, { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      showToast(`تم إرسال الكتالوج مع ${data.image_count || 0} صورة`, data.sent ? 'success' : 'warning');
+      showToast(`جاري إرسال ${data.image_count || 0} صورة من الكتالوج بدون نص`, 'success');
       await loadMessages(currentSenderId);
     } else {
-      showToast('فشل إرسال الكتالوج', 'danger');
+      showToast(data.error || 'فشل إرسال الكتالوج', 'danger');
     }
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
