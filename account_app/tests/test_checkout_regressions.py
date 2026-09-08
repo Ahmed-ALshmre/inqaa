@@ -363,14 +363,14 @@ class CheckoutRegressionTests(unittest.TestCase):
         ai.assert_called_once()
         self.assertEqual(response["reply"], "أي موديل تقصدين؟")
 
-    def test_unmatched_image_asks_for_clarification_without_disabling_ai(self):
+    def test_unmatched_image_pauses_silently_for_human(self):
         self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
         self.ev.update(text="", image_url="https://example.test/new.jpg")
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "match_product", return_value=(None, None, {})), patch.object(self.m, "create_human_review", return_value=77):
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
-        self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
-        self.assertFalse(response["meta"]["ai_paused"])
-        self.assertIn("صورة أقرب", response["reply"])
+        self.assertFalse(self.m.is_customer_ai_enabled(self.db, self.sender))
+        self.assertTrue(response["meta"]["ai_paused"])
+        self.assertEqual(response["reply"], "")
         self.assertIsNone(self.m.get_active_product_binding(self.db, self.sender))
 
     def test_dashboard_send_accepts_confirmed_cart_once(self):
@@ -485,12 +485,12 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertEqual(result["error_code"], "authentication")
         self.assertEqual(result["http_status"], 401)
 
-    def test_image_service_failure_acknowledges_receipt(self):
+    def test_image_service_failure_is_silent(self):
         self.ev.update(text="", image_url="https://example.test/customer.jpg")
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "match_product", return_value=(None, None, {"service_error": True, "error_code": "authentication"})), patch.object(self.m, "create_human_review", return_value=88) as review:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
-        self.assertIn("وصلت الصورة", response["reply"])
-        self.assertIn("تعذر تحليلها", response["reply"])
+        self.assertEqual(response["reply"], "")
+        self.assertTrue(response["meta"]["ai_paused"])
         self.assertIn("authentication", review.call_args.args[2])
 
     def test_vision_accepts_plain_and_social_image_references_without_ui_filter(self):
@@ -512,6 +512,26 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertIn(self.m.SCREENSHOT_MATCH_GUIDANCE, content[0]["text"])
         self.assertIn("F1", content[0]["text"])
         self.assertEqual(result["product_id"], "F1")
+
+    def test_image_second_attempt_success_continues_without_review(self):
+        ev = dict(self.ev, image_url="https://example.test/customer.jpg")
+        with patch.object(self.m, "_match_single_product", side_effect=[(None, None, {"product_found": False}), (CATALOG[1], "image_recognition", {"product_found": True, "product_id": "F2"})]) as match, patch.object(self.m, "create_human_review") as review:
+            product, _, result = self.m.match_product(self.db, ev, CATALOG)
+        self.assertEqual(match.call_count, 2)
+        self.assertEqual(product["product_id"], "F2")
+        self.assertEqual(len(result["images"][0]["attempts"]), 2)
+        review.assert_not_called()
+
+    def test_image_two_failures_then_silent_handoff(self):
+        self.ev.update(text="", image_url="https://example.test/customer.jpg")
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "_match_single_product", return_value=(None, None, {"product_found": False})) as match, patch.object(self.m, "create_human_review", return_value=99) as review, patch.object(self.m, "call_main_ai") as ai:
+            result = self.m.process_webhook(self.db, {}, use_debounce=False)
+        self.assertEqual(match.call_count, 2)
+        review.assert_called_once()
+        ai.assert_not_called()
+        self.assertEqual(result["reply"], "")
+        self.assertTrue(result["meta"]["ai_paused"])
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 0)
 
 
 if __name__ == "__main__":

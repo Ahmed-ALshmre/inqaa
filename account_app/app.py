@@ -5610,8 +5610,17 @@ def match_product(db, ev, products, resume_ai_on_link=True):
     for url in images:
         image_event = dict(ev, image_url=url, ref=None, ad_id=None, text='',
                            preserve_existing=not replace or matched is not None)
-        product, current_method, result = _match_single_product(db, image_event, products, resume_ai_on_link)
-        results.append(dict(result or {}, image_url=url))
+        attempts = []
+        for attempt in range(2):
+            try:
+                product, current_method, result = _match_single_product(db, image_event, products, resume_ai_on_link)
+            except Exception as exc:
+                product, current_method, result = None, None, vision_service_failure(exc)
+            attempts.append({"attempt": attempt + 1, "product_found": bool(product),
+                             "reason": (result or {}).get("reason"), "error_code": (result or {}).get("error_code")})
+            if product:
+                break
+        results.append(dict(result or {}, image_url=url, attempts=attempts))
         if product:
             complete_customer_product_link(
                 db, ev.get("sender_id"), product, current_method,
@@ -5624,8 +5633,9 @@ def match_product(db, ev, products, resume_ai_on_link=True):
     combined['images'] = results
     combined['product_ids'] = list(dict.fromkeys(r['product_id'] for r in results if r.get('product_found') and r.get('product_id')))
     combined['unmatched_image_urls'] = [r['image_url'] for r in results if not r.get('product_found')]
-    if matched and combined['unmatched_image_urls']:
-        create_human_review(db, ev, 'صور لم تُطابق بثقة ضمن المرفقات: ' + '\n'.join(combined['unmatched_image_urls']), build_product_vision_candidates(products, limit=20))
+    if combined['unmatched_image_urls']:
+        # Do not answer from one matched image while another remains unresolved.
+        return None, None, combined
     return matched, method, combined
 
 
@@ -6469,18 +6479,8 @@ def _call_main_ai_once(
     db = get_db()
     post_order = ev.get("_post_order")
     if image_result and image_result.get("unmatched_customer_image"):
-        review_id = image_result.get("human_review_id")
-        review_text = f" رقم المراجعة: {review_id}" if review_id else ""
-        return {
-            "reply": (
-                "حبيبتي هذا الموديل ما كدرت أتأكد منه بشكل واضح ضمن منتجاتنا الحالية 🌸 "
-                f"حولته للإدارة حتى تتأكدلج وترجع بالج جواب أدق.{review_text}"
-            ),
-            "intent": "image_check",
-            "create_order": False,
-            "order": {},
-            "confidence": 100,
-        }
+        return {"reply": "", "intent": "image_check", "create_order": False,
+                "requires_human": True, "order": {}, "confidence": 0}
 
     if image_result and image_result.get("waiting_for_image"):
         return {
@@ -7660,6 +7660,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 },
             }
 
+        set_customer_ai_enabled(db, ev["sender_id"], False)
         existing_review = has_pending_image_review(db, ev["sender_id"]) or has_pending_human_review(db, ev["sender_id"])
         if existing_review and has_sent_pending_image_reply(db, ev["sender_id"], existing_review):
             log(8, "HUMAN REVIEW", f"Image already has pending review #{existing_review}; customer was asked size/age before.")
@@ -7690,14 +7691,11 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             if (image_result or {}).get("service_error") else "AI could not confidently match customer image; routed to human review",
             candidates,
         )
-        # Keep the unresolved image in review, but allow subsequent questions.
-        # The previous model is not evidence about this newly supplied image.
         reject_current_binding(db, ev["sender_id"], "unmatched_new_customer_image", allow_any_source=True)
-        return saved_checkout_reply(
-            db, ev, ("وصلت الصورة 🌸 لكن تعذر تحليلها حالياً. ممكن اسم الموديل حتى أكمل وياك؟"
-                     if (image_result or {}).get("service_error") else "وصلت الصورة 🌸 ما كدرت أحدد الموديل بدقة؛ ممكن اسمه أو صورة أقرب للقطعة؟"),
-            {"human_review_id": review_id, "image_unresolved": True, "ai_paused": False},
-        )
+        return {"sender_id": ev["sender_id"], "page_id": ev.get("page_id"), "platform": ev.get("platform"),
+                "reply": "", "reply_parts": [], "send_image": False,
+                "meta": {"human_review_id": review_id, "image_unresolved": True, "ai_paused": True,
+                         "waiting_for_human_action": True, "image_attempts": (image_result or {}).get("images", [])}}
 
     # A prior review must not silence new questions after AI is resumed.
     # Resolve the current explicit choice before falling back to customer memory.
@@ -9983,7 +9981,10 @@ def api_ask_ai(sender_id):
             ev.update(image_url=latest["image_url"], text=latest.get("text") or "")
             matched_product, _, image_result = match_product(db, ev, products)
             if not matched_product:
-                return jsonify({"reply": "لم أتمكن من تحديد الموديل في الصورة؛ أرسلي اسم الموديل أو صورة أوضح 🌸", "intent": "image_check"})
+                review_id = has_pending_human_review(db, sender_id) or create_human_review(
+                    db, ev, "تعذر تحديد الموديل بعد محاولتين؛ مراجعة الصورة مطلوبة", build_product_vision_candidates(products, limit=20))
+                set_customer_ai_enabled(db, sender_id, False)
+                return jsonify({"reply": "", "intent": "human_review", "human_review_id": review_id, "ai_paused": True})
         else:
             explicit = _text_match_product(text, products)
             if explicit:
