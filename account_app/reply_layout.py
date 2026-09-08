@@ -57,9 +57,10 @@ def approved_parts(result, reply):
             same_topic = bool(topic(previous) and topic(previous) == topic(part))
             previous_fragment = (len(compact(previous)) < 30 and not re.search(r"[؟?]$", previous))
             continuation = bool(re.match(r"^(?:لأن|لان|وإذا|واذا|يعني)\s", part))
+            separate_question = bool(re.search(r"[؟?]$", part) and not re.search(r"[؟?]$", previous))
             # Keep related explanations, contact fields and greeting+answer together.
             if (is_greeting(previous) or previous_fragment or continuation
-                    or (same_topic and (topic(part) == "contact" or len(previous) + len(part) <= 300))):
+                    or (same_topic and not separate_question and (topic(part) == "contact" or len(previous) + len(part) <= 300))):
                 grouped[-1] = previous + "\n\n" + part
                 continue
         grouped.append(part)

@@ -66,15 +66,18 @@ class ConversationContextTests(unittest.TestCase):
 
     def recognize(self, text="", product_id="F2"):
         with patch.object(m, "match_customer_image_with_catalog", return_value={"product_found": True, "product_id": product_id, "confidence": 100}):
-            return self.event(text, image="https://images.test/" + uuid.uuid4().hex + ".jpg", model_reply="الموديل متوفر")
+            result = self.event(text, image="https://images.test/" + uuid.uuid4().hex + ".jpg", model_reply="الموديل متوفر")
+            if result.get("meta", {}).get("auto_reply"):
+                result["reply"] = result["meta"]["auto_reply"]["reply"]
+            return result
 
     def test_different_photo_asks_add_or_replace_without_changing_old_choice(self):
         m.complete_customer_product_link(self.db,self.sender,CATALOG[0],"manual")
         result = self.recognize()
         self.assertTrue(result["meta"]["product_choice_pending"])
-        self.assertIn("فستان انيقة",result["reply"])
-        self.assertIn("فستان دانتيل",result["reply"])
-        self.assertEqual([p["product_id"] for p in m.load_customer_products(self.db,self.sender)],["F1"])
+        self.assertEqual("الموديل متوفر",result["reply"])
+        self.assertNotIn("لو",result["reply"])
+        self.assertEqual([p["product_id"] for p in m.load_customer_products(self.db,self.sender)],["F2"])
         result = self.event("بس هذا")
         self.assertEqual(result["meta"]["product_choice_resolved"],"replace")
         self.assertEqual([p["product_id"] for p in m.load_customer_products(self.db,self.sender)],["F2"])
@@ -93,20 +96,20 @@ class ConversationContextTests(unittest.TestCase):
     def test_ambiguous_yes_does_not_choose_add_or_replace(self):
         first = self.recognize()
         self.assertTrue(first["meta"].get("product_choice_pending"), first)
-        result = self.event("اي")
-        self.assertTrue(result["meta"].get("product_choice_pending"), result)
+        result = self.event("اي", model_reply="تفضلي عيني")
+        self.assertNotIn("أثبتلج", result["reply"])
         self.assertIsNotNone(m.pending_product_choice(self.db,self.sender))
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?",(self.sender,)).fetchone()[0],0)
 
     def test_explicit_addition_in_caption_needs_no_extra_choice(self):
         m.complete_customer_product_link(self.db,self.sender,CATALOG[0],"manual")
         result = self.recognize("ضيفي هذا ويا السابق")
-        self.assertNotIn("product_choice_pending",result["meta"])
+        self.assertFalse(result["meta"].get("product_choice_pending"))
         self.assertEqual({p["product_id"] for p in m.load_customer_products(self.db,self.sender)},{"F1","F2"})
 
     def test_new_image_matches_default_without_asking_choice(self):
         result = self.recognize(product_id="F1")
-        self.assertNotIn("product_choice_pending",result["meta"])
+        self.assertFalse(result["meta"].get("product_choice_pending"))
         self.assertEqual(m.load_customer_products(self.db,self.sender)[0]["product_id"],"F1")
         self.assertIn("لينن",self.event("شنو القماش؟")["reply"])
 
@@ -233,12 +236,11 @@ class ConversationContextTests(unittest.TestCase):
         m.save_message(self.db,self.sender,"incoming","text","قياس 44",None,None,None,{})
         client=m.app.test_client()
         with client.session_transaction() as session: session["dashboard_authenticated"]=True
-        with patch.object(m,"match_customer_image_with_catalog",return_value={"product_found":True,"product_id":"F2","confidence":100}), patch.object(m,"call_main_ai") as main:
+        with patch.object(m,"match_customer_image_with_catalog",return_value={"product_found":True,"product_id":"F2","confidence":100}), patch.object(m,"call_main_ai", return_value={"reply":"قياس 44 متوفر", "intent":"product_question"}) as main:
             response=client.post(f"/api/conversations/{self.sender}/ask_ai",json={"allow_empty":True})
         self.assertEqual(response.status_code,200)
-        self.assertEqual(response.get_json()["intent"],"product_choice")
-        self.assertIn("دانتيل",response.get_json()["reply"])
-        main.assert_not_called()
+        self.assertEqual(response.get_json()["reply"],"قياس 44 متوفر")
+        self.assertEqual(main.call_args.args[5]["product_id"],"F2")
 
     def test_dashboard_uses_enabled_default_for_faq(self):
         m.save_message(self.db,self.sender,"incoming","text","شنو القماش",None,None,None,{})
@@ -263,3 +265,24 @@ class ConversationContextTests(unittest.TestCase):
             result=m.match_customer_image_with_catalog("https://images.test/customer.jpg",CATALOG)
         self.assertFalse(result["product_found"])
         request.assert_not_called()
+
+    def test_new_photo_discussion_defers_choice_until_booking(self):
+        self.recognize()
+        price=self.event("شكد سعره؟")["reply"]
+        self.assertIn("15,000",price)
+        self.assertNotIn("دانتيل",price)
+        fabric=self.event("شنو القماش؟")["reply"]
+        self.assertIn("باربي",fabric)
+        result=self.event("ثبتي الطلب")
+        self.assertIn("أثبتلج",result["reply"])
+        self.assertIn("دانتيل",result["reply"])
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?",(self.sender,)).fetchone()[0],0)
+        self.event("بس هذا")
+        self.assertIsNone(m.pending_product_choice(self.db,self.sender))
+
+    def test_model_cannot_confirm_ambiguous_cart_during_discussion(self):
+        self.recognize()
+        with patch.object(m,"_call_main_ai_once",return_value={"reply":"تم تثبيت الطلب","create_order":True,"order":{}}):
+            result=m.call_main_ai(dict(self.ev,text="اي"),"text",{},[],CATALOG,CATALOG[1],None,"",[])
+        self.assertFalse(result["create_order"])
+        self.assertIn("أثبتلج",result["reply"])

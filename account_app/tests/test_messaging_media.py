@@ -112,7 +112,7 @@ class MessagingMediaTests(unittest.TestCase):
         old = {'product_id':'old','product_name':'Old','stock':'متوفر'}
         new = {'product_id':'new','product_name':'New','stock':'متوفر'}
         catalog_patch = patch.object(self.m, 'load_products_from_file', return_value=[old,new]); catalog_patch.start(); self.addCleanup(catalog_patch.stop)
-        for caption, expected in [('', {'old'}), ('بس هذا', {'new'}), ('ضيفي هذا ويا الطلب', {'old','new'})]:
+        for caption, expected in [('', {'new'}), ('بس هذا', {'new'}), ('ضيفي هذا ويا الطلب', {'old','new'})]:
             self.m.complete_customer_product_link(self.db,self.sender,old,'manual')
             ev = {'sender_id':self.sender,'text':caption,'image_url':'https://img.test/new.jpg'}
             with patch.object(self.m,'match_customer_image_with_catalog',return_value={'product_found':True,'product_id':'new'}):

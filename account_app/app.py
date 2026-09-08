@@ -31,7 +31,7 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
-from flask import Flask, g, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
+from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
 
@@ -5642,7 +5642,7 @@ def pending_product_choice(db, sender_id):
 def product_choice_question(previous, selected):
     new_names = " و".join(p.get("product_name") or p["product_id"] for p in selected)
     old_names = " و".join(p.get("product_name") or p["product_id"] for p in previous)
-    return f"الصورة تطابق {new_names} 🌸 تريد هذا وحده، لو تضيفه إلى {old_names}؟"
+    return f"أثبتلج {new_names} وحده، لو وياه {old_names}؟"
 
 
 def resolve_product_choice(db, ev, products):
@@ -5658,10 +5658,10 @@ def resolve_product_choice(db, ev, products):
     text = ev.get("text") or ""
     intent = image_selection_intent(text)
     if not intent:
-        answer = known_product_question_reply(text, selected[0]) if len(selected) == 1 else None
-        question = product_choice_question(previous, selected)
-        return saved_checkout_reply(db, ev, ((answer["reply"] + "\n") if answer else "") + question,
-                                    {"product_choice_pending": True})
+        if re.search(r"ثبت|ثبتي|احجز|أحجز|حجز|اطلب|أطلب|طلبيه|طلبية", text) or contact_fields(text):
+            return saved_checkout_reply(db, ev, product_choice_question(previous, selected),
+                                        {"product_choice_pending": True})
+        return None
     chosen = previous + selected if intent == "add" else selected
     unique = list({p["product_id"]: p for p in chosen}.values())
     for index, product in enumerate(unique):
@@ -5710,7 +5710,12 @@ def match_product(db, ev, products, resume_ai_on_link=True):
         db.execute("INSERT OR REPLACE INTO customer_product_choices VALUES(?,?,?,?)", (
             ev["sender_id"], json.dumps([p["product_id"] for p in previous]), json.dumps(combined['product_ids']), now_baghdad_iso()))
         db.commit()
-        combined.update(product_choice_pending=True, selection_question=product_choice_question(previous, recognized))
+        for index, product in enumerate(recognized):
+            complete_customer_product_link(db, ev["sender_id"], product, "image_recognition",
+                source="image_recognition", preserve_existing=index > 0, resume_ai=resume_ai_on_link)
+        answer = known_product_question_reply(ev.get("text"), recognized[-1])
+        natural_reply = answer["reply"] if answer else f"إي عيني، هذا {recognized[-1].get('product_name') or 'الموديل'} 🌸"
+        combined.update(product_choice_pending=True, selection_question=natural_reply)
         return recognized[-1], "image_recognition", combined
     chosen = list({p["product_id"]: p for p in (previous + recognized if intent == "add" else recognized)}.values())
     for index, product in enumerate(chosen):
@@ -6007,8 +6012,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         latest = latest_incoming_message(db, sender_id)
         choice_ev = dict(latest, sender_id=sender_id)
         choice_reply = resolve_product_choice(db, choice_ev, load_active_products(db))
-        sent = send_webhook_result_to_facebook(choice_reply, sender_id)
-        return {"sent": sent, "reply": choice_reply.get("reply", ""), "reason": None if sent else "manychat_send_failed"}
+        if choice_reply:
+            sent = send_webhook_result_to_facebook(choice_reply, sender_id)
+            return {"sent": sent, "reply": choice_reply.get("reply", ""), "reason": None if sent else "manychat_send_failed"}
     complete_customer_product_link(
         db,
         sender_id,
@@ -6547,13 +6553,13 @@ def call_main_ai(
     if (message_type == "text" and not (image_result or {}).get("waiting_for_image") and not ev.get("image_url")
             and all(t.strip() == question.strip() for t in unanswered)):
         if matched_product and is_simple_greeting(question) and not ev.get("_post_order"):
-            return {"reply": f"وعليكم السلام، أهلاً وسهلاً 🌸\nبخصوص موديل {matched_product.get('product_name') or 'المنتج المحدد'}، شنو تحب تعرف عنه؟",
+            return {"reply": "وعليكم السلام، هلا بيج 🌸 تفضلي",
                     "create_order": False, "requires_human": False, "order": {}, "intent": "greeting"}
         answer = known_product_question_reply(question, matched_product)
         if answer:
             return answer
     args = (ev, message_type, customer, history, products, matched_product,
-            image_result, instructions_text, rules_list)
+            image_result, instructions_text + "\nأسلوب المحادثة: رد عراقي مختصر وطبيعي. التحية وحدها تجاب بتحية وتفضلي دون عرض منتج. صورة الموديل تنقل الحديث إليه؛ أجب عن السؤال واللون والقياس مباشرة، ولا تقل الصورة تطابق ولا تسأل إضافة أو استبدال أثناء الاستفسار. لا تذكر موديلين إلا عند توضيح طلب الحجز إن بقي الاختيار غامضاً. افصل المعلومة عن سؤال المتابعة في reply_parts.", rules_list)
     kwargs = dict(fix_instruction=fix_instruction, customer_products=customer_products,
                   conversation_history=conversation_history, catalog_search_context=catalog_search_context)
     result = _call_main_ai_once(*args, **kwargs)
@@ -6575,6 +6581,12 @@ def call_main_ai(
         result = _call_main_ai_once(*args, **kwargs)
     if matched_product and not is_product_objection(question) and reply_reasks_known_product(result.get("reply")):
         return {"reply": "", "failed": True, "failure_reason": "known_product_context_repeatedly_ignored", "requires_human": True}
+    pending = pending_product_choice(get_db(), ev.get("sender_id")) if has_app_context() else None
+    if pending and checkout_requested(get_db(), ev, result):
+        catalog = {p["product_id"]: p for p in products}
+        previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
+        selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
+        return {"reply": product_choice_question(previous, selected), "create_order": False, "order": {}, "intent": "product_choice"}
     return result
 
 
@@ -7760,8 +7772,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         image_flow("04_before_image_matching", sender_id=ev["sender_id"], image_url=ev.get("image_url"))
         matched_product, match_method, image_result = match_product(db, ev, products)
         if matched_product:
-            if (image_result or {}).get("product_choice_pending"):
-                return saved_checkout_reply(db, ev, image_result["selection_question"], {"product_choice_pending": True, "product_ids": image_result["product_ids"]})
             image_flow(
                 "09_no_human_review_auto_reply_start",
                 sender_id=ev["sender_id"],
@@ -7793,6 +7803,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "meta": {
                     "message_type": message_type,
                     "catalog_match": True,
+                    "product_choice_pending": bool((image_result or {}).get("product_choice_pending")),
                     "product_id": (matched_product or {}).get("product_id"),
                     "match_method": match_method,
                     "auto_reply": auto_reply,
@@ -10122,15 +10133,13 @@ def api_ask_ai(sender_id):
         ev = collect_unanswered_event(db, ev, latest_id)
         ev["_resolve_default_for_image"] = True
         pending = pending_product_choice(db, sender_id)
-        if pending and not ev.get("image_url"):
+        if pending and not ev.get("image_url") and re.search(r"ثبت|احجز|أحجز|حجز|اطلب|أطلب", ev.get("text") or ""):
             catalog = {p["product_id"]: p for p in products}
             previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
             selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
             return jsonify({"reply": product_choice_question(previous, selected), "intent": "product_choice"})
         if ev.get("image_url"):
             matched_product, _, image_result = match_product(db, ev, products)
-            if (image_result or {}).get("product_choice_pending"):
-                return jsonify({"reply": image_result["selection_question"], "intent": "product_choice"})
             if not matched_product:
                 review_id = has_pending_human_review(db, sender_id) or create_human_review(
                     db, ev, "تعذر تحديد الموديل بعد محاولتين؛ مراجعة الصورة مطلوبة", build_product_vision_candidates(products, limit=20))

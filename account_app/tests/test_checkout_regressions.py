@@ -461,7 +461,8 @@ class CheckoutRegressionTests(unittest.TestCase):
             self.assertEqual(self.m.load_customer_products(self.db, self.sender)[0]["product_id"], "F1")
         first.assert_not_called()
         model.assert_not_called()
-        self.assertIn("فستان دانتيل", response["reply"])
+        self.assertNotIn("فستان دانتيل", response["reply"])
+        self.assertIn("تفضلي", response["reply"])
         self.assertNotIn("صورة", response["reply"])
 
     def test_existing_enabled_auto_binding_is_visible_to_ai(self):

@@ -45,6 +45,13 @@ class ReplyLayoutTests(unittest.TestCase):
         parts = approved_parts({'reply_parts':['باقي قطعتين', 'الحجز مثبت']}, reply)
         self.assertEqual(compact(' '.join(parts)), compact(reply))
 
+    def test_size_explanation_and_followup_are_separate_messages(self):
+        reply="القياسات متوفرة من 38 إلى 52، وتناسب أوزان من 55 للـ 100 كيلو. شكد القياس أو الوزن المطلوب حتى أتأكدلك منه؟"
+        parts=approved_parts({},reply)
+        self.assertEqual(len(parts),2)
+        self.assertTrue(parts[1].startswith("شكد"))
+        self.assertEqual(compact(" ".join(parts)),compact(reply))
+
 
 if __name__ == '__main__':
     unittest.main()
