@@ -108,11 +108,11 @@ class MessagingMediaTests(unittest.TestCase):
             self.m.match_product(self.db,ev,[old,new])
         self.assertEqual([p['product_id'] for p in self.m.load_customer_products(self.db,self.sender)], ['new'])
 
-    def test_new_photo_changes_focus_without_explicit_correction(self):
+    def test_new_photo_waits_for_choice_unless_intent_is_explicit(self):
         old = {'product_id':'old','product_name':'Old','stock':'متوفر'}
         new = {'product_id':'new','product_name':'New','stock':'متوفر'}
         catalog_patch = patch.object(self.m, 'load_products_from_file', return_value=[old,new]); catalog_patch.start(); self.addCleanup(catalog_patch.stop)
-        for caption, expected in [('', {'new'}), ('ضيفي هذا ويا الطلب', {'old','new'})]:
+        for caption, expected in [('', {'old'}), ('بس هذا', {'new'}), ('ضيفي هذا ويا الطلب', {'old','new'})]:
             self.m.complete_customer_product_link(self.db,self.sender,old,'manual')
             ev = {'sender_id':self.sender,'text':caption,'image_url':'https://img.test/new.jpg'}
             with patch.object(self.m,'match_customer_image_with_catalog',return_value={'product_found':True,'product_id':'new'}):
@@ -347,7 +347,7 @@ class MessagingMediaTests(unittest.TestCase):
             finally:self.m._current_store_id.reset(token)
 
     def test_photo_never_rebinds_automatic_product_before_matching(self):
-        with patch.object(self.m,'get_auto_product_settings',return_value={'enabled':True}), patch.object(self.m,'get_active_product_binding',return_value=None):
+        with patch.object(self.m,'get_auto_product_settings',return_value={'enabled':True, 'product':{'product_id':'P1','product_name':'فستان'}}), patch.object(self.m,'get_active_product_binding',return_value=None):
             self.assertFalse(self.m.should_use_auto_product(self.db,self.sender,{'image_url':'https://example.test/new.jpg'},'image',[]))
             self.assertTrue(self.m.should_use_auto_product(self.db,self.sender,{'text':'مرحبا'},'text',[]))
 

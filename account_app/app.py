@@ -2291,6 +2291,9 @@ def complete_customer_product_link(db, sender_id, product, match_method, confide
         db, sender_id, product, effective_method,
         confidence=confidence, source=effective_source, status="active",
     )
+    if effective_source == "manual_admin":
+        product_choice_table(db)
+        db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (sender_id,))
     cur = db.execute(
         "UPDATE human_reviews SET status='linked', replied_at=? "
         "WHERE sender_id=? AND status='pending'",
@@ -2504,25 +2507,23 @@ def is_simple_greeting(text):
 
 
 def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
-    if message_type == "image" or ev.get("image_url"):
+    if message_type == "image" or ev.get("image_url") or ev.get("attachments"):
         return False
     if customer_products or get_active_product_binding(db, sender_id):
         return False
-    text = (ev.get("text") or "").strip()
-    if text and is_product_objection(text):
-        return False
-    if ev.get("ref") or ev.get("ad_id") or ev.get("attachments"):
+    text = str(ev.get("text") or "")
+    if is_product_objection(text) or is_existing_order_followup(text):
         return False
     settings = get_auto_product_settings(db)
-    if not settings.get("enabled"):
+    product = settings.get("product")
+    if not settings.get("enabled") or not product:
         return False
-    # Never restore a default after a photo or an explicit product rejection.
-    if has_any_customer_image(db, sender_id) or db.execute(
-        "SELECT 1 FROM customer_product_interests WHERE sender_id=? AND status IN ('rejected','superseded') LIMIT 1",
-        (sender_id,),
-    ).fetchone():
+    rejected = db.execute("SELECT 1 FROM customer_product_interests WHERE sender_id=? AND product_id=? AND status='rejected' LIMIT 1",
+                          (sender_id, product.get("product_id"))).fetchone()
+    if rejected:
         return False
-    return is_simple_greeting(text) or (not text) or _is_contextual_product_question(text)
+    # A request naming another category must not inherit the campaign's dress.
+    return select_customer_context_product(text, [product]) is not None
 
 
 def _is_contextual_product_question(text):
@@ -3698,6 +3699,8 @@ def _requests_product_photo(text):
 
 
 def _promises_product_photo(text):
+    if re.search(r"(?:دزيلي|ارسلي|أرسلي|ابعثي|ابعثلي).{0,30}(?:صور|صوره|صورة)", str(text or "")):
+        return False
     return bool(re.search(r"(?:هذي|هذه|هاي|أدز|ادز|أرسل|ارسل|دزيت|أرفق|ارفق).{0,35}(?:صور|صوره|صورة)", str(text or "")))
 
 
@@ -5151,12 +5154,14 @@ def build_product_vision_candidates(products, limit=10):
     """بناء قائمة منتجات مرئية كاملة عندما لا تكفي ترشيحات CLIP."""
     candidates = []
     for p in products:
-        if not p.get("image_url"):
+        image_urls = product_image_urls(p)
+        if not image_urls:
             continue
         candidates.append({
             "product_id"         : p.get("product_id"),
             "product_name"       : p.get("product_name"),
-            "image_url"          : p.get("image_url"),
+            "image_url"          : image_urls[0],
+            "image_urls"         : image_urls,
             "visual_description" : p.get("visual_description"),
             "description"        : p.get("description"),
             "price"              : p.get("price"),
@@ -5267,8 +5272,8 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
             "type": "text",
             "text": "PRODUCT_CANDIDATE:\n" + json.dumps(product_info, ensure_ascii=False, indent=2),
         })
-        if c.get("image_url"):
-            content.append({"type": "image_url", "image_url": {"url": _image_ref_for_openrouter(c["image_url"])}})
+        for reference in c.get("image_urls") or ([c["image_url"]] if c.get("image_url") else []):
+            content.append({"type": "image_url", "image_url": {"url": _image_ref_for_openrouter(reference)}})
 
     content.append({
         "type": "text",
@@ -5441,7 +5446,12 @@ def _local_image_path_from_reference(image_ref):
     normalized = path.replace("\\", "/")
     if "/product_image/" in normalized:
         rel = normalized.split("/product_image/", 1)[1].lstrip("/")
-        return os.path.join(PRODUCT_IMAGE_DIR, rel)
+        root = UPLOADS_DIR if rel.startswith("uploads/") else PRODUCT_IMAGE_DIR
+        rel = rel.removeprefix("uploads/") if rel.startswith("uploads/") else rel
+        target = os.path.abspath(os.path.join(root, rel))
+        if os.path.commonpath([os.path.abspath(root), target]) != os.path.abspath(root):
+            raise ValueError("Invalid product image path")
+        return target
     if os.path.isabs(image_ref):
         return image_ref
     return os.path.join(os.path.dirname(__file__), image_ref.lstrip("/"))
@@ -5453,6 +5463,10 @@ def _image_ref_for_openrouter(image_ref):
         raise ValueError("missing image url")
     if image_ref.startswith("data:"):
         return image_ref
+    if "/product_image/" in urlparse(image_ref).path:
+        local = _local_image_path_from_reference(image_ref)
+        if os.path.isfile(local):
+            return _file_to_data_url(local)
     if image_ref.startswith("https://"):
         return image_ref
     if image_ref.startswith("http://"):
@@ -5475,6 +5489,13 @@ def _clean_catalog_product_id(raw, products):
 
 
 def match_customer_image_with_catalog(customer_image_url, products):
+    # Uploaded catalog sheets can contain numbers unrelated to database IDs.
+    # Prefer explicitly labelled product photos; never replace a failed direct
+    # comparison with an unverified sheet-number guess.
+    direct_candidates = build_product_vision_candidates(products, limit=len(products or []))
+    if direct_candidates and is_store_feature_enabled("vision_enabled", VISION_ENABLED):
+        result = confirm_with_vision(customer_image_url, direct_candidates)
+        return dict(result, reference_source="labelled_product_images")
     catalog_model = get_ai_model(None, "catalog_match_model", CATALOG_MATCH_MODEL)
     image_flow(
         "04_catalog_match_start",
@@ -5597,46 +5618,110 @@ def match_customer_image_with_catalog(customer_image_url, products):
         return vision_service_failure(exc)
 
 
+def image_selection_intent(text):
+    text = str(text or "").strip()
+    if re.search(r"(?:لا|ما)\s*(?:تضيف|تضيفين|تضيفي|اضيف|أضيف)|(?:بس|فقط)\s*(?:هذا|هذه|هاذ|هاي|هذني)|(?:هذا|هذه|هاي)\s*(?:بس|فقط|وحده|وحدها)|بدل|مو هذا|مو هاذا|اقصد هذا|أقصد هذا|عوفي السابق|الغ[يِ] السابق", text):
+        return "replace"
+    if re.search(r"ضيف|اضيف|أضيف|بالاضاف|بالإضاف|هم اريد|هم أريد|ويا(?:ه|ها|هم|هن| القديم| السابق| الاول| الأول)|مع السابق|الاثنين|الإثنين|كلاهما", text):
+        return "add"
+    return ""
+
+
+def product_choice_table(db):
+    db.execute("""CREATE TABLE IF NOT EXISTS customer_product_choices (
+        sender_id TEXT PRIMARY KEY, previous_ids TEXT NOT NULL,
+        image_ids TEXT NOT NULL, created_at TEXT NOT NULL)""")
+
+
+def pending_product_choice(db, sender_id):
+    product_choice_table(db)
+    row = db.execute("SELECT * FROM customer_product_choices WHERE sender_id=?", (sender_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def product_choice_question(previous, selected):
+    new_names = " و".join(p.get("product_name") or p["product_id"] for p in selected)
+    old_names = " و".join(p.get("product_name") or p["product_id"] for p in previous)
+    return f"الصورة تطابق {new_names} 🌸 تريد هذا وحده، لو تضيفه إلى {old_names}؟"
+
+
+def resolve_product_choice(db, ev, products):
+    pending = pending_product_choice(db, ev["sender_id"])
+    if not pending:
+        return None
+    catalog = {p["product_id"]: p for p in products}
+    previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
+    selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
+    if not selected:
+        db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev["sender_id"],)); db.commit()
+        return saved_checkout_reply(db, ev, "الموديل المحدد تغير بالكتالوج؛ نحتاج نحدد البديل قبل الحجز.", {"product_choice_changed": True})
+    text = ev.get("text") or ""
+    intent = image_selection_intent(text)
+    if not intent:
+        answer = known_product_question_reply(text, selected[0]) if len(selected) == 1 else None
+        question = product_choice_question(previous, selected)
+        return saved_checkout_reply(db, ev, ((answer["reply"] + "\n") if answer else "") + question,
+                                    {"product_choice_pending": True})
+    chosen = previous + selected if intent == "add" else selected
+    unique = list({p["product_id"]: p for p in chosen}.values())
+    for index, product in enumerate(unique):
+        complete_customer_product_link(db, ev["sender_id"], product, "customer_correction",
+                                      source="image_recognition", preserve_existing=index > 0)
+    db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev["sender_id"],)); db.commit()
+    names = " و".join(p.get("product_name") or p["product_id"] for p in unique)
+    return saved_checkout_reply(db, ev, f"تمام، نعتمد {names} 🌸", {"product_choice_resolved": intent, "product_ids": [p["product_id"] for p in unique]})
+
+
 def match_product(db, ev, products, resume_ai_on_link=True):
     images = [m['url'] for m in extract_media({'attachments': ev.get('attachments', [])}, image_url=ev.get('image_url') or '') if m['type'] == 'image']
     if not images:
         return _match_single_product(db, ev, products, resume_ai_on_link)
-    results = []
-    matched = None
-    method = None
-    # A new photo establishes the current model; explicit additions retain
-    # earlier interests. Every matched model in the same album is preserved.
-    replace = not bool(re.search(r"(?:هم اريد|هم أريد|ضيف|أضيف|اضيف|ويا|بالإضافة|بالاضافة)", ev.get('text') or ''))
+    previous = load_customer_products(db, ev.get("sender_id"), limit=50)
+    if not previous and ev.get("_resolve_default_for_image"):
+        settings = get_auto_product_settings(db)
+        if settings.get("enabled") and settings.get("product"):
+            previous = [settings["product"]]
+    results, recognized = [], []
     for url in images:
-        image_event = dict(ev, image_url=url, ref=None, ad_id=None, text='',
-                           preserve_existing=not replace or matched is not None)
+        image_event = dict(ev, image_url=url, ref=None, ad_id=None, text='')
         attempts = []
         for attempt in range(2):
             try:
-                product, current_method, result = _match_single_product(db, image_event, products, resume_ai_on_link)
+                product, method, result = _match_single_product(db, image_event, products, resume_ai_on_link)
             except Exception as exc:
-                product, current_method, result = None, None, vision_service_failure(exc)
+                product, method, result = None, None, vision_service_failure(exc)
             attempts.append({"attempt": attempt + 1, "product_found": bool(product),
                              "reason": (result or {}).get("reason"), "error_code": (result or {}).get("error_code")})
             if product:
                 break
         results.append(dict(result or {}, image_url=url, attempts=attempts))
-        if product:
-            complete_customer_product_link(
-                db, ev.get("sender_id"), product, current_method,
-                confidence=(result or {}).get("confidence") or 100,
-                source="image_recognition", resume_ai=resume_ai_on_link,
-                preserve_existing=image_event["preserve_existing"],
-            )
-            matched, method = product, current_method
-    combined = dict(results[-1])
-    combined['images'] = results
-    combined['product_ids'] = list(dict.fromkeys(r['product_id'] for r in results if r.get('product_found') and r.get('product_id')))
+        if product and product.get("product_id") not in {p["product_id"] for p in recognized}:
+            recognized.append(product)
+    combined = dict(results[-1], images=results)
+    combined['product_ids'] = [p["product_id"] for p in recognized]
     combined['unmatched_image_urls'] = [r['image_url'] for r in results if not r.get('product_found')]
+    combined['service_error'] = any(r.get('service_error') for r in results)
     if combined['unmatched_image_urls']:
-        # Do not answer from one matched image while another remains unresolved.
         return None, None, combined
-    return matched, method, combined
+    intent = image_selection_intent(ev.get("text"))
+    new_ids = set(combined['product_ids']) - {p["product_id"] for p in previous}
+    if previous and new_ids and not intent:
+        product_choice_table(db)
+        db.execute("INSERT OR REPLACE INTO customer_product_choices VALUES(?,?,?,?)", (
+            ev["sender_id"], json.dumps([p["product_id"] for p in previous]), json.dumps(combined['product_ids']), now_baghdad_iso()))
+        db.commit()
+        combined.update(product_choice_pending=True, selection_question=product_choice_question(previous, recognized))
+        return recognized[-1], "image_recognition", combined
+    chosen = list({p["product_id"]: p for p in (previous + recognized if intent == "add" else recognized)}.values())
+    for index, product in enumerate(chosen):
+        from_image = product["product_id"] in combined["product_ids"]
+        complete_customer_product_link(db, ev.get("sender_id"), product,
+            "image_recognition" if from_image else "customer_correction", confidence=100,
+            source="image_recognition" if from_image else "unknown", resume_ai=resume_ai_on_link,
+            preserve_existing=(intent == "add" or not new_ids or index > 0))
+    product_choice_table(db)
+    db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev["sender_id"],)); db.commit()
+    return recognized[-1], "image_recognition", combined
 
 
 def _match_single_product(db, ev, products, resume_ai_on_link=True):
@@ -5673,20 +5758,10 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
             match_method = "text"
 
     if not matched and not image_url and text and sender_id and _is_contextual_product_question(text):
-        prev_type = previous_incoming_message_type(db, sender_id)
-        if _has_demonstrative_reference(text) and prev_type != "image":
-            print(
-                "[Product] Context text looks like it refers to a new image, "
-                "but previous message was not image; skipping customer memory.",
-                flush=True,
-            )
-            return None, None, {
-                "product_found": False,
-                "confidence": 0,
-                "reason": "Text likely refers to an image that has not arrived yet",
-                "waiting_for_image": True,
-            }
         remembered_products = load_customer_products(db, sender_id, limit=1)
+        if not remembered_products and _has_demonstrative_reference(text):
+            return None, None, {"product_found": False, "confidence": 0,
+                                "reason": "No selected product for contextual question", "waiting_for_image": True}
         if remembered_products:
             last_product_id = remembered_products[0].get("product_id")
             matched = next((p for p in products if p.get("product_id") == last_product_id), None)
@@ -5923,11 +5998,17 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
     return sent
 
 
-def auto_reply_after_product_link(db, sender_id, matched_product, conversation_history=None):
+def auto_reply_after_product_link(db, sender_id, matched_product, conversation_history=None, event=None):
     """Generate and send the first AI reply as soon as a human links a product."""
     if not matched_product:
         return {"sent": False, "reply": "", "reason": "missing_product"}
     ai_was_enabled = is_ai_enabled(db) and is_customer_ai_enabled(db, sender_id)
+    if ai_was_enabled and pending_product_choice(db, sender_id):
+        latest = latest_incoming_message(db, sender_id)
+        choice_ev = dict(latest, sender_id=sender_id)
+        choice_reply = resolve_product_choice(db, choice_ev, load_active_products(db))
+        sent = send_webhook_result_to_facebook(choice_reply, sender_id)
+        return {"sent": sent, "reply": choice_reply.get("reply", ""), "reason": None if sent else "manychat_send_failed"}
     complete_customer_product_link(
         db,
         sender_id,
@@ -5966,13 +6047,15 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         "ad_id": latest.get("ad_id"),
         "referral_source": None,
         "referral_type": None,
-        "postback_payload": None,
-        "quick_reply_payload": None,
+        "postback_payload": None, "postback": None,
+        "quick_reply_payload": None, "quick_reply": None,
         "timestamp": latest.get("created_at"),
         "page_id": customer.get("page_id") or "",
         "platform": customer.get("platform") or "facebook",
     }
-    message_type = latest.get("message_type") or "text"
+    if event:
+        ev.update(event)
+    message_type = detect_message_type(ev)
     latest_order = get_latest_customer_order(db, sender_id)
     if latest_order:
         result = handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
@@ -6407,6 +6490,13 @@ def known_product_question_reply(text, product):
     if not product:
         return None
     text = re.sub(r"[؟?!.،🌸]", "", str(text or "")).strip()
+    if re.fullmatch(r"(?:ما هي|شنو)\s+مواصفات(?: الفستان| الموديل| المنتج|ه|ها)?", text):
+        details = [str(product.get("product_name") or "الموديل")]
+        for field, label in (("price", "السعر"), ("colors", "الألوان"), ("sizes", "القياسات"), ("fabric", "القماش")):
+            if product.get(field):
+                details.append(f"{label}: {product[field]}")
+        if len(details) > 1:
+            return {"reply": "\n".join(details), "create_order": False, "requires_human": False, "order": {}, "intent": "product_question"}
     patterns = (
         (r"(?:شكد|كم|شنو)\s+(?:السعر|سعره|سعرها|سعر القطعة)|(?:السعر|سعر)", "price", "السعر"),
         (r"(?:شنو|ما هي|شنهي)\s+(?:الالوان|الألوان|الوانه|الوانها)(?: المتوفره| المتوفرة)?|(?:الألوان|الالوان)", "colors", "الألوان المتوفرة"),
@@ -6428,6 +6518,14 @@ def known_product_question_reply(text, product):
     return None
 
 
+def requests_alternative_photo(text):
+    return bool(re.search(r"(?:ماكو|اكو|أكو|عندكم|ممكن).{0,20}غير.{0,20}صور|تصوير بموبايل|حطي وصوري|صوريه|صوريها|صور.{0,20}(?:حقيقية|حقيقيه|من المحل)|(?:تدزين|ترسلين|تدز|ترسل).{0,20}نفس.{0,15}(?:صور|صوره|صورة)", str(text or "")))
+
+
+def reply_reasks_known_product(reply):
+    return bool(re.search(r"(?:أي|اي|شنو|ما هو|شنهو)\s+(?:موديل|الموديل|فستان)|(?:دزيلي|أرسلي|ارسلي|اعطيني).{0,35}(?:اسم الموديل|صورة الموديل|صورة المنتج)|(?:ما واضح|مو واضح|لم يتحدد).{0,30}(?:موديل|المنتج)", str(reply or "")))
+
+
 def call_main_ai(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
@@ -6442,6 +6540,10 @@ def call_main_ai(
         elif message.get("direction") == "incoming":
             unanswered.append(message.get("text") or "")
     question = ev.get("text") or ""
+    if matched_product and requests_alternative_photo(question) and len(product_image_urls(matched_product)) <= 1:
+        return {"reply": "المتوفر حالياً لهذا الموديل هو صورة الكتالوج المسجلة فقط؛ ما عندي تصوير إضافي من المحل.",
+                "intent": "product_photo", "create_order": False, "order": {}, "requires_human": False,
+                "_suppress_product_images": True}
     if (message_type == "text" and not (image_result or {}).get("waiting_for_image") and not ev.get("image_url")
             and all(t.strip() == question.strip() for t in unanswered)):
         if matched_product and is_simple_greeting(question) and not ev.get("_post_order"):
@@ -6455,7 +6557,9 @@ def call_main_ai(
     kwargs = dict(fix_instruction=fix_instruction, customer_products=customer_products,
                   conversation_history=conversation_history, catalog_search_context=catalog_search_context)
     result = _call_main_ai_once(*args, **kwargs)
-    needs_review = (result.get("failed") or result.get("requires_human") is True
+    lost_context = bool(matched_product and not is_product_objection(question)
+                        and reply_reasks_known_product(result.get("reply")))
+    needs_review = (lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
     if needs_review and not fix_instruction and not (image_result or {}).get("unmatched_customer_image"):
         kwargs["fix_instruction"] = (
@@ -6466,7 +6570,11 @@ def call_main_ai(
             "غير متاح؛ هذه الإجراءات تبقى للبشر. لا تخترع معلومة ناقصة ولا ترسل إشعار تحويل للزبون. "
             "عند القدرة على الإجابة أعد requires_human=false."
         )
+        if lost_context:
+            kwargs["fix_instruction"] += " المنتج محدد بالفعل: " + str(matched_product.get("product_name")) + ". أجب عن السؤال الحالي من بياناته؛ لا تطلب اسمه أو صورته مجدداً."
         result = _call_main_ai_once(*args, **kwargs)
+    if matched_product and not is_product_objection(question) and reply_reasks_known_product(result.get("reply")):
+        return {"reply": "", "failed": True, "failure_reason": "known_product_context_repeatedly_ignored", "requires_human": True}
     return result
 
 
@@ -6694,6 +6802,8 @@ def _call_main_ai_once(
             + json.dumps(products_short, ensure_ascii=False, indent=2)
         )
     binding_source = (matched_product or {}).get("source") or (matched_product or {}).get("match_method")
+    if matched_product:
+        sections.append("[قاعدة متابعة الموديل] المنتج أعلاه هو سياق المحادثة الحالي. الأسئلة اللاحقة مثل هذا، لونه، قياسه وقماشه تعود إليه؛ لا تطلب صورة أو اسم الموديل ثانية. تغيير الموديل أو الإضافة يُحددان من اختيار الزبون والتحقق بالصورة.")
     if binding_source == "auto_default_product":
         sections.append(
             "[تنبيه داخلي عن الربط التلقائي]\n"
@@ -7232,6 +7342,27 @@ def restore_checkout_draft(db, ev, result, matched_product):
     current["items"] = [item]
     result["order"] = current
 
+def collect_unanswered_event(db, ev, incoming_message_id):
+    rows = db.execute("""SELECT * FROM messages WHERE sender_id=? AND direction='incoming'
+        AND id<=? AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'),0)
+        ORDER BY id""", (ev["sender_id"], incoming_message_id, ev["sender_id"])).fetchall()
+    texts, media, seen = [], [], set()
+    for row in rows:
+        message = dict(row)
+        text = str(message.get("text") or "").strip()
+        if text and text != message.get("image_url") and not text.startswith(("http://", "https://")):
+            texts.append(text)
+        for item in message_media(message):
+            key = (item.get("type"), item.get("url"))
+            if key not in seen:
+                media.append(item); seen.add(key)
+    if not rows:
+        return ev
+    images = [item["url"] for item in media if item["type"] == "image"]
+    return dict(ev, text="\n".join(texts) or ev.get("text", ""),
+                attachments=media or ev.get("attachments", []), image_url=images[0] if images else ev.get("image_url"))
+
+
 def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_images: bool = True, incoming_message_id=None):
     t_start = time.time()
 
@@ -7447,6 +7578,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     # ── STEP 06: Load conversation history ───────────────────────────────────
     log(6, "HISTORY", "Loading latest customer messages...")
+    ev = collect_unanswered_event(db, ev, incoming_message_id)
+    message_type = detect_message_type(ev)
     history = load_history(db, ev["sender_id"])
     unanswered_text = []
     for message in history:
@@ -7467,9 +7600,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     customer_products = load_customer_products(db, ev["sender_id"])
     latest_order = get_latest_customer_order(db, ev["sender_id"])
-    if latest_order and message_type != "image":
+    if latest_order:
         return handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
     if not latest_order and message_type != "image":
+        choice_reply = resolve_product_choice(db, ev, products)
+        if choice_reply:
+            return choice_reply
         proposal_reply = accept_checkout_proposal(db, ev, history, products)
         if proposal_reply:
             return proposal_reply
@@ -7491,7 +7627,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         if target and (not active_binding or target.get("product_id") != active_binding.get("product_id")):
             complete_customer_product_link(
                 db, ev["sender_id"], target, "ad_id" if target in ad_matches else "text", confidence=100,
-                preserve_existing=bool(re.search(r"(?:هم اريد|هم أريد|ضيف|أضيف|اضيف|ويا|بالإضافة|بالاضافة)", ev.get("text") or "")),
+                preserve_existing=(image_selection_intent(ev.get("text")) != "replace" and (image_selection_intent(ev.get("text")) == "add" or target.get("product_id") in {p.get("product_id") for p in customer_products})),
             )
             customer_products = load_customer_products(db, ev["sender_id"])
             active_binding = get_active_product_binding(db, ev["sender_id"])
@@ -7619,10 +7755,13 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             },
         }
 
-    if message_type == "image" and HUMAN_REVIEW_ALL_IMAGES:
+    if message_type == "image" or ev.get("image_url"):
+        ev = dict(ev, _resolve_default_for_image=True)
         image_flow("04_before_image_matching", sender_id=ev["sender_id"], image_url=ev.get("image_url"))
         matched_product, match_method, image_result = match_product(db, ev, products)
         if matched_product:
+            if (image_result or {}).get("product_choice_pending"):
+                return saved_checkout_reply(db, ev, image_result["selection_question"], {"product_choice_pending": True, "product_ids": image_result["product_ids"]})
             image_flow(
                 "09_no_human_review_auto_reply_start",
                 sender_id=ev["sender_id"],
@@ -7635,7 +7774,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             })
             auto_reply = auto_reply_after_product_link(
                 db, ev["sender_id"], matched_product,
-                conversation_history=conversation_history,
+                conversation_history=conversation_history, event=ev,
             )
             image_flow(
                 "12_auto_reply_finished",
@@ -7705,7 +7844,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     if matched_product:
         complete_customer_product_link(db, ev["sender_id"], matched_product,
                                       match_method, source="current_message",
-                                      preserve_existing=bool(re.search(r"(?:هم اريد|هم أريد|ضيف|أضيف|اضيف|ويا|بالإضافة|بالاضافة)", ev.get("text") or "")))
+                                      preserve_existing=(image_selection_intent(ev.get("text")) != "replace" and (match_method == "customer_memory" or matched_product.get("product_id") in {p.get("product_id") for p in customer_products} or image_selection_intent(ev.get("text")) == "add")))
         customer_products = load_customer_products(db, ev["sender_id"])
     elif customer_products and not (image_result or {}).get("waiting_for_image"):
         matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
@@ -8115,7 +8254,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     send_img = _should_send_image(db, ev["sender_id"], matched_product, ev) or (
         bool(matched_product) and _promises_product_photo(reply)
     )
-    if order_created or ai_result.get("_checkout_proposal"):
+    if order_created or ai_result.get("_checkout_proposal") or ai_result.get("_suppress_product_images"):
         send_img = False
     requested_image_color = str(ai_result.get("image_color") or "").strip()
     if not requested_image_color:
@@ -8927,6 +9066,8 @@ def index_all_products():
 
 @app.route("/health", methods=["GET"])
 def health():
+    with open(__file__, "rb") as source:
+        code_version = hashlib.sha256(source.read()).hexdigest()[:16]
     readiness = {
         "ai": bool(OPENROUTER_KEY),
         "customer_messaging": bool(current_manychat_api_key()),
@@ -8935,6 +9076,7 @@ def health():
     }
     return jsonify({
         "status"        : "ok",
+        "code_version"  : code_version,
         "sales_ready"   : all(readiness.values()),
         "readiness"     : readiness,
         "db"            : DB_PATH,
@@ -9976,10 +10118,19 @@ def api_ask_ai(sender_id):
     }
     image_result = None
     if allow_empty:
-        latest = latest_incoming_message(db, sender_id)
-        if latest.get("image_url"):
-            ev.update(image_url=latest["image_url"], text=latest.get("text") or "")
+        latest_id = db.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=? AND direction='incoming'", (sender_id,)).fetchone()[0]
+        ev = collect_unanswered_event(db, ev, latest_id)
+        ev["_resolve_default_for_image"] = True
+        pending = pending_product_choice(db, sender_id)
+        if pending and not ev.get("image_url"):
+            catalog = {p["product_id"]: p for p in products}
+            previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
+            selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
+            return jsonify({"reply": product_choice_question(previous, selected), "intent": "product_choice"})
+        if ev.get("image_url"):
             matched_product, _, image_result = match_product(db, ev, products)
+            if (image_result or {}).get("product_choice_pending"):
+                return jsonify({"reply": image_result["selection_question"], "intent": "product_choice"})
             if not matched_product:
                 review_id = has_pending_human_review(db, sender_id) or create_human_review(
                     db, ev, "تعذر تحديد الموديل بعد محاولتين؛ مراجعة الصورة مطلوبة", build_product_vision_candidates(products, limit=20))
@@ -9989,6 +10140,9 @@ def api_ask_ai(sender_id):
             explicit = _text_match_product(text, products)
             if explicit:
                 matched_product = explicit
+            elif not matched_product and should_use_auto_product(db, sender_id, ev, "text", customer_prods):
+                matched_product = get_auto_product_settings(db).get("product")
+        customer_prods = load_customer_products(db, sender_id)
     draft_message_id = db.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=?", (sender_id,)).fetchone()[0]
     ai_result = call_main_ai(
         ev, "image" if ev.get("image_url") else "text", customer, history, products,

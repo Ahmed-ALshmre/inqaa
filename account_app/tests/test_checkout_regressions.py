@@ -396,7 +396,7 @@ class CheckoutRegressionTests(unittest.TestCase):
     def simulate_customer_photo(self, product_index, fallback=False):
         self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
         selected = CATALOG[product_index]
-        self.ev.update(text="", image_url="https://images.test/customer-model.jpg", ad_id="old-ad")
+        self.ev.update(text="بس هذا" if product_index else "", image_url="https://images.test/customer-model.jpg", ad_id="old-ad")
         recognized = {"product_found": True, "product_id": selected["product_id"], "confidence": 100}
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "match_customer_image_with_catalog", return_value={"product_found": False} if fallback else recognized), patch.object(self.m, "confirm_with_vision", return_value=recognized) as vision, patch.object(self.m, "call_main_ai", return_value={"reply": "الموديل متوفر، شنو القياس المطلوب؟", "create_order": False}) as ai, patch.object(self.m, "send_webhook_result_to_facebook", return_value=True) as send, patch.object(self.m, "create_human_review") as review:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)

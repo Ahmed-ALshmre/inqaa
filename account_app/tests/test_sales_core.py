@@ -143,8 +143,8 @@ class SalesCoreTests(unittest.TestCase):
             "image", [],
         ))
 
-    def test_unknown_ad_does_not_get_default_product(self):
-        self.assertFalse(should_use_auto_product(
+    def test_unknown_ad_can_use_enabled_campaign_default(self):
+        self.assertTrue(should_use_auto_product(
             self.db, self.sender_id,
             {"text": "مرحبا", "image_url": "", "ref": "campaign", "ad_id": "123"},
             "text", [],
