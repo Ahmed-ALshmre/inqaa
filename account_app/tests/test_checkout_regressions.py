@@ -370,7 +370,7 @@ class CheckoutRegressionTests(unittest.TestCase):
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
         self.assertFalse(response["meta"]["ai_paused"])
-        self.assertIn("صورة أوضح", response["reply"])
+        self.assertIn("صورة أقرب", response["reply"])
         self.assertIsNone(self.m.get_active_product_binding(self.db, self.sender))
 
     def test_dashboard_send_accepts_confirmed_cart_once(self):
@@ -475,6 +475,43 @@ class CheckoutRegressionTests(unittest.TestCase):
         with patch.object(self.m, "get_auto_product_settings", return_value={"enabled": True, "product_id": "F1"}):
             self.m.save_message(self.db, self.sender, "incoming", "image", "", "https://example.test/customer.jpg", None, None, {})
             self.assertFalse(self.m.should_use_auto_product(self.db, self.sender, {"text": "سلام عليكم"}, "text", []))
+
+    def test_vision_auth_failure_is_not_classified_as_unknown_product(self):
+        import requests
+        response = requests.Response(); response.status_code = 401
+        with patch.object(self.m, "OPENROUTER_KEY", "test"), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m.requests, "post", side_effect=requests.HTTPError(response=response)):
+            result = self.m.confirm_with_vision("https://example.test/customer.jpg", [])
+        self.assertTrue(result["service_error"])
+        self.assertEqual(result["error_code"], "authentication")
+        self.assertEqual(result["http_status"], 401)
+
+    def test_image_service_failure_acknowledges_receipt(self):
+        self.ev.update(text="", image_url="https://example.test/customer.jpg")
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "match_product", return_value=(None, None, {"service_error": True, "error_code": "authentication"})), patch.object(self.m, "create_human_review", return_value=88) as review:
+            response = self.m.process_webhook(self.db, {}, use_debounce=False)
+        self.assertIn("وصلت الصورة", response["reply"])
+        self.assertIn("تعذر تحليلها", response["reply"])
+        self.assertIn("authentication", review.call_args.args[2])
+
+    def test_vision_accepts_plain_and_social_image_references_without_ui_filter(self):
+        references = ["https://images.test/plain.jpg", "https://scontent.xx.fbcdn.net/screenshot.jpg", "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=sample"]
+        for reference in references:
+            with self.subTest(reference=reference), patch.object(self.m, "OPENROUTER_KEY", "test"), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m.requests, "post") as post:
+                post.return_value.json.return_value = {"choices": [{"message": {"content": "F1"}}]}
+                result = self.m.confirm_with_vision(reference, [dict(CATALOG[0], image_url="https://images.test/product.jpg")])
+            content = post.call_args.kwargs["json"]["messages"][1]["content"]
+            self.assertEqual(content[1]["image_url"]["url"], reference)
+            self.assertTrue(any(self.m.SCREENSHOT_MATCH_GUIDANCE in part.get("text", "") for part in content))
+            self.assertEqual(result["product_id"], "F1")
+
+    def test_catalog_also_receives_general_image_matching_guidance(self):
+        with patch.object(self.m, "OPENROUTER_KEY", "test"), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "_resolve_catalog_image_paths", return_value=["catalog.png"]), patch.object(self.m, "_file_to_data_url", return_value="data:image/png;base64,TEST"), patch.object(self.m.requests, "post") as post:
+            post.return_value.json.return_value = {"choices": [{"message": {"content": "F1"}}]}
+            result = self.m.match_customer_image_with_catalog("https://images.test/plain.jpg", CATALOG)
+        content = post.call_args.kwargs["json"]["messages"][0]["content"]
+        self.assertIn(self.m.SCREENSHOT_MATCH_GUIDANCE, content[0]["text"])
+        self.assertIn("F1", content[0]["text"])
+        self.assertEqual(result["product_id"], "F1")
 
 
 if __name__ == "__main__":

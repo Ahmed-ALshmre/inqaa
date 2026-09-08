@@ -5212,6 +5212,26 @@ def _extract_product_id_only(raw, candidates):
     return ""
 
 
+SCREENSHOT_MATCH_GUIDANCE = (
+    "تعرف على الموديل من تفاصيل القطعة، سواء كانت الصورة أصلية بلا حواف، أو مقصوصة، "
+    "أو لقطة شاشة من فيسبوك أو إنستغرام أو أي تطبيق آخر. لا تشترط واجهة أو أبعاداً محددة. "
+    "تجاهل الحواف وأشرطة الهاتف والأزرار والكتابة والإعجابات والعلامات المائية والخلفية. "
+    "حدد القطعة الرئيسية الكاملة، وتجاهل أجزاء المنشورات المجاورة؛ إذا ظهرت عدة قطع "
+    "كاملة ولم يتضح المقصود فلا تختَر واحدة عشوائياً. قارن القصة والأكمام والياقة "
+    "والثنيات والزخارف مع صور المنتجات. لا ترفض نفس الموديل بسبب القص أو التحجيم "
+    "أو ضغط الصورة أو انعكاسها أو اختلاف الإضاءة وحده. لا تعتمد على اللون وحده، "
+    "ولا تخترع تفاصيل مخفية أو تطابقاً عندما لا تكفي التفاصيل المرئية."
+)
+
+
+def vision_service_failure(exc):
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    code = "authentication" if status in (401, 403) else "rate_limit" if status == 429 else "service_error"
+    return {"product_found": False, "product_id": "", "confidence": 0,
+            "service_error": True, "error_code": code, "http_status": status,
+            "reason": "Image analysis service failed: " + code}
+
+
 def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
     """إرجاع product_id فقط من Vision بعد مقارنة صورة الزبون بصور المنتجات."""
     if not is_store_feature_enabled("vision_enabled", VISION_ENABLED):
@@ -5222,7 +5242,7 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
     if not OPENROUTER_KEY:
         return {
             "product_found": False, "product_id": "", "confidence": 0,
-            "reason": "No API key", "available": False,
+            "reason": "No API key", "available": False, "service_error": True, "error_code": "missing_key",
         }
 
     content = [
@@ -5231,7 +5251,7 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
         {
             "type": "text",
             "text": (
-                "قارن صورة الزبون مع صور المنتجات التالية. "
+                SCREENSHOT_MATCH_GUIDANCE + " قارن صورة الزبون مع صور المنتجات التالية. "
                 "مهمتك الوحيدة اختيار product_id المطابق أو NONE."
             ),
         },
@@ -5298,11 +5318,7 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
             "reason": "Vision selected product_id only" if pid else "Vision returned NONE",
         }
     except Exception as exc:
-        print(f"[VisionConfirm] Error: {exc}", flush=True)
-        return {
-            "product_found": False, "product_id": "", "confidence": 0,
-            "available": False, "reason": str(exc),
-        }
+        return vision_service_failure(exc)
 
 
 def _resolve_catalog_image_path():
@@ -5484,7 +5500,7 @@ def match_customer_image_with_catalog(customer_image_url, products):
             "product_found": False,
             "product_id": "",
             "confidence": 0,
-            "reason": "No API key",
+            "reason": "No API key", "service_error": True, "error_code": "missing_key",
         }
     if not products:
         image_flow("04_catalog_match_skipped", reason="no_products")
@@ -5519,6 +5535,9 @@ def match_customer_image_with_catalog(customer_image_url, products):
             catalog_images_count=len(catalog_image_urls),
         )
         prompt = render_setting_template(None, "prompt_catalog_match", DEFAULT_CATALOG_MATCH_PROMPT)
+        prompt += "\n" + SCREENSHOT_MATCH_GUIDANCE
+        prompt += "\nمعرفات وأسماء المنتجات المسموح اختيارها:\n" + json.dumps(
+            [{"product_id": p.get("product_id"), "product_name": p.get("product_name")} for p in products], ensure_ascii=False)
         print("[CatalogVision] sending customer image to OpenRouter", flush=True)
         resp = requests.post(
             OPENROUTER_URL,
@@ -5575,14 +5594,7 @@ def match_customer_image_with_catalog(customer_image_url, products):
             "reason": "Matched by OpenRouter catalog",
         }
     except Exception as exc:
-        image_flow("06_openrouter_catalog_error", error=str(exc))
-        print(f"[CatalogVision] error={exc}", flush=True)
-        return {
-            "product_found": False,
-            "product_id": "",
-            "confidence": 0,
-            "reason": str(exc),
-        }
+        return vision_service_failure(exc)
 
 
 def match_product(db, ev, products, resume_ai_on_link=True):
@@ -5743,7 +5755,10 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
             )
 
         vision = confirm_with_vision(image_url, candidates)
-        image_result = vision
+        image_result = dict(vision)
+        if not vision.get("product_found") and (catalog_result or {}).get("service_error"):
+            image_result["catalog_error"] = catalog_result.get("error_code")
+            image_result["service_error"] = True
         pid = vision.get("product_id")
         if pid:
             matched = next((p for p in products if p.get("product_id") == pid), None)
@@ -7671,14 +7686,16 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         review_id = create_human_review(
             db,
             ev,
-            "AI could not confidently match customer image; routed to human review",
+            ("Image analysis service failure: " + str((image_result or {}).get("error_code") or (image_result or {}).get("catalog_error") or "service_error"))
+            if (image_result or {}).get("service_error") else "AI could not confidently match customer image; routed to human review",
             candidates,
         )
         # Keep the unresolved image in review, but allow subsequent questions.
         # The previous model is not evidence about this newly supplied image.
         reject_current_binding(db, ev["sender_id"], "unmatched_new_customer_image", allow_any_source=True)
         return saved_checkout_reply(
-            db, ev, "ما كدرت أحدد الموديل من الصورة بدقة 🌸 ممكن اسم الموديل أو صورة أوضح؟",
+            db, ev, ("وصلت الصورة 🌸 لكن تعذر تحليلها حالياً. ممكن اسم الموديل حتى أكمل وياك؟"
+                     if (image_result or {}).get("service_error") else "وصلت الصورة 🌸 ما كدرت أحدد الموديل بدقة؛ ممكن اسمه أو صورة أقرب للقطعة؟"),
             {"human_review_id": review_id, "image_unresolved": True, "ai_paused": False},
         )
 
