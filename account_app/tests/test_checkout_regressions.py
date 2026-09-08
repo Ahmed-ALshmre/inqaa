@@ -453,6 +453,29 @@ class CheckoutRegressionTests(unittest.TestCase):
             self.m._current_store_id.reset(token)
         self.assertEqual(observed, ["al-fatena"])
 
+    def test_enabled_default_greeting_uses_product_without_asking_for_photo(self):
+        self.ev["text"] = "سلام عليكم"
+        settings = {"enabled": True, "product_id": "F1", "product": CATALOG[0], "send_image": False}
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "get_auto_product_settings", return_value=settings), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "generate_first_message_reply") as first, patch.object(self.m, "_call_main_ai_once") as model:
+            response = self.m.process_webhook(self.db, {}, use_debounce=False)
+            self.assertEqual(self.m.load_customer_products(self.db, self.sender)[0]["product_id"], "F1")
+        first.assert_not_called()
+        model.assert_not_called()
+        self.assertIn("فستان دانتيل", response["reply"])
+        self.assertNotIn("صورة", response["reply"])
+
+    def test_existing_enabled_auto_binding_is_visible_to_ai(self):
+        self.m.remember_customer_product(self.db, self.sender, CATALOG[0], "auto_default_product")
+        with patch.object(self.m, "get_auto_product_settings", return_value={"enabled": True, "product_id": "F1"}):
+            self.assertEqual(self.m.load_customer_products(self.db, self.sender)[0]["product_id"], "F1")
+        with patch.object(self.m, "get_auto_product_settings", return_value={"enabled": False, "product_id": "F1"}):
+            self.assertEqual(self.m.load_customer_products(self.db, self.sender), [])
+
+    def test_default_is_not_restored_after_customer_photo_or_rejection(self):
+        with patch.object(self.m, "get_auto_product_settings", return_value={"enabled": True, "product_id": "F1"}):
+            self.m.save_message(self.db, self.sender, "incoming", "image", "", "https://example.test/customer.jpg", None, None, {})
+            self.assertFalse(self.m.should_use_auto_product(self.db, self.sender, {"text": "سلام عليكم"}, "text", []))
+
 
 if __name__ == "__main__":
     unittest.main()

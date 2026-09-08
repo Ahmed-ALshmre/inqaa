@@ -349,6 +349,6 @@ class MessagingMediaTests(unittest.TestCase):
     def test_photo_never_rebinds_automatic_product_before_matching(self):
         with patch.object(self.m,'get_auto_product_settings',return_value={'enabled':True}), patch.object(self.m,'get_active_product_binding',return_value=None):
             self.assertFalse(self.m.should_use_auto_product(self.db,self.sender,{'image_url':'https://example.test/new.jpg'},'image',[]))
-            self.assertFalse(self.m.should_use_auto_product(self.db,self.sender,{'text':'مرحبا'},'text',[]))
+            self.assertTrue(self.m.should_use_auto_product(self.db,self.sender,{'text':'مرحبا'},'text',[]))
 
 if __name__=='__main__':unittest.main()

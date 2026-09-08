@@ -2383,7 +2383,7 @@ def load_customer_products(db, sender_id, limit=5):
         memory = dict(row)
         product = dict(products_by_id.get(memory.get("product_id"), {}))
         # Legacy search/default/reply guesses must not masquerade as a choice.
-        if not product or not product_binding_is_reliable(memory, product):
+        if not product or not product_binding_is_reliable(memory, product, db):
             continue
         product.update({
             "product_id": memory.get("product_id"),
@@ -2401,8 +2401,12 @@ def load_customer_products(db, sender_id, limit=5):
     return result[:limit]
 
 
-def product_binding_is_reliable(memory, product):
-    guessed = {"auto_default_product", "catalog_search", "reply_product_context"}
+def product_binding_is_reliable(memory, product, db=None):
+    if "auto_default_product" in {memory.get("match_method"), memory.get("source")}:
+        settings = get_auto_product_settings(db)
+        if not settings.get("enabled") or settings.get("product_id") != product.get("product_id"):
+            return False
+    guessed = {"catalog_search", "reply_product_context"}
     if memory.get("match_method") in guessed or memory.get("source") in guessed:
         return False
     old_name = str(memory.get("product_name") or "").strip()
@@ -2422,7 +2426,7 @@ def get_active_product_binding(db, sender_id):
     for row in rows:
         memory = dict(row)
         product = catalog.get(memory.get("product_id"))
-        if product and product_binding_is_reliable(memory, product):
+        if product and product_binding_is_reliable(memory, product, db):
             return memory
     return None
 
@@ -2495,6 +2499,10 @@ def is_product_objection(text):
     return any(keyword in normalized for keyword in _PRODUCT_OBJECTION_KEYWORDS)
 
 
+def is_simple_greeting(text):
+    return bool(re.fullmatch(r"(?:السلام عليكم|سلام عليكم|السلام عليكم ورحمة الله(?: وبركاته)?|مرحبا|مرحباً|هلو|هلا|السلام|صباح الخير|مساء الخير)[\s!؟،.🌸]*", str(text or "").strip()))
+
+
 def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
     if message_type == "image" or ev.get("image_url"):
         return False
@@ -2503,9 +2511,18 @@ def should_use_auto_product(db, sender_id, ev, message_type, customer_products):
     text = (ev.get("text") or "").strip()
     if text and is_product_objection(text):
         return False
-    # A campaign default is not evidence that this customer selected its model.
-    # Explicit text/ad/image matching below is the only way to establish a link.
-    return False
+    if ev.get("ref") or ev.get("ad_id") or ev.get("attachments"):
+        return False
+    settings = get_auto_product_settings(db)
+    if not settings.get("enabled"):
+        return False
+    # Never restore a default after a photo or an explicit product rejection.
+    if has_any_customer_image(db, sender_id) or db.execute(
+        "SELECT 1 FROM customer_product_interests WHERE sender_id=? AND status IN ('rejected','superseded') LIMIT 1",
+        (sender_id,),
+    ).fetchone():
+        return False
+    return is_simple_greeting(text) or (not text) or _is_contextual_product_question(text)
 
 
 def _is_contextual_product_question(text):
@@ -6402,6 +6419,9 @@ def call_main_ai(
     question = ev.get("text") or ""
     if (message_type == "text" and not (image_result or {}).get("waiting_for_image") and not ev.get("image_url")
             and all(t.strip() == question.strip() for t in unanswered)):
+        if matched_product and is_simple_greeting(question) and not ev.get("_post_order"):
+            return {"reply": f"وعليكم السلام، أهلاً وسهلاً 🌸\nبخصوص موديل {matched_product.get('product_name') or 'المنتج المحدد'}، شنو تحب تعرف عنه؟",
+                    "create_order": False, "requires_human": False, "order": {}, "intent": "greeting"}
         answer = known_product_question_reply(question, matched_product)
         if answer:
             return answer

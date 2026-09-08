@@ -132,7 +132,7 @@ class SalesCoreTests(unittest.TestCase):
         self.assertEqual(get_active_product_binding(self.db, self.sender_id)["product_id"], "P002")
 
     def test_new_customer_default_product_does_not_override_image(self):
-        self.assertFalse(should_use_auto_product(
+        self.assertTrue(should_use_auto_product(
             self.db, self.sender_id,
             {"text": "مرحبا", "image_url": "", "ref": "", "ad_id": ""},
             "text", [],
