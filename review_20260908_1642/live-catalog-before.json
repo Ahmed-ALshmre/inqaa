@@ -1,0 +1,41 @@
+[
+  {
+    "sample": "instagram_screenshot",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": true,
+      "product_id": "P002",
+      "confidence": 100,
+      "reason": "Matched by OpenRouter catalog"
+    },
+    "seconds": 4.36,
+    "correct": false
+  },
+  {
+    "sample": "catalog_original_P003",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P003",
+    "result": {
+      "product_found": true,
+      "product_id": "P003",
+      "confidence": 100,
+      "reason": "Matched by OpenRouter catalog"
+    },
+    "seconds": 3.72,
+    "correct": true
+  },
+  {
+    "sample": "catalog_original_P006",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": true,
+      "product_id": "P002",
+      "confidence": 100,
+      "reason": "Matched by OpenRouter catalog"
+    },
+    "seconds": 4.61,
+    "correct": false
+  }
+]

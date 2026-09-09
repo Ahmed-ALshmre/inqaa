@@ -51,11 +51,133 @@ class ConversationContextTests(unittest.TestCase):
         product, _, result = m.match_product(self.db, dict(self.ev, text="هو هذا الموديل"), CATALOG)
         self.assertEqual((product or {}).get("product_id"), "F1")
         self.assertFalse((result or {}).get("waiting_for_image"))
+
+    def test_contextual_rejection_keeps_other_product_and_answers_next_question(self):
+        for phrase, question in zip(['لا فستان دانتيل ماريده', 'دانتيل ماعجبني', 'هذا مو ذوقي'],
+                                    ['شكد سعره؟', 'شنو السعر؟', 'كم السعر؟']):
+            with self.subTest(phrase=phrase):
+                self.recognize()
+                decision = {'action': 'change', 'reject_ids': ['F1'], 'select_ids': [], 'focus_id': 'F2'}
+                with patch.object(m, 'classify_contextual_selection', return_value=decision) as classify:
+                    result = self.event(phrase, model_reply='تمام، نخلي فستان انيقة. شنو القياس المطلوب؟')
+                self.assertIn('انيقة', result['reply'])
+                self.assertNotIn('حدديه', result['reply'])
+                self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['F2'])
+                self.assertIsNone(m.pending_product_choice(self.db, self.sender))
+                self.assertTrue(classify.call_args.args[3])
+                self.assertIn('15,000', self.event(question)['reply'])
+        self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+
+    def test_contextual_reverse_selection_restores_only_explicit_choice(self):
+        self.recognize()
+        decision = {'action': 'change', 'reject_ids': ['F2'], 'select_ids': ['F1'], 'focus_id': 'F1'}
+        with patch.object(m, 'classify_contextual_selection', return_value=decision):
+            result = self.event('أريد دانتيل مو انيقة', model_reply='تمام، نكمل على دانتيل. شنو القياس المطلوب؟')
+        self.assertIn('دانتيل', result['reply'])
+        self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['F1'])
+        self.assertIn('16,000', self.event('شكد سعره؟')['reply'])
+
+    def test_ambiguous_or_invalid_selection_keeps_context(self):
+        self.recognize()
+        before = [dict(r) for r in self.db.execute('SELECT * FROM customer_product_interests WHERE sender_id=?', (self.sender,))]
+        for decision in [None, {'action': 'clarify'},
+                         {'action': 'change', 'reject_ids': ['UNKNOWN'], 'select_ids': [], 'focus_id': ''},
+                         {'action': 'change', 'reject_ids': ['F2'], 'select_ids': ['F2'], 'focus_id': 'F2'}]:
+            with patch.object(m, 'classify_contextual_selection', return_value=decision):
+                result = m.resolve_product_choice(self.db, dict(self.ev, text='ماعجبني'), CATALOG)
+            self.assertIn('دانتيل', result['reply'])
+            self.assertIn('انيقة', result['reply'])
+            self.assertNotIn('صورة', result['reply'])
+            after = [dict(r) for r in self.db.execute('SELECT * FROM customer_product_interests WHERE sender_id=?', (self.sender,))]
+            self.assertEqual(before, after)
+            self.assertIsNotNone(m.pending_product_choice(self.db, self.sender))
+
+    def test_negated_dislike_does_not_remove_a_product(self):
+        self.recognize()
+        with patch.object(m, 'classify_contextual_selection', return_value={'action': 'none'}):
+            m.resolve_contextual_product_selection(self.db, dict(self.ev, text='مو ماعجبني بس أسأل عن السعر'), CATALOG)
+        self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['F2'])
+
+    def test_selection_model_receives_context_and_only_known_ids(self):
+        with patch.object(m, 'OPENROUTER_KEY', 'test'), patch.object(m.requests, 'post') as post:
+            post.return_value.json.return_value = {'choices': [{'message': {'content': '{"action":"change","reject_ids":["F1"],"select_ids":[],"focus_id":"F2"}'}}]}
+            result = m.classify_contextual_selection(self.db, 'ماريده', [{'product_id': 'F1'}, {'product_id': 'F2'}],
+                [{'direction': 'outgoing', 'text': 'تريدين دانتيل ويا انيقة؟'}], None)
+        self.assertEqual(result['focus_id'], 'F2')
+        content = post.call_args.kwargs['json']['messages'][-1]['content']
+        self.assertIn('تريدين دانتيل ويا انيقة؟', content)
+        self.assertIn('ماريده', content)
     def test_default_applies_to_product_question_not_only_greeting(self):
         with patch.object(m,"generate_first_message_reply",return_value=("أرسلي صورة", "")) as first:
             result = self.event("ما هي مواصفات الفستان؟", model_reply="الفستان دانتيل بسعر 16000")
         first.assert_not_called()
         self.assertIn("دانتيل", result["reply"])
+
+    def test_opening_ad_questions_bind_exact_skirt_name_before_default(self):
+        skirt = dict(CATALOG[0], product_id='SK1', product_name='تنورة', category='تنورة', price='19000')
+        catalog = CATALOG + [skirt]
+        for question in ['شنو قياسات التنورة المتوفرة؟', '1. شكد سعر التنورة', 'شلون أطلب التنورة وكم التوصيل؟', 'شكد سعر التنوره؟']:
+            with self.subTest(question=question):
+                self.sender = 'al-fatena::ad-name-' + uuid.uuid4().hex
+                self.ev['sender_id'] = self.sender
+                m.get_or_create_customer(self.db, self.sender, 'page', 'facebook')
+                with patch.object(m, 'load_products_from_file', return_value=catalog), patch.object(m, 'load_active_products', return_value=catalog), patch.object(m, 'generate_first_message_reply') as greeting, patch.object(m, '_call_main_ai_once', return_value={'reply':'التنورة متوفرة، شنو القياس المطلوب؟', 'order':{}, 'create_order':False}) as model:
+                    result = self.event(question)
+                    self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['SK1'])
+                greeting.assert_not_called()
+                self.assertEqual(model.call_args.args[5]['product_id'], 'SK1')
+                self.assertIn('التنورة', result['reply'])
+                self.assertNotIn('صورة', result['reply'])
+                self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],0)
+
+    def test_duplicate_opening_names_ask_without_default_binding(self):
+        catalog = [dict(CATALOG[0], product_id='SK1', product_name='تنورة'), dict(CATALOG[1], product_id='SK2', product_name='تنوره')]
+        with patch.object(m, 'load_products_from_file', return_value=catalog), patch.object(m, 'load_active_products', return_value=catalog), patch.object(m, '_call_main_ai_once') as model:
+            result = self.event('شكد سعر التنورة؟')
+            self.assertEqual(m.load_customer_products(self.db, self.sender), [])
+        model.assert_not_called()
+        self.assertTrue(result['meta']['first_message_name_ambiguous'])
+
+    def test_opening_name_normalization_scope_negation_and_full_names(self):
+        skirt = dict(CATALOG[0], product_id='SK1', product_name='تنورة', store_id='al-fatena')
+        pleated = dict(skirt, product_id='SK2', product_name='تنورة بليسي')
+        for question in ['شنو قياسات التَّنُّورَة؟', 'كم التوصيل للتنوره؟']:
+            self.assertEqual(m.first_message_named_products(question, [skirt]), [skirt])
+        self.assertEqual(m.first_message_named_products('شكد سعر التنورة البليسي؟', [skirt, pleated]), [pleated])
+        self.assertEqual(m.first_message_named_products('شكد سعر التنورة؟', [pleated]), [])
+        self.assertEqual(m.first_message_named_products('شنو سعر التنورة؟', [dict(skirt,store_id='khuyoot')]), [])
+        for question in ['التنورة ماريدها', 'لا اريد التنورة', 'مو التنورة', 'اريد غير التنورة', 'المتنورة', 'ما عجبني التنورة']:
+            self.assertEqual(m.first_message_named_products(question, [skirt]), [])
+        self.assertEqual(m.first_message_named_products('التنورة وفستان دانتيل متوفرات؟', [skirt, CATALOG[0]]), [skirt, CATALOG[0]])
+        self.assertEqual(m.first_message_named_products('شكد سعر التنورة؟', [dict(skirt,stock='نفذ')])[0]['stock'], 'نفذ')
+
+    def test_opening_availability_and_delivery_questions_are_not_rejections(self):
+        product = dict(CATALOG[0], product_id='BAG', product_name='حقيبة جلد')
+        for text in ['الحقيبة الجلد متوفرة لو لا؟', 'الحقيبة الجلد موجودة أم لا؟', 'كم سعر الحقيبة الجلد بدون التوصيل؟', 'شكد سعر حقيبة جلد من غير أجور الشحن؟']:
+            self.assertEqual(m.first_message_named_products(text, [product]), [product])
+        for text in ['لا اريد الحقيبة الجلد بدون توصيل', 'أريد الطلب بدون حقيبة جلد', 'حقيبة جلد ما عجبني']:
+            self.assertEqual(m.first_message_named_products(text, [product]), [])
+
+    def test_opening_greeting_burst_still_binds_ad_name(self):
+        product = dict(CATALOG[0], product_id='BAG', product_name='حقيبة جلد')
+        catalog=CATALOG+[product]
+        m.save_message(self.db,self.sender,'incoming','text','السلام عليكم',None,None,None,{})
+        with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog), patch.object(m,'_call_main_ai_once',return_value={'reply':'الحقيبة متوفرة، شنو اللون المطلوب؟','order':{},'create_order':False}) as model:
+            self.event('شنو قياسات الحقيبة الجلد المتوفرة؟')
+            self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db,self.sender)],['BAG'])
+        self.assertEqual(model.call_args.args[5]['product_id'],'BAG')
+    def test_specs_use_conversation_instead_of_dumping_internal_size_notes(self):
+        product = dict(CATALOG[0], sizes="قياسات هذا المنتج من 38 إلى 52. اعتمد الجدول التالي عند الرد على الزبونة: وزن 55–60 كيلو = قياس 38")
+        self.settings["product"] = product
+        expected = "الفستان دانتيل أسود وقماشه لينن، سعره 16,000 د.ع. شنو القياس اللي تلبسينه؟"
+        with patch.object(m, "_call_main_ai_once", return_value={"reply": expected, "order": {}, "create_order": False}) as model:
+            result = self.event("ما هي مواصفات الفستان؟")
+        model.assert_called_once()
+        self.assertEqual(result["reply"], expected)
+        self.assertNotIn("اعتمد الجدول", result["reply"])
+        self.assertIsNone(m.known_product_question_reply("شنو القياسات؟", product))
+        self.assertIsNone(m.known_product_question_reply("ما هي مواصفات الفستان؟", product))
+
     def test_photo_followed_by_text_in_same_burst_is_matched(self):
         m.save_message(self.db,self.sender,"incoming","image","","https://images.test/customer.jpg",None,None,{})
         self.settings["enabled"] = False

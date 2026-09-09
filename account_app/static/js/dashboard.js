@@ -122,6 +122,8 @@ function toggleSidebar() {
 }
 
 function toggleControl() {
+  const dialog = document.getElementById('customerToolsDialog');
+  if (dialog) { closeDashboardDrawer(); dialog.showModal(); return; }
   const cp = document.getElementById('controlPanel');
   const ov = document.getElementById('mobileOverlay');
   const sb = document.getElementById('sidebarPanel');
@@ -400,7 +402,7 @@ function renderConversations() {
     const storeBadgeClass = storeId === 'khuyoot' ? 'store-khuyoot' : (storeId === 'golden-threads' ? 'store-golden-threads' : 'store-lamsa');
     return `
       <div class="customer-item ${active}" role="button" tabindex="0" data-sender="${esc(c.sender_id)}" onclick="selectConversation(this.dataset.sender)" onkeydown="if(event.key==='Enter'){selectConversation(this.dataset.sender)}">
-        <div class="cust-avatar">${esc(init)}</div>
+        <div class="cust-avatar">${esc(init)}${platformBadge(c.platform)}</div>
         <div class="cust-info">
           <div class="cust-name">${esc(c.name || c.sender_id)} ${adBadge}</div>
           <div><span class="conversation-store-badge ${storeBadgeClass}"><i class="bi bi-shop"></i> ${esc(storeName)}</span></div>
@@ -449,6 +451,7 @@ async function selectConversation(senderId) {
   document.getElementById('chatStoreName').textContent = conv.store_name || 'المتجر غير محدد';
   document.getElementById('chatName').textContent     = conv.name || senderId;
   document.getElementById('chatSenderId').textContent = senderId;
+  document.getElementById('chatAvatar').insertAdjacentHTML('beforeend', platformBadge(conv.platform));
   renderConversationAIToggle();
   renderAskAIButton();
 

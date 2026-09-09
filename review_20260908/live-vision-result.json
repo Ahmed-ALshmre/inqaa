@@ -1,0 +1,12 @@
+[
+  {
+    "sample": "customer_review_191",
+    "expected_from_saved_link": "P001",
+    "result": {
+      "product_found": false,
+      "product_id": "",
+      "confidence": 0,
+      "reason": "401 Client Error: Unauthorized for url: https://openrouter.ai/api/v1/chat/completions"
+    }
+  }
+]

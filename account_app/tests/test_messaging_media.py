@@ -308,12 +308,13 @@ class MessagingMediaTests(unittest.TestCase):
     def test_extra_sales_parts_keep_all_information_under_limit(self):
         parts=['تحية','سعر','قماش','قياس','توصيل','سؤال']
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
-        self.assertTrue(1 <= len(result['reply_parts']) <= 4)
+        self.assertTrue(1 <= len(result['reply_parts']) <= 5)
         self.assertEqual(result['reply'],'\n\n'.join(parts))
 
     def test_meaningful_parts_sent_once_in_order_for_every_store(self):
         parts=['الفستان متوفر باللون الأسود والأحمر حسب الخيارات الموجودة للقطعة.',
                'القماش باربي وتفاصيل الخامة الموجودة موضحة بهذا المنتج حتى تختارين براحتج.',
+               'القياسات متوفرة من 38 إلى 52 حسب جدول هذا الموديل الموجود عندنا.',
                'الفحص عند الاستلام متاح حسب سياسة المتجر، وتكدرين تتأكدين من القطعة.',
                'شنو القياس واللون اللي تحبين نكمل عليه حتى نراجع توفر الاختيار؟']
         for store in ['default', 'khuyoot', 'golden-threads', 'al-fatena']:
@@ -329,6 +330,20 @@ class MessagingMediaTests(unittest.TestCase):
                     self.m.send_webhook_result_to_facebook(result)
                 self.assertEqual([call.args[1] for call in send.call_args_list],[result['reply']])
             finally:self.m._current_store_id.reset(token)
+
+    def test_manychat_splits_one_long_model_part_into_ordered_messages(self):
+        parts = ['الفستان متوفر باللون الأسود والأحمر حسب الخيارات المسجلة بالموديل.',
+                 'القماش لينن حسب تفاصيل الخامة الموجودة عندنا بالمتجر.',
+                 'القياسات متوفرة من 38 إلى 52 حسب الجدول المسجل لهذا الموديل.',
+                 'الفحص متاح عند الاستلام بوجود المندوب حسب سياسة المتجر.',
+                 'شنو اللون اللي تفضلينه حتى نراجع توفره بالقياس اللي اخترتيه؟']
+        reply = ' '.join(parts)
+        result = {'reply': reply, 'reply_parts': [reply], 'send_image': False}
+        with patch.object(self.m, 'process_webhook', return_value=result), patch.object(
+                self.m, '_post_manychat_send', return_value={'ok': True}) as send:
+            self.m._process_manychat_webhook_async_locked(self.body([], 'مواصفات'), self.sender, 'facebook')
+        self.assertEqual([c.args[1] for c in send.call_args_list],
+                         [[{'type': 'text', 'text': part}] for part in parts])
 
     def test_delivery_fees_are_separate_by_store_and_destination(self):
         for sid,baghdad,other in [('al-fatena',3000,7000),('khuyoot',0,4500)]:

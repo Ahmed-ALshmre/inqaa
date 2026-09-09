@@ -1,0 +1,2808 @@
+[
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "price_only",
+    "question": "بيش هاي عيني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10987,
+      "completion_tokens": 105,
+      "total_tokens": 11092,
+      "cost": 0.00080325,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 10205,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00080325,
+        "upstream_inference_prompt_cost": 0.00054075,
+        "upstream_inference_completions_cost": 0.0002625
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 82,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "سعره 15,000 دينار عيني، تحبين أحجزه إلج؟",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 6.91
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "greeting",
+    "question": "سلام عليكم",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10942,
+      "completion_tokens": 138,
+      "total_tokens": 11080,
+      "cost": 0.0036276,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0036276,
+        "upstream_inference_prompt_cost": 0.0032826,
+        "upstream_inference_completions_cost": 0.000345
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 114,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "وعليكم السلام حبيبتي، يا هلا بيج. تدللين عيني، شنو محتاجة؟",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 7.26
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "greeting",
+    "question": "سلام عليكم",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10942,
+      "completion_tokens": 102,
+      "total_tokens": 11044,
+      "cost": 0.008589,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.008589,
+        "upstream_inference_prompt_cost": 0.0082065,
+        "upstream_inference_completions_cost": 0.0003825
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"وعليكم السلام، هلا بيج عيني تفضلي.\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "وعليكم السلام، هلا بيج عيني تفضلي.",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 7.5
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "greeting",
+    "question": "سلام عليكم",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10942,
+      "completion_tokens": 227,
+      "total_tokens": 11169,
+      "cost": 0.00905775,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00905775,
+        "upstream_inference_prompt_cost": 0.0082065,
+        "upstream_inference_completions_cost": 0.00085125
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 120,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"وعليكم السلام، هلا بيج عيني تفضلي.\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"confidence\": 1\n}\n```",
+    "result": {
+      "reply": "وعليكم السلام، هلا بيج عيني تفضلي.",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 8.92
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "weight",
+    "question": "اني وزني ٨٥ شنو يلبسني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10995,
+      "completion_tokens": 148,
+      "total_tokens": 11143,
+      "cost": 0.0036685,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0036685,
+        "upstream_inference_prompt_cost": 0.0032985,
+        "upstream_inference_completions_cost": 0.00037
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 113,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "تدللين عيني، وزن 85 كيلو يلبسج قياس 48 من فستان أنيقة. تحبين أحجزه إلج؟",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 2.74
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "price_only",
+    "question": "بيش هاي عيني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10987,
+      "completion_tokens": 309,
+      "total_tokens": 11296,
+      "cost": 0.009399,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.009399,
+        "upstream_inference_prompt_cost": 0.00824025,
+        "upstream_inference_completions_cost": 0.00115875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"سعره 15 ألف عيني.\\n\\nشنو القياس أو الوزن المناسب إلج حتى أشوفه؟\",\n  \"reply_parts\": [\n    \"سعره 15 ألف عيني.\",\n    \"شنو القياس أو الوزن المناسب إلج حتى أشوفه؟\"\n  ],\n  \"intent\": \"price\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.95,\n  \"sales_state\": {\n    \"intent\": \"price\",\n    \"stage\": \"inquiry\",\n    \"objection\": \"none\",\n    \"missing_fields\": [\n      \"size\",\n      \"color\",\n      \"phone\",\n      \"province\",\n      \"address\"\n    ],\n    \"next_step\": \"ask_size\"\n  }\n}",
+    "result": {
+      "reply": "سعره 15 ألف عيني.\n\nشنو القياس أو الوزن المناسب إلج حتى أشوفه؟",
+      "reply_parts": [
+        "سعره 15 ألف عيني.",
+        "شنو القياس أو الوزن المناسب إلج حتى أشوفه؟"
+      ],
+      "intent": "price",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.95,
+      "sales_state": {
+        "intent": "price",
+        "stage": "inquiry",
+        "objection": "none",
+        "missing_fields": [
+          "size",
+          "color",
+          "phone",
+          "province",
+          "address"
+        ],
+        "next_step": "ask_size"
+      }
+    },
+    "errors": [],
+    "seconds": 4.59
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "price_only",
+    "question": "بيش هاي عيني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10987,
+      "completion_tokens": 324,
+      "total_tokens": 11311,
+      "cost": 0.00945525,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00945525,
+        "upstream_inference_prompt_cost": 0.00824025,
+        "upstream_inference_completions_cost": 0.001215
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تدللين عيني، سعره 15 ألف دينار.\\n\\nشنو القياس أو الوزن اللي يناسبج حتى أحجزه إلج؟\",\n  \"reply_parts\": [\n    \"تدللين عيني، سعره 15 ألف دينار.\",\n    \"شنو القياس أو الوزن اللي يناسبج حتى أحجزه إلج؟\"\n  ],\n  \"intent\": \"price\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"sales_state\": {\n    \"intent\": \"price\",\n    \"stage\": \"inquiry\",\n    \"objection\": \"none\",\n    \"missing_fields\": [\n      \"size\",\n      \"color\",\n      \"phone\",\n      \"province\",\n      \"address\"\n    ],\n    \"next_step\": \"ask_size\"\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "تدللين عيني، سعره 15 ألف دينار.\n\nشنو القياس أو الوزن اللي يناسبج حتى أحجزه إلج؟",
+      "reply_parts": [
+        "تدللين عيني، سعره 15 ألف دينار.",
+        "شنو القياس أو الوزن اللي يناسبج حتى أحجزه إلج؟"
+      ],
+      "intent": "price",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "sales_state": {
+        "intent": "price",
+        "stage": "inquiry",
+        "objection": "none",
+        "missing_fields": [
+          "size",
+          "color",
+          "phone",
+          "province",
+          "address"
+        ],
+        "next_step": "ask_size"
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 6.2
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "greeting",
+    "question": "سلام عليكم",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10942,
+      "completion_tokens": 828,
+      "total_tokens": 11770,
+      "cost": 0.03182,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.03182,
+        "upstream_inference_prompt_cost": 0.021884,
+        "upstream_inference_completions_cost": 0.009936
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 636,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"وعليكم السلام، يا هلا بيج عيني. تفضلي، يا قياس تلبسين حتى أتأكدلج من الموديل؟\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F1\",\n        \"product_name\": \"فستان دانتيل\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.9\n}\n```",
+    "result": {
+      "reply": "وعليكم السلام، يا هلا بيج عيني. تفضلي، يا قياس تلبسين حتى أتأكدلج من الموديل؟",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F1",
+            "product_name": "فستان دانتيل",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.9
+    },
+    "errors": [
+      "greeting_upsell"
+    ],
+    "seconds": 13.34
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "price_only",
+    "question": "بيش هاي عيني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10987,
+      "completion_tokens": 746,
+      "total_tokens": 11733,
+      "cost": 0.030926,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.030926,
+        "upstream_inference_prompt_cost": 0.021974,
+        "upstream_inference_completions_cost": 0.008952
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 561,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"سعرها 15 ألف دينار عيني، شكد قياسج أو وزنج حتى أجهزه إلج؟\",\n  \"intent\": \"price\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1.0\n}\n```",
+    "result": {
+      "reply": "سعرها 15 ألف دينار عيني، شكد قياسج أو وزنج حتى أجهزه إلج؟",
+      "intent": "price",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1.0
+    },
+    "errors": [],
+    "seconds": 9.02
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "weight",
+    "question": "اني وزني ٨٥ شنو يلبسني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10995,
+      "completion_tokens": 325,
+      "total_tokens": 11320,
+      "cost": 0.009465,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.009465,
+        "upstream_inference_prompt_cost": 0.00824625,
+        "upstream_inference_completions_cost": 0.00121875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تدللين عيني، يلبسج قياس 48 يجي مرتب عليج.\\n\\nيا لون يعجبج، الأسود لو الجوزي؟\",\n  \"reply_parts\": [\n    \"تدللين عيني، يلبسج قياس 48 يجي مرتب عليج.\",\n    \"يا لون يعجبج، الأسود لو الجوزي؟\"\n  ],\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"48\",\n        \"size_type\": \"weight\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"sales_state\": {\n    \"intent\": \"question\",\n    \"stage\": \"qualification\",\n    \"objection\": \"none\",\n    \"missing_fields\": [\n      \"color\",\n      \"phone\",\n      \"province\",\n      \"address\"\n    ],\n    \"next_step\": \"choose_color\"\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "تدللين عيني، يلبسج قياس 48 يجي مرتب عليج.\n\nيا لون يعجبج، الأسود لو الجوزي؟",
+      "reply_parts": [
+        "تدللين عيني، يلبسج قياس 48 يجي مرتب عليج.",
+        "يا لون يعجبج، الأسود لو الجوزي؟"
+      ],
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "48",
+            "size_type": "weight",
+            "quantity": 1
+          }
+        ]
+      },
+      "sales_state": {
+        "intent": "question",
+        "stage": "qualification",
+        "objection": "none",
+        "missing_fields": [
+          "color",
+          "phone",
+          "province",
+          "address"
+        ],
+        "next_step": "choose_color"
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 5.33
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "weight",
+    "question": "اني وزني ٨٥ شنو يلبسني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10995,
+      "completion_tokens": 346,
+      "total_tokens": 11341,
+      "cost": 0.00954375,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00954375,
+        "upstream_inference_prompt_cost": 0.00824625,
+        "upstream_inference_completions_cost": 0.0012975
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تدللين عيني، وزن 85 يناسبج قياس 48 ويطلع كلش مرتب عليج.\\n\\nيا لون يعجبج الأسود لو الجوزي حتى أحجزه إلج؟\",\n  \"reply_parts\": [\n    \"تدللين عيني، وزن 85 يناسبج قياس 48 ويطلع كلش مرتب عليج.\",\n    \"يا لون يعجبج الأسود لو الجوزي حتى أحجزه إلج؟\"\n  ],\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"48\",\n        \"size_type\": \"weight\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"sales_state\": {\n    \"intent\": \"question\",\n    \"stage\": \"inquiry\",\n    \"objection\": \"none\",\n    \"missing_fields\": [\n      \"color\",\n      \"phone\",\n      \"province\",\n      \"address\"\n    ],\n    \"next_step\": \"select_color\"\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "تدللين عيني، وزن 85 يناسبج قياس 48 ويطلع كلش مرتب عليج.\n\nيا لون يعجبج الأسود لو الجوزي حتى أحجزه إلج؟",
+      "reply_parts": [
+        "تدللين عيني، وزن 85 يناسبج قياس 48 ويطلع كلش مرتب عليج.",
+        "يا لون يعجبج الأسود لو الجوزي حتى أحجزه إلج؟"
+      ],
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "48",
+            "size_type": "weight",
+            "quantity": 1
+          }
+        ]
+      },
+      "sales_state": {
+        "intent": "question",
+        "stage": "inquiry",
+        "objection": "none",
+        "missing_fields": [
+          "color",
+          "phone",
+          "province",
+          "address"
+        ],
+        "next_step": "select_color"
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 5.62
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "image_context",
+    "question": "هذا الي بالصورة قماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11001,
+      "completion_tokens": 410,
+      "total_tokens": 11411,
+      "cost": 0.0043253,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0043253,
+        "upstream_inference_prompt_cost": 0.0033003,
+        "upstream_inference_completions_cost": 0.001025
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 297,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"هلا عيني، قماشه باربي يجنن باللبس. شنو القياس اللي تحبينه؟\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "هلا عيني، قماشه باربي يجنن باللبس. شنو القياس اللي تحبينه؟",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 5.77
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "weight",
+    "question": "اني وزني ٨٥ شنو يلبسني؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10995,
+      "completion_tokens": 598,
+      "total_tokens": 11593,
+      "cost": 0.029166,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.029166,
+        "upstream_inference_prompt_cost": 0.02199,
+        "upstream_inference_completions_cost": 0.007176
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 408,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"يلبسج قياس 48 عيني، يجي مضبوط عليج. يا لون تحبين الأسود لو الجوزي؟\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"48\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1.0\n}\n```",
+    "result": {
+      "reply": "يلبسج قياس 48 عيني، يجي مضبوط عليج. يا لون تحبين الأسود لو الجوزي؟",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "48",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1.0
+    },
+    "errors": [],
+    "seconds": 8.26
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "image_context",
+    "question": "هذا الي بالصورة قماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11001,
+      "completion_tokens": 296,
+      "total_tokens": 11297,
+      "cost": 0.00936075,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00936075,
+        "upstream_inference_prompt_cost": 0.00825075,
+        "upstream_inference_completions_cost": 0.00111
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 171,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"يا هلا حبيبتي، قماشه باربي مرتب وناعم. شنو القياس أو اللون اللي تحبين تشوفيه؟\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"confidence\": 0.95\n}\n```",
+    "result": {
+      "reply": "يا هلا حبيبتي، قماشه باربي مرتب وناعم. شنو القياس أو اللون اللي تحبين تشوفيه؟",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 5.51
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "image_context",
+    "question": "هذا الي بالصورة قماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11001,
+      "completion_tokens": 274,
+      "total_tokens": 11275,
+      "cost": 0.00927825,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00927825,
+        "upstream_inference_prompt_cost": 0.00825075,
+        "upstream_inference_completions_cost": 0.0010275
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"يا هلا حبيبتي، قماشه باربي ومرتب كلش باللبس ✨\\n\\nشنو قياسج أو وزنج حتى أشوفلج توفره؟\",\n  \"reply_parts\": [\n    \"يا هلا حبيبتي، قماشه باربي ومرتب كلش باللبس ✨\",\n    \"شنو قياسج أو وزنج حتى أشوفلج توفره؟\"\n  ],\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"sales_state\": {\n    \"intent\": \"question\",\n    \"stage\": \"inquiry\",\n    \"objection\": \"none\",\n    \"missing_fields\": [\n      \"size\",\n      \"color\",\n      \"phone\",\n      \"province\",\n      \"address\"\n    ],\n    \"next_step\": \"ask_size\"\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "يا هلا حبيبتي، قماشه باربي ومرتب كلش باللبس ✨\n\nشنو قياسج أو وزنج حتى أشوفلج توفره؟",
+      "reply_parts": [
+        "يا هلا حبيبتي، قماشه باربي ومرتب كلش باللبس ✨",
+        "شنو قياسج أو وزنج حتى أشوفلج توفره؟"
+      ],
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "sales_state": {
+        "intent": "question",
+        "stage": "inquiry",
+        "objection": "none",
+        "missing_fields": [
+          "size",
+          "color",
+          "phone",
+          "province",
+          "address"
+        ],
+        "next_step": "ask_size"
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 5.8
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "image_context",
+    "question": "هذا الي بالصورة قماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11001,
+      "completion_tokens": 204,
+      "total_tokens": 11205,
+      "cost": 0.02445,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.02445,
+        "upstream_inference_prompt_cost": 0.022002,
+        "upstream_inference_completions_cost": 0.002448
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"يا هلا حبيبتي، نورتينا.\\n\\nقماشه باربي يجنن ومرتب باللبس، والوانه أسود وجوزي. يا لون حابة أحجزه إلج؟\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1.0\n}\n```",
+    "result": {
+      "reply": "يا هلا حبيبتي، نورتينا.\n\nقماشه باربي يجنن ومرتب باللبس، والوانه أسود وجوزي. يا لون حابة أحجزه إلج؟",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1.0
+    },
+    "errors": [],
+    "seconds": 6.51
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "missing_phone",
+    "question": "ثبتي انيقة أسود قياس 44، بغداد المنصور شارع الرواد قرب جامع الاختبار",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11006,
+      "completion_tokens": 401,
+      "total_tokens": 11407,
+      "cost": 0.0043043,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0043043,
+        "upstream_inference_prompt_cost": 0.0033018,
+        "upstream_inference_completions_cost": 0.0010025
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 349,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "هلا حبيبتي، فستان أنيقة الأسود قياس 44 ثبتته إلج على عنوان بغداد المنصور شارع الرواد قرب جامع الاختبار. بس دزيلي رقم موبايلج حتى نكمل الحجز وتدللين.",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 5.41
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "missing_phone",
+    "question": "ثبتي انيقة أسود قياس 44، بغداد المنصور شارع الرواد قرب جامع الاختبار",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11006,
+      "completion_tokens": 361,
+      "total_tokens": 11367,
+      "cost": 0.00960825,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00960825,
+        "upstream_inference_prompt_cost": 0.0082545,
+        "upstream_inference_completions_cost": 0.00135375
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 157,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"تدللين حبيبتي، بس دزيلي رقم الموبايل حتى أثبتلج الحجز مباشرة.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.95\n}\n```",
+    "result": {
+      "reply": "تدللين حبيبتي، بس دزيلي رقم الموبايل حتى أثبتلج الحجز مباشرة.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 6.2
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "missing_phone",
+    "question": "ثبتي انيقة أسود قياس 44، بغداد المنصور شارع الرواد قرب جامع الاختبار",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11006,
+      "completion_tokens": 202,
+      "total_tokens": 11208,
+      "cost": 0.009012,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.009012,
+        "upstream_inference_prompt_cost": 0.0082545,
+        "upstream_inference_completions_cost": 0.0007575
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"أهلاً عيني تدللين، بس دزيلي رقم الموبايل حتى أثبتلج الحجز مباشرة.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"بغداد\",\n    \"address\": \"بغداد المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "أهلاً عيني تدللين، بس دزيلي رقم الموبايل حتى أثبتلج الحجز مباشرة.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "بغداد",
+        "address": "بغداد المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 6.09
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "confirm_complete",
+    "question": "اي ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11048,
+      "completion_tokens": 244,
+      "total_tokens": 11292,
+      "cost": 0.009201,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.009201,
+        "upstream_inference_prompt_cost": 0.008286,
+        "upstream_inference_completions_cost": 0.000915
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}\n```",
+    "result": {
+      "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 7.22
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "confirm_complete",
+    "question": "اي ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11048,
+      "completion_tokens": 677,
+      "total_tokens": 11725,
+      "cost": 0.0050069,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0050069,
+        "upstream_inference_prompt_cost": 0.0033144,
+        "upstream_inference_completions_cost": 0.0016925
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 432,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "تدللين حبيبتي، تم تثبيت الحجز. يوصلج بأسرع وقت والفحص متاح عند الاستلام.\n\n```json\n{\n  \"reply\": \"تدللين حبيبتي، تم تثبيت الحجز. يوصلج بأسرع وقت والفحص متاح عند الاستلام.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}\n```",
+    "result": {
+      "reply": "تدللين حبيبتي، تم تثبيت الحجز. يوصلج بأسرع وقت والفحص متاح عند الاستلام.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 8.05
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "missing_phone",
+    "question": "ثبتي انيقة أسود قياس 44، بغداد المنصور شارع الرواد قرب جامع الاختبار",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11006,
+      "completion_tokens": 746,
+      "total_tokens": 11752,
+      "cost": 0.030964,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.030964,
+        "upstream_inference_prompt_cost": 0.022012,
+        "upstream_inference_completions_cost": 0.008952
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 534,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"يا هلا عيني، تدللين. بس دزيلي رقم موبايلج حتى أثبتلج الحجز وتوصلج بأقرب وقت.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1.0\n}\n```",
+    "result": {
+      "reply": "يا هلا عيني، تدللين. بس دزيلي رقم موبايلج حتى أثبتلج الحجز وتوصلج بأقرب وقت.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1.0
+    },
+    "errors": [],
+    "seconds": 8.92
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "confirm_complete",
+    "question": "اي ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11048,
+      "completion_tokens": 239,
+      "total_tokens": 11287,
+      "cost": 0.00918225,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00918225,
+        "upstream_inference_prompt_cost": 0.008286,
+        "upstream_inference_completions_cost": 0.00089625
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 4.81
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "add_both",
+    "question": "اي ثبتي الاثنين",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11247,
+      "completion_tokens": 305,
+      "total_tokens": 11552,
+      "cost": 0.009579,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.009579,
+        "upstream_inference_prompt_cost": 0.00843525,
+        "upstream_inference_completions_cost": 0.00114375
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F1\",\n        \"product_name\": \"فستان دانتيل\",\n        \"color\": \"بيج\",\n        \"size\": \"46\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      },\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F1",
+            "product_name": "فستان دانتيل",
+            "color": "بيج",
+            "size": "46",
+            "size_type": "size",
+            "quantity": 1
+          },
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 6.47
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "add_both",
+    "question": "اي ثبتي الاثنين",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11247,
+      "completion_tokens": 429,
+      "total_tokens": 11676,
+      "cost": 0.010044,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.010044,
+        "upstream_inference_prompt_cost": 0.00843525,
+        "upstream_inference_completions_cost": 0.00160875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\",\n  \"reply_parts\": [\n    \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\"\n  ],\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F1\",\n        \"product_name\": \"فستان دانتيل\",\n        \"color\": \"بيج\",\n        \"size\": \"46\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      },\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"sales_state\": {\n    \"intent\": \"order\",\n    \"stage\": \"closing\",\n    \"objection\": \"none\",\n    \"missing_fields\": [],\n    \"next_step\": \"completed\"\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+      "reply_parts": [
+        "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ."
+      ],
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F1",
+            "product_name": "فستان دانتيل",
+            "color": "بيج",
+            "size": "46",
+            "size_type": "size",
+            "quantity": 1
+          },
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "sales_state": {
+        "intent": "order",
+        "stage": "closing",
+        "objection": "none",
+        "missing_fields": [],
+        "next_step": "completed"
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 7.66
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "add_both",
+    "question": "اي ثبتي الاثنين",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11247,
+      "completion_tokens": 690,
+      "total_tokens": 11937,
+      "cost": 0.0050991,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0050991,
+        "upstream_inference_prompt_cost": 0.0033741,
+        "upstream_inference_completions_cost": 0.001725
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 408,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تدللين حبيبتي، تم تثبيت طلبج. الفحص متاح عند الاستلام، وإذا مو نفس الطلب يرجع مجاناً.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F1\",\n        \"product_name\": \"فستان دانتيل\",\n        \"color\": \"بيج\",\n        \"size\": \"46\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      },\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تدللين حبيبتي، تم تثبيت طلبج. الفحص متاح عند الاستلام، وإذا مو نفس الطلب يرجع مجاناً.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F1",
+            "product_name": "فستان دانتيل",
+            "color": "بيج",
+            "size": "46",
+            "size_type": "size",
+            "quantity": 1
+          },
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 8.14
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "confirm_complete",
+    "question": "اي ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11048,
+      "completion_tokens": 1391,
+      "total_tokens": 12439,
+      "cost": 0.038788,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.038788,
+        "upstream_inference_prompt_cost": 0.022096,
+        "upstream_inference_completions_cost": 0.016692
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1167,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"تم تثبيت الطلب حبيبتي. أهم شي تفحصين القطعة ويه المندوب قبل الدفع، وإذا مو نفس الصورة ترجع مجاناً.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}\n```",
+    "result": {
+      "reply": "تم تثبيت الطلب حبيبتي. أهم شي تفحصين القطعة ويه المندوب قبل الدفع، وإذا مو نفس الصورة ترجع مجاناً.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 12.86
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "add_both",
+    "question": "اي ثبتي الاثنين",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11247,
+      "completion_tokens": 583,
+      "total_tokens": 11830,
+      "cost": 0.0147948,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 8164,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0147948,
+        "upstream_inference_prompt_cost": 0.0077988,
+        "upstream_inference_completions_cost": 0.006996
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 230,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"تدللين عيني، تم تثبيت الطلب بنجاح.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F1\",\n        \"product_name\": \"فستان دانتيل\",\n        \"color\": \"بيج\",\n        \"size\": \"46\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      },\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1.0,\n  \"sales_state\": {\n    \"intent\": \"order\",\n    \"stage\": \"closed\",\n    \"objection\": \"\",\n    \"missing_fields\": [],\n    \"next_step\": \"none\"\n  },\n  \"reply_parts\": [\n    \"تدللين عيني، تم تثبيت الطلب بنجاح.\"\n  ]\n}\n```",
+    "result": {
+      "reply": "تدللين عيني، تم تثبيت الطلب بنجاح.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F1",
+            "product_name": "فستان دانتيل",
+            "color": "بيج",
+            "size": "46",
+            "size_type": "size",
+            "quantity": 1
+          },
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1.0,
+      "sales_state": {
+        "intent": "order",
+        "stage": "closed",
+        "objection": "",
+        "missing_fields": [],
+        "next_step": "none"
+      },
+      "reply_parts": [
+        "تدللين عيني، تم تثبيت الطلب بنجاح."
+      ]
+    },
+    "errors": [],
+    "seconds": 9.62
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "replace_only",
+    "question": "اي انيقة بس ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11063,
+      "completion_tokens": 525,
+      "total_tokens": 11588,
+      "cost": 0.00187605,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 10205,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00187605,
+        "upstream_inference_prompt_cost": 0.00056355,
+        "upstream_inference_completions_cost": 0.0013125
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 263,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "تدللين حبيبتي، تم تثبيت الطلب.\nالفحص متاح عند الاستلام بوجود المندوب، وإذا المنتج مو نفس الصورة يرجع مجاناً.\n{\n  \"reply\": \"تدللين حبيبتي، تم تثبيت الطلب.\\nالفحص متاح عند الاستلام بوجود المندوب، وإذا المنتج مو نفس الصورة يرجع مجاناً.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تدللين حبيبتي، تم تثبيت الطلب.\nالفحص متاح عند الاستلام بوجود المندوب، وإذا المنتج مو نفس الصورة يرجع مجاناً.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 4.75
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "replace_only",
+    "question": "اي انيقة بس ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11063,
+      "completion_tokens": 239,
+      "total_tokens": 11302,
+      "cost": 0.0091935,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0091935,
+        "upstream_inference_prompt_cost": 0.00829725,
+        "upstream_inference_completions_cost": 0.00089625
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 4.27
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "replace_only",
+    "question": "اي انيقة بس ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11063,
+      "completion_tokens": 239,
+      "total_tokens": 11302,
+      "cost": 0.0091935,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0091935,
+        "upstream_inference_prompt_cost": 0.00829725,
+        "upstream_inference_completions_cost": 0.00089625
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 4.39
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "do_not_book",
+    "question": "لا تثبتين هسه خلي اسأل اختي وبعدين اردلج",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11046,
+      "completion_tokens": 425,
+      "total_tokens": 11471,
+      "cost": 0.0043763,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0043763,
+        "upstream_inference_prompt_cost": 0.0033138,
+        "upstream_inference_completions_cost": 0.0010625
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 396,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "تدللين عيني، خذي راحتج ويا أختج. من تتفقون كوليلي حتى أحجزلجياه.",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 4.94
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "do_not_book",
+    "question": "لا تثبتين هسه خلي اسأل اختي وبعدين اردلج",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11046,
+      "completion_tokens": 215,
+      "total_tokens": 11261,
+      "cost": 0.003580725,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 8163,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.003580725,
+        "upstream_inference_prompt_cost": 0.002774475,
+        "upstream_inference_completions_cost": 0.00080625
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"تدللين حبيبتي، أخذي راحتج وشوكت ما تحبين بس راسليني.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.95\n}\n```",
+    "result": {
+      "reply": "تدللين حبيبتي، أخذي راحتج وشوكت ما تحبين بس راسليني.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 4.95
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "do_not_book",
+    "question": "لا تثبتين هسه خلي اسأل اختي وبعدين اردلج",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11046,
+      "completion_tokens": 208,
+      "total_tokens": 11254,
+      "cost": 0.0090645,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0090645,
+        "upstream_inference_prompt_cost": 0.0082845,
+        "upstream_inference_completions_cost": 0.00078
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تدللين عيني، خذي راحتج وبأي وقت تحبين تثبتين إني بالخدمة.\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "تدللين عيني، خذي راحتج وبأي وقت تحبين تثبتين إني بالخدمة.",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 4.25
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "two_questions",
+    "question": "بيش ويا توصيل بغداد وقماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10992,
+      "completion_tokens": 180,
+      "total_tokens": 11172,
+      "cost": 0.0037476,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0037476,
+        "upstream_inference_prompt_cost": 0.0032976,
+        "upstream_inference_completions_cost": 0.00045
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 145,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "سعره 15 ألف عيني، والتوصيل لبغداد 5 آلاف، وقماشه باربي. تحبين أحجزه إلج؟",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 2.61
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "replace_only",
+    "question": "اي انيقة بس ثبتي",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11063,
+      "completion_tokens": 964,
+      "total_tokens": 12027,
+      "cost": 0.033694,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.033694,
+        "upstream_inference_prompt_cost": 0.022126,
+        "upstream_inference_completions_cost": 0.011568
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 755,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"تدللين عيني، تم تثبيت طلبج وتوصلج بأقرب وقت.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": true,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1.0\n}\n```",
+    "result": {
+      "reply": "تدللين عيني، تم تثبيت طلبج وتوصلج بأقرب وقت.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": true,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1.0
+    },
+    "errors": [],
+    "seconds": 9.81
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "two_questions",
+    "question": "بيش ويا توصيل بغداد وقماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10992,
+      "completion_tokens": 251,
+      "total_tokens": 11243,
+      "cost": 0.00918525,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00918525,
+        "upstream_inference_prompt_cost": 0.008244,
+        "upstream_inference_completions_cost": 0.00094125
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"سعره 15 ألف والتوصيل لبغداد 5 آلاف يعني المجموع 20 ألف، وقماشه باربي عيني. تحبين أحجزه إلج؟\",\n  \"reply_parts\": [\n    \"سعره 15 ألف والتوصيل لبغداد 5 آلاف يعني المجموع 20 ألف، وقماشه باربي عيني. تحبين أحجزه إلج؟\"\n  ],\n  \"intent\": \"price\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"بغداد\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1\n}",
+    "result": {
+      "reply": "سعره 15 ألف والتوصيل لبغداد 5 آلاف يعني المجموع 20 ألف، وقماشه باربي عيني. تحبين أحجزه إلج؟",
+      "reply_parts": [
+        "سعره 15 ألف والتوصيل لبغداد 5 آلاف يعني المجموع 20 ألف، وقماشه باربي عيني. تحبين أحجزه إلج؟"
+      ],
+      "intent": "price",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "بغداد",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1
+    },
+    "errors": [],
+    "seconds": 3.95
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "two_questions",
+    "question": "بيش ويا توصيل بغداد وقماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10992,
+      "completion_tokens": 206,
+      "total_tokens": 11198,
+      "cost": 0.0090165,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0090165,
+        "upstream_inference_prompt_cost": 0.008244,
+        "upstream_inference_completions_cost": 0.0007725
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"سعره 15 ألف والتوصيل لبغداد 5 آلاف، يعني المجموع 20 ألف، وقماشه باربي عيني.\\n\\nتحبين أحجزلكياه؟\",\n  \"intent\": \"price\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"بغداد\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.95\n}\n```",
+    "result": {
+      "reply": "سعره 15 ألف والتوصيل لبغداد 5 آلاف، يعني المجموع 20 ألف، وقماشه باربي عيني.\n\nتحبين أحجزلكياه؟",
+      "intent": "price",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "بغداد",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 4.24
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "two_questions",
+    "question": "بيش ويا توصيل بغداد وقماشه شنو؟",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10992,
+      "completion_tokens": 134,
+      "total_tokens": 11126,
+      "cost": 0.023592,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.023592,
+        "upstream_inference_prompt_cost": 0.021984,
+        "upstream_inference_completions_cost": 0.001608
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"سعره 15 ألف عيني، والتوصيل لبغداد 5 آلاف، وقماشه باربي يجنن. تحبين أحجزه إلج؟\",\n  \"intent\": \"price\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"confidence\": 1.0\n}\n```",
+    "result": {
+      "reply": "سعره 15 ألف عيني، والتوصيل لبغداد 5 آلاف، وقماشه باربي يجنن. تحبين أحجزه إلج؟",
+      "intent": "price",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "confidence": 1.0
+    },
+    "errors": [
+      "total_not_answered"
+    ],
+    "seconds": 4.31
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "real_offer",
+    "question": "السعر زين بس محتارة أحجز لو لا",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11058,
+      "completion_tokens": 461,
+      "total_tokens": 11519,
+      "cost": 0.0044699,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0044699,
+        "upstream_inference_prompt_cost": 0.0033174,
+        "upstream_inference_completions_cost": 0.0011525
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 422,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "حقج عيني، بس تره عليه عرض توصيل مجاني لبغداد إذا تاخذين قطعتين، والفحص متاح عند الاستلام. أحجزلجياه؟",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 5.2
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "real_offer",
+    "question": "السعر زين بس محتارة أحجز لو لا",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11058,
+      "completion_tokens": 237,
+      "total_tokens": 11295,
+      "cost": 0.00918225,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00918225,
+        "upstream_inference_prompt_cost": 0.0082935,
+        "upstream_inference_completions_cost": 0.00088875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"حقج عيني، الفحص متاح عند الاستلام وتكدرين تشوفين القماش براحتج. تحبين أحجزلج ياه؟\",\n  \"reply_parts\": [\n    \"حقج عيني، الفحص متاح عند الاستلام وتكدرين تشوفين القماش براحتج. تحبين أحجزلج ياه؟\"\n  ],\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "حقج عيني، الفحص متاح عند الاستلام وتكدرين تشوفين القماش براحتج. تحبين أحجزلج ياه؟",
+      "reply_parts": [
+        "حقج عيني، الفحص متاح عند الاستلام وتكدرين تشوفين القماش براحتج. تحبين أحجزلج ياه؟"
+      ],
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.95
+    },
+    "errors": [
+      "offer_missing_or_conditions_lost"
+    ],
+    "seconds": 4.52
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "real_offer",
+    "question": "السعر زين بس محتارة أحجز لو لا",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11058,
+      "completion_tokens": 337,
+      "total_tokens": 11395,
+      "cost": 0.00955725,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00955725,
+        "upstream_inference_prompt_cost": 0.0082935,
+        "upstream_inference_completions_cost": 0.00126375
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"حقج عيني، الفحص متاح عند الاستلام بوجود المندوب وإذا ما عجبج يرجع مجاناً، تحبين أحجزلج ياه؟\",\n  \"reply_parts\": [\n    \"حقج عيني، الفحص متاح عند الاستلام بوجود المندوب وإذا ما عجبج يرجع مجاناً، تحبين أحجزلج ياه؟\"\n  ],\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"sales_state\": {\n    \"intent\": \"question\",\n    \"stage\": \"objection_handling\",\n    \"objection\": \"hesitation\",\n    \"missing_fields\": [\n      \"color\",\n      \"size\",\n      \"phone\",\n      \"province\",\n      \"address\"\n    ],\n    \"next_step\": \"confirm_booking_interest\"\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "حقج عيني، الفحص متاح عند الاستلام بوجود المندوب وإذا ما عجبج يرجع مجاناً، تحبين أحجزلج ياه؟",
+      "reply_parts": [
+        "حقج عيني، الفحص متاح عند الاستلام بوجود المندوب وإذا ما عجبج يرجع مجاناً، تحبين أحجزلج ياه؟"
+      ],
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "sales_state": {
+        "intent": "question",
+        "stage": "objection_handling",
+        "objection": "hesitation",
+        "missing_fields": [
+          "color",
+          "size",
+          "phone",
+          "province",
+          "address"
+        ],
+        "next_step": "confirm_booking_interest"
+      },
+      "confidence": 0.95
+    },
+    "errors": [
+      "offer_missing_or_conditions_lost"
+    ],
+    "seconds": 4.5
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "do_not_book",
+    "question": "لا تثبتين هسه خلي اسأل اختي وبعدين اردلج",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11046,
+      "completion_tokens": 1271,
+      "total_tokens": 12317,
+      "cost": 0.0226506,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 8163,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0226506,
+        "upstream_inference_prompt_cost": 0.0073986,
+        "upstream_inference_completions_cost": 0.015252
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1053,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"تدللين عيني، خذي راحتج ومن تقررين راسليني حتى أثبته إلج وتأمرين.\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"07700000000\",\n    \"province\": \"بغداد\",\n    \"address\": \"المنصور شارع الرواد قرب جامع الاختبار\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"أسود\",\n        \"size\": \"44\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1.0\n}\n```",
+    "result": {
+      "reply": "تدللين عيني، خذي راحتج ومن تقررين راسليني حتى أثبته إلج وتأمرين.",
+      "intent": "order",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "07700000000",
+        "province": "بغداد",
+        "address": "المنصور شارع الرواد قرب جامع الاختبار",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "أسود",
+            "size": "44",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1.0
+    },
+    "errors": [],
+    "seconds": 12.98
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "low_stock",
+    "question": "عاجبني الأسود قياس 44 أفكر أحجزه",
+    "http_status": 402,
+    "errors": [
+      "http_402"
+    ],
+    "result": {},
+    "seconds": 3.51
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "real_offer",
+    "question": "السعر زين بس محتارة أحجز لو لا",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11058,
+      "completion_tokens": 491,
+      "total_tokens": 11549,
+      "cost": 0.0133146,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 8163,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0133146,
+        "upstream_inference_prompt_cost": 0.0074226,
+        "upstream_inference_completions_cost": 0.005892
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 209,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "```json\n{\n  \"reply\": \"حقج عيني، بس اطمني الفحص متاح عند الاستلام، وإذا مو نفس الصورة يرجع مجاناً. تحبين أثبتلج؟\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 0.9,\n  \"sales_state\": {\n    \"intent\": \"objection\",\n    \"stage\": \"convincing\",\n    \"objection\": \"hesitation\",\n    \"missing_fields\": [\n      \"color\",\n      \"size\",\n      \"province\",\n      \"phone\",\n      \"address\"\n    ],\n    \"next_step\": \"ask_order\"\n  }\n}\n```",
+    "result": {
+      "reply": "حقج عيني، بس اطمني الفحص متاح عند الاستلام، وإذا مو نفس الصورة يرجع مجاناً. تحبين أثبتلج؟",
+      "intent": "order",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 0.9,
+      "sales_state": {
+        "intent": "objection",
+        "stage": "convincing",
+        "objection": "hesitation",
+        "missing_fields": [
+          "color",
+          "size",
+          "province",
+          "phone",
+          "address"
+        ],
+        "next_step": "ask_order"
+      }
+    },
+    "errors": [
+      "offer_missing_or_conditions_lost"
+    ],
+    "seconds": 7.51
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "low_stock",
+    "question": "عاجبني الأسود قياس 44 أفكر أحجزه",
+    "http_status": 402,
+    "errors": [
+      "http_402"
+    ],
+    "result": {},
+    "seconds": 4.64
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "low_stock",
+    "question": "عاجبني الأسود قياس 44 أفكر أحجزه",
+    "http_status": 402,
+    "errors": [
+      "http_402"
+    ],
+    "result": {},
+    "seconds": 4.45
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "low_stock",
+    "question": "عاجبني الأسود قياس 44 أفكر أحجزه",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11011,
+      "completion_tokens": 509,
+      "total_tokens": 11520,
+      "cost": 0.0045758,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0045758,
+        "upstream_inference_prompt_cost": 0.0033033,
+        "upstream_inference_completions_cost": 0.0012725
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 463,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "تدللين حبيبتي، قياس 44 باللون الأسود متوفر، وباقي منه قطعتين بس. تحبين أحجزه إلج؟ دزّيلي العنوان والموبايل.",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 5.69
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "documented_demand",
+    "question": "شرايج بهذا الموديل محتارة آخذه",
+    "http_status": 402,
+    "errors": [
+      "http_402"
+    ],
+    "result": {},
+    "seconds": 6.2
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "documented_demand",
+    "question": "شرايج بهذا الموديل محتارة آخذه",
+    "http_status": 402,
+    "errors": [
+      "http_402"
+    ],
+    "result": {},
+    "seconds": 7.55
+  },
+  {
+    "model": "google/gemini-3.7-flash",
+    "case": "no_repeat_pressure",
+    "question": "خليني أفكر وارجعلج",
+    "http_status": 402,
+    "errors": [
+      "http_402"
+    ],
+    "result": {},
+    "seconds": 2.24
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "documented_demand",
+    "question": "شرايج بهذا الموديل محتارة آخذه",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11073,
+      "completion_tokens": 121,
+      "total_tokens": 11194,
+      "cost": 0.0087585,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0087585,
+        "upstream_inference_prompt_cost": 0.00830475,
+        "upstream_inference_completions_cost": 0.00045375
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"كلش راقي وقماشه باربي مرتب، وعليه طلب حلو هالفترة. تحبين تشوفين قياسج بي؟\",\n  \"intent\": \"question\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"confidence\": 0.95\n}",
+    "result": {
+      "reply": "كلش راقي وقماشه باربي مرتب، وعليه طلب حلو هالفترة. تحبين تشوفين قياسج بي؟",
+      "intent": "question",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "confidence": 0.95
+    },
+    "errors": [],
+    "seconds": 9.41
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "no_repeat_pressure",
+    "question": "خليني أفكر وارجعلج",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10994,
+      "completion_tokens": 363,
+      "total_tokens": 11357,
+      "cost": 0.0042057,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0042057,
+        "upstream_inference_prompt_cost": 0.0032982,
+        "upstream_inference_completions_cost": 0.0009075
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 349,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "تدللين عيني، خذي راحتج بأي وقت.",
+    "errors": [
+      "ValueError"
+    ],
+    "result": {},
+    "seconds": 9.44
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "case": "documented_demand",
+    "question": "شرايج بهذا الموديل محتارة آخذه",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 11073,
+      "completion_tokens": 413,
+      "total_tokens": 11486,
+      "cost": 0.0043544,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0043544,
+        "upstream_inference_prompt_cost": 0.0033219,
+        "upstream_inference_completions_cost": 0.0010325
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 171,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"فستان أنيقة كلش حلو عيني ومطلوب هلأيام، عليه طلب قوي. تحبين أحجزه إلج؟\",\n  \"intent\": \"order\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": [\n      {\n        \"product_id\": \"F2\",\n        \"product_name\": \"فستان انيقة\",\n        \"color\": \"\",\n        \"size\": \"\",\n        \"size_type\": \"size\",\n        \"quantity\": 1\n      }\n    ]\n  },\n  \"confidence\": 1,\n  \"sales_state\": {\n    \"intent\": \"order\",\n    \"stage\": \"pre_booking\",\n    \"objection\": null,\n    \"missing_fields\": [],\n    \"next_step\": \"ask_for_booking_confirmation\"\n  }\n}",
+    "result": {
+      "reply": "فستان أنيقة كلش حلو عيني ومطلوب هلأيام، عليه طلب قوي. تحبين أحجزه إلج؟",
+      "intent": "order",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": [
+          {
+            "product_id": "F2",
+            "product_name": "فستان انيقة",
+            "color": "",
+            "size": "",
+            "size_type": "size",
+            "quantity": 1
+          }
+        ]
+      },
+      "confidence": 1,
+      "sales_state": {
+        "intent": "order",
+        "stage": "pre_booking",
+        "objection": null,
+        "missing_fields": [],
+        "next_step": "ask_for_booking_confirmation"
+      }
+    },
+    "errors": [],
+    "seconds": 11.25
+  },
+  {
+    "model": "google/gemini-3.1-pro-preview",
+    "case": "no_repeat_pressure",
+    "question": "خليني أفكر وارجعلج",
+    "http_status": 402,
+    "errors": [
+      "http_402"
+    ],
+    "result": {},
+    "seconds": 3.7
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": "no_repeat_pressure",
+    "question": "خليني أفكر وارجعلج",
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 10994,
+      "completion_tokens": 206,
+      "total_tokens": 11200,
+      "cost": 0.009018,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.009018,
+        "upstream_inference_prompt_cost": 0.0082455,
+        "upstream_inference_completions_cost": 0.0007725
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "finish_reason": "stop",
+    "raw": "{\n  \"reply\": \"تدللين عيني، براحتج فكري وتواصلي وياي بأي وقت.\",\n  \"reply_parts\": [\n    \"تدللين عيني، براحتج فكري وتواصلي وياي بأي وقت.\"\n  ],\n  \"intent\": \"unknown\",\n  \"image_color\": \"\",\n  \"create_order\": false,\n  \"order\": {\n    \"customer_name\": \"\",\n    \"phone\": \"\",\n    \"province\": \"\",\n    \"address\": \"\",\n    \"notes\": \"\",\n    \"items\": []\n  },\n  \"confidence\": 0.95,\n  \"sales_state\": {\n    \"intent\": \"postpone\",\n    \"stage\": \"hesitation\",\n    \"objection\": \"needs_time\",\n    \"missing_fields\": [],\n    \"next_step\": \"wait\"\n  }\n}",
+    "result": {
+      "reply": "تدللين عيني، براحتج فكري وتواصلي وياي بأي وقت.",
+      "reply_parts": [
+        "تدللين عيني، براحتج فكري وتواصلي وياي بأي وقت."
+      ],
+      "intent": "unknown",
+      "image_color": "",
+      "create_order": false,
+      "order": {
+        "customer_name": "",
+        "phone": "",
+        "province": "",
+        "address": "",
+        "notes": "",
+        "items": []
+      },
+      "confidence": 0.95,
+      "sales_state": {
+        "intent": "postpone",
+        "stage": "hesitation",
+        "objection": "needs_time",
+        "missing_fields": [],
+        "next_step": "wait"
+      }
+    },
+    "errors": [],
+    "seconds": 6.42
+  }
+]

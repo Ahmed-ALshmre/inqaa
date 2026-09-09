@@ -21,6 +21,8 @@
       <p class="login-copy">أديري المحادثات والطلبات والمنتجات من مكان واحد.</p>
       {% if error %}<div class="login-error"><i class="bi bi-exclamation-circle"></i>{{ error }}</div>{% endif %}
       <form method="post" class="login-form">
+        <label for="username">اسم الدخول</label>
+        <input class="form-control" id="username" name="username" autocomplete="username" placeholder="admin للمالك، أو اسم دخول الموظف" dir="ltr">
         <label for="password">كلمة المرور</label>
         <div class="login-password-wrap">
           <i class="bi bi-shield-lock"></i>

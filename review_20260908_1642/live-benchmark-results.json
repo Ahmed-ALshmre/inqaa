@@ -1,0 +1,88 @@
+[
+  {
+    "sample": "instagram_screenshot",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": true,
+      "product_id": "P006",
+      "confidence": 100,
+      "available": false,
+      "reason": "Vision selected product_id only"
+    },
+    "seconds": 14.27,
+    "correct": true
+  },
+  {
+    "sample": "catalog_original_P003",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P003",
+    "result": {
+      "product_found": true,
+      "product_id": "P003",
+      "confidence": 100,
+      "available": false,
+      "reason": "Vision selected product_id only"
+    },
+    "seconds": 10.19,
+    "correct": true
+  },
+  {
+    "sample": "catalog_original_P006",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": true,
+      "product_id": "P006",
+      "confidence": 100,
+      "available": false,
+      "reason": "Vision selected product_id only"
+    },
+    "seconds": 9.8,
+    "correct": true
+  },
+  {
+    "sample": "instagram_screenshot",
+    "model": "google/gemini-3.8-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": false,
+      "product_id": "",
+      "confidence": 0,
+      "available": false,
+      "reason": "Vision returned NONE"
+    },
+    "seconds": 16.08,
+    "correct": false
+  },
+  {
+    "sample": "catalog_original_P003",
+    "model": "google/gemini-3.8-flash",
+    "expected": "P003",
+    "result": {
+      "product_found": false,
+      "product_id": "",
+      "confidence": 0,
+      "service_error": true,
+      "error_code": "service_error",
+      "http_status": null,
+      "reason": "Image analysis service failed: service_error"
+    },
+    "seconds": 45.88,
+    "correct": false
+  },
+  {
+    "sample": "catalog_original_P006",
+    "model": "google/gemini-3.8-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": false,
+      "product_id": "",
+      "confidence": 0,
+      "available": false,
+      "reason": "Vision returned NONE"
+    },
+    "seconds": 15.84,
+    "correct": false
+  }
+]

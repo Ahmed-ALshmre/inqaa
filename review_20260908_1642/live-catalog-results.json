@@ -1,0 +1,47 @@
+[
+  {
+    "sample": "instagram_screenshot",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": true,
+      "product_id": "P006",
+      "confidence": 100,
+      "available": false,
+      "reason": "Vision selected product_id only",
+      "reference_source": "labelled_product_images"
+    },
+    "seconds": 9.34,
+    "correct": true
+  },
+  {
+    "sample": "catalog_original_P003",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P003",
+    "result": {
+      "product_found": true,
+      "product_id": "P003",
+      "confidence": 100,
+      "available": false,
+      "reason": "Vision selected product_id only",
+      "reference_source": "labelled_product_images"
+    },
+    "seconds": 9.81,
+    "correct": true
+  },
+  {
+    "sample": "catalog_original_P006",
+    "model": "google/gemini-2.5-flash",
+    "expected": "P006",
+    "result": {
+      "product_found": true,
+      "product_id": "P006",
+      "confidence": 100,
+      "available": false,
+      "reason": "Vision selected product_id only",
+      "reference_source": "labelled_product_images"
+    },
+    "seconds": 8.94,
+    "correct": true
+  }
+]

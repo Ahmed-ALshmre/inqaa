@@ -1,0 +1,2015 @@
+[
+  {
+    "id": "google/gemini-3.8-flash",
+    "canonical_slug": "google/gemini-3.8-flash-20260902",
+    "hugging_face_id": null,
+    "name": "Google: Gemini 3.8 Flash",
+    "created": 1788362056,
+    "description": "Gemini 3.8 Flash is Google's most intelligent Flash model with significant gains from 3.7 Flash across software engineering, agentic tasks, and multi-step reasoning.",
+    "context_length": 1048576,
+    "architecture": {
+      "modality": "text+image+file+audio+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video",
+        "file",
+        "audio"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Gemini",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.00000075",
+      "completion": "0.00000375",
+      "image": "0.00000075",
+      "audio": "0.00000075",
+      "input_audio_cache": "0.000000075",
+      "web_search": "0.014",
+      "internal_reasoning": "0.00000375",
+      "input_cache_read": "0.000000075",
+      "input_cache_write": "0.0000000416666666666667"
+    },
+    "top_provider": {
+      "context_length": 1048576,
+      "max_completion_tokens": 65536,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ],
+    "default_parameters": {},
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/google/gemini-3.8-flash-20260902/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1330,
+          "win_rate": 57.4,
+          "rank": 10
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1323,
+          "win_rate": 56.7,
+          "rank": 7
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1258,
+          "win_rate": 49.1,
+          "rank": 26
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1346,
+          "win_rate": 59.9,
+          "rank": 6
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1350,
+          "win_rate": 59.7,
+          "rank": 5
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1313,
+          "win_rate": 55.6,
+          "rank": 8
+        }
+      ],
+      "artificial_analysis": {
+        "intelligence_index": 41.2,
+        "coding_index": 76.3,
+        "agentic_index": 41.1
+      }
+    },
+    "reasoning": {
+      "mandatory": true,
+      "default_enabled": true,
+      "supported_efforts": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "default_effort": "medium"
+    }
+  },
+  {
+    "id": "anthropic/claude-sonnet-5",
+    "canonical_slug": "anthropic/claude-sonnet-5-20260630",
+    "hugging_face_id": null,
+    "name": "Anthropic: Claude Sonnet 5",
+    "created": 1782843083,
+    "description": "Sonnet 5 is Anthropic's most capable Sonnet-class model, with frontier performance across coding, agents, and professional work. It supports adaptive thinking with selectable reasoning effort levels (low, medium, high, max,...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+file->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Claude",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000002",
+      "completion": "0.00001",
+      "web_search": "0.01",
+      "input_cache_read": "0.0000002",
+      "input_cache_write": "0.0000025",
+      "input_cache_write_1h": "0.000004"
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 128000,
+      "is_moderated": true
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "tool_choice",
+      "tools",
+      "verbosity"
+    ],
+    "default_parameters": {},
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/anthropic/claude-sonnet-5-20260630/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "agents",
+          "category": "agenticgamedev",
+          "elo": 1222,
+          "win_rate": 51.5,
+          "rank": 7
+        },
+        {
+          "arena": "agents",
+          "category": "androidnative",
+          "elo": 1251,
+          "win_rate": 55.1,
+          "rank": 8
+        },
+        {
+          "arena": "agents",
+          "category": "fullstack",
+          "elo": 1256,
+          "win_rate": 56.1,
+          "rank": 8
+        },
+        {
+          "arena": "agents",
+          "category": "godotgamedev",
+          "elo": 1268,
+          "win_rate": 60.4,
+          "rank": 3
+        },
+        {
+          "arena": "agents",
+          "category": "htmlslides",
+          "elo": 1225,
+          "win_rate": 53.7,
+          "rank": 5
+        },
+        {
+          "arena": "agents",
+          "category": "mobileapps",
+          "elo": 1267,
+          "win_rate": 56.3,
+          "rank": 5
+        },
+        {
+          "arena": "agents",
+          "category": "python-pptxslides",
+          "elo": 1229,
+          "win_rate": 51.4,
+          "rank": 10
+        },
+        {
+          "arena": "agents",
+          "category": "webapps",
+          "elo": 1270,
+          "win_rate": 56.1,
+          "rank": 5
+        },
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1291,
+          "win_rate": 55.1,
+          "rank": 19
+        },
+        {
+          "arena": "models",
+          "category": "asciiart",
+          "elo": 1233,
+          "win_rate": 52.5,
+          "rank": 17
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1294,
+          "win_rate": 53.9,
+          "rank": 16
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1259,
+          "win_rate": 52.6,
+          "rank": 25
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1316,
+          "win_rate": 54.6,
+          "rank": 12
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1216,
+          "win_rate": 51.7,
+          "rank": 21
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1298,
+          "win_rate": 54.9,
+          "rank": 15
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1292,
+          "win_rate": 53.8,
+          "rank": 16
+        }
+      ],
+      "artificial_analysis": {
+        "intelligence_index": 38.4,
+        "coding_index": 71.5,
+        "agentic_index": 44.3
+      }
+    },
+    "reasoning": {
+      "mandatory": false,
+      "default_enabled": true,
+      "supported_efforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default_effort": "high"
+    }
+  },
+  {
+    "id": "~anthropic/claude-sonnet-latest",
+    "canonical_slug": "~anthropic/claude-sonnet-latest",
+    "alias_target": {
+      "name": "Anthropic: Claude Sonnet 5",
+      "slug": "anthropic/claude-sonnet-5"
+    },
+    "hugging_face_id": null,
+    "name": "Anthropic Claude Sonnet Latest",
+    "created": 1777318368,
+    "description": "This model always redirects to the latest model in the Anthropic Claude Sonnet family.",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+file->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Router",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000002",
+      "completion": "0.00001",
+      "web_search": "0.01",
+      "input_cache_read": "0.0000002",
+      "input_cache_write": "0.0000025",
+      "input_cache_write_1h": "0.000004"
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 128000,
+      "is_moderated": true
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "tool_choice",
+      "tools",
+      "verbosity"
+    ],
+    "default_parameters": {},
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/~anthropic/claude-sonnet-latest/endpoints"
+    },
+    "reasoning": {
+      "mandatory": false,
+      "default_enabled": true,
+      "supported_efforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default_effort": "high"
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-plus-20260420",
+    "canonical_slug": "qwen/qwen3.5-plus-20260420",
+    "hugging_face_id": null,
+    "name": "Qwen: Qwen3.5 Plus 2026-04-20",
+    "created": 1777261368,
+    "description": "Qwen3.5 Plus (April 2026) is a large-scale multimodal language model from Alibaba. It accepts text, image, and video input and produces text output, with a 1M token context window. This...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.0000003",
+      "completion": "0.0000018",
+      "input_cache_write": "0.000000375",
+      "overrides": [
+        {
+          "min_prompt_tokens": 256000,
+          "prompt": "0.000000375",
+          "completion": "0.00000225",
+          "input_cache_write": "0.00000046875"
+        }
+      ]
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 65536,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logprobs",
+      "max_tokens",
+      "presence_penalty",
+      "reasoning",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {},
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-plus-20260420/endpoints"
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-9b",
+    "canonical_slug": "qwen/qwen3.5-9b-20260310",
+    "hugging_face_id": "Qwen/Qwen3.5-9B",
+    "name": "Qwen: Qwen3.5-9B",
+    "created": 1773152396,
+    "description": "Qwen3.5-9B is a multimodal foundation model from the Qwen3.5 family, designed to deliver strong reasoning, coding, and visual understanding in an efficient 9B-parameter architecture. It uses a unified vision-language design...",
+    "context_length": 262144,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.0000001",
+      "completion": "0.00000015"
+    },
+    "top_provider": {
+      "context_length": 262144,
+      "max_completion_tokens": 235929,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": null,
+      "top_p": null,
+      "top_k": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-9b-20260310/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [],
+      "artificial_analysis": {
+        "intelligence_index": null,
+        "coding_index": 28.7,
+        "agentic_index": null
+      }
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-35b-a3b",
+    "canonical_slug": "qwen/qwen3.5-35b-a3b-20260224",
+    "hugging_face_id": "Qwen/Qwen3.5-35B-A3B",
+    "name": "Qwen: Qwen3.5-35B-A3B",
+    "created": 1772053822,
+    "description": "The Qwen3.5 Series 35B-A3B is a native vision-language model designed with a hybrid architecture that integrates linear attention mechanisms and a sparse mixture-of-experts model, achieving higher inference efficiency. Its overall...",
+    "context_length": 262144,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.0000003125",
+      "completion": "0.00000125",
+      "input_cache_read": "0.00000015625"
+    },
+    "top_provider": {
+      "context_length": 256000,
+      "max_completion_tokens": 16384,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": 1,
+      "top_p": 0.95,
+      "top_k": 20,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-35b-a3b-20260224/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [],
+      "artificial_analysis": {
+        "intelligence_index": null,
+        "coding_index": 37,
+        "agentic_index": null
+      }
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-27b",
+    "canonical_slug": "qwen/qwen3.5-27b-20260224",
+    "hugging_face_id": "Qwen/Qwen3.5-27B",
+    "name": "Qwen: Qwen3.5-27B",
+    "created": 1772053810,
+    "description": "The Qwen3.5 27B native vision-language Dense model incorporates a linear attention mechanism, delivering fast response times while balancing inference speed and performance. Its overall capabilities are comparable to those of...",
+    "context_length": 262144,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000000195",
+      "completion": "0.00000156"
+    },
+    "top_provider": {
+      "context_length": 262144,
+      "max_completion_tokens": 65536,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-27b-20260224/endpoints"
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-122b-a10b",
+    "canonical_slug": "qwen/qwen3.5-122b-a10b-20260224",
+    "hugging_face_id": "Qwen/Qwen3.5-122B-A10B",
+    "name": "Qwen: Qwen3.5-122B-A10B",
+    "created": 1772053789,
+    "description": "The Qwen3.5 122B-A10B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. In terms of...",
+    "context_length": 262144,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.00000029",
+      "completion": "0.0000024"
+    },
+    "top_provider": {
+      "context_length": 262144,
+      "max_completion_tokens": 81920,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-122b-a10b-20260224/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [],
+      "artificial_analysis": {
+        "intelligence_index": 16.2,
+        "coding_index": 45.7,
+        "agentic_index": 9.6
+      }
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-flash-02-23",
+    "canonical_slug": "qwen/qwen3.5-flash-20260224",
+    "hugging_face_id": null,
+    "name": "Qwen: Qwen3.5-Flash",
+    "created": 1772053776,
+    "description": "The Qwen3.5 native vision-language Flash models are built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. Compared to the...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000000065",
+      "completion": "0.00000026"
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 65536,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "max_tokens",
+      "presence_penalty",
+      "reasoning",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": null,
+      "top_p": null,
+      "frequency_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-flash-20260224/endpoints"
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "anthropic/claude-sonnet-4.6",
+    "canonical_slug": "anthropic/claude-4.6-sonnet-20260217",
+    "hugging_face_id": "",
+    "name": "Anthropic: Claude Sonnet 4.6",
+    "created": 1771342990,
+    "description": "Sonnet 4.6 is Anthropic's most capable Sonnet-class model yet, with frontier performance across coding, agents, and professional work. It excels at iterative development, complex codebase navigation, end-to-end project management with...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+file->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Claude",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000003",
+      "completion": "0.000015",
+      "web_search": "0.01",
+      "input_cache_read": "0.0000003",
+      "input_cache_write": "0.00000375",
+      "input_cache_write_1h": "0.000006"
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 128000,
+      "is_moderated": true
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p",
+      "verbosity"
+    ],
+    "default_parameters": {},
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/anthropic/claude-4.6-sonnet-20260217/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "agents",
+          "category": "agenticgamedev",
+          "elo": 1176,
+          "win_rate": 52.2,
+          "rank": 16
+        },
+        {
+          "arena": "agents",
+          "category": "androidnative",
+          "elo": 1217,
+          "win_rate": 62,
+          "rank": 13
+        },
+        {
+          "arena": "agents",
+          "category": "fullstack",
+          "elo": 1222,
+          "win_rate": 64.3,
+          "rank": 11
+        },
+        {
+          "arena": "agents",
+          "category": "godotgamedev",
+          "elo": 1226,
+          "win_rate": 60.6,
+          "rank": 6
+        },
+        {
+          "arena": "agents",
+          "category": "mobileapps",
+          "elo": 1248,
+          "win_rate": 63.6,
+          "rank": 10
+        },
+        {
+          "arena": "agents",
+          "category": "webapps",
+          "elo": 1213,
+          "win_rate": 56.9,
+          "rank": 19
+        },
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1267,
+          "win_rate": 57.6,
+          "rank": 28
+        },
+        {
+          "arena": "models",
+          "category": "asciiart",
+          "elo": 1256,
+          "win_rate": 60.1,
+          "rank": 14
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1294,
+          "win_rate": 59.4,
+          "rank": 15
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1296,
+          "win_rate": 58.3,
+          "rank": 13
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1285,
+          "win_rate": 58.8,
+          "rank": 22
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1224,
+          "win_rate": 58.7,
+          "rank": 18
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1290,
+          "win_rate": 58.3,
+          "rank": 20
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1299,
+          "win_rate": 60,
+          "rank": 13
+        }
+      ],
+      "artificial_analysis": {
+        "intelligence_index": 30.5,
+        "coding_index": 63,
+        "agentic_index": 33.1
+      }
+    },
+    "reasoning": {
+      "mandatory": false,
+      "supported_efforts": [
+        "max",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default_effort": "medium"
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-plus-02-15",
+    "canonical_slug": "qwen/qwen3.5-plus-20260216",
+    "hugging_face_id": "",
+    "name": "Qwen: Qwen3.5 Plus 2026-02-15",
+    "created": 1771229416,
+    "description": "The Qwen3.5 native vision-language series Plus models are built on a hybrid architecture that integrates linear attention mechanisms with sparse mixture-of-experts models, achieving higher inference efficiency. In a variety of...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.00000026",
+      "completion": "0.00000156",
+      "overrides": [
+        {
+          "min_prompt_tokens": 256000,
+          "prompt": "0.000000325",
+          "completion": "0.00000195"
+        }
+      ]
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 65536,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logprobs",
+      "max_tokens",
+      "presence_penalty",
+      "reasoning",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": null,
+      "top_p": null,
+      "frequency_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-plus-20260216/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1152,
+          "win_rate": 47.7,
+          "rank": 67
+        },
+        {
+          "arena": "models",
+          "category": "asciiart",
+          "elo": 1116,
+          "win_rate": 43.2,
+          "rank": 56
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1184,
+          "win_rate": 48.5,
+          "rank": 62
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1153,
+          "win_rate": 44.9,
+          "rank": 73
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1131,
+          "win_rate": 42.6,
+          "rank": 77
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1135,
+          "win_rate": 48.9,
+          "rank": 51
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1196,
+          "win_rate": 52.2,
+          "rank": 53
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1202,
+          "win_rate": 50,
+          "rank": 56
+        }
+      ]
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "qwen/qwen3.5-397b-a17b",
+    "canonical_slug": "qwen/qwen3.5-397b-a17b-20260216",
+    "hugging_face_id": "Qwen/Qwen3.5-397B-A17B",
+    "name": "Qwen: Qwen3.5 397B A17B",
+    "created": 1771223018,
+    "description": "The Qwen3.5 series 397B-A17B native vision-language model is built on a hybrid architecture that integrates a linear attention mechanism with a sparse mixture-of-experts model, achieving higher inference efficiency. It delivers...",
+    "context_length": 262144,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Qwen3",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.00000055",
+      "completion": "0.0000035",
+      "input_cache_read": "0.000000225"
+    },
+    "top_provider": {
+      "context_length": 262144,
+      "max_completion_tokens": 235929,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/qwen/qwen3.5-397b-a17b-20260216/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1194,
+          "win_rate": 56.7,
+          "rank": 49
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1197,
+          "win_rate": 52.6,
+          "rank": 53
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1192,
+          "win_rate": 53.2,
+          "rank": 55
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1165,
+          "win_rate": 50.1,
+          "rank": 61
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1167,
+          "win_rate": 56.1,
+          "rank": 42
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1182,
+          "win_rate": 51.4,
+          "rank": 62
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1205,
+          "win_rate": 52.5,
+          "rank": 54
+        }
+      ],
+      "artificial_analysis": {
+        "intelligence_index": 19.1,
+        "coding_index": 48.2,
+        "agentic_index": 10.6
+      }
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "deepseek/deepseek-v3.2",
+    "canonical_slug": "deepseek/deepseek-v3.2-20251201",
+    "hugging_face_id": "deepseek-ai/DeepSeek-V3.2",
+    "name": "DeepSeek: DeepSeek V3.2",
+    "created": 1764594642,
+    "description": "DeepSeek-V3.2 is a large language model designed to harmonize high computational efficiency with strong reasoning and agentic tool-use performance. It introduces DeepSeek Sparse Attention (DSA), a fine-grained sparse attention mechanism...",
+    "context_length": 163840,
+    "architecture": {
+      "modality": "text->text",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "DeepSeek",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000000269",
+      "completion": "0.0000004",
+      "input_cache_read": "0.0000001345"
+    },
+    "top_provider": {
+      "context_length": 163840,
+      "max_completion_tokens": 65536,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": 1,
+      "top_p": 0.95,
+      "top_k": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/deepseek/deepseek-v3.2-20251201/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1165,
+          "win_rate": 49.5,
+          "rank": 60
+        },
+        {
+          "arena": "models",
+          "category": "asciiart",
+          "elo": 1105,
+          "win_rate": 40.5,
+          "rank": 57
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1182,
+          "win_rate": 49.3,
+          "rank": 65
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1175,
+          "win_rate": 48.2,
+          "rank": 65
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1157,
+          "win_rate": 46.5,
+          "rank": 67
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1059,
+          "win_rate": 40.8,
+          "rank": 68
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1167,
+          "win_rate": 46.8,
+          "rank": 65
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1189,
+          "win_rate": 50.2,
+          "rank": 63
+        }
+      ],
+      "artificial_analysis": {
+        "intelligence_index": null,
+        "coding_index": 44.2,
+        "agentic_index": null
+      }
+    },
+    "reasoning": {
+      "mandatory": false,
+      "default_enabled": false
+    }
+  },
+  {
+    "id": "google/gemini-2.5-flash-image",
+    "canonical_slug": "google/gemini-2.5-flash-image",
+    "hugging_face_id": "",
+    "name": "Google: Nano Banana (Gemini 2.5 Flash Image)",
+    "created": 1759870431,
+    "description": "Gemini 2.5 Flash Image, a.k.a. \"Nano Banana,\" is now generally available. It is a state of the art image generation model with contextual understanding. It is capable of image generation,...",
+    "context_length": 32768,
+    "architecture": {
+      "modality": "text+image->text+image",
+      "input_modalities": [
+        "image",
+        "text"
+      ],
+      "output_modalities": [
+        "image",
+        "text"
+      ],
+      "tokenizer": "Gemini",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.0000003",
+      "completion": "0.0000025",
+      "image": "0.0000003",
+      "image_output": "0.00003",
+      "audio": "0.000001",
+      "input_audio_cache": "0.0000001",
+      "web_search": "0.014",
+      "internal_reasoning": "0.0000025",
+      "input_cache_read": "0.00000003",
+      "input_cache_write": "0.0000000833333333333333"
+    },
+    "top_provider": {
+      "context_length": 32768,
+      "max_completion_tokens": 8192,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "max_tokens",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": null,
+      "top_p": null,
+      "frequency_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": "2025-01-31",
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/google/gemini-2.5-flash-image/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "graphicdesign",
+          "elo": 1181,
+          "win_rate": 56.9,
+          "rank": 9
+        },
+        {
+          "arena": "models",
+          "category": "image",
+          "elo": 1196,
+          "win_rate": 55.6,
+          "rank": 10
+        },
+        {
+          "arena": "models",
+          "category": "logo",
+          "elo": 1173,
+          "win_rate": 51.4,
+          "rank": 11
+        }
+      ]
+    }
+  },
+  {
+    "id": "anthropic/claude-sonnet-4.5",
+    "canonical_slug": "anthropic/claude-4.5-sonnet-20250929",
+    "hugging_face_id": "",
+    "name": "Anthropic: Claude Sonnet 4.5",
+    "created": 1759161676,
+    "description": "Claude Sonnet 4.5 is Anthropic’s most advanced Sonnet model to date, optimized for real-world agents and coding workflows. It delivers state-of-the-art performance on coding benchmarks such as SWE-bench Verified, with...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+file->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Claude",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000003",
+      "completion": "0.000015",
+      "web_search": "0.01",
+      "input_cache_read": "0.0000003",
+      "input_cache_write": "0.00000375",
+      "input_cache_write_1h": "0.000006",
+      "overrides": [
+        {
+          "min_prompt_tokens": 200000,
+          "prompt": "0.000006",
+          "completion": "0.0000225",
+          "input_cache_read": "0.0000006",
+          "input_cache_write": "0.0000075",
+          "input_cache_write_1h": "0.000012"
+        }
+      ]
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 64000,
+      "is_moderated": true
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_completion_tokens",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": 1,
+      "top_p": 1,
+      "top_k": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": "2025-01-31",
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/anthropic/claude-4.5-sonnet-20250929/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1190,
+          "win_rate": 51,
+          "rank": 51
+        },
+        {
+          "arena": "models",
+          "category": "asciiart",
+          "elo": 1228,
+          "win_rate": 56.1,
+          "rank": 19
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1200,
+          "win_rate": 51.5,
+          "rank": 51
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1184,
+          "win_rate": 47.3,
+          "rank": 58
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1192,
+          "win_rate": 51.1,
+          "rank": 53
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1142,
+          "win_rate": 52.2,
+          "rank": 49
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1191,
+          "win_rate": 49.4,
+          "rank": 55
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1204,
+          "win_rate": 51.8,
+          "rank": 55
+        },
+        {
+          "arena": "agents",
+          "category": "fullstack",
+          "elo": 1059,
+          "win_rate": 43.7,
+          "rank": 32
+        },
+        {
+          "arena": "agents",
+          "category": "mobileapps",
+          "elo": 1174,
+          "win_rate": 52.9,
+          "rank": 26
+        },
+        {
+          "arena": "agents",
+          "category": "webapps",
+          "elo": 1083,
+          "win_rate": 43.2,
+          "rank": 31
+        }
+      ],
+      "artificial_analysis": {
+        "intelligence_index": 21.2,
+        "coding_index": 52.1,
+        "agentic_index": 17.5
+      }
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "deepseek/deepseek-v3.2-exp",
+    "canonical_slug": "deepseek/deepseek-v3.2-exp",
+    "hugging_face_id": "deepseek-ai/DeepSeek-V3.2-Exp",
+    "name": "DeepSeek: DeepSeek V3.2 Exp",
+    "created": 1759150481,
+    "description": "DeepSeek-V3.2-Exp is an experimental large language model released by DeepSeek as an intermediate step between V3.1 and future architectures. It introduces DeepSeek Sparse Attention (DSA), a fine-grained sparse attention mechanism...",
+    "context_length": 163840,
+    "architecture": {
+      "modality": "text->text",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "DeepSeek",
+      "instruct_type": "deepseek-v3.1"
+    },
+    "pricing": {
+      "prompt": "0.00000027",
+      "completion": "0.00000041"
+    },
+    "top_provider": {
+      "context_length": 163840,
+      "max_completion_tokens": 65536,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "frequency_penalty",
+      "include_reasoning",
+      "logit_bias",
+      "logprobs",
+      "max_tokens",
+      "min_p",
+      "presence_penalty",
+      "reasoning",
+      "repetition_penalty",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_logprobs",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "frequency_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": "2025-07-31",
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/deepseek/deepseek-v3.2-exp/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1181,
+          "win_rate": 56.4,
+          "rank": 53
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1188,
+          "win_rate": 54.2,
+          "rank": 58
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1169,
+          "win_rate": 50.6,
+          "rank": 67
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1170,
+          "win_rate": 53,
+          "rank": 59
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1059,
+          "win_rate": 42,
+          "rank": 69
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1185,
+          "win_rate": 53.3,
+          "rank": 57
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1193,
+          "win_rate": 54.3,
+          "rank": 61
+        }
+      ]
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "google/gemini-2.5-flash",
+    "canonical_slug": "google/gemini-2.5-flash",
+    "hugging_face_id": "",
+    "name": "Google: Gemini 2.5 Flash",
+    "created": 1750172488,
+    "description": "Gemini 2.5 Flash is Google's state-of-the-art workhorse model, specifically designed for advanced reasoning, coding, mathematics, and scientific tasks. It includes built-in \"thinking\" capabilities, enabling it to provide responses with greater...",
+    "context_length": 1048576,
+    "architecture": {
+      "modality": "text+image+file+audio+video->text",
+      "input_modalities": [
+        "file",
+        "image",
+        "text",
+        "audio",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Gemini",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.0000003",
+      "completion": "0.0000025",
+      "image": "0.0000003",
+      "audio": "0.000001",
+      "input_audio_cache": "0.0000001",
+      "web_search": "0.014",
+      "internal_reasoning": "0.0000025",
+      "input_cache_read": "0.00000003",
+      "input_cache_write": "0.0000000833333333333333"
+    },
+    "top_provider": {
+      "context_length": 1048576,
+      "max_completion_tokens": 65535,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "response_format",
+      "seed",
+      "stop",
+      "structured_outputs",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": null,
+      "top_p": null,
+      "top_k": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": "2025-01-31",
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/google/gemini-2.5-flash/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1104,
+          "win_rate": 47.4,
+          "rank": 87
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1122,
+          "win_rate": 46.9,
+          "rank": 88
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1151,
+          "win_rate": 49.1,
+          "rank": 74
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1091,
+          "win_rate": 44.3,
+          "rank": 90
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1111,
+          "win_rate": 48.9,
+          "rank": 83
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1129,
+          "win_rate": 47.1,
+          "rank": 88
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1047,
+          "win_rate": 43.1,
+          "rank": 71
+        }
+      ]
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  },
+  {
+    "id": "anthropic/claude-sonnet-4",
+    "canonical_slug": "anthropic/claude-4-sonnet-20250522",
+    "hugging_face_id": "",
+    "name": "Anthropic: Claude Sonnet 4",
+    "created": 1747930371,
+    "description": "Claude Sonnet 4 significantly enhances the capabilities of its predecessor, Sonnet 3.7, excelling in both coding and reasoning tasks with improved precision and controllability. Achieving state-of-the-art performance on SWE-bench (72.7%),...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+file->text",
+      "input_modalities": [
+        "image",
+        "text",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Claude",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0.000003",
+      "completion": "0.000015",
+      "web_search": "0.01",
+      "input_cache_read": "0.0000003",
+      "input_cache_write": "0.00000375",
+      "input_cache_write_1h": "0.000006",
+      "overrides": [
+        {
+          "min_prompt_tokens": 200000,
+          "prompt": "0.000006",
+          "completion": "0.0000225",
+          "input_cache_read": "0.0000006",
+          "input_cache_write": "0.0000075",
+          "input_cache_write_1h": "0.000012"
+        }
+      ]
+    },
+    "top_provider": {
+      "context_length": 200000,
+      "max_completion_tokens": 64000,
+      "is_moderated": true
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "stop",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_k",
+      "top_p"
+    ],
+    "default_parameters": {
+      "temperature": null,
+      "top_p": null,
+      "top_k": null,
+      "frequency_penalty": null,
+      "presence_penalty": null,
+      "repetition_penalty": null
+    },
+    "supported_voices": null,
+    "knowledge_cutoff": "2025-01-31",
+    "expiration_date": null,
+    "links": {
+      "details": "/api/v1/models/anthropic/claude-4-sonnet-20250522/endpoints"
+    },
+    "benchmarks": {
+      "design_arena": [
+        {
+          "arena": "models",
+          "category": "3d",
+          "elo": 1172,
+          "win_rate": 57.8,
+          "rank": 57
+        },
+        {
+          "arena": "models",
+          "category": "codecategories",
+          "elo": 1159,
+          "win_rate": 53.4,
+          "rank": 73
+        },
+        {
+          "arena": "models",
+          "category": "dataviz",
+          "elo": 1174,
+          "win_rate": 56.5,
+          "rank": 66
+        },
+        {
+          "arena": "models",
+          "category": "gamedev",
+          "elo": 1164,
+          "win_rate": 54.8,
+          "rank": 62
+        },
+        {
+          "arena": "models",
+          "category": "svg",
+          "elo": 1106,
+          "win_rate": 51.1,
+          "rank": 57
+        },
+        {
+          "arena": "models",
+          "category": "uicomponent",
+          "elo": 1147,
+          "win_rate": 57.9,
+          "rank": 72
+        },
+        {
+          "arena": "models",
+          "category": "website",
+          "elo": 1160,
+          "win_rate": 52.4,
+          "rank": 75
+        }
+      ],
+      "artificial_analysis": {
+        "intelligence_index": null,
+        "coding_index": 37.6,
+        "agentic_index": null
+      }
+    },
+    "reasoning": {
+      "mandatory": false
+    }
+  }
+]

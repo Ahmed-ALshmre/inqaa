@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}فريق العمل{% endblock %}
+{% block content %}
+<section class="admin-page-head"><div><p class="admin-kicker">الإعدادات / فريق العمل</p><h1>الموظفون والصلاحيات</h1><p>حساب مستقل لكل موظف. الصلاحيات المختارة تشمل جميع المتاجر. تعديل الحساب ينهي جلساته القديمة.</p></div><button class="btn btn-primary" onclick="editStaff()"><i class="bi bi-person-plus"></i> إضافة موظف</button></section>
+<p id="staffStatus" role="status"></p><section class="admin-card-grid" id="staffList"></section>
+<dialog class="workspace-dialog" id="staffDialog"><form id="staffForm"><div class="dialog-heading"><h2>حساب الموظف</h2><button type="button" onclick="this.closest('dialog').close()" aria-label="إغلاق">×</button></div>
+<input type="hidden" id="staffId"><label>الاسم<input class="form-control" id="staffName" required maxlength="80"></label>
+<label>اسم الدخول<input class="form-control" id="staffUsername" required maxlength="80" autocomplete="off" dir="ltr"></label>
+<label>كلمة المرور<input class="form-control" id="staffPassword" type="password" minlength="10" maxlength="200" autocomplete="new-password" placeholder="اتركها فارغة عند التعديل للاحتفاظ بالحالية"></label>
+<fieldset><legend>الصلاحيات</legend><p class="small">عرض المحادثات والمنتجات متاح لكل موظف. فعّل الإجراءات المسموحة فقط.</p>
+{% for key,label in permissions.items() %}<label class="permission-option"><input type="checkbox" name="permission" value="{{ key }}"> {{ label }}</label>{% endfor %}</fieldset>
+<label class="permission-option"><input type="checkbox" id="staffActive" checked> الحساب فعال</label><p id="staffFormStatus" role="status"></p><button class="btn btn-primary" id="staffSave" type="submit">حفظ الحساب</button>
+</form></dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/js/staff.js?v=1"></script>{% endblock %}

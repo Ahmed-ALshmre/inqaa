@@ -37,7 +37,7 @@ function downloadAdvisorMemoryDraft() {
 function scrollAdvisorToLatest() {
   const messages = document.getElementById('advisorMessages');
   messages.scrollTop = messages.scrollHeight;
-  messages.lastElementChild?.scrollIntoView({block:'nearest'});
+  requestAnimationFrame(() => { messages.scrollTop = messages.scrollHeight; });
 }
 
 function advisorEsc(value) {
