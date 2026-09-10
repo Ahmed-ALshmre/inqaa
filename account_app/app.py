@@ -1127,6 +1127,8 @@ def init_db():
         db.commit()
         print(f"[DB] Migration: added {table}.{column} column.", flush=True)
 
+    for column in ("product_total", "delivery_fee", "total_amount"):
+        _add_column_if_missing("orders", column, "INTEGER")
     _add_column_if_missing("messages", "media_json", "TEXT")
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id,id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_direction_id ON messages(sender_id,direction,id)")
@@ -1576,6 +1578,10 @@ def get_order_confirmation_text(db=None):
     return get_store_settings(db).get("inspection_message") or DEFAULT_ORDER_CONFIRMATION_TEXT
 
 
+def valid_ai_model_id(value):
+    return bool(re.fullmatch(r"[A-Za-z0-9_-]+/[A-Za-z0-9_.:/-]+", str(value or "").strip()))
+
+
 def get_ai_model(db, setting_name, default):
     if setting_name.startswith("ai_"):
         key = setting_name
@@ -1583,7 +1589,27 @@ def get_ai_model(db, setting_name, default):
         key = f"ai_{setting_name}"
     else:
         key = f"ai_{setting_name}_model"
-    return str(get_app_setting(key, default, db) or default).strip()
+    configured = str(get_app_setting(key, default, db) or default).strip()
+    if valid_ai_model_id(configured):
+        return configured
+    # Old settings accepted display names. Recover without rewriting the store's data.
+    inherited = str(get_app_setting(key, default, db, store_id="default") or default).strip()
+    fallback = inherited if valid_ai_model_id(inherited) else default
+    print(f"[AIConfig] Invalid model ID for {current_store_id()}/{key}; using {fallback}", flush=True)
+    return fallback
+
+
+def ai_failure_message(reason):
+    code = str(reason or "")
+    if code == "provider_http_401":
+        return "تعذر الاتصال بالذكاء الاصطناعي: تحقق من مفتاح OpenRouter."
+    if code == "provider_http_402":
+        return "تعذر توليد الرد: رصيد خدمة الذكاء الاصطناعي غير كافٍ."
+    if code in {"provider_http_400", "provider_http_404"}:
+        return "رفضت خدمة الذكاء الاصطناعي الطلب؛ تحقق من معرف النموذج وإعداداته في إعدادات المتجر."
+    if code == "provider_http_429":
+        return "خدمة الذكاء الاصطناعي مشغولة حالياً؛ أعد المحاولة بعد قليل."
+    return "تعذر توليد الرد من خدمة الذكاء الاصطناعي. أعد المحاولة أو راجع إعدادات المتجر."
 
 
 def get_ai_temperature(db, setting_name, default):
@@ -4690,7 +4716,8 @@ def customer_product_target(text, products):
     available = [p for p in products if _stock_state(p) == "available"]
     # Resolve against the whole catalog first: an unavailable named model must
     # never silently become an available model sharing its category.
-    target = _text_match_product(text, products)
+    named = first_message_named_products(text, products)
+    target = (named[0] if len(named) == 1 else None) if named else _text_match_product(text, products)
     return target if target and target in available else None
 
 
@@ -4952,6 +4979,12 @@ def _customer_products_display_order(customer_products):
     )
 
 
+def _context_product_words(text):
+    # Normalize spelling only for an already-known product's context. Keep the
+    # catalog's general search and image matching rules independent.
+    return {word.translate(str.maketrans("أإآىة", "ااايه")) for word in _catalog_words(text)}
+
+
 def select_customer_context_product(text, customer_products):
     if not customer_products:
         return None
@@ -4967,21 +5000,43 @@ def select_customer_context_product(text, customer_products):
         return explicit
 
     request_info = _extract_product_request(text)
-    if request_info.get("product_terms") and not any(
-        set(request_info["product_terms"]) & _catalog_words(" ".join(str(p.get(k) or "") for k in ("product_name", "category")))
-        for p in ordered
-    ):
-        return None
+    terms = _context_product_words(" ".join(request_info.get("product_terms") or []))
+    terms -= {"قطعه", "ملابس"}
+    # "ست نفس الصورة؟" addresses the seller; "أريد ست" still requests a set.
+    if re.match(r"^\s*ست\s+نفس\b", str(text or "")):
+        terms.discard("ست")
+    if terms:
+        ordered = [p for p in ordered if terms & _context_product_words(
+            " ".join(str(p.get(k) or "") for k in ("product_name", "category")))]
+        if not ordered:
+            return None
     if request_info.get("has_specific_filter"):
         matches = []
         for product in ordered:
-            match = _product_matches_request(product, request_info)
+            context_product = dict(product)
+            for field in ("product_name", "category", "keywords", "description", "visual_description", "colors", "sizes", "notes"):
+                context_product[field] = str(product.get(field) or "").translate(str.maketrans("أإآىة", "ااايه"))
+            context_request = dict(request_info, product_terms=sorted(terms),
+                                   color_terms=sorted(_context_product_words(" ".join(request_info.get("color_terms") or []))))
+            match = _product_matches_request(context_product, context_request)
             if match:
-                matches.append(match)
+                matches.append(dict(match, product=product))
         if len(matches) == 1:
-            matches.sort(key=lambda item: item["score"], reverse=True)
             return matches[0]["product"]
     return ordered[0] if len(ordered) == 1 else None
+
+
+def is_product_detail_followup(text):
+    """Questions and polite closure do not reopen product selection."""
+    text = str(text or "").strip()
+    if is_conditional_return_question(text) or requests_alternative_photo(text):
+        return True
+    if re.fullmatch(r"لا\s+(?:(?:حبي|عيني|حياتي|عمري)\s+)?(?:تسلمين|شكرا|شكراً)[.!،\s]*", text):
+        return True
+    # Preserve explicit changes, rejection, and requests for a different item.
+    if re.search(r"ماريد|ما\s*(?:اريد|أريد|عجب)|ماعجب|عوف|الغ|ألغ|بدل|خلي|مو\s+(?:هذا|هاي|ذوق)|(?:اريد|أريد|اختار|أختار)", text):
+        return False
+    return bool(re.search(r"قماش|خام|قياس|مقاس|طول|سعر|توصيل|صور|تصوير|فحص|لون", text))
 
 
 def select_product_mentioned_in_reply(reply, customer_products):
@@ -5726,7 +5781,7 @@ def resolve_contextual_product_selection(db, ev, products):
     if ev.get("_selection_resolved") or ev.get("image_url") or ev.get("attachments"):
         return None
     text = str(ev.get("text") or "").strip()
-    if requests_alternative_photo(text) or is_conditional_return_question(text):
+    if is_product_detail_followup(text):
         return None
     # A broad intent gate only decides when to ask the language model; it never
     # decides which product is wanted or rejected.
@@ -5736,7 +5791,13 @@ def resolve_contextual_product_selection(db, ev, products):
     rows = db.execute("SELECT product_id,status,source FROM customer_product_interests WHERE sender_id=?",
                       (ev["sender_id"],)).fetchall()
     pending = pending_product_choice(db, ev["sender_id"])
-    known = {r["product_id"]: dict(r) for r in rows}
+    reliable_ids = {p["product_id"] for p in load_customer_products(db, ev["sender_id"], limit=50)}
+    mentioned_ids = {p["product_id"] for p in products if _text_match_product(text, [p])}
+    mentioned_ids.update(p["product_id"] for p in first_message_named_products(text, products))
+    # Suggested/rejected items only re-enter when explicitly mentioned or part
+    # of the pending add/replace question, never as automatic alternatives.
+    known = {r["product_id"]: dict(r) for r in rows
+             if r["product_id"] in reliable_ids or r["product_id"] in mentioned_ids}
     if pending:
         for pid in json.loads(pending["previous_ids"]) + json.loads(pending["image_ids"]):
             known.setdefault(pid, {"status": "previous_option", "source": "pending_choice"})
@@ -6430,7 +6491,7 @@ def _text_contains_any(text: str, keywords) -> bool:
 def is_conditional_return_question(text):
     """Distinguish asking about inspection/returns from reporting an actual fault."""
     text = str(text or "").strip().lower()
-    hypothetical = re.search(r"(?:^|\s)(?:اذا|إذا|لو|في حال)(?:\s|$)", text)
+    hypothetical = re.search(r"(?:^|\s)(?:و)?(?:اذا|إذا|لو|في حال)(?:\s|$)", text)
     return_terms = ("ارجع", "أرجع", "يرجع", "ترجع", "معجب", "يعجب", "مو نفس", "ما اجه نفس", "ما إجه نفس")
     actual_problem = ("استلمت", "وصلني", "وصلتني", "رجعته", "رجعت الطلب", "اريد الغي", "أريد ألغي", "الغوا الطلب")
     return bool(hypothetical and any(w in text for w in return_terms) and not any(w in text for w in actual_problem))
@@ -6753,7 +6814,8 @@ def call_main_ai(
                         and reply_reasks_known_product(result.get("reply")))
     needs_review = (lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
-    if needs_review and not fix_instruction and not (image_result or {}).get("unmatched_customer_image"):
+    transport_failure = str(result.get("failure_reason") or "").startswith(("provider_http_", "exception:"))
+    if needs_review and not transport_failure and not fix_instruction and not (image_result or {}).get("unmatched_customer_image"):
         kwargs["fix_instruction"] = (
             "راجع قرار التحويل قبل اعتماده. أجب عن أسئلة السعر واللون والقياس والخامة والتوصيل والفحص "
             "من بيانات المنتج والمتجر والطلب المرفقة. الربط الموجود صالح ولا يحتاج إعادة ربط يدوي. "
@@ -7130,10 +7192,13 @@ def _call_main_ai_once(
                 error=str(exc),
             )
         print(f"[MainAI] Error: {exc} → escalating to human.", flush=True)
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", None)
+        reason = f"provider_http_{status}" if status else f"exception:{type(exc).__name__}"
         return {
             "reply": "", "intent": "unknown",
             "create_order": False, "order": {}, "confidence": 0,
-            "failed": True, "failure_reason": f"exception:{type(exc).__name__}",
+            "failed": True, "failure_reason": reason,
         }
 
 
@@ -7397,7 +7462,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         "store_id": current_store_id(),
     }
 
-    db.execute(
+    order_cursor = db.execute(
         """INSERT INTO orders
            (sender_id, customer_name, phone, province, address,
             product_id, product_name, color, size, notes, status, order_items, created_at, store_id)
@@ -7419,6 +7484,9 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
             current_store_id(),
         ),
     )
+
+    db.execute("UPDATE orders SET product_total=?,delivery_fee=?,total_amount=? WHERE id=?",
+               (product_total, delivery_fee, total_amount, order_cursor.lastrowid))
 
     db.execute(
         """UPDATE customers SET
@@ -7899,7 +7967,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         request_info = search_result.get("request") or {}
         matches = search_result.get("matches") or []
         skip_search_for_current_context = bool(
-            customer_products and _is_contextual_product_question(ev.get("text", ""))
+            customer_products and (_is_contextual_product_question(ev.get("text", "")) or
+                (is_product_detail_followup(ev.get("text", "")) and select_customer_context_product(ev.get("text", ""), customer_products)))
         )
         if request_info.get("is_search") and not skip_search_for_current_context and matches:
             remember_product_search_results(db, ev["sender_id"], matches, request_info)
@@ -8997,60 +9066,57 @@ def import_forbidden_rules():
     return jsonify({"status": "ok", "count": len(data)}), 200
 
 
-def _orders_payload(db, limit=500, date_from=None, date_to=None):
-    query = """SELECT
-             o.*,
-             c.name AS customer_display_name,
-             c.page_id,
-             COALESCE(c.platform, 'facebook') AS platform
-           FROM orders o
-           LEFT JOIN customers c ON c.sender_id = o.sender_id
-           WHERE 1=1"""
-    params = []
-    if date_from:
-        query += " AND o.created_at >= ?"
-        params.append(date_from + "T00:00:00")
-    if date_to:
-        query += " AND o.created_at <= ?"
-        params.append(date_to + "T23:59:59")
-    query += " ORDER BY o.id DESC LIMIT ?"
-    params.append(limit)
-    rows = db.execute(query, params).fetchall()
+def _orders_payload(db, limit=500, date_from=None, date_to=None, offset=0, store_id=None, search=""):
+    conditions, params = [], []
+    for value, operator in ((date_from, ">="), (date_to, "<=")):
+        if value:
+            datetime.strptime(value, "%Y-%m-%d")
+            conditions.append(f"substr(o.created_at,1,10) {operator} ?")
+            params.append(value)
+    if date_from and date_to and date_from > date_to:
+        raise ValueError("Invalid date range")
+    if store_id and store_id != "all":
+        conditions.append("COALESCE(o.store_id,'default')=?")
+        params.append(store_id)
+    where = " AND ".join(conditions) or "1=1"
+    totals = db.execute(f"SELECT COUNT(*) total, SUM(CASE WHEN COALESCE(o.status,'new')='new' THEN 1 ELSE 0 END) new_count, COUNT(DISTINCT CASE WHEN COALESCE(o.status,'new')!='cancelled' THEN NULLIF(o.sender_id,'') END) buyers FROM orders o WHERE {where}", params).fetchone()
+    # The denominator uses the same dates and store, including manual buyers
+    # without incoming messages. Multiple orders by one person count once.
+    people_conditions, people_params = [], []
+    for value, operator in ((date_from, ">="), (date_to, "<=")):
+        if value:
+            people_conditions.append(f"substr(activity_time,1,10) {operator} ?")
+            people_params.append(value)
+    if store_id and store_id != "all":
+        people_conditions.append("COALESCE(store_id,'default')=?")
+        people_params.append(store_id)
+    people_where = " AND ".join(people_conditions) or "1=1"
+    people = db.execute(f"""SELECT COUNT(DISTINCT NULLIF(sender_id,'')) FROM (
+        SELECT sender_id,store_id,created_at activity_time FROM messages WHERE direction='incoming'
+        UNION ALL SELECT sender_id,store_id,first_seen_at FROM customers
+        UNION ALL SELECT sender_id,store_id,created_at FROM orders
+    ) WHERE {people_where}""", people_params).fetchone()[0]
+    if search:
+        conditions.append("(" + " OR ".join(f"instr(lower(COALESCE({column},'')),lower(?))>0" for column in ("o.id", "o.sender_id", "o.customer_name", "c.name", "o.phone", "o.product_name", "o.province", "o.address", "o.status")) + ")")
+        params.extend([search] * 9)
+    where = " AND ".join(conditions) or "1=1"
+    rows = db.execute(f"""SELECT o.*, c.name customer_display_name, c.page_id,
+        COALESCE(c.platform,'facebook') platform FROM orders o
+        LEFT JOIN customers c ON c.sender_id=o.sender_id WHERE {where}
+        ORDER BY o.id DESC LIMIT ? OFFSET ?""", params + [limit + 1, offset]).fetchall()
     orders = []
-    seen_order_keys = set()
-    for row in rows:
+    for row in rows[:limit]:
         order = dict(row)
         try:
             order["items"] = json.loads(order.get("order_items") or "[]")
-        except Exception:
+        except (ValueError, TypeError):
             order["items"] = []
-        dedupe_key = (
-            _norm_order_value(order.get("sender_id")),
-            _norm_order_value(order.get("phone")),
-            _norm_order_value(order.get("product_id")),
-            _norm_order_value(order.get("address")),
-        )
-        if all(dedupe_key) and dedupe_key in seen_order_keys:
-            continue
-        seen_order_keys.add(dedupe_key)
         orders.append(order)
-    total_people = db.execute(
-        """SELECT COUNT(DISTINCT sender_id) FROM (
-             SELECT sender_id FROM customers WHERE sender_id IS NOT NULL AND sender_id != ''
-             UNION
-             SELECT sender_id FROM messages
-             WHERE direction='incoming' AND sender_id IS NOT NULL AND sender_id != ''
-           )"""
-    ).fetchone()[0]
-    conversion_rate = round((len(orders) / total_people) * 100, 2) if total_people else 0
-    return {
-        "orders": orders,
-        "total": len(orders),
-        "new_count": sum(1 for o in orders if (o.get("status") or "new") == "new"),
-        "people_count": total_people,
-        "people_to_order_conversion": conversion_rate,
-        "conversion_rate": conversion_rate,
-    }
+    conversion = round(100 * totals["buyers"] / people, 2) if people else 0
+    return {"orders": orders, "total": totals["total"], "new_count": totals["new_count"] or 0,
+            "people_count": people, "ordering_people_count": totals["buyers"],
+            "people_to_order_conversion": conversion, "conversion_rate": conversion,
+            "has_more": len(rows) > limit, "next_offset": offset + len(orders)}
 
 
 @app.route("/orders", methods=["GET"])
@@ -9496,14 +9562,14 @@ def products_page():
 @app.route("/api/orders")
 @_dash_require
 def api_orders():
-    limit = request.args.get("limit", "500")
-    date_from = request.args.get("date_from")
-    date_to = request.args.get("date_to")
     try:
-        limit = max(1, min(int(limit), 2000))
+        limit = max(1, min(int(request.args.get("limit", 100)), 2000))
+        offset = max(0, int(request.args.get("offset", 0)))
+        return jsonify(_orders_payload(get_db(), limit=limit, offset=offset,
+            date_from=request.args.get("date_from"), date_to=request.args.get("date_to"),
+            store_id=request.args.get("store_id"), search=request.args.get("q", "").strip()))
     except ValueError:
-        limit = 500
-    return jsonify(_orders_payload(get_db(), limit=limit, date_from=date_from, date_to=date_to))
+        return jsonify({"error": "تحقق من الفترة الزمنية وأرقام الصفحات"}), 400
 
 
 def _order_payload_by_id(db, order_id):
@@ -9546,6 +9612,14 @@ def api_update_order(order_id):
         if field in data:
             updates[field] = str(data.get(field) or "").strip()
 
+    if "product_total" in data or "delivery_fee" in data:
+        try:
+            amounts = [int(str(data[k])) for k in ("product_total", "delivery_fee")]
+            if not (0 < amounts[0] <= 10**12 and 0 <= amounts[1] <= 10**12):
+                raise ValueError()
+        except (ValueError, TypeError, KeyError):
+            return jsonify({"ok": False, "error": "أدخل سعر القطع الصحيح وأجرة التوصيل (صفر للتوصيل المجاني)"}), 400
+        updates.update(product_total=amounts[0], delivery_fee=amounts[1], total_amount=sum(amounts))
     if not updates:
         return jsonify({"ok": False, "error": "no fields to update"}), 400
 
@@ -9564,6 +9638,8 @@ def api_resend_order_telegram(order_id):
     order = _order_payload_by_id(db, order_id)
     if not order:
         return jsonify({"ok": False, "error": "order not found"}), 404
+    if order.get("total_amount") is None:
+        return jsonify({"ok": False, "error": "الطلب قديم بلا سعر محفوظ؛ أدخل سعر القطع والتوصيل من تعديل الطلب أولاً"}), 409
     sent = send_order_to_telegram(order)
     return jsonify({
         "ok": sent,
@@ -9932,7 +10008,8 @@ def api_conversations():
             params.append(value)
     status = request.args.get("status", "all")
     if status == "booked": conditions.append("lead_stage = 'booked'")
-    elif status == "problems": conditions.append("human_attention_count > 0")
+    elif status == "problems": conditions.append("human_service_count > 0")
+    elif status == "system_issues": conditions.append("system_issue_count > 0")
     elif status == "unanswered": conditions.append("unanswered = 1")
     if request.args.get("ai") in ("0", "1"):
         conditions.append("ai_enabled = ?")
@@ -10023,6 +10100,18 @@ def api_conversations():
             ORDER BY last_seen_at DESC LIMIT 1
         )
     """
+    # Technical failures are distinct from deliberate human handoffs. Repeated
+    # checkout prompts are indicators for review, not automatic order changes.
+    technical = "(COALESCE(hr.reason,'') LIKE '%exception:%' OR COALESCE(hr.reason,'') LIKE '%provider_http_%' OR COALESCE(hr.reason,'') LIKE '%empty_reply%' OR COALESCE(hr.reason,'') LIKE '%could not produce a reply%')"
+    base_query = f"""SELECT base.*,
+        (base.problem_count + (SELECT COUNT(*) FROM human_reviews hr WHERE hr.sender_id=base.sender_id AND hr.status='pending' AND NOT {technical})) human_service_count,
+        ((SELECT COUNT(*) FROM human_reviews hr WHERE hr.sender_id=base.sender_id AND hr.status='pending' AND {technical}) +
+         CASE WHEN (SELECT COUNT(*) FROM messages issue WHERE issue.sender_id=base.sender_id AND issue.direction='outgoing'
+             AND (issue.text LIKE 'هذه القطع المقترحة للحجز%' OR issue.text LIKE 'باقي نحدد لون%' OR issue.text LIKE 'أثبتلج%وحده، لو وياه%')
+             AND datetime(issue.created_at)>=datetime(base.last_time,'-1 day')
+             AND NOT EXISTS (SELECT 1 FROM orders done WHERE done.sender_id=base.sender_id AND datetime(done.created_at)>=datetime(issue.created_at)))>=3 THEN 1 ELSE 0 END
+        ) system_issue_count
+        FROM ({base_query}) base"""
     rows = db.execute(f"SELECT * FROM ({base_query}) WHERE {where} ORDER BY {sort} LIMIT ? OFFSET ?", params + [limit + 1, offset]).fetchall()
     return jsonify({"conversations": [dict(r) for r in rows[:limit]], "has_more": len(rows) > limit})
 
@@ -10291,8 +10380,7 @@ def api_ask_ai(sender_id):
     allow_empty        = bool(data.get("allow_empty"))
 
     db = get_db()
-    if not is_ai_enabled(db):
-        return jsonify({"reply": "", "intent": "disabled", "confidence": 0, "disabled": True}), 200
+    # Explicit staff drafting is allowed while automatic replies are paused.
     customer         = get_or_create_customer(db, sender_id, None)
     history          = load_history(db, sender_id)
     conversation_history = get_conversation_history(db, sender_id, limit=10)
@@ -10352,15 +10440,16 @@ def api_ask_ai(sender_id):
             previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
             selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
             return jsonify({"reply": product_choice_question(previous, selected), "intent": "product_choice"})
-        if ev.get("image_url"):
+        if ev.get("image_url") and not (product_id and matched_product):
             matched_product, _, image_result = match_product(db, ev, products)
             if not matched_product:
                 review_id = has_pending_human_review(db, sender_id) or create_human_review(
                     db, ev, "تعذر تحديد الموديل بعد محاولتين؛ مراجعة الصورة مطلوبة", build_product_vision_candidates(products, limit=20))
                 set_customer_ai_enabled(db, sender_id, False)
                 return jsonify({"reply": "", "intent": "human_review", "human_review_id": review_id, "ai_paused": True})
-        else:
-            explicit = _text_match_product(text, products)
+        elif not (product_id and matched_product):
+            named = first_message_named_products(ev.get("text") or text, products)
+            explicit = named[0] if len(named) == 1 else _text_match_product(text, products)
             if explicit:
                 matched_product = explicit
             elif not matched_product and should_use_auto_product(db, sender_id, ev, "text", customer_prods):
@@ -10373,7 +10462,11 @@ def api_ask_ai(sender_id):
         customer_products=customer_prods,
         conversation_history=conversation_history,
     )
-    if ai_result.get("failed") or ai_result.get("requires_human") or is_ai_handoff_reply(ai_result.get("reply")):
+    if ai_result.get("failed"):
+        reason = ai_result.get("failure_reason") or "unknown"
+        return jsonify({"reply": "", "intent": "ai_error", "error": ai_failure_message(reason),
+                        "failure_reason": reason}), 502
+    if ai_result.get("requires_human") or is_ai_handoff_reply(ai_result.get("reply")):
         return jsonify({"reply": "", "intent": "human_review"})
     if allow_empty:
         ai_reply_draft_table(db)
@@ -12473,6 +12566,11 @@ def api_set_ai_enabled():
             "openrouter_key_present": bool(OPENROUTER_KEY),
         })
     data = request.get_json(silent=True) or {}
+    invalid_models = [field for field in ("main_model", "improve_model", "checker_model", "vision_model", "catalog_match_model")
+                      if field in data and not valid_ai_model_id(data[field])]
+    if invalid_models:
+        return jsonify({"ok": False, "error": "اكتب معرف النموذج الكامل من OpenRouter مثل google/gemini-3-flash-preview، وليس اسم العرض.",
+                        "fields": invalid_models}), 400
     enabled = bool(data.get("enabled"))
     set_store_setting(db, "ai_enabled", "1" if enabled else "0", sid)
     for feature in ("checker_enabled", "vision_enabled", "catalog_match_enabled"):
@@ -12858,6 +12956,17 @@ def api_create_order(sender_id):
     items = normalize_order_items({"items": raw_items}, products=catalog)
     if len(items) != len(raw_items):
         return jsonify({"ok": False, "error": "إحدى القطع غير متوفرة؛ راجع الطلب قبل التثبيت"}), 400
+    by_id = {str(p.get("product_id")): p for p in catalog}
+    product_total = 0
+    for item in items:
+        raw_price = str(by_id.get(item["product_id"], {}).get("price") or "").translate(_ARABIC_DIGIT_TRANS)
+        price = int(re.sub(r"\D", "", raw_price) or "0")
+        if price <= 0:
+            return jsonify({"ok": False, "error": "سعر إحدى القطع غير محدد؛ حدّث سعر المنتج قبل تثبيت الطلب"}), 400
+        item["unit_price"] = price
+        product_total += price * item["quantity"]
+    delivery_fee = int(delivery_fee_for_province(data["province"], db) or 0)
+    total_amount = product_total + delivery_fee
     product_id_text = ", ".join(item["product_id"] for item in items if item.get("product_id"))
     product_name_text = order_items_summary(items)
     if not product_id_text and not product_name_text.strip():
@@ -12882,6 +12991,10 @@ def api_create_order(sender_id):
 
     order_info = {
         "created_at": now,
+        "store_id": current_store_id(),
+        "product_total": product_total,
+        "delivery_fee": delivery_fee,
+        "total_amount": total_amount,
         "sender_id": sender_id,
         "customer_name": data.get("customer_name"),
         "phone": data.get("phone"),
@@ -12896,7 +13009,7 @@ def api_create_order(sender_id):
         "status": "new",
     }
 
-    db.execute(
+    order_cursor = db.execute(
         "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
         "product_id, product_name, color, size, notes, status, order_items, created_at, store_id) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,'new',?,?,?)",
@@ -12905,6 +13018,8 @@ def api_create_order(sender_id):
          product_name_text, data.get("color"), data.get("size"),
          data.get("notes"), json.dumps(items, ensure_ascii=False), now, current_store_id()),
     )
+    db.execute("UPDATE orders SET product_total=?,delivery_fee=?,total_amount=? WHERE id=?",
+               (product_total, delivery_fee, total_amount, order_cursor.lastrowid))
     db.execute(
         "UPDATE customers SET lead_score=100, lead_stage='booked', "
         "phone=COALESCE(NULLIF(?,''),phone), province=COALESCE(NULLIF(?,''),province), "

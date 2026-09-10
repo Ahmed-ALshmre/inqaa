@@ -1,0 +1,34 @@
+/* Orders scroll as a document; chat viewport rules must not constrain them. */
+html.orders-root { height:auto; min-height:100%; overflow-y:auto; overflow-x:hidden; }
+body.orders-page { height:auto!important; min-height:100dvh; overflow:visible!important; padding:0!important; }
+.orders-page .navbar-custom { position:sticky!important; top:0; height:auto!important; min-height:64px; gap:10px; padding:10px 16px!important; }
+.orders-page .navbar-custom .nav-actions { position:static!important; width:auto!important; height:auto!important; min-height:0; transform:none!important; display:flex!important; flex-wrap:wrap; padding:0!important; border:0; box-shadow:none; }
+.orders-page .orders-layout { height:auto; min-height:0; width:100%; max-width:1500px; margin:0 auto!important; padding:20px 16px 32px!important; overflow:visible; }
+.orders-page .orders-table-wrap { max-height:none!important; height:auto; }
+.orders-page .orders-table td { overflow-wrap:anywhere; }
+.orders-page .orders-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.orders-page .orders-stat { min-width:0; }
+.orders-page .orders-stat small { white-space:normal; }
+.orders-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:24px 0 calc(24px + env(safe-area-inset-bottom)); }
+.orders-page .modal-dialog { max-height:calc(100dvh - 24px); }
+.orders-page .modal-content { max-height:calc(100dvh - 24px); overflow-y:auto; }
+.orders-page .nav-actions a { overflow-wrap:anywhere; }
+@media(max-width:768px) {
+  .orders-page .navbar-custom { position:relative!important; }
+  .orders-page .navbar-custom .nav-actions { width:100%!important; justify-content:center; gap:8px!important; }
+  .orders-page .nav-actions>a { min-width:44px; min-height:44px; flex:1 1 auto; }
+  .orders-page .orders-layout { padding:12px 10px 32px!important; }
+  .orders-page .orders-header { display:block; }
+  .orders-page .orders-stats { grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:12px; width:100%; }
+  .orders-page .orders-table { width:100%!important; min-width:0!important; table-layout:auto; }
+  .orders-page .orders-table tbody { width:100%; min-width:0; }
+  .orders-page .orders-table tbody tr:not(.orders-empty-row) td { display:block; text-align:right; min-width:0; }
+  .orders-page .orders-table tbody tr:not(.orders-empty-row) td::before { display:block; margin-bottom:4px; }
+  .orders-page .orders-actions { grid-template-columns:repeat(3,minmax(0,1fr))!important; }
+  .orders-page .orders-actions .btn { padding:8px 3px; min-width:0; min-height:44px; font-size:12px; }
+  .orders-page .orders-toolbar .d-flex { flex-wrap:wrap; }
+}
+.orders-page .orders-stat span { color:var(--primary); font-size:24px; line-height:1.4; }
+.orders-page .orders-table td[data-label="الهاتف"],
+.orders-page .orders-table td[data-label="رقم الطلب"],
+.orders-page .orders-table td[data-label="مع التوصيل"] { white-space:nowrap; overflow-wrap:normal; }

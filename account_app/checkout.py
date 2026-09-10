@@ -13,7 +13,7 @@ def normalized(value):
 
 PHONE = re.compile(r"(?<!\d)(?:(?:\+?964|00964)[\s()-]*7|07)(?:[\s()-]*\d){9}(?!\d)")
 PROVINCES = {
-    "بغداد": ("بغداد",), "البصرة": ("البصرة", "بصره", "بصرة"),
+    "بغداد": ("بغداد",), "البصرة": ("البصرة", "البصره", "بصره", "بصرة"),
     "نينوى": ("نينوى", "الموصل", "موصل"), "أربيل": ("اربيل", "هولير"),
     "دهوك": ("دهوك",), "السليمانية": ("السليمانية", "سليمانية", "سليمانيه"),
     "كركوك": ("كركوك",), "الأنبار": ("الانبار", "انبار"),
@@ -75,7 +75,11 @@ def contact_fields(text, previous=None):
 
 
 def is_confirmation(text):
-    return bool(re.fullmatch(r"(?:اي|ايي|نعم|تمام|موافق|موافقة|اوكي|ثبتي|ثبت|ثبتيه|ثبتوا)(?:\s+(?:عيني|حياتي|حبيبتي|حبي|الطلب|الحجز|هسه|رجاء|شكرا))*[.!،\s]*", normalized(text).strip()))
+    # Only affirmative words and courtesy fillers; corrections, questions and
+    # negations must still invalidate a pending cart, including mixed bursts.
+    affirmative = r"(?:اي+|يي+|نعم|تمام|موافق|موافقة|اوكي|اوك|ثبتي|ثبت|ثبتيه|ثبتوا)"
+    filler = r"(?:عيني|حياتي|حبيبتي|حبي|عمري|يمعوده|يمعودة|الطلب|الحجز|هسه|رجاء|شكرا)"
+    return bool(re.fullmatch(affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*", normalized(text).strip()))
 
 
 def is_existing_order_followup(text):

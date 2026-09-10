@@ -274,7 +274,7 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
 function syncConversationFilterUI() {
   const group = document.getElementById('conversationFilters');
   if (!group) return;
-  const validFilters = new Set(['all', 'booked', 'problems', 'unanswered']);
+  const validFilters = new Set(['all', 'booked', 'problems', 'system_issues', 'unanswered']);
   if (!validFilters.has(currentFilter)) currentFilter = 'all';
   group.querySelectorAll('[data-filter]').forEach(button => {
     button.classList.toggle('active', button.dataset.filter === currentFilter);
@@ -410,7 +410,7 @@ function renderConversations() {
           <div class="cust-preview">${preview}</div>
         </div>
         <div class="d-flex flex-column align-items-end gap-1">
-          <span class="cust-time">${time}</span>${leadMeta}${badge}${problemBadge}
+          <span class="cust-time">${time}</span>${leadMeta}${badge}${problemBadge}${c.system_issue_count > 0 ? '<span class="badge bg-danger" title="خطأ تقني أو تكرار خطوات الحجز؛ يحتاج مراجعة">مشكلة نظام</span>' : ''}
         </div>
       </div>`;
   }).join('');
@@ -1092,7 +1092,7 @@ async function askAI(options = {}) {
         document.getElementById('aiReplyPreview').style.display = 'block';
       }
     } else {
-      showToast('AI لم يستطع الرد — يمكنك التدخل يدوياً', 'warning');
+      showToast(data.error || 'AI لم يستطع الرد — يمكنك التدخل يدوياً', 'warning');
       showHumanIntervention();
     }
   } catch (e) { showToast('خطأ AI: ' + e.message, 'danger'); }

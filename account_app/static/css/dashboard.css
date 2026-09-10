@@ -2764,3 +2764,6 @@ button,a,input,select,textarea { touch-action:manipulation; }
 @media(max-width:768px) {
   body.admin-shell .admin-main { padding-top:calc(62px + env(safe-area-inset-top))!important; }
 }
+/* Keep every inbox filter reachable on narrow screens. */
+#conversationFilters { display:flex; flex-wrap:wrap; gap:4px; }
+#conversationFilters .btn { flex:1 1 auto; border-radius:8px; }

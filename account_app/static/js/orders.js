@@ -1,5 +1,9 @@
 let allOrders = [];
 let editModal = null;
+let orderRequest = 0;
+let orderOffset = 0;
+let orderSearchTimer;
+function scheduleOrderSearch() { clearTimeout(orderSearchTimer); orderSearchTimer = setTimeout(() => loadOrders(), 250); }
 
 const orderKey = new URLSearchParams(location.search).get('key') || '';
 
@@ -28,6 +32,8 @@ function dashboardConversationUrl(senderId) {
   const params = new URLSearchParams();
   if (orderKey) params.set('key', orderKey);
   if (senderId) params.set('sender_id', senderId);
+  const store = document.getElementById('orderStore')?.value;
+  if (store && store !== 'all') params.set('store_id', store);
   return `/dashboard?${params.toString()}`;
 }
 
@@ -70,43 +76,53 @@ function orderSearchText(order) {
   ].join(' ').toLowerCase();
 }
 
-async function loadOrders() {
+async function loadOrders(append = false) {
+  const request = ++orderRequest;
   const body = document.getElementById('ordersBody');
-  body.innerHTML = `
-    <tr>
-      <td colspan="10" class="text-center py-5" style="color:var(--text-muted)">
-        <div class="spinner-border spinner-border-sm mb-2"></div>
-        <div class="small">جاري تحميل الطلبات...</div>
-      </td>
-    </tr>`;
-  const from = document.getElementById('orderDateFrom')?.value || '';
-  const to = document.getElementById('orderDateTo')?.value || '';
-  let url = '/api/orders?';
-  if (from) url += `date_from=${from}&`;
-  if (to) url += `date_to=${to}&`;
-  
-  const res = await fetch(orderApi(url));
-  if (!res.ok) {
-    body.innerHTML = `<tr><td colspan="10" class="text-center py-5 text-danger">فشل تحميل الطلبات</td></tr>`;
-    return;
+  const more = document.getElementById('ordersMore');
+  more.disabled = true;
+  if (!append) {
+    orderOffset = 0;
+    allOrders = [];
+    more.hidden = true;
+    document.getElementById('ordersLoaded').textContent = '';
+    body.innerHTML = '<tr class="orders-empty-row"><td colspan="11">جاري تحميل الطلبات…</td></tr>';
+    for (const id of ['ordersTotal','ordersNew','ordersPeople','ordersConversion']) document.getElementById(id).textContent = '—';
   }
-  const data = await res.json();
-  allOrders = data.orders || [];
-  document.getElementById('ordersTotal').textContent = data.total ?? allOrders.length;
-  document.getElementById('ordersNew').textContent = data.new_count ?? allOrders.filter(o => (o.status || 'new') === 'new').length;
-  document.getElementById('ordersPeople').textContent = data.people_count ?? 0;
-  document.getElementById('ordersConversion').textContent =
-    `${Number(data.people_to_order_conversion || data.conversion_rate || 0).toFixed(1)}%`;
-  renderOrders();
+  const params = new URLSearchParams({offset: String(orderOffset), limit: '100'});
+  for (const [key, id] of [['date_from','orderDateFrom'],['date_to','orderDateTo'],['store_id','orderStore'],['q','orderSearch']]) {
+    const value = document.getElementById(id)?.value?.trim();
+    if (value) params.set(key, value);
+  }
+  try {
+    const res = await fetch(orderApi('/api/orders?' + params));
+    const data = await res.json();
+    if (request !== orderRequest) return;
+    if (!res.ok) throw new Error(data.error || 'فشل تحميل الطلبات');
+    allOrders = append ? allOrders.concat(data.orders || []) : (data.orders || []);
+    orderOffset = data.next_offset;
+    document.getElementById('ordersTotal').textContent = data.total;
+    document.getElementById('ordersNew').textContent = data.new_count;
+    document.getElementById('ordersPeople').textContent = data.people_count;
+    document.getElementById('ordersConversion').textContent = `${Number(data.people_to_order_conversion || 0).toFixed(1)}%`;
+    more.hidden = !data.has_more;
+    document.getElementById('ordersLoaded').textContent = `المعروض: ${allOrders.length} طلب`;
+    renderOrders();
+  } catch (err) {
+    if (request !== orderRequest) return;
+    if (!append) body.innerHTML = `<tr class="orders-empty-row"><td colspan="11">${esc(err.message)}</td></tr>`;
+    else showOrderToast(err.message, 'danger');
+  } finally {
+    if (request === orderRequest) more.disabled = false;
+  }
 }
 
 function renderOrders() {
   const body = document.getElementById('ordersBody');
-  const query = (document.getElementById('orderSearch').value || '').trim().toLowerCase();
-  const orders = query ? allOrders.filter(order => orderSearchText(order).includes(query)) : allOrders;
+  const orders = allOrders;
 
   if (!orders.length) {
-    body.innerHTML = `<tr class="orders-empty-row"><td colspan="10"><i class="bi bi-bag-check"></i><strong>لا توجد طلبات مطابقة</strong><span>ستظهر الطلبات الجديدة هنا تلقائيًا</span></td></tr>`;
+    body.innerHTML = `<tr class="orders-empty-row"><td colspan="11"><i class="bi bi-bag-check"></i><strong>لا توجد طلبات مطابقة</strong><span>ستظهر الطلبات الجديدة هنا تلقائيًا</span></td></tr>`;
     return;
   }
 
@@ -129,6 +145,7 @@ function renderOrders() {
         <td data-label="المحافظة">${esc(order.province || '-')}</td>
         <td data-label="العنوان" class="orders-address">${esc(order.address || '-')}</td>
         <td data-label="القياس">${esc(order.size || '-')}</td>
+        <td data-label="مع التوصيل">${order.total_amount == null ? 'غير محفوظ' : Number(order.total_amount).toLocaleString('en-US') + ' د.ع'}</td>
         <td data-label="الحالة"><span class="badge bg-success">${esc(order.status || 'new')}</span></td>
         <td data-label="الإجراءات">
           <div class="orders-actions">
@@ -152,7 +169,7 @@ function renderOrders() {
 
 function setEditValue(id, value) {
   const el = document.getElementById(id);
-  if (el) el.value = value || '';
+  if (el) el.value = value ?? '';
 }
 
 function openEditOrder(orderId) {
@@ -168,6 +185,8 @@ function openEditOrder(orderId) {
   setEditValue('editColor', order.color);
   setEditValue('editSize', order.size);
   setEditValue('editNotes', order.notes);
+  setEditValue('editProductTotal', order.product_total);
+  setEditValue('editDeliveryFee', order.delivery_fee);
   setEditValue('editStatus', order.status || 'new');
   document.getElementById('orderEditStatus').textContent = '';
   editModal ||= new bootstrap.Modal(document.getElementById('orderEditModal'));
@@ -191,6 +210,9 @@ async function saveEditedOrder(event) {
     notes: document.getElementById('editNotes').value,
     status: document.getElementById('editStatus').value,
   };
+  const productTotal = document.getElementById('editProductTotal').value;
+  const deliveryFee = document.getElementById('editDeliveryFee').value;
+  if (productTotal !== '' || deliveryFee !== '') { payload.product_total = productTotal; payload.delivery_fee = deliveryFee; }
   try {
     const res = await fetch(orderApi(`/api/orders/${encodeURIComponent(orderId)}`), {
       method: 'PATCH',
@@ -201,7 +223,7 @@ async function saveEditedOrder(event) {
     if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حفظ الطلب');
     const index = allOrders.findIndex(item => Number(item.id) === Number(orderId));
     if (index >= 0) allOrders[index] = data.order;
-    renderOrders();
+    await loadOrders();
     editModal?.hide();
     showOrderToast('تم حفظ تعديل الطلب', 'success');
   } catch (err) {
@@ -240,5 +262,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (dt) dt.value = todayStr;
 
   document.getElementById('orderEditForm')?.addEventListener('submit', saveEditedOrder);
+  const selectedStore = new URLSearchParams(location.search).get('store_id') || 'all';
+  const select = document.getElementById('orderStore');
+  if (selectedStore !== 'all') select.add(new Option(selectedStore, selectedStore, true, true));
+  fetch(orderApi('/api/stores')).then(res => res.json()).then(data => {
+    for (const store of data.stores || []) {
+      const existing = [...select.options].find(o => o.value === store.store_id);
+      if (existing) existing.textContent = store.name || store.store_id;
+      else select.add(new Option(store.name || store.store_id, store.store_id));
+    }
+  }).catch(() => {});
   loadOrders();
 });

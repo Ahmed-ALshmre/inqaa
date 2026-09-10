@@ -45,6 +45,70 @@ class ConversationContextTests(unittest.TestCase):
                 with patch.object(m, "_call_main_ai_once", return_value={"reply": model_reply, "order": {}, "create_order": False}):
                     return m.process_webhook(self.db, {}, use_debounce=False)
             return m.process_webhook(self.db, {}, use_debounce=False)
+    def test_audit_product_context_survives_long_history_and_wording(self):
+        skirt = dict(CATALOG[0], product_id='SK', product_name='تنورة', category='تنورة', price='12000')
+        catalog = [skirt, dict(CATALOG[1], product_id='SU', product_name='سوت نيلي', category='سوت')]
+        with patch.object(m, 'load_products_from_file', return_value=catalog), patch.object(m, 'load_active_products', return_value=catalog), patch('requests.sessions.Session.request', side_effect=AssertionError('Unexpected network')):
+            m.complete_customer_product_link(self.db, self.sender, skirt, 'manual', source='manual_admin')
+            for i in range(120):
+                m.save_message(self.db, self.sender, 'incoming' if i % 2 == 0 else 'outgoing', 'text', 'متابعة سابقة '+str(i), None, None, None, {})
+            phrases = ['ست نفس الي بالصوره يوصل',
+                       'قطعه وحده بس اذا ماعجبتني ترجع بيد المندوب بدون ما ادفع شيء',
+                       'قماشها شنو\nاكو تصوير حقيقي\nللقطعة',
+                       'لعد شنو كاتبه نحدد لون تنوره', 'اي التنوره\nدريت صورتها',
+                       'بس كوليلي شنو نوع القماش', 'واذا مو نفس الصوره ارجعهه وكروه ماادفع']
+            for phrase in phrases:
+                with self.subTest(phrase=phrase), patch.object(m, 'classify_contextual_selection') as selection, patch.object(m, '_call_main_ai_once', return_value={'reply':'التنورة قماشها باربي، والفحص عند الاستلام.', 'order':{}, 'create_order':False}) as model:
+                    response = self.event(phrase)
+                    self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db,self.sender)],['SK'])
+                    self.assertNotIn('مو واضح',response['reply'])
+                    self.assertNotIn('ألغيت',response['reply'])
+                    selection.assert_not_called()
+                    self.assertEqual(model.call_args.args[5]['product_id'],'SK')
+            self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],0)
+
+    def test_context_spelling_and_generic_words_do_not_mask_new_category(self):
+        skirt = dict(CATALOG[0], product_id='SK', product_name='تنورة', category='تنورة')
+        suit = dict(CATALOG[1], product_id='SU', product_name='سوت نيلي', category='سوت')
+        for phrase in ['تنوره', 'التنورة', 'شنو قماش القطعة', 'ست نفس الصوره؟']:
+            self.assertEqual(m.select_customer_context_product(phrase,[skirt])['product_id'],'SK')
+        for phrase in ['اريد سوت', 'اريد ست', 'السوت شكد سعره']:
+            self.assertIsNone(m.select_customer_context_product(phrase,[skirt]))
+        self.assertIsNone(m.select_customer_context_product('شكد سعر القطعة',[skirt,suit]))
+        self.assertEqual(m.select_customer_context_product('شنو قماش التنوره',[skirt,suit])['product_id'],'SK')
+        duplicate=dict(skirt, product_id='SK2', product_name='تنوره')
+        self.assertIsNone(m.select_customer_context_product('تنوره',[skirt,duplicate]))
+
+    def test_context_questions_do_not_revive_old_suggestions(self):
+        m.complete_customer_product_link(self.db,self.sender,CATALOG[0],'manual',source='manual_admin')
+        m.remember_product_search_results(self.db,self.sender,[{'product':CATALOG[1], 'score':70}],{})
+        with patch.object(m,'classify_contextual_selection',return_value=None) as classifier:
+            self.assertIsNone(m.resolve_contextual_product_selection(self.db,dict(self.ev,text='بس كوليلي شنو نوع القماش'),CATALOG))
+            self.assertIsNone(m.resolve_contextual_product_selection(self.db,dict(self.ev,text='لا حبي تسلمين'),CATALOG))
+            classifier.assert_not_called()
+            m.resolve_contextual_product_selection(self.db,dict(self.ev,text='هذا مو ذوقي'),CATALOG)
+            self.assertEqual([p['product_id'] for p in classifier.call_args.args[2]],['F1'])
+        self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db,self.sender)],['F1'])
+
+    def test_existing_conversation_can_switch_to_exact_category_name(self):
+        skirt = dict(CATALOG[0], product_id='SK', product_name='تنورة', category='تنورة', price='12000')
+        catalog = CATALOG + [skirt]
+        with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
+            m.complete_customer_product_link(self.db,self.sender,CATALOG[0],'manual',source='manual_admin')
+            with patch.object(m,'classify_contextual_selection',return_value=None), patch.object(m,'_call_main_ai_once',return_value={'reply':'التنورة متوفرة بسعر 12000','order':{},'create_order':False}) as model:
+                self.event('اريد التنوره')
+                self.assertEqual(model.call_args.args[5]['product_id'],'SK')
+            self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db,self.sender)],['SK'])
+            self.assertIsNone(m.customer_product_target('اريد التنوره',[skirt,dict(skirt,product_id='SK2')]))
+            self.assertIsNone(m.customer_product_target('اريد التنوره',[dict(skirt,stock='نفذ')]))
+
+    def test_attached_return_condition_is_not_cancellation(self):
+        for phrase in ['واذا مو نفس الصوره ارجعهه وكروه ماادفع', 'وإذا ماعجبني ارجعه', 'اذا ما صار ارجعه']:
+            self.assertTrue(m.is_conditional_return_question(phrase))
+            self.assertFalse(m.is_product_objection(phrase))
+        for phrase in ['اريد الغي الطلب', 'وصلني غير موديل اريد ارجعه']:
+            self.assertFalse(m.is_conditional_return_question(phrase))
+
     def test_demonstrative_keeps_known_product(self):
         m.complete_customer_product_link(self.db, self.sender, CATALOG[0], "manual")
         m.save_message(self.db,self.sender,"incoming","text","سلام عليكم",None,None,None,{})
