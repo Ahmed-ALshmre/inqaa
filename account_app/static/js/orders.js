@@ -145,7 +145,7 @@ function renderOrders() {
         <td data-label="المحافظة">${esc(order.province || '-')}</td>
         <td data-label="العنوان" class="orders-address">${esc(order.address || '-')}</td>
         <td data-label="القياس">${esc(order.size || '-')}</td>
-        <td data-label="مع التوصيل">${order.total_amount == null ? 'غير محفوظ' : Number(order.total_amount).toLocaleString('en-US') + ' د.ع'}</td>
+        <td data-label="مع التوصيل">${order.total_amount == null ? 'غير محفوظ' : Number(order.total_amount).toLocaleString('en-US') + ' د.ع'}${order.is_paid ? '<div class="text-success small">مدفوع بالكامل</div>' : ''}</td>
         <td data-label="الحالة"><span class="badge bg-success">${esc(order.status || 'new')}</span></td>
         <td data-label="الإجراءات">
           <div class="orders-actions">

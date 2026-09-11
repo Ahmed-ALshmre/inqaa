@@ -1324,8 +1324,7 @@ async function loadProducts(storeId = 'default') {
       `<option value="${esc(p.product_id)}">${esc(p.product_name)} — ${esc(p.price)} (${esc(p.stock)})</option>`
     ).join('');
     document.getElementById('productSelect').innerHTML  = '<option value="">— اختر منتجاً —</option>' + opts;
-    document.getElementById('orderProduct').innerHTML   = '<option value="">— اختر —</option>' +
-      allProducts.map(p => `<option value="${esc(p.product_id)}">${esc(p.product_name)}</option>`).join('');
+
   } catch (e) {}
 }
 
@@ -1586,49 +1585,79 @@ async function toggleConversationAI() {
 }
 
 // ══ Quick Actions ══════════════════════════════════════════════════════════
+let manualOrderRowId = 0;
+let manualOrderSender = null;
+let manualOrderSubmitting = false;
+function addManualOrderItem() {
+  const container = document.getElementById('manualOrderItems');
+  if (container.children.length >= 20) { showToast('الحد الأقصى 20 سطراً للقطع', 'warning'); return; }
+  const id = ++manualOrderRowId;
+  const row = document.createElement('div');
+  row.className = 'manual-order-item border rounded p-3 mb-2';
+  row.innerHTML = `<div class="row g-2">
+    <div class="col-12"><label for="manual-product-${id}" class="form-label small">المنتج</label>
+      <select id="manual-product-${id}" class="form-select" data-field="product_id"><option value="">اختر المنتج</option>${allProducts.map(p => `<option value="${esc(p.product_id)}">${esc(p.product_name)}</option>`).join('')}</select></div>
+    <div class="col-4"><label for="manual-quantity-${id}" class="form-label small">العدد</label><input id="manual-quantity-${id}" class="form-control" data-field="quantity" type="number" min="1" max="20" step="1" value="1"></div>
+    <div class="col-4"><label for="manual-size-${id}" class="form-label small">القياس</label><input id="manual-size-${id}" class="form-control" data-field="size"></div>
+    <div class="col-4"><label for="manual-color-${id}" class="form-label small">اللون</label><input id="manual-color-${id}" class="form-control" data-field="color"></div>
+    <div class="col-12 text-end"><button class="btn btn-outline-danger btn-sm" type="button" data-remove>حذف القطعة</button></div>
+  </div>`;
+  row.querySelector('[data-remove]').addEventListener('click', () => {
+    if (container.children.length > 1) row.remove();
+    else showToast('أضف قطعة واحدة على الأقل', 'warning');
+  });
+  container.appendChild(row);
+}
+
 function openOrderModal() {
   if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
-  if (currentCustomer) {
-    document.getElementById('orderPhone').value    = currentCustomer.phone    || '';
-    document.getElementById('orderProvince').value = currentCustomer.province || '';
-    document.getElementById('orderAddress').value  = currentCustomer.address  || '';
+  manualOrderSender = currentSenderId;
+  for (const [id, key] of [['orderPhone','phone'],['orderProvince','province'],['orderAddress','address']]) {
+    document.getElementById(id).value = currentCustomer?.[key] || '';
   }
-  new bootstrap.Modal(document.getElementById('orderModal')).show();
+  document.getElementById('orderPaid').checked = false;
+  document.getElementById('orderNotes').value = '';
+  document.getElementById('manualOrderItems').innerHTML = '';
+  addManualOrderItem();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('orderModal')).show();
 }
 
 async function submitOrder() {
-  if (!currentSenderId) return;
-  const selEl = document.getElementById('orderProduct');
-  const selectedOptions = [...selEl.selectedOptions].filter(o => o.value);
-  const data  = {
+  if (!manualOrderSender || manualOrderSubmitting) return;
+  if (manualOrderSender !== currentSenderId) { showToast('تغيرت المحادثة؛ افتح نافذة الطلب مجدداً', 'warning'); return; }
+  const items = [...document.querySelectorAll('#manualOrderItems .manual-order-item')].map(row => {
+    const item = Object.fromEntries([...row.querySelectorAll('[data-field]')].map(el => [el.dataset.field, el.value.trim()]));
+    item.quantity = Number(item.quantity);
+    return item;
+  });
+  if (!items.length || items.some(i => !i.product_id || !Number.isInteger(i.quantity) || i.quantity < 1 || i.quantity > 20)) {
+    showToast('اختر منتجاً وعدداً صحيحاً من 1 إلى 20 لكل قطعة', 'warning'); return;
+  }
+  const data = {
     customer_name: currentCustomer?.name || '',
-    phone:         document.getElementById('orderPhone').value,
-    province:      document.getElementById('orderProvince').value,
-    address:       document.getElementById('orderAddress').value,
-    product_ids:   selectedOptions.map(o => o.value),
-    product_names: selectedOptions.map(o => o.text),
-    product_id:    selectedOptions[0]?.value || '',
-    product_name:  selectedOptions[0]?.text || '',
-    size:          document.getElementById('orderSize').value,
-    color:         document.getElementById('orderColor').value,
-    notes:         document.getElementById('orderNotes').value,
+    phone: document.getElementById('orderPhone').value,
+    province: document.getElementById('orderProvince').value,
+    address: document.getElementById('orderAddress').value,
+    items,
+    is_paid: document.getElementById('orderPaid').checked,
+    notes: document.getElementById('orderNotes').value,
   };
+  manualOrderSubmitting = true;
+  const button = document.getElementById('submitManualOrderBtn');
+  button.disabled = true;
   try {
-    const res  = await apiFetch(`/api/conversations/${currentSenderId}/create_order`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+    const res = await apiFetch(`/api/conversations/${manualOrderSender}/create_order`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data),
     });
     const r = await res.json();
     if (r.ok) {
-      if (r.duplicate) {
-        showToast(r.message || 'هذا الطلب مثبت مسبقاً ولم يتم تكراره', 'warning');
-      } else if (r.telegram_sent === false) {
-        showToast(r.telegram_error || 'تم تثبيت الطلب لكن لم يصل إلى تلغرام', 'warning');
-      } else {
-        showToast('تم تثبيت الطلب وإرساله إلى تلغرام', 'success');
-      }
+      if (r.duplicate) showToast(r.message || 'هذا الطلب مثبت مسبقاً', 'warning');
+      else if (r.telegram_sent === false) showToast(r.telegram_error || 'تم تثبيت الطلب لكن لم يصل إلى تلغرام', 'warning');
+      else showToast('تم تثبيت الطلب وإرساله إلى تلغرام وجدولته للإرسال إلى API', 'success');
       bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide();
     } else showToast('فشل تثبيت الطلب: ' + (r.error || ''), 'danger');
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
+  finally { manualOrderSubmitting = false; button.disabled = false; }
 }
 
 async function sendCatalog() {

@@ -6,6 +6,7 @@ let productImageColors = {};
 const fields = {
   product_id: 'productId',
   product_name: 'productName',
+  order_name: 'productOrderName',
   price: 'productPrice',
   status: 'productStatus',
   stock: 'productStock',

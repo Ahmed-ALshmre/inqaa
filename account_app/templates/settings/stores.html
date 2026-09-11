@@ -2,9 +2,21 @@
 {% block title %}إدارة المتاجر{% endblock %}
 {% block content %}
 <section class="admin-page-head">
-  <div><p class="admin-kicker">نظام متعدد المتاجر</p><h1>المتاجر والـ Webhook</h1><p>كل متجر يملك منتجات وكتالوجاً وإعدادات ذكاء مستقلة.</p></div>
+  <div><p class="admin-kicker">نظام متعدد المتاجر</p><h1>المتاجر وإرسال الطلبات</h1><p>كل متجر يملك منتجات وكتالوجاً وإعدادات ذكاء مستقلة.</p></div>
 </section>
 <section class="admin-panel"><p class="admin-muted">كل متجر معزول بمنتجاته وإعداداته ورابطه. انسخ رابط كل متجر وضعه في ManyChat الخاص به.</p><span class="admin-status" id="storesStatus"></span></section>
+<section class="admin-panel mt-3">
+  <h2>ربط Menger الموحد لجميع المتاجر</h2>
+  <p>كل طلب مثبت يُرسل كاملاً إلى تلغرام وإلى Menger. أدخل رابط الربط والمفتاح مرة واحدة، ثم اربط كل متجر بمعرّفه أدناه.</p>
+  <form id="mengerConnectionForm">
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label" for="mengerApiUrl">رابط API الموحد</label><input class="form-control" type="url" name="api_url" id="mengerApiUrl" dir="ltr" placeholder="https://your-domain/api/v1/orders"></div>
+      <div class="col-md-6"><label class="form-label" for="mengerApiKey">مفتاح API الموحد</label><input class="form-control" type="password" name="api_key" id="mengerApiKey" dir="ltr" autocomplete="new-password"><label class="small mt-2"><input type="checkbox" name="clear_api_key"> حذف المفتاح المحفوظ</label></div>
+      <div class="col-md-6"><label class="form-label" for="mengerSource">اسم المشروع المرسل (source)</label><input class="form-control" name="source" id="mengerSource" dir="ltr" value="lamsa-project" required></div>
+    </div>
+    <button class="btn btn-primary mt-3" type="submit">حفظ الربط الموحد</button> <span role="status"></span>
+  </form>
+</section>
 <section class="admin-panel mt-3"><h2>المتاجر الحالية</h2><div class="admin-list" id="storesList"></div></section>
 {% endblock %}
-{% block scripts %}<script src="/static/js/stores.js?v=1"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/stores.js?v=3"></script>{% endblock %}

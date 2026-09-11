@@ -24,11 +24,13 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
+    from . import menger
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
     from .checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
+    import menger
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
@@ -632,7 +634,14 @@ def _safe_headers_for_log(headers):
 
 def _safe_body_for_log():
     if request.is_json:
-        return request.get_json(silent=True)
+        def redact(value):
+            if isinstance(value, dict):
+                return {key: ("***" if key.lower() == "api_key" else redact(item))
+                        for key, item in value.items()}
+            if isinstance(value, list):
+                return [redact(item) for item in value]
+            return value
+        return redact(request.get_json(silent=True))
     if request.files:
         return "<multipart/form-data>"
     return request.get_data(as_text=True) or ""
@@ -784,6 +793,7 @@ def close_db(exc):
 def init_db():
     """Create all tables if they don't exist."""
     db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
+    menger.init_db(db)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS processed_messages (
             mid        TEXT PRIMARY KEY,
@@ -1127,6 +1137,7 @@ def init_db():
         db.commit()
         print(f"[DB] Migration: added {table}.{column} column.", flush=True)
 
+    _add_column_if_missing("orders", "is_paid", "INTEGER NOT NULL DEFAULT 0")
     for column in ("product_total", "delivery_fee", "total_amount"):
         _add_column_if_missing("orders", column, "INTEGER")
     _add_column_if_missing("messages", "media_json", "TEXT")
@@ -1360,12 +1371,13 @@ PRODUCT_FIELDS = (
     "store_id", "product_id", "ref", "ad_id", "product_name", "keywords", "category",
     "description", "visual_description", "price", "offer", "colors", "sizes",
     "stock", "stock_quantity", "fabric", "style", "delivery", "image_url",
-    "image_colors", "image_embedding", "status", "notes",
+    "image_colors", "image_embedding", "status", "notes", "order_name",
 )
 
 
 def _normalize_product(raw_product):
     product = {field: raw_product.get(field, "") for field in PRODUCT_FIELDS}
+    product["order_name"] = str(product.get("order_name") or "").strip()
     product["product_id"] = str(product.get("product_id") or "").strip()
     product["store_id"] = _safe_store_id(product.get("store_id") or DEFAULT_STORE_ID)
     product["status"] = str(product.get("status") or "active").strip() or "active"
@@ -3268,7 +3280,7 @@ def format_order_for_telegram(order):
         if not isinstance(item, dict):
             continue
         quantity = max(1, int(item.get("quantity") or 1))
-        name = str(item.get("product_name") or item.get("product_id") or "منتج")
+        name = str(item.get("order_name") or item.get("product_name") or item.get("product_id") or "منتج")
         item_quantities[name] = item_quantities.get(name, 0) + quantity
         if item.get("size"):
             option_values.extend([str(item["size"]).strip()] * quantity)
@@ -3306,7 +3318,7 @@ def format_order_for_telegram(order):
         product_line,
         location,
         str(order.get("phone") or "").strip(),
-        f"{int(order.get('total_amount') or order.get('price') or 0)} مع التوصيل",
+        f"{0 if order.get('is_paid') else int(order.get('total_amount') or order.get('price') or 0)} مع التوصيل",
     ]
     if option_values:
         unique_options = list(dict.fromkeys(option_values))
@@ -3315,12 +3327,17 @@ def format_order_for_telegram(order):
         else:
             label = "القياسات" if len(unique_options) > 1 else "القياس"
         lines.append(f"{label}: {'، '.join(unique_options)}")
+    if order.get("is_paid"):
+        lines.append("ملاحظات: " + menger.paid_notes(order.get("notes")))
     return "\n".join(line for line in lines if line)
 
 
 def send_order_to_telegram(order):
     """Send one parser-friendly booking block to the order-import channel."""
     chat_id = TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID
+    if has_app_context():
+        config = menger.settings(get_db(), order.get("store_id") or current_store_id())
+        chat_id = config.get("telegram_chat_id") or chat_id
     return send_telegram_message(
         format_order_for_telegram(order),
         chat_id=chat_id,
@@ -7462,6 +7479,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         "store_id": current_store_id(),
     }
 
+    menger.snapshot_prices(booking_data, catalog_products)
     order_cursor = db.execute(
         """INSERT INTO orders
            (sender_id, customer_name, phone, province, address,
@@ -7487,6 +7505,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
 
     db.execute("UPDATE orders SET product_total=?,delivery_fee=?,total_amount=? WHERE id=?",
                (product_total, delivery_fee, total_amount, order_cursor.lastrowid))
+
+    menger.enqueue(db, order_cursor.lastrowid, booking_data, catalog_products)
 
     db.execute(
         """UPDATE customers SET
@@ -9641,6 +9661,8 @@ def api_resend_order_telegram(order_id):
     if order.get("total_amount") is None:
         return jsonify({"ok": False, "error": "الطلب قديم بلا سعر محفوظ؛ أدخل سعر القطع والتوصيل من تعديل الطلب أولاً"}), 409
     sent = send_order_to_telegram(order)
+    if sent is None:
+        return jsonify(ok=False, error="كل قطع هذا الطلب موجهة إلى API؛ لا توجد قطع لإرسالها إلى تلغرام"), 409
     return jsonify({
         "ok": sent,
         "telegram_sent": sent,
@@ -9657,6 +9679,12 @@ def _backup_sqlite_file_to_bytes(path):
         dst = sqlite3.connect(tmp_path)
         try:
             src.backup(dst)
+            if dst.execute("SELECT 1 FROM sqlite_master WHERE name='menger_store_settings'").fetchone():
+                dst.execute("UPDATE menger_store_settings SET api_key=''")
+                if dst.execute("SELECT 1 FROM sqlite_master WHERE name='menger_connection'").fetchone():
+                    dst.execute("UPDATE menger_connection SET api_key=''")
+                dst.commit()
+                dst.execute("VACUUM")
         finally:
             dst.close()
             src.close()
@@ -10590,8 +10618,25 @@ def api_stores():
         return jsonify(stores=[{key: store.get(key) for key in ('store_id', 'name', 'active')} for store in stores])
     base_url = PUBLIC_URL or request.url_root.rstrip("/")
     for store in stores:
+        store["menger"] = menger.settings(db, store["store_id"], public=True)
         store["webhook_url"] = f"{base_url}/manychat/webhook/{store.get('webhook_key') or store['store_id']}"
     return jsonify({"ok": True, "stores": stores, "current_store_id": current_store_id()})
+
+
+@app.route("/api/settings/menger", methods=["GET", "PUT"])
+@_dash_require
+def api_menger_connection():
+    db = get_db()
+    if request.method == "PUT":
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error="بيانات الربط غير صحيحة"), 400
+        try:
+            menger.save_connection(db, data)
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+        db.commit()
+    return jsonify(ok=True, connection=menger.connection(db, public=True))
 
 
 @app.route("/api/stores/<store_id>", methods=["PUT"])
@@ -10602,6 +10647,13 @@ def api_update_store(store_id):
     if not existing:
         return jsonify({"error": "المتجر غير موجود"}), 404
     data = request.get_json(silent=True) or {}
+    if "menger" in data:
+        if not isinstance(data["menger"], dict):
+            return jsonify(error="بيانات الربط غير صحيحة"), 400
+        try:
+            menger.save_settings(db, store_id, data["menger"])
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
     name = str(data.get("name") or existing["name"]).strip()
     page_id = str(data.get("page_id") if "page_id" in data else existing.get("page_id") or "").strip()
     webhook_key = _safe_store_id(data.get("webhook_key") or existing.get("webhook_key") or store_id)
@@ -12918,6 +12970,11 @@ def api_create_order(sender_id):
     data = request.get_json(silent=True) or {}
     db   = get_db()
     now  = now_baghdad_iso()
+    if not isinstance(data.get("is_paid", False), bool):
+        return jsonify(ok=False, error="حالة الدفع غير صحيحة"), 400
+    is_paid = data.get("is_paid", False)
+    if is_paid:
+        data["notes"] = menger.paid_notes(data.get("notes"))
     product_ids = data.get("product_ids")
     if not isinstance(product_ids, list):
         product_ids = [data.get("product_id")]
@@ -13007,8 +13064,10 @@ def api_create_order(sender_id):
         "notes": data.get("notes"),
         "items": items,
         "status": "new",
+        "is_paid": is_paid,
     }
 
+    menger.snapshot_prices(order_info, catalog)
     order_cursor = db.execute(
         "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
         "product_id, product_name, color, size, notes, status, order_items, created_at, store_id) "
@@ -13026,6 +13085,8 @@ def api_create_order(sender_id):
         "address=COALESCE(NULLIF(?,''),address) WHERE sender_id=?",
         (data.get("phone"), data.get("province"), data.get("address"), sender_id),
     )
+    db.execute("UPDATE orders SET is_paid=? WHERE id=?", (int(is_paid), order_cursor.lastrowid))
+    menger.enqueue(db, order_cursor.lastrowid, order_info, catalog)
     db.commit()
     save_booking_to_file(order_info)
     telegram_sent = send_order_to_telegram(order_info)
@@ -13045,7 +13106,7 @@ def api_create_order(sender_id):
     return jsonify({
         "ok": True,
         "telegram_sent": telegram_sent,
-        "telegram_error": "" if telegram_sent else "تعذر إرسال الطلب إلى تلغرام. تأكد من TELEGRAM_BOT_TOKEN و TELEGRAM_ORDERS_CHAT_ID أو ORDER_TELEGRAM_CHAT_ID.",
+        "telegram_error": "" if telegram_sent is not False else "تعذر إرسال الطلب إلى تلغرام. تأكد من TELEGRAM_BOT_TOKEN و TELEGRAM_ORDERS_CHAT_ID أو ORDER_TELEGRAM_CHAT_ID.",
     })
 
 
@@ -13098,6 +13159,7 @@ bootstrap_app(load_clip=False)
 if os.environ.get("ENABLE_BACKGROUND_JOBS", "1") == "1" and "pytest" not in sys.modules:
     _background_jobs_started = True
     start_smart_reviewer_thread()
+    menger.start_worker(DB_PATH)
 
 
 if __name__ == "__main__":
