@@ -138,8 +138,10 @@ async function initChannelsPage() {
   const data = await getJSON('/api/settings/overview');
   const ch = data.channels || {};
   document.getElementById('channelsGrid').innerHTML = [
-    ['ManyChat API', ch.manychat_key_present ? 'مضبوط' : 'غير مضبوط'],
-    ['ManyChat URL', ch.manychat_api_url || '-'],
+    ['Chatwoot API', ch.chatwoot_key_present ? 'مضبوط' : 'غير مضبوط'],
+    ['Chatwoot URL', ch.chatwoot_api_url || '-'],
+    ['Webhook', ch.chatwoot_webhook_url || '-'],
+    ['توقيع Webhook', ch.chatwoot_webhook_secret_present ? 'مضبوط' : 'غير مضبوط'],
     ['Telegram Bot', ch.telegram_bot_present ? 'موجود' : 'غير مضبوط'],
     ['Telegram Chat', ch.telegram_chat_present ? 'موجود' : 'غير مضبوط'],
     ['Orders Chat', ch.telegram_orders_chat_present ? 'موجود' : 'غير مضبوط'],

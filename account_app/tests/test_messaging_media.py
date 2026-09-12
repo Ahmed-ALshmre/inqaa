@@ -199,6 +199,7 @@ class MessagingMediaTests(unittest.TestCase):
         worker.assert_called_once()
 
     @patch('account_app.app.threading.Thread')
+    @patch.dict(os.environ, MESSAGING_PROVIDER="manychat")
     def test_manychat_keeps_media_types_and_all_images(self,thread):
         self.client.post('/manychat/webhook/lamsa-store',json={'subscriber_id':self.sender,'attachments':[{'type':'image','url':'https://img.test/a.jpg'},{'type':'image','url':'https://img.test/b.jpg'},{'type':'audio','url':'https://cdn.fbsbx.com/audioclip-test.mp4'}]})
         body=thread.call_args.kwargs['args'][0]
@@ -234,6 +235,7 @@ class MessagingMediaTests(unittest.TestCase):
             self.assertIn('Subscriber not found',review.call_args.args[2])
 
     @patch('account_app.app.threading.Thread')
+    @patch.dict(os.environ, MESSAGING_PROVIDER="manychat")
     def test_fatena_defaults_to_facebook_and_preserves_explicit_channel(self, thread):
         self.client.post('/manychat/webhook/al-fatena', json={'subscriber_id':self.sender,'text':'hello'})
         body=thread.call_args.kwargs['args'][0]
@@ -246,6 +248,7 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual(self.m.detect_manychat_platform({'platform':'facebook','whatsapp_phone':'123'}),'facebook')
         self.assertEqual(self.m.detect_manychat_platform({'whatsapp_phone':'123'}),'whatsapp')
 
+    @patch.dict(os.environ, MESSAGING_PROVIDER="manychat")
     def test_whatsapp_send_uses_correct_channel_without_messenger_tag(self):
         from unittest.mock import Mock
         response=Mock(ok=True,status_code=200)

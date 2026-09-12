@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=20">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=21">
   <link rel="stylesheet" href="/static/css/messenger.css?v=3">
   <link rel="stylesheet" href="/static/css/workspace.css?v=1">
 </head>
@@ -209,6 +209,15 @@
           </button>
         </div>
       </div>
+
+      <aside id="conversationAdContext" class="conversation-ad-context" hidden aria-label="مصدر المحادثة">
+        <img id="conversationAdImage" hidden alt="صورة الإعلان" referrerpolicy="no-referrer">
+        <div class="conversation-ad-copy">
+          <strong id="conversationAdTitle"></strong>
+          <span id="conversationAdDetails"></span>
+        </div>
+        <a id="conversationAdLink" hidden target="_blank" rel="noopener noreferrer">عرض المصدر ↗</a>
+      </aside>
 
       <!-- Messages -->
       <div class="chat-sync-bar"><span id="chatUpdateStatus" role="status"></span><button type="button" id="loadOlderMessages" hidden onclick="loadMessages(currentSenderId,false,true)">عرض رسائل أقدم</button></div>
@@ -584,7 +593,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=3"></script>
-<script src="/static/js/dashboard.js?v=22"></script>
+<script src="/static/js/dashboard.js?v=24"></script>
 <script src="/static/js/conversation_tools.js?v=1"></script>
 <script>
   if ('serviceWorker' in navigator) {

@@ -455,17 +455,8 @@ async function selectConversation(senderId) {
   renderConversationAIToggle();
   renderAskAIButton();
 
-  // Ad badge
-  const adBadge = document.getElementById('chatAdBadge');
-  if (conv.ad_id || conv.ref) {
-    adBadge.style.display = '';
-    document.getElementById('chatAdText').textContent = [
-      conv.ad_id ? `إعلان: ${conv.ad_id}` : '',
-      conv.ref ? `Ref: ${conv.ref}` : '',
-    ].filter(Boolean).join(' | ');
-  } else {
-    adBadge.style.display = 'none';
-  }
+  document.getElementById('chatAdBadge').style.display = 'none';
+  renderConversationAdContext((conv.ad_id || conv.ref) ? {ad_id: conv.ad_id, ref: conv.ref} : null);
 
   // Customer form
   document.getElementById('custName').value     = conv.name     || '';
@@ -537,6 +528,7 @@ async function loadMessages(senderId, scroll = true, older = false) {
     }
     if (senderId === currentSenderId) {
       renderMessages(messages, scroll && !older, senderId);
+      renderConversationAdContext(data.ad_context || null);
       const more = document.getElementById('loadOlderMessages');
       if (more) more.hidden = !hasOlder;
       if (status) status.textContent = 'محدّثة الآن';
@@ -546,6 +538,44 @@ async function loadMessages(senderId, scroll = true, older = false) {
   } finally {
     if (messageRequest === pending) messageRequest = null;
   }
+}
+
+function renderConversationAdContext(ad) {
+  const panel = document.getElementById('conversationAdContext');
+  if (!panel) return;
+  panel.hidden = !ad || !Object.values(ad).some(Boolean);
+  const image = document.getElementById('conversationAdImage');
+  const link = document.getElementById('conversationAdLink');
+  image.hidden = true;
+  image.removeAttribute('src');
+  link.hidden = true;
+  link.removeAttribute('href');
+  document.getElementById('conversationAdTitle').textContent = '';
+  document.getElementById('conversationAdDetails').textContent = '';
+  if (panel.hidden) return;
+  const title = ad.headline || (ad.ad_id ? 'قادم من إعلان' : 'مصدر المحادثة');
+  const details = [ad.ad_id && `الإعلان: ${ad.ad_id}`,
+    !ad.ad_id && ad.source_id && `المصدر: ${ad.source_id}`,
+    ad.campaign_name && `الحملة: ${ad.campaign_name}`,
+    ad.campaign_id && `معرّف الحملة: ${ad.campaign_id}`,
+    ad.post_id && `المنشور: ${ad.post_id}`, ad.ref && `الإحالة: ${ad.ref}`,
+    ad.source, ad.body, ad.ctwa_clid && `النقرة: ${ad.ctwa_clid}`].filter(Boolean).join(' · ');
+  document.getElementById('conversationAdTitle').textContent = title;
+  const detailNode = document.getElementById('conversationAdDetails');
+  detailNode.textContent = details;
+  detailNode.title = details;
+  const absoluteWebUrl = value => {
+    try { const u = new URL(value); return ['https:', 'http:'].includes(u.protocol) && !u.username && !u.password ? u.href : ''; }
+    catch { return ''; }
+  };
+  const imageUrl = absoluteWebUrl(ad.image_url);
+  if (imageUrl) {
+    image.onerror = () => { image.hidden = true; };
+    image.src = imageUrl;
+    image.hidden = false;
+  }
+  const sourceUrl = absoluteWebUrl(ad.source_url);
+  if (sourceUrl) { link.href = sourceUrl; link.hidden = false; }
 }
 
 function safeMediaUrl(value) {
@@ -1014,7 +1044,7 @@ async function sendMessage(text = null, imgUrl = null) {
       await loadMessages(sendingTo, currentSenderId === sendingTo);
       return true;
     } else {
-      const detail = data.warning || data.error || 'ManyChat لم يؤكد الإرسال';
+      const detail = data.warning || data.error || 'Chatwoot لم يؤكد الإرسال';
       showToast('فشل الإرسال: ' + detail, 'danger');
       return false;
     }
@@ -1024,14 +1054,14 @@ async function sendMessage(text = null, imgUrl = null) {
 
 async function testManyChat() {
   try {
-    const res = await apiFetch('/api/manychat/test');
+    const res = await apiFetch('/api/chatwoot/test');
     const data = await res.json();
     if (data.ok) {
-      showToast(`ManyChat OK — ${data.page_name || data.page_id || 'page connected'}`, 'success');
+      showToast(`Chatwoot متصل — ${data.status_code || ''}`, 'success');
     } else {
-      showToast('ManyChat غير صالح: ' + (data.message || data.reason || data.status || 'unknown'), 'danger');
+      showToast('Chatwoot غير متصل: ' + (data.message || data.error || data.reason || data.status || 'unknown'), 'danger');
     }
-  } catch (e) { showToast('فشل اختبار ManyChat: ' + e.message, 'danger'); }
+  } catch (e) { showToast('فشل اختبار Chatwoot: ' + e.message, 'danger'); }
 }
 
 // ══ Ask AI ═════════════════════════════════════════════════════════════════
