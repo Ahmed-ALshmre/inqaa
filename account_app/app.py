@@ -24,13 +24,15 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import menger
+    from . import menger, chatwoot, ad_attribution
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
     from .checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
     import menger
+    import chatwoot
+    import ad_attribution
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
@@ -264,7 +266,9 @@ _STORE_MANYCHAT_KEYS_CONFIGURED = any(
         _normalize_manychat_key_value(os.environ.get("MANYCHAT_API_KEY_AL_FATENA", "")),
     )
 )
-if MANYCHAT_API_KEY or _STORE_MANYCHAT_KEYS_CONFIGURED:
+if chatwoot.enabled():
+    print("[Config] Chatwoot messaging enabled", flush=True)
+elif MANYCHAT_API_KEY or _STORE_MANYCHAT_KEYS_CONFIGURED:
     print("[Config] ✅ ManyChat API key configuration loaded", flush=True)
 else:
     print("[Config] ❌ MANYCHAT_API_KEY is MISSING — customer messages will NOT be sent!", flush=True)
@@ -738,7 +742,7 @@ def _extract_ad_info_from_body(body):
 
 @app.before_request
 def log_incoming_http_request():
-    if not REQUEST_LOGGING_ENABLED:
+    if not REQUEST_LOGGING_ENABLED or request.path.startswith("/chatwoot/webhook"):
         return
     record = _incoming_request_log_record()
     _append_incoming_request_log(record)
@@ -794,6 +798,7 @@ def init_db():
     """Create all tables if they don't exist."""
     db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
     menger.init_db(db)
+    ad_attribution.init_db(db)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS processed_messages (
             mid        TEXT PRIMARY KEY,
@@ -4181,6 +4186,8 @@ def _build_manychat_content(content_type: str, messages: list, message_tag: str 
 def _post_manychat_send(subscriber_id: str, messages: list, platform: str = "facebook",
                         label: str = "send", message_tag: str = "", page_id: str = "",
                         store_id: str = "") -> dict:
+    if chatwoot.enabled():
+        return chatwoot.send(sys.modules[__name__], subscriber_id, messages)
     subscriber_id = str(subscriber_id or "").strip()
     sender_store_id = store_id
     if "::" in subscriber_id:
@@ -4351,6 +4358,8 @@ def get_subscriber_info(subscriber_id: str, page_id: str = "", store_id: str = "
     جلب معلومات الزبون من ManyChat
     endpoint: GET /fb/subscriber/getInfo
     """
+    if chatwoot.enabled():
+        return {}  # Chatwoot profiles arrive with the signed webhook.
     raw_subscriber_id = str(subscriber_id or "").strip()
     if "::" in raw_subscriber_id:
         inferred_store, raw_subscriber_id = raw_subscriber_id.split("::", 1)
@@ -4406,6 +4415,8 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
         (sender_id, direction, message_type, text, image_url, ad_id, ref,
          json.dumps(raw_payload, ensure_ascii=False), now, current_store_id(), json.dumps(media, ensure_ascii=False)),
     )
+    if direction == "incoming":
+        ad_attribution.save(db, sender_id, cursor.lastrowid, raw_payload, ad_id, ref)
     db.commit()
     return cursor.lastrowid
 
@@ -8778,6 +8789,8 @@ def manychat_webhook(store_key=""):
     يستقبل الرسائل من ManyChat External Request ويرجع الرد في نفس response.
     هذا المسار لا يحتاج X-API-Key لأن ManyChat يستدعيه مباشرة.
     """
+    if chatwoot.enabled():
+        return jsonify(error="Use /chatwoot/webhook"), 410
     data = request.get_json(silent=True) or request.form.to_dict() or request.args.to_dict() or {}
     db = get_db()
     try:
@@ -8889,7 +8902,7 @@ def manychat_webhook(store_key=""):
     }), 200
 
 
-def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id=None):
+def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id=None, background_after_intake=False):
     """Persist incoming data first; waiting for AI must never delay dashboard messages."""
     with app.app_context():
         db = get_db()
@@ -8898,8 +8911,12 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
         with _sender_locks_guard:
             intake_lock = _sender_intake_locks.setdefault(subscriber_id, threading.Lock())
         with intake_lock:
+            mid = fake_body["entry"][0]["messaging"][0].get("message", {}).get("mid", "")
+            is_chatwoot = mid.startswith("chatwoot-")
+            if is_chatwoot and db.execute("SELECT mid FROM processed_messages WHERE mid=?", (mid,)).fetchone():
+                return
             media = extract_media({"attachments": ev.get("attachments", [])})
-            if is_recent_duplicate_incoming(db, subscriber_id, ev.get("text"), ev.get("image_url"), media=media):
+            if not is_chatwoot and is_recent_duplicate_incoming(db, subscriber_id, ev.get("text"), ev.get("image_url"), media=media):
                 return
             get_or_create_customer(db, subscriber_id, ev.get("page_id"), platform)
             saved_id = save_message(db, subscriber_id, "incoming", detect_message_type(ev),
@@ -8907,6 +8924,20 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
             save_conversation_message(db, subscriber_id, "user", ev.get("text"))
             # Every message is captured before debounce discards older events.
             capture_customer_contact(db, subscriber_id, ev.get("text"))
+            if is_chatwoot:
+                db.execute("INSERT OR IGNORE INTO processed_messages(mid, processed_at) VALUES (?,?)", (mid, now_baghdad_iso()))
+                db.commit()
+        args = (fake_body, subscriber_id, platform, outbound_subscriber_id, saved_id)
+        if background_after_intake:
+            threading.Thread(target=_finish_customer_webhook_async, args=args, daemon=True).start()
+            return
+        return _finish_customer_webhook_async(*args)
+
+
+def _finish_customer_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id, saved_id):
+    with app.app_context():
+        db = get_db()
+        _current_store_id.set(extract_facebook_event(fake_body).get("store_id") or DEFAULT_STORE_ID)
         if DEBOUNCE_DELAY > 0:
             time.sleep(DEBOUNCE_DELAY)
         if not acquire_sender_lock(db, subscriber_id):
@@ -8965,9 +8996,9 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
             delivery = _post_manychat_send(recipient, messages, platform=platform,
                                            page_id=page_id, store_id=store_id, label="auto-reply")
             if not delivery.get("ok"):
-                reason = (f"فشل إرسال رد ManyChat للمتجر {store_id}: "
+                reason = (f"فشل إرسال الرد للمتجر {store_id}: "
                           f"{delivery.get('status')} HTTP {delivery.get('status_code')} — "
-                          f"{delivery.get('message') or 'لم يؤكد ManyChat قبول الرسالة'}")
+                          f"{delivery.get('message') or 'لم يؤكد مزود الرسائل قبول الرسالة'}")
                 token = _current_store_id.set(store_id)
                 try:
                     create_human_review(db, event, reason, [], notify_telegram=False)
@@ -9375,7 +9406,7 @@ def health():
         code_version = hashlib.sha256(source.read()).hexdigest()[:16]
     readiness = {
         "ai": bool(OPENROUTER_KEY),
-        "customer_messaging": bool(current_manychat_api_key()),
+        "customer_messaging": (bool(chatwoot.configuration()["chatwoot_key_present"] and chatwoot.configuration()["chatwoot_api_url"]) if chatwoot.enabled() else bool(current_manychat_api_key())),
         "public_product_images": bool(PUBLIC_URL),
         "order_notifications": bool(TELEGRAM_BOT_TOKEN and (TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID)),
     }
@@ -10171,7 +10202,7 @@ def api_conversation_messages(sender_id):
         if item["media"] and len({m["type"] for m in item["media"]}) == 1:
             item["message_type"] = item["media"][0]["type"]
         messages.append(item)
-    return jsonify({"messages": messages, "has_more": more})
+    return jsonify({"messages": messages, "has_more": more, "ad_context": ad_attribution.load(db, sender_id)})
 
 
 @app.route('/api/conversations/<sender_id>/messages/<int:message_id>/media', methods=['POST'])
@@ -10197,6 +10228,7 @@ def api_delete_conversation(sender_id):
     db = get_db()
     deleted = {}
     for table in (
+        "conversation_ad_context",
         "messages",
         "conversation_memory",
         "human_reviews",
@@ -10369,16 +10401,16 @@ def api_send_message(sender_id):
         (text_result and text_result.get("ok"))
         or (image_result and image_result.get("ok"))
     )
-    manychat_key = manychat_api_key_for_page(page_id, current_store_id())
+    manychat_key = os.environ.get("CHATWOOT_API_TOKEN", "") if chatwoot.enabled() else manychat_api_key_for_page(page_id, current_store_id())
     primary = text_result or image_result or {}
     warning = None
     if not manychat_key and not sent:
-        warning = "MANYCHAT_API_KEY غير مُهيّأ — تم حفظ الرسالة في القاعدة فقط"
+        warning = "مفتاح إرسال الرسائل غير مُهيّأ — تم حفظ الرسالة في القاعدة فقط"
     elif not sent:
         status = primary.get("status") or "unknown"
         message = primary.get("message") or ""
         http_code = primary.get("status_code")
-        warning = f"ManyChat رفض الإرسال (status={status}, http={http_code}) لمنصة {platform}"
+        warning = f"مزود الرسائل رفض الإرسال (status={status}, http={http_code}) لمنصة {platform}"
         if message:
             warning += f"\nالتفاصيل: {message}"
 
@@ -10619,7 +10651,8 @@ def api_stores():
     base_url = PUBLIC_URL or request.url_root.rstrip("/")
     for store in stores:
         store["menger"] = menger.settings(db, store["store_id"], public=True)
-        store["webhook_url"] = f"{base_url}/manychat/webhook/{store.get('webhook_key') or store['store_id']}"
+        provider = "chatwoot" if chatwoot.enabled() else "manychat"
+        store["webhook_url"] = f"{base_url}/{provider}/webhook/{store.get('webhook_key') or store['store_id']}"
     return jsonify({"ok": True, "stores": stores, "current_store_id": current_store_id()})
 
 
@@ -12511,6 +12544,7 @@ def api_settings_overview():
             "openrouter_key_present": bool(OPENROUTER_KEY),
         },
         "channels": {
+            **chatwoot.configuration(),
             "manychat_key_present": bool(manychat_api_key_for_page("", current_store_id())),
             "manychat_api_url": MANYCHAT_API_URL,
             "telegram_bot_present": bool(TELEGRAM_BOT_TOKEN),
@@ -13130,6 +13164,8 @@ def api_mark_reviewed(sender_id):
     current_ai_enabled = is_customer_ai_enabled(db, sender_id)
     return jsonify({"ok": True, "ai_resumed": current_ai_enabled, "ai_enabled": current_ai_enabled})
 
+
+chatwoot.install(sys.modules[__name__])
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 

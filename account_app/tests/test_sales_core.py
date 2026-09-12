@@ -521,6 +521,7 @@ class MultiStoreIntegrationTests(unittest.TestCase):
             self.db.commit()
 
     @patch("account_app.app.threading.Thread")
+    @patch.dict(os.environ, MESSAGING_PROVIDER="manychat")
     def test_webhooks_namespace_same_manychat_customer_by_store(self, thread_cls):
         payload = {
             "subscriber_id": self.marker,
@@ -680,6 +681,7 @@ class MultiStoreIntegrationTests(unittest.TestCase):
             self.assertEqual(manychat_api_key_for_page("", "unknown-store"), "fallback-key")
 
     @patch("account_app.app.requests.post")
+    @patch.dict(os.environ, MESSAGING_PROVIDER="manychat")
     def test_manychat_sender_prefix_chooses_correct_store_key(self, post):
         response = post.return_value
         response.ok = True

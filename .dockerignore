@@ -16,3 +16,7 @@
 **/catalog_images
 **/aud
 backups
+
+**/.env
+**/.env.*
+!**/.env.example

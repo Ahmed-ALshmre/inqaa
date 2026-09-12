@@ -1,6 +1,6 @@
 # لمسة ستور
 
-لوحة مبيعات Flask لمتجر ملابس نسائية عراقي متخصص بالسوت والدشداشة النسائية. تدير محادثات Messenger وManyChat والكتالوج والردود الذكية والطلبات، مع توصيل إلى جميع المحافظات بسعر 5,000 د.ع.
+لوحة مبيعات Flask لمتجر ملابس نسائية عراقي متخصص بالسوت والدشداشة النسائية. تدير محادثات Messenger وChatwoot والكتالوج والردود الذكية والطلبات، مع توصيل إلى جميع المحافظات بسعر 5,000 د.ع.
 
 ## المزايا الأساسية
 
@@ -55,7 +55,11 @@ SESSION_SECRET_KEY
 DASHBOARD_PASSWORD
 PUBLIC_URL
 OPENROUTER_API_KEY
-MANYCHAT_API_KEY
+MESSAGING_PROVIDER=chatwoot
+CHATWOOT_BASE_URL
+CHATWOOT_API_TOKEN
+CHATWOOT_WEBHOOK_SECRET
+CHATWOOT_INBOX_STORES
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
 DISABLE_CLIP=1
@@ -71,12 +75,29 @@ ASYNC_WEBHOOK=1
 DEBOUNCE_DELAY=35
 ```
 
-After deploying, set `PUBLIC_URL` to the Railway public URL and configure ManyChat/Facebook webhooks to use:
+## تكامل Chatwoot
 
-```text
-https://your-railway-domain.up.railway.app/webhook
-https://your-railway-domain.up.railway.app/manychat/webhook
-```
+مزود الرسائل الافتراضي هو Chatwoot. يمر إرسال المساعد والموظفين والمتابعات وصور الكتالوج عبر واجهة Chatwoot، ولا يُستدعى ManyChat في هذا الوضع.
+
+- اضبط `PUBLIC_URL=https://inqaa-production.up.railway.app`.
+- اضبط `CHATWOOT_BASE_URL` على أصل رابط لوحة Chatwoot (HTTPS، دون مسار الحساب).
+- ضع مفتاح **Profile Settings → Access Token** في `CHATWOOT_API_TOKEN`.
+- أضف Webhook من **Settings → Integrations → Webhooks** بالعنوان `https://inqaa-production.up.railway.app/chatwoot/webhook` واشترك بحدث `message_created`.
+- ضع **Signing Secret** الخاص بهذا الويب هوك في `CHATWOOT_WEBHOOK_SECRET`. هذا مفتاح مختلف عن Access Token؛ يستعمل للتحقق من التوقيع والطابع الزمني.
+- اربط كل صندوق بالمتجر الموجود عبر `CHATWOOT_INBOX_STORES`، مثل `{"1:2":"default"}` حيث 1 رقم حساب Chatwoot و2 رقم الصندوق. استبدل الأرقام ومعرف المتجر بالقيم الفعلية. الصناديق غير المربوطة تُرفض حتى لا تُرسل طلباتها إلى متجر آخر. يمكن بدلاً من ذلك استعمال رابط الويب هوك المخصص للمتجر من صفحة المتاجر.
+- صفحة **الإعدادات ← قنوات التواصل** تعرض حالة الإعداد وتوفر فحص اتصال لا يرسل رسائل للعملاء.
+
+تُحفظ الرسالة الواردة قبل إرجاع النجاح ثم تعالج في الخلفية باستخدام منطق الطلبات الحالي. يتم تجاهل الأحداث الأخرى ورسائل الموظفين والملاحظات الخاصة، وتمنع هوية الحدث تكرار المعالجة. معالجة الذكاء الاصطناعي الخلفية تستخدم آلية التطبيق الحالية؛ ليست طابوراً دائماً يستأنف تلقائياً بعد إعادة تشغيل الخادم.
+
+المحادثات القديمة محفوظة، لكن معرف ManyChat لا يساوي معرف Chatwoot؛ يجب أن تصل رسالة جديدة عبر Chatwoot لإنشاء محادثة قابلة للإرسال. صور الكتالوج المحلية تُرفع كمرفقات؛ روابط الصور الخارجية غير المخزنة في الكتالوج تُرفض مع خطأ واضح. يمكن الرجوع إلى التكامل السابق صراحةً بوضع `MESSAGING_PROVIDER=manychat`.
+
+المراجع: [إعداد Webhooks](https://www.chatwoot.com/hc/user-guide/articles/1677693021-how-to-use-webhooks)، [إرسال الرسائل](https://developers.chatwoot.com/api-reference/messages/create-new-message).
+
+## مصدر الإعلان أعلى المحادثة
+
+تظهر بطاقة صغيرة أعلى المحادثة عندما تتوفر إحالة إعلانية: الصورة المصغرة والعنوان ومعرّف الإعلان والحملة والرابط، حسب البيانات التي وصلت بالفعل. تدعم حقول Chatwoot في `conversation.additional_attributes.referral` و`content_attributes.referral` وإحالات Facebook مع `ads_context_data`، وتستعيد معرّفات الإعلانات القديمة من الرسائل المحفوظة.
+
+تحفظ البيانات لكل محادثة حتى بعد وصول رسائل عادية أو تحميل صفحات أقدم، وتُخفى البطاقة عند عدم وجود بيانات. صورة الإعلان لا تُعامل كمرفق أرسله الزبون. لا يتم استنتاج صورة الإعلان من صورة المنتج، ولا استدعاء واجهة الإعلانات أو إرسال رسائل تجريبية للعملاء.
 
 ## إرسال الطلبات إلى تلغرام وMenger
 

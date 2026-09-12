@@ -2767,3 +2767,13 @@ button,a,input,select,textarea { touch-action:manipulation; }
 /* Keep every inbox filter reachable on narrow screens. */
 #conversationFilters { display:flex; flex-wrap:wrap; gap:4px; }
 #conversationFilters .btn { flex:1 1 auto; border-radius:8px; }
+
+/* Compact attribution remains separate from customer message attachments. */
+.conversation-ad-context { display:flex; align-items:center; gap:9px; padding:8px 14px; margin:0; flex:0 0 auto; background:var(--surface, #fff8ef); border-bottom:1px solid var(--border, #eddfd1); font-size:11px; min-width:0; }
+.conversation-ad-context[hidden], .conversation-ad-context [hidden] { display:none !important; }
+.conversation-ad-context img { width:42px; height:42px; object-fit:cover; border-radius:7px; flex-shrink:0; }
+.conversation-ad-copy { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.conversation-ad-copy strong { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.conversation-ad-copy span { color:var(--text-muted, #675c65); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.conversation-ad-context a { flex-shrink:0; color:var(--primary, #642447); font-size:11px; }
+@media(max-width:480px) { .conversation-ad-context { padding:6px 10px; gap:7px; } .conversation-ad-context img { width:36px; height:36px; } }
