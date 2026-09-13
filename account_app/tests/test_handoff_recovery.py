@@ -11,6 +11,22 @@ class HandoffRecoveryTests(unittest.TestCase):
         return app.call_main_ai({'text': text}, 'text', {}, history or [], [self.product],
                                 self.product, None, '', [], **kwargs)
 
+    def test_literal_newlines_preserve_complete_order_object(self):
+        parsed = app._parse_ai_json('prefix {"reply":"line one\nline two", "order":{"items":[]}, "create_order":false} suffix')
+        self.assertEqual(parsed['reply'], 'line one\nline two')
+        self.assertFalse(parsed['create_order'])
+
+    def test_invalid_response_is_retried_once(self):
+        failed = {'reply':'','failed':True,'failure_reason':'invalid_ai_response','create_order':False,'order':{}}
+        recovered = {'reply':'التوصيل حسب المحافظة','create_order':False,'order':{}}
+        with patch.object(app, '_call_main_ai_once', side_effect=[failed, recovered]) as model:
+            self.assertEqual(self.ask('شكد التوصيل؟'), recovered)
+        self.assertEqual(model.call_count, 2)
+        self.assertIn('JSON', model.call_args.kwargs['fix_instruction'])
+        with patch.object(app, '_call_main_ai_once', return_value=failed) as model:
+            self.assertFalse(self.ask('شكد التوصيل؟')['create_order'])
+        self.assertEqual(model.call_count, 2)
+
     def test_known_questions_do_not_need_model_or_human_in_any_store(self):
         for store in ['default', 'khuyoot', 'golden-threads', 'al-fatena']:
             token = app._current_store_id.set(store)

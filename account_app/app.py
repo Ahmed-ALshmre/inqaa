@@ -165,6 +165,18 @@ def _parse_ai_json(raw: str) -> dict:
     except Exception:
         pass
 
+    # Decode a complete object even when surrounded by prose or containing
+    # literal newlines inside strings. Never infer order fields from fragments.
+    decoder = json.JSONDecoder(strict=False)
+    start = text.find("{")
+    if start >= 0:
+        try:
+            value, _ = decoder.raw_decode(text, start)
+            if isinstance(value, dict):
+                return value
+        except ValueError:
+            pass
+
     # محاولة 2: استخراج أول كتلة JSON
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
@@ -1128,6 +1140,10 @@ def init_db():
         set_setting(db, "auto_product_id", "P001")
         set_setting(db, "auto_product_send_image", "0")
         set_setting(db, "auto_product_linking_v2_migrated", "1")
+    # Supersedes the previous photo fallback migration for Lamsa only.
+    if not db.execute("SELECT 1 FROM app_settings WHERE key='lamsa_catalog_only_v2'").fetchone():
+        set_setting(db, "vision_enabled", "0")
+        set_setting(db, "lamsa_catalog_only_v2", "1")
     db.commit()
 
     # Migration: أضف العمود إذا لم يكن موجوداً (للقواعد القديمة)
@@ -4138,11 +4154,14 @@ def resolve_incoming_media(data, text=""):
             item['type'] = cached[1]
             continue
         try:
-            response = requests.head(item["url"], timeout=3, allow_redirects=False)
-            if response.status_code == 200:
-                kind = media_type(item["url"], response.headers.get("Content-Type", ""))
-                if kind in ("image", "audio", "video"): item["type"] = kind
-            response.close()
+            try:
+                response = requests.head(item["url"], timeout=3, allow_redirects=False)
+                if response.status_code == 200:
+                    kind = media_type(item["url"], response.headers.get("Content-Type", ""))
+                    if kind in ("image", "audio", "video"): item["type"] = kind
+                response.close()
+            except requests.RequestException:
+                pass
             if item['type'] == 'file':
                 # Some Meta CDN endpoints do not support HEAD. Read headers only.
                 with requests.get(item['url'], timeout=3, allow_redirects=False, stream=True,
@@ -4558,7 +4577,7 @@ def extract_facebook_event(body):
     postback  = event.get("postback", {})
     quick_reply = message.get("quick_reply", {})
 
-    media = extract_media(message)
+    media = resolve_incoming_media(message)
     attachments = [{"type": m["type"], "payload": {"url": m["url"]}} for m in media]
     image_url = next((m["url"] for m in media if m["type"] == "image"), None)
     if image_url:
@@ -5612,11 +5631,26 @@ def _clean_catalog_product_id(raw, products):
 
 
 def match_customer_image_with_catalog(customer_image_url, products):
+    attempts = 3 if current_store_id() == DEFAULT_STORE_ID else 1
+    for attempt in range(1, attempts + 1):
+        result = _match_customer_image_with_catalog_once(customer_image_url, products)
+        result = dict(result, attempts=attempt)
+        if result.get("product_found"):
+            return result
+        # Retry uncertain comparisons and transient service failures only.
+        if result.get("reason") != "Catalog returned NONE or unknown product_id" and not (
+            result.get("service_error") and result.get("error_code") == "service_error"
+        ):
+            return result
+    return result
+
+
+def _match_customer_image_with_catalog_once(customer_image_url, products):
     # Uploaded catalog sheets can contain numbers unrelated to database IDs.
-    # Prefer explicitly labelled product photos; never replace a failed direct
-    # comparison with an unverified sheet-number guess.
+    # Other stores retain direct-photo matching because their sheet numbers may
+    # differ from product IDs. Lamsa compares only against all uploaded catalogue sheets.
     direct_candidates = build_product_vision_candidates(products, limit=len(products or []))
-    if direct_candidates and is_store_feature_enabled("vision_enabled", VISION_ENABLED):
+    if current_store_id() != DEFAULT_STORE_ID and direct_candidates and is_store_feature_enabled("vision_enabled", VISION_ENABLED):
         result = confirm_with_vision(customer_image_url, direct_candidates)
         return dict(result, reference_source="labelled_product_images")
     catalog_model = get_ai_model(None, "catalog_match_model", CATALOG_MATCH_MODEL)
@@ -6059,6 +6093,10 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
                     price=matched.get("price"),
                 )
                 return matched, match_method, image_result
+
+    if not matched and image_url and products and current_store_id() == DEFAULT_STORE_ID:
+        # Keep catalogue failure details and never run CLIP/product-photo matching.
+        return None, match_method, image_result
 
     if not matched and image_url and products and is_store_feature_enabled("vision_enabled", VISION_ENABLED, db):
         # ── Vision product-id pipeline ────────────────────────────────────────
@@ -6843,7 +6881,8 @@ def call_main_ai(
     needs_review = (lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
     transport_failure = str(result.get("failure_reason") or "").startswith(("provider_http_", "exception:"))
-    if needs_review and not transport_failure and not fix_instruction and not (image_result or {}).get("unmatched_customer_image"):
+    format_failure = result.get("failure_reason") == "invalid_ai_response"
+    if needs_review and not transport_failure and not fix_instruction and (format_failure or not (image_result or {}).get("unmatched_customer_image")):
         kwargs["fix_instruction"] = (
             "راجع قرار التحويل قبل اعتماده. أجب عن أسئلة السعر واللون والقياس والخامة والتوصيل والفحص "
             "من بيانات المنتج والمتجر والطلب المرفقة. الربط الموجود صالح ولا يحتاج إعادة ربط يدوي. "
@@ -6854,6 +6893,8 @@ def call_main_ai(
         )
         if lost_context:
             kwargs["fix_instruction"] += " المنتج محدد بالفعل: " + str(matched_product.get("product_name")) + ". أجب عن السؤال الحالي من بياناته؛ لا تطلب اسمه أو صورته مجدداً."
+        if format_failure:
+            kwargs["fix_instruction"] += ' الرد السابق تعذر قراءته. أرجع كائن JSON صالح فقط بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder. لا تؤكد حجزاً دون بيانات مكتملة وموافقة الزبون.'
         result = _call_main_ai_once(*args, **kwargs)
     if matched_product and not is_product_objection(question) and reply_reasks_known_product(result.get("reply")):
         return {"reply": "", "failed": True, "failure_reason": "known_product_context_repeatedly_ignored", "requires_human": True}
@@ -7140,6 +7181,7 @@ def _call_main_ai_once(
         )
     sections.append(
         "[المهمة]\n"
+        "- أرجع كائن JSON صالح فقط، بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder.\n"
         "- اعتمد فقط على البيانات أعلاه.\n"
         "- اقرأ كل رسائل الزبون غير المجابة معاً وأجب عنها كلها في ردٍ واحد متماسك بترتيب منطقي.\n"
         "- لا تتجاهل أي رسالة منها ولا تُكرّر إجابات نفس النقطة مرتين.\n"
@@ -7201,7 +7243,13 @@ def _call_main_ai_once(
                 raw_preview=raw,
             )
         print(f"[MainAI] {raw}", flush=True)
-        parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
+        try:
+            if isinstance(raw, list):
+                raw = "".join(part.get("text", "") for part in raw if isinstance(part, dict) and part.get("type") == "text")
+            parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
+        except (ValueError, TypeError):
+            return {"reply": "", "failed": True, "failure_reason": "invalid_ai_response",
+                    "create_order": False, "order": {}}
         if not isinstance(parsed, dict):
             parsed = {}
         parsed = normalize_ai_reply_parts(parsed)

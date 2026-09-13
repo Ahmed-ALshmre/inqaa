@@ -38,6 +38,74 @@ class MessagingMediaTests(unittest.TestCase):
     def body(self,attachments,text=''):
         return {'entry':[{'id':'page','_store_id':'default','messaging':[{'sender':{'id':self.sender},'message':{'mid':uuid.uuid4().hex,'text':text,'attachments':attachments}}]}]}
 
+    def test_instagram_story_resolved_before_routing(self):
+        for mime, expected in [('image/jpeg', 'image'), ('video/mp4', 'video')]:
+            url = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=' + uuid.uuid4().hex
+            with patch.object(self.m.requests, 'head') as head:
+                head.return_value.status_code = 200
+                head.return_value.headers = {'Content-Type': mime}
+                ev = self.m.extract_facebook_event(self.body([{'type':'ig_story','payload':{'url':url}}]))
+            self.assertEqual(self.m.detect_message_type(ev), expected)
+            self.assertEqual(ev['image_url'], url if expected == 'image' else None)
+
+    def test_head_timeout_still_checks_get_headers(self):
+        url = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=' + uuid.uuid4().hex
+        with patch.object(self.m.requests, 'head', side_effect=self.m.requests.Timeout), patch.object(self.m.requests, 'get') as get:
+            response = get.return_value.__enter__.return_value
+            response.status_code = 200
+            response.headers = {'Content-Type':'image/jpeg'}
+            ev = self.m.extract_facebook_event(self.body([{'type':'ig_story','payload':{'url':url}}]))
+        self.assertEqual(ev['image_url'], url)
+
+    def test_catalog_only_migration_runs_once_and_preserves_other_stores(self):
+        self.m.set_setting(self.db, 'vision_enabled', '1')
+        self.m.set_setting(self.db, 'store:khuyoot:vision_enabled', '1')
+        self.db.execute("DELETE FROM app_settings WHERE key='lamsa_catalog_only_v2'")
+        self.db.commit()
+        self.m.init_db()
+        self.assertEqual(self.m.get_setting(self.db, 'vision_enabled'), '0')
+        self.assertEqual(self.m.get_setting(self.db, 'store:khuyoot:vision_enabled'), '1')
+
+    def test_catalog_retries_stop_on_success_and_never_use_product_photos(self):
+        product = {'product_id':'P005','product_name':'Suit','image_url':'https://images.test/product.jpg'}
+        miss = {'product_found':False,'reason':'Catalog returned NONE or unknown product_id'}
+        hit = {'product_found':True,'product_id':'P005'}
+        for answers, expected in [([miss, hit], 2), ([miss, miss, miss], 3)]:
+            with patch.object(self.m, '_match_customer_image_with_catalog_once', side_effect=answers) as catalog, patch.object(self.m,'confirm_with_vision') as photos, patch.object(self.m,'find_top_candidates') as clip:
+                result = self.m.match_customer_image_with_catalog('https://images.test/customer.jpg',[product])
+            self.assertEqual(catalog.call_count, expected)
+            self.assertEqual(result['attempts'], expected)
+            photos.assert_not_called(); clip.assert_not_called()
+        ev = {'sender_id':self.sender,'text':'','image_url':'https://images.test/customer.jpg'}
+        with patch.object(self.m,'match_customer_image_with_catalog',return_value=miss), patch.object(self.m,'confirm_with_vision') as photos, patch.object(self.m,'is_store_feature_enabled',return_value=True):
+            matched, method, result = self.m.match_product(self.db,ev,[product])
+        self.assertIsNone(matched)
+        photos.assert_not_called()
+
+    def test_malformed_model_reply_recovers_through_real_pipeline(self):
+        product = {'product_id':'P005','product_name':'سوت حوامل','stock':'متوفر','price':'18000','status':'active'}
+        ev = self.m.extract_facebook_event(self.body([{'type':'image','payload':{'url':'https://images.test/customer.jpg'}}], 'شنو سعره وقياساته؟'))
+        with patch.object(self.m, 'OPENROUTER_KEY', 'test'), patch.object(self.m.requests, 'post') as post:
+            post.return_value.json.side_effect = [
+                {'choices':[{'message':{'content':'not valid JSON'}}]},
+                {'choices':[{'message':{'content':'{"reply":"السعر 18000 دينار","create_order":false,"order":{}}'}}]},
+            ]
+            result = self.m.call_main_ai(ev,'image',{},[],[product],product,{'product_found':True},'',[])
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(result['reply'], 'السعر 18000 دينار')
+        self.assertFalse(result['create_order'])
+        self.assertFalse(result.get('failed'))
+
+    def test_both_catalog_sheets_are_sent_for_lamsa(self):
+        products = [{'product_id':'P005','product_name':'Suit','image_url':'https://images.test/suit.jpg'}]
+        with patch.object(self.m, 'OPENROUTER_KEY', 'test'), patch.object(self.m, 'is_store_feature_enabled', return_value=True), patch.object(self.m, '_resolve_catalog_image_paths', return_value=['old.png','new.png']), patch.object(self.m, '_file_to_data_url', side_effect=['data:image/png;base64,OLD','data:image/png;base64,NEW']), patch.object(self.m.requests, 'post') as post:
+            post.return_value.json.return_value = {'choices':[{'message':{'content':'P005'}}]}
+            result = self.m.match_customer_image_with_catalog('https://images.test/customer.jpg',products)
+        self.assertTrue(result['product_found'])
+        content = post.call_args.kwargs['json']['messages'][0]['content']
+        images = [item['image_url']['url'] for item in content if item['type']=='image_url']
+        self.assertEqual(images, ['https://images.test/customer.jpg','data:image/png;base64,OLD','data:image/png;base64,NEW'])
+
     def test_all_images_survive_extraction_storage_and_api(self):
         body=self.body([{'type':'image','payload':{'url':f'https://images.test/{i}.jpg'}} for i in range(3)])
         ev=self.m.extract_facebook_event(body)
