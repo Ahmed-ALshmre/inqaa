@@ -221,23 +221,82 @@ async function initMaintenancePage() {
   ].map(([label, value]) => `<div><small>${adminEsc(label)}</small><strong>${adminEsc(value)}</strong></div>`).join('');
 }
 
+let fullRestoreBusy = false;
+function selectFullBackup(input) {
+  const file = input.files?.[0];
+  document.getElementById('restoreFileInfo').textContent = file ? `${file.name} — ${(file.size / 1048576).toFixed(1)} MB` : 'لم يتم اختيار ملف بعد';
+  document.getElementById('restoreStart').disabled = !file || fullRestoreBusy;
+}
+
 async function restoreFullBackup(input) {
-  if (!input.files?.[0]) return;
-  const warning = 'سيتم استبدال بيانات النظام الحالية بالمحادثات والمنتجات والصور الموجودة في النسخة. سيتم حفظ قاعدة البيانات الحالية تلقائياً للطوارئ. هل تريد المتابعة؟';
-  if (!confirm(warning)) { input.value = ''; return; }
-  const key = new URLSearchParams(location.search).get('key') || '';
-  const form = new FormData();
-  form.append('file', input.files[0]);
-  try {
-    const response = await fetch(`/api/import/full-backup?key=${encodeURIComponent(key)}`, {method: 'POST', body: form});
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'تعذرت استعادة النسخة الكاملة');
-    alert(`تمت استعادة النظام بنجاح\nالمنتجات: ${result.products || 0}\nالصور: ${result.images || 0}`);
-    location.reload();
-  } catch (error) {
-    alert(error.message);
+  const file = input.files?.[0];
+  if (!file || fullRestoreBusy) return;
+  if (!file.name.toLowerCase().endsWith('.zip') || !file.size) {
+    document.getElementById('restoreFileInfo').textContent = 'اختر ملف ZIP غير فارغ.';
+    return;
   }
-  input.value = '';
+  if (!confirm('ستُستبدل البيانات الحالية ببيانات النسخة، مع حفظ قاعدة البيانات الحالية للطوارئ. هل تريد بدء الاستعادة؟')) return;
+  fullRestoreBusy = true;
+  input.disabled = true;
+  const button = document.getElementById('restoreStart');
+  button.disabled = true;
+  const progress = document.getElementById('restoreProgress');
+  const stage = document.getElementById('restoreStage');
+  const percent = document.getElementById('restorePercent');
+  const status = document.getElementById('restoreStatus');
+  document.getElementById('restoreProgressPanel').hidden = false;
+  document.getElementById('restoreDone').hidden = true;
+  progress.value = 0;
+  stage.textContent = '1 / 2 — رفع النسخة';
+  percent.textContent = '0%';
+  status.textContent = 'جارٍ إرسال الملف، أبقِ الصفحة مفتوحة.';
+  const guard = event => { event.preventDefault(); event.returnValue = ''; };
+  window.addEventListener('beforeunload', guard);
+  const processing = () => {
+    stage.textContent = '2 / 2 — فحص النسخة واستعادة البيانات';
+    progress.removeAttribute('value');
+    percent.textContent = 'اكتمل الرفع';
+    status.textContent = 'جارٍ فحص النسخة وحفظ قاعدة البيانات الحالية ثم استعادة البيانات والصور. ننتظر تأكيد الخادم.';
+  };
+  try {
+    const key = new URLSearchParams(location.search).get('key') || '';
+    const form = new FormData(); form.append('file', file);
+    const result = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `/api/import/full-backup?key=${encodeURIComponent(key)}`);
+      xhr.upload.onprogress = event => {
+        if (!event.lengthComputable) { progress.removeAttribute('value'); return; }
+        const value = Math.min(100, Math.round(event.loaded / event.total * 100));
+        progress.value = value; percent.textContent = `${value}%`;
+      };
+      xhr.upload.onload = processing;
+      xhr.onload = () => {
+        let data;
+        try { data = JSON.parse(xhr.responseText); }
+        catch { reject(new Error('تعذر قراءة تأكيد الخادم. تحقق من حالة البيانات قبل تكرار الاستعادة.')); return; }
+        if (xhr.status < 200 || xhr.status >= 300 || !data.ok) {
+          reject(new Error(data.error || 'تعذرت الاستعادة. تحقق من حالة البيانات قبل إعادة المحاولة.')); return;
+        }
+        resolve(data);
+      };
+      xhr.onerror = () => reject(new Error('انقطع الاتصال. قد تستمر الاستعادة على الخادم؛ تحقق من البيانات قبل تكرارها.'));
+      xhr.onabort = () => reject(new Error('توقف الاتصال؛ تحقق من حالة الاستعادة قبل تكرارها.'));
+      xhr.send(form);
+    });
+    progress.value = 100; percent.textContent = '100%';
+    stage.textContent = 'اكتملت الاستعادة';
+    status.textContent = `تمت استعادة ${result.products || 0} منتج و${result.images || 0} صورة بنجاح.`;
+    document.getElementById('restoreDone').hidden = false;
+    input.value = '';
+  } catch (error) {
+    stage.textContent = 'الاستعادة تحتاج مراجعة';
+    progress.value = 0; percent.textContent = '';
+    status.textContent = error.message;
+  } finally {
+    fullRestoreBusy = false; input.disabled = false;
+    window.removeEventListener('beforeunload', guard);
+    selectFullBackup(input);
+  }
 }
 
 async function restoreProductsBackup(input) {

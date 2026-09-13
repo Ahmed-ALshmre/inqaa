@@ -9952,7 +9952,8 @@ def api_import_full_backup():
 
             with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as temp_db:
                 tmp_db = temp_db.name
-                temp_db.write(bundle.read("sales.db"))
+                with bundle.open("sales.db") as source:
+                    shutil.copyfileobj(source, temp_db, length=1024 * 1024)
             source_db = sqlite3.connect(tmp_db)
             try:
                 integrity = source_db.execute("PRAGMA integrity_check").fetchone()[0]
