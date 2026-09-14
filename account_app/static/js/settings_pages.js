@@ -273,7 +273,10 @@ async function restoreFullBackup(input) {
       xhr.onload = () => {
         let data;
         try { data = JSON.parse(xhr.responseText); }
-        catch { reject(new Error('تعذر قراءة تأكيد الخادم. تحقق من حالة البيانات قبل تكرار الاستعادة.')); return; }
+        catch {
+          const reason = ({413: 'حجم الملف تجاوز حد الرفع لدى الخادم.', 502: 'تعطل اتصال الاستضافة بالتطبيق.', 503: 'الخادم مشغول أو غير متاح.', 504: 'انتهت مهلة انتظار الاستضافة.'})[xhr.status] || 'وصل رد غير متوقع من الخادم.';
+          reject(new Error(`${reason} (HTTP ${xhr.status}) تحقق من حالة البيانات قبل تكرار الاستعادة.`)); return;
+        }
         if (xhr.status < 200 || xhr.status >= 300 || !data.ok) {
           reject(new Error(data.error || 'تعذرت الاستعادة. تحقق من حالة البيانات قبل إعادة المحاولة.')); return;
         }

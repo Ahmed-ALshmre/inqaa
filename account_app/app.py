@@ -794,7 +794,6 @@ def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES, timeout=30)
         g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA journal_mode=WAL")
         g.db.execute("PRAGMA busy_timeout=30000")
     return g.db
 
@@ -808,7 +807,10 @@ def close_db(exc):
 
 def init_db():
     """Create all tables if they don't exist."""
-    db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
+    db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES, timeout=30)
+    # Configure the database once, rather than requesting a journal-mode
+    # change on every HTTP connection (including during a restore).
+    db.execute("PRAGMA journal_mode=WAL")
     menger.init_db(db)
     ad_attribution.init_db(db)
     db.executescript("""
@@ -9899,6 +9901,17 @@ def api_export_full_backup():
                      download_name=f"lamsa-store-backup-{timestamp}.zip")
 
 
+def _copy_restore_database(source, destination, timeout=30):
+    """Bound SQLite backup retries; a busy database must not hang the request."""
+    deadline = time.monotonic() + timeout
+
+    def progress(status, remaining, total):
+        if status != sqlite3.SQLITE_DONE and time.monotonic() >= deadline:
+            raise TimeoutError("قاعدة البيانات مشغولة. لم يكتمل نسخ قاعدة البيانات؛ تحقق من حالتها قبل إعادة الاستعادة.")
+
+    source.backup(destination, pages=256, progress=progress, sleep=0.1)
+
+
 def _restore_directory_from_backup(bundle, archive_prefix, destination):
     prefix = archive_prefix.rstrip("/") + "/"
     restored = 0
@@ -9975,13 +9988,13 @@ def api_import_full_backup():
                 current = sqlite3.connect(DB_PATH)
                 safety = sqlite3.connect(safety_path)
                 try:
-                    current.backup(safety)
+                    _copy_restore_database(current, safety)
                 finally:
                     safety.close()
                     current.close()
 
                 destination_db = get_db()
-                source_db.backup(destination_db)
+                _copy_restore_database(source_db, destination_db)
                 destination_db.commit()
             finally:
                 source_db.close()
@@ -10029,6 +10042,8 @@ def api_import_full_backup():
             "products": restored_products,
             "images": image_count,
         })
+    except TimeoutError as exc:
+        return jsonify({"error": str(exc)}), 503
     except (ValueError, json.JSONDecodeError, zipfile.BadZipFile) as exc:
         return jsonify({"error": f"فشل فحص النسخة: {exc}"}), 400
     except Exception as exc:
@@ -10078,16 +10093,18 @@ def api_import_database():
             current = sqlite3.connect(DB_PATH)
             backup = sqlite3.connect(backup_path)
             try:
-                current.backup(backup)
+                _copy_restore_database(current, backup)
             finally:
                 backup.close()
                 current.close()
 
             dst = get_db()
-            src.backup(dst)
+            _copy_restore_database(src, dst)
             dst.commit()
         finally:
             src.close()
+    except TimeoutError as exc:
+        return jsonify({"error": str(exc)}), 503
     except Exception as exc:
         return jsonify({"error": f"فشل استيراد قاعدة البيانات: {exc}"}), 500
     finally:
