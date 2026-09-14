@@ -89,6 +89,14 @@ def snapshot_prices(order, catalog):
         item['unit_price'] = int(re.sub(r'\D', '', str(item.get('unit_price') or product.get('price') or '')) or '0')
 
 
+def local_store_name(db, store_id):
+    try:
+        row = db.execute('SELECT name FROM stores WHERE store_id=?', (store_id,)).fetchone()
+    except sqlite3.OperationalError:
+        return ''
+    return str(row['name'] if row else '').strip()
+
+
 def enqueue(db, order_id, order, catalog):
     init_db(db)
     products = {p['product_id']: p for p in catalog}
@@ -103,7 +111,10 @@ def enqueue(db, order_id, order, catalog):
     if not items:
         return
     config = connection(db)
+    local_store = order.get('store_id') or 'default'
+    store_name = local_store_name(db, local_store)
     payload = dict(source=config['source'], external_order_id=str(order_id),
+                   store_name=store_name,
                    created_at=order['created_at'],
                    customer=dict(name=order.get('customer_name') or '', phone=order['phone'],
                                  province=order['province'], address=order['address']),
@@ -112,7 +123,7 @@ def enqueue(db, order_id, order, catalog):
         payload['total_price'] = 0
         payload['notes'] = paid_notes(payload['notes'])
     db.execute('INSERT OR IGNORE INTO menger_deliveries(order_id,local_store,payload) VALUES(?,?,?)',
-               (order_id, order.get('store_id') or 'default', json.dumps(payload, ensure_ascii=False)))
+               (order_id, local_store, json.dumps(payload, ensure_ascii=False)))
 
 
 def paid_notes(notes):
@@ -148,10 +159,14 @@ def deliver_due(db, post=None, now=None):
             continue
         payload = json.loads(row['payload'])
         destination = payload.get('store_id') or (config['store_id'] if configured else stores.get(row['local_store']))
-        if not isinstance(destination, str) or not destination.strip():
+        store_name = local_store_name(db, row['local_store']) or str(payload.get('store_name') or '').strip()
+        if (not isinstance(destination, str) or not destination.strip()) and not store_name:
             continue
         delivered += 1
-        payload['store_id'] = destination.strip()
+        if isinstance(destination, str) and destination.strip():
+            payload['store_id'] = destination.strip()
+        if store_name:
+            payload['store_name'] = store_name
         # Atomic lease supports several server processes; destination stays fixed on retry.
         claim = db.execute("UPDATE menger_deliveries SET status='sending', next_attempt=?, attempts=attempts+1,payload=? WHERE order_id=? AND status IN ('pending','retry','sending') AND next_attempt<=?",
                            (now + 120, json.dumps(payload, ensure_ascii=False), row['order_id'], now))
