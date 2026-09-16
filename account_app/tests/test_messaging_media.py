@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -270,7 +271,7 @@ class MessagingMediaTests(unittest.TestCase):
     @patch.dict(os.environ, MESSAGING_PROVIDER="manychat")
     def test_manychat_keeps_media_types_and_all_images(self,thread):
         self.client.post('/manychat/webhook/lamsa-store',json={'subscriber_id':self.sender,'attachments':[{'type':'image','url':'https://img.test/a.jpg'},{'type':'image','url':'https://img.test/b.jpg'},{'type':'audio','url':'https://cdn.fbsbx.com/audioclip-test.mp4'}]})
-        body=thread.call_args.kwargs['args'][0]
+        body=json.loads(self.db.execute("SELECT payload FROM ai_jobs WHERE kind='webhook' ORDER BY created_at DESC LIMIT 1").fetchone()[0])['fake_body']
         media=self.m.extract_facebook_event(body)['attachments']
         self.assertEqual([m['type'] for m in media],['image','image','audio'])
 
@@ -279,7 +280,7 @@ class MessagingMediaTests(unittest.TestCase):
         result=self.m.normalize_ai_reply_parts({'reply_parts':['القياس متوفر','شنو اللون المطلوب؟']})
         result['sender_id']=self.sender
         self.m.send_webhook_result_to_facebook(result)
-        self.assertEqual([c.args[1] for c in send.call_args_list],[result['reply']])
+        self.assertEqual([c.args[1] for c in send.call_args_list],['القياس متوفر','شنو اللون المطلوب؟'])
         self.assertEqual(self.m.approved_reply_parts(result,'جواب مصحح'),['جواب مصحح'])
 
     def test_fatena_missing_key_does_not_use_another_account(self):
@@ -306,11 +307,11 @@ class MessagingMediaTests(unittest.TestCase):
     @patch.dict(os.environ, MESSAGING_PROVIDER="manychat")
     def test_fatena_defaults_to_facebook_and_preserves_explicit_channel(self, thread):
         self.client.post('/manychat/webhook/al-fatena', json={'subscriber_id':self.sender,'text':'hello'})
-        body=thread.call_args.kwargs['args'][0]
+        body=json.loads(self.db.execute("SELECT payload FROM ai_jobs WHERE kind='webhook' ORDER BY created_at DESC LIMIT 1").fetchone()[0])['fake_body']
         self.assertEqual(self.m.extract_facebook_event(body)['platform'],'facebook')
         self.assertEqual(self.m.manychat_content_type('facebook'),'messenger')
-        self.client.post('/manychat/webhook/al-fatena', json={'subscriber_id':self.sender,'text':'hello','platform':'whatsapp'})
-        body=thread.call_args.kwargs['args'][0]
+        self.client.post('/manychat/webhook/al-fatena', json={'subscriber_id':self.sender,'text':'hello whatsapp','platform':'whatsapp'})
+        body=json.loads(self.db.execute("SELECT payload FROM ai_jobs WHERE kind='webhook' ORDER BY created_at DESC LIMIT 1").fetchone()[0])['fake_body']
         self.assertEqual(self.m.extract_facebook_event(body)['platform'],'whatsapp')
         self.assertEqual(self.m.manychat_content_type('whatsapp'),'whatsapp')
         self.assertEqual(self.m.detect_manychat_platform({'platform':'facebook','whatsapp_phone':'123'}),'facebook')
@@ -361,13 +362,14 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'",(self.sender,)).fetchone()[0],0)
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='incoming'",(self.sender,)).fetchone()[0],3)
 
-    def test_short_sales_reply_sends_one_complete_message(self):
+    def test_short_sales_paragraphs_separate_followup_question(self):
         parts=['أهلاً بك.','السعر 17000 دينار.','القماش باربي.','أي قياس تحتاج؟']
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
-        self.assertEqual(self.m.approved_reply_parts(result,result['reply']),[result['reply']])
+        expected = ['\n\n'.join(parts[:3]), parts[3]]
+        self.assertEqual(self.m.approved_reply_parts(result,result['reply']), expected)
         with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
             self.m.send_webhook_result_to_facebook(dict(result,sender_id=self.sender))
-            self.assertEqual([call.args[1] for call in send.call_args_list],[result['reply']])
+            self.assertEqual([call.args[1] for call in send.call_args_list], expected)
 
     def test_corrected_sales_text_stays_one_message_without_old_claims(self):
         result={'reply_parts':['باقي قطعتين','أحجز الآن']}

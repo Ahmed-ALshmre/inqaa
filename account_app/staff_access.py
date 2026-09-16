@@ -53,6 +53,7 @@ def required_permission(path, method):
     if path in {'/', '/dashboard', '/api/me', '/api/conversations', '/api/products', '/api/stores'} and read:
         return 'read'
     if path.startswith('/api/conversations/'):
+        if '/ai_job/' in path and read: return 'reply'
         tail = path.rsplit('/', 1)[-1]
         if read and tail in {'messages', 'instructions'}: return 'read'
         if tail == 'create_order': return 'orders'

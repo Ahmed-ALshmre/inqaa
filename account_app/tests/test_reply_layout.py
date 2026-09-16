@@ -4,6 +4,9 @@ from account_app.reply_layout import approved_parts, compact
 
 
 class ReplyLayoutTests(unittest.TestCase):
+    def test_explicit_short_paragraph_and_followup_are_separate_bubbles(self):
+        self.assertEqual(approved_parts({}, 'القياس متوفر\n\nشنو اللون المطلوب؟'),
+                         ['القياس متوفر', 'شنو اللون المطلوب؟'])
     def layout(self, parts):
         reply = '\n\n'.join(parts)
         result = approved_parts({'reply_parts': parts}, reply)

@@ -381,7 +381,8 @@ function renderConversations() {
     const time    = fmtTime(c.last_time);
     const active  = c.sender_id === currentSenderId ? 'active' : '';
     const badge   = c.pending_reviews_count > 0
-      ? `<span class="badge bg-danger" title="${esc(c.human_review_reason || 'تحتاج تدخلاً بشرياً')}" style="font-size:9px;"><i class="bi bi-person-exclamation"></i> ${c.pending_reviews_count}</span>` : '';
+      ? `<span class="badge bg-danger" title="${esc(c.human_review_reason || 'تحتاج تدخلاً بشرياً')}" style="font-size:9px;"><i class="bi bi-person-exclamation"></i> ${c.pending_reviews_count}</span>`
+      : c.ai_job_error ? `<span class="badge bg-warning text-dark" title="${esc(c.ai_job_error)}">تعذر إكمال الرد</span>` : '';
     const problemBadge = c.problem_count > 0
       ? `<span class="badge bg-warning text-dark" title="${esc(c.problem_reason || 'مشكلة مفتوحة')}" style="font-size:9px;"><i class="bi bi-exclamation-triangle-fill"></i> ${c.problem_count}</span>` : '';
     const adBadge = (c.ad_id || c.ref)
@@ -818,23 +819,26 @@ function _hiCloseModal() {
 
 async function hiLinkProduct() {
   if (_hiBusy || !currentSenderId) return;
+  const senderId = currentSenderId;
   const sel = document.getElementById('hiUnifiedProduct');
   const pid = sel.value;
   if (!pid) { showToast('اختر منتجاً أولاً', 'warning'); return; }
   _hiSetBusy(true, 'hiBtnLinkProduct');
   try {
-    const res = await apiFetch(`/api/conversations/${currentSenderId}/link_product`, {
+    const res = await apiFetch(`/api/conversations/${senderId}/link_product`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: pid }),
+      body: JSON.stringify({ product_id: pid, async: true }),
     });
-    const data = await res.json();
+    const data = await waitForAIJob(res, senderId);
+    if (senderId !== currentSenderId) return;
     if (!data.ok) {
       showToast('فشل ربط المنتج: ' + (data.error || ''), 'danger');
       return;
     }
     const sent = data.auto_reply && data.auto_reply.sent;
     showToast(sent ? 'تم ربط المنتج وإرسال رد' : 'تم ربط المنتج — لم يُرسل رد تلقائي', sent ? 'success' : 'warning');
+    if (!sent) return;
     _hiCloseModal();
     hideHumanIntervention();
     await loadConversations(false);
@@ -872,11 +876,13 @@ async function _hiSilentLinkIfChosen() {
   if (!sel) return;
   const pid = (sel.value || '').trim();
   if (!pid) return;
-  await apiFetch(`/api/conversations/${currentSenderId}/link_product`, {
+  const response = await apiFetch(`/api/conversations/${currentSenderId}/link_product`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ product_id: pid, silent: true }),
   });
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || 'تعذر حفظ المنتج المحدد');
   await refreshLinkedProductSync();
 }
 
@@ -891,14 +897,18 @@ async function _hiSyncGenderIfChosen() {
 
 async function hiAskAI() {
   if (_hiBusy || !currentSenderId) return;
+  const senderId = currentSenderId;
   const text = (document.getElementById('hiUnifiedText').value || '').trim();
   const selectedProductId = (document.getElementById('hiTextProduct').value || '').trim();
   _hiSetBusy(true, 'hiBtnAskAI');
   try {
     await _hiSyncGenderIfChosen();
+    if (senderId !== currentSenderId) return;
     await _hiSilentLinkIfChosen();
+    if (senderId !== currentSenderId) return;
     document.getElementById('messageInput').value = text;
     await askAI({
+      staffAction: true,
       text,
       allowEmpty: true,
       rewriteMode: Boolean(text),
@@ -1070,10 +1080,27 @@ async function testManyChat() {
 // ══ Ask AI ═════════════════════════════════════════════════════════════════
 // Catalog image upload moved to /settings/catalog page
 
+async function waitForAIJob(response, senderId) {
+  let data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'تعذر بدء المعالجة');
+  if (!data.job_id) return data;
+  const jobId = data.job_id;
+  showToast('جاري تجهيز الرد في الخلفية...', 'info');
+  for (let attempt = 0; attempt < 600; attempt++) {
+    const poll = await apiFetch(`/api/conversations/${senderId}/ai_job/${jobId}`);
+    data = await poll.json();
+    if (!poll.ok) throw new Error(data.error || 'تعذر قراءة حالة المعالجة');
+    if (['done', 'failed', 'dismissed'].includes(data.status)) return data.result || {};
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  throw new Error('المهمة ما زالت محفوظة بالسيرفر. أعد فتح الاقتراح لقراءة النتيجة.');
+}
+
 async function askAI(options = {}) {
   if (!currentSenderId) return;
+  const senderId = currentSenderId;
   if (_isAskingAI) { showToast('جاري تجهيز اقتراح AI...', 'warning'); return; }
-  if (!canUseAI()) {
+  if (!canUseAI() && !options.staffAction) {
     const reason = !globalAIEnabled
       ? 'AI متوقف حالياً من الزر الرئيسي'
       : 'AI متوقف في هذه المحادثة. شغّله من زر المحادثة أولاً';
@@ -1106,13 +1133,14 @@ async function askAI(options = {}) {
   btn.innerHTML = '<div class="spinner-border spinner-border-sm text-white" style="width:14px;height:14px;"></div>';
 
   try {
-    const res  = await apiFetch(`/api/conversations/${currentSenderId}/ask_ai`, {
+    const res  = await apiFetch(`/api/conversations/${senderId}/ask_ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, extra_instructions: extraInstructions, product_id: productId, allow_empty: allowEmpty,
+      body: JSON.stringify({ text, extra_instructions: extraInstructions, product_id: productId, allow_empty: allowEmpty, async: true,
         mode: options.rewriteMode && text ? 'rewrite' : 'conversation' }),
     });
-    const data = await res.json();
+    const data = await waitForAIJob(res, senderId);
+    if (senderId !== currentSenderId) return;
     if (data.reply) {
       if (autonomous) {
         const composer = document.getElementById('messageInput');
@@ -1212,7 +1240,8 @@ function dismissAIPreview() {
 // ══ Improve Message (independent of AI on/off) ════════════════════════════
 let _isImproving = false;
 async function improveMessage() {
-  if (_isImproving) return;
+  if (_isImproving || !currentSenderId) return;
+  const senderId = currentSenderId;
   const ta = document.getElementById('messageInput');
   const text = (ta.value || '').trim();
   if (!text) {
@@ -1226,19 +1255,17 @@ async function improveMessage() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;"></span>';
   }
   try {
-    const res = await apiFetch('/api/improve_message', {
+    const res = await apiFetch(`/api/conversations/${senderId}/ask_ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, mode: 'rewrite', async: true, product_id: document.getElementById('productSelect').value }),
     });
-    const data = await res.json();
-    if (data.ok && data.improved) {
-      ta.value = data.improved;
+    const data = await waitForAIJob(res, senderId);
+    if (senderId !== currentSenderId || ta.value.trim() !== text) return;
+    if (data.reply) {
+      ta.value = data.reply;
       ta.focus();
       showToast('تم تحسين النص', 'success');
-    } else if (data.improved) {
-      ta.value = data.improved;
-      showToast(data.error ? `تعذر التحسين بالكامل: ${data.error}` : 'لم يتم التحسين', 'warning');
     } else {
       showToast(data.error || 'فشل تحسين النص', 'danger');
     }

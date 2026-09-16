@@ -237,12 +237,13 @@ class SalesCoreTests(unittest.TestCase):
         self.assertEqual(send_photo.call_count, 0)
         notification = send_message.call_args.args[0]
         self.assertNotIn("https://", notification)
-        self.assertIn("تحتاج تدخلك", notification)
+        self.assertIn("المراجعة: #", notification)
+        self.assertIn("المطلوب:", notification)
         self.assertNotIn("P001", notification)
         self.assertNotIn("هذا موجود", notification)
 
     @patch("account_app.app.send_telegram_message", return_value=True)
-    def test_problem_alert_includes_urgent_reason_and_order(self, send_message):
+    def test_problem_alert_includes_short_reason_and_order(self, send_message):
         from account_app.app import send_problem_to_telegram
 
         send_problem_to_telegram({
@@ -253,7 +254,8 @@ class SalesCoreTests(unittest.TestCase):
             "order_id": 77,
         })
         alert = send_message.call_args.args[0]
-        self.assertIn("عاجل", alert)
+        self.assertIn("المشكلة:", alert)
+        self.assertIn("المطلوب:", alert)
         self.assertIn("تأخر الطلب", alert)
         self.assertIn("77", alert)
 
@@ -543,7 +545,7 @@ class MultiStoreIntegrationTests(unittest.TestCase):
         ).fetchall()
         self.assertEqual({row["sender_id"] for row in rows}, {self.lamsa_sender, self.khuyoot_sender})
         self.assertEqual({row["store_id"] for row in rows}, {"default", "khuyoot"})
-        self.assertEqual(thread_cls.call_count, 2)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM ai_jobs WHERE sender_id IN (?,?)', (self.lamsa_sender,self.khuyoot_sender)).fetchone()[0], 2)
 
     def test_ai_dashboard_action_uses_conversation_store_context(self):
         for sender_id, store_id in ((self.lamsa_sender, "default"), (self.khuyoot_sender, "khuyoot")):

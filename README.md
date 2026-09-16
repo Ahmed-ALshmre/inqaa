@@ -72,7 +72,7 @@ Optional:
 ```text
 HUMAN_REPLY_WEBHOOK_URL
 ASYNC_WEBHOOK=1
-DEBOUNCE_DELAY=35
+DEBOUNCE_DELAY=15
 ```
 
 ## تكامل Chatwoot
@@ -164,3 +164,7 @@ Runtime logs and local secrets are intentionally ignored by Git:
 ضمن `notes`، وتصبح قيمة `total_price` المرسلة إلى API صفراً ويعرض تلغرام مبلغ صفر
 مع التوصيل. تبقى أسعار القطع والقيمة الأصلية محفوظة داخل النظام. التوثيق لا يحدد حقلاً
 مخصصاً للدفع، لذلك لا ندّعي تعديل حقل الدفع الداخلي في Menger.
+
+
+### Separate Telegram notification group
+Set `TELEGRAM_NOTIFICATIONS_CHAT_ID` to the notification group ID. Human review, system alerts and post-order problems use this destination. Keep `TELEGRAM_ORDERS_CHAT_ID`, `TELEGRAM_CHAT_ID`, and per-store booking destinations unchanged. Add the existing bot to the new group with permission to send messages. Review commands are accepted from the notification group.

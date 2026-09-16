@@ -93,14 +93,14 @@ class AIConfigurationTests(unittest.TestCase):
         self.assertEqual(json.loads(request['messages'][-1]['content'])['draft'], 'القماش قطن')
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 0)
-        self.assertEqual(self.db.execute('SELECT count(*) FROM ai_reply_drafts WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM ai_reply_drafts WHERE sender_id=?', (self.sender,)).fetchone()[0], 1)
 
-    def test_staff_rewrite_timeout_does_not_start_second_request(self):
+    def test_staff_rewrite_timeout_retries_only_once(self):
         with patch.object(m, 'OPENROUTER_KEY', 'test'), patch.object(m.requests, 'post', side_effect=requests.ReadTimeout) as provider:
             response = self.client.post(f'/api/conversations/{self.sender}/ask_ai', json={
                 'text': 'القماش قطن', 'mode': 'rewrite', 'allow_empty': True})
         self.assertEqual(response.status_code, 502)
-        provider.assert_called_once()
+        self.assertEqual(provider.call_count, 2)
         self.assertEqual(response.json['reply'], '')
 
     def test_staff_rewrite_rejects_truncated_suggestion(self):
@@ -119,14 +119,14 @@ class AIConfigurationTests(unittest.TestCase):
             self.assertEqual(response.status_code, 400)
             self.assertEqual(m.get_app_setting('ai_enabled', db=self.db, store_id='khuyoot'), '1')
 
-    def test_http_errors_keep_status_and_do_not_repeat_same_request(self):
+    def test_http_errors_keep_status_and_retry_only_transient_statuses(self):
         for status in [400, 401, 402, 404, 429, 503]:
             response = requests.Response(); response.status_code = status
             response._content = b'{"error":{"message":"private provider details"}}'
             with patch.object(m.requests, 'post', return_value=response) as post:
                 result = m.call_main_ai(self.ev, 'text', self.customer, [], [self.product], self.product, None, '', [])
             self.assertEqual(result['failure_reason'], f'provider_http_{status}')
-            self.assertEqual(post.call_count, 1)
+            self.assertEqual(post.call_count, 2 if status in (429, 503) else 1)
             self.assertNotIn('private', str(result))
 
     def test_staff_can_draft_while_auto_paused_and_keep_selected_product(self):

@@ -51,7 +51,7 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(response.status_code,200,response.get_json())
             self.assertEqual(send.call_args.args[0]['total_amount'],29000)
             rendered=self.m.format_order_for_telegram(send.call_args.args[0])
-            for detail in ['اللون: اسود', 'القياس / الوزن: 44', 'العدد: 2', 'ملاحظات: الاتصال قبل الوصول']:
+            for detail in ['اللون: اسود', 'القياس: 44', 'العدد: 2', 'ملاحظات: الاتصال قبل الوصول']:
                 self.assertIn(detail,rendered)
             order=dict(self.db.execute('select * from orders').fetchone())
             self.assertEqual((order['product_total'],order['delivery_fee'],order['total_amount']),(24000,5000,29000))
@@ -60,7 +60,7 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(response.status_code,200)
             self.assertEqual(send.call_args.args[0]['total_amount'],29000)
             rendered=self.m.format_order_for_telegram(send.call_args.args[0])
-            for detail in ['اللون: اسود', 'القياس / الوزن: 44', 'العدد: 2', 'ملاحظات: الاتصال قبل الوصول']:
+            for detail in ['اللون: اسود', 'القياس: 44', 'العدد: 2', 'ملاحظات: الاتصال قبل الوصول']:
                 self.assertIn(detail,rendered)
             self.assertIn('29000 مع التوصيل', self.m.format_order_for_telegram(send.call_args.args[0]))
             self.assertEqual(self.client.post('/api/conversations/price/create_order',json=payload).get_json()['duplicate'],True)

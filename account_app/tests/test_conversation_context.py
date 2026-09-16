@@ -320,7 +320,7 @@ class ConversationContextTests(unittest.TestCase):
         m.complete_customer_product_link(self.db,self.sender,CATALOG[1],"manual")
         self.assertIn("باربي",self.event("شنو القماش؟")["reply"])
 
-    def test_failed_album_does_not_commit_partial_product_links(self):
+    def test_failed_album_preserves_recognized_and_existing_product_links(self):
         self.settings["enabled"] = False
         m.complete_customer_product_link(self.db,self.sender,CATALOG[0],"manual")
         ev = dict(self.ev, text="بس هذا", image_url="https://images.test/a.jpg", attachments=[{"type":"image","url":"https://images.test/a.jpg"},{"type":"image","url":"https://images.test/b.jpg"}])
@@ -329,7 +329,7 @@ class ConversationContextTests(unittest.TestCase):
             product, _, result = m.match_product(self.db,ev,CATALOG)
         self.assertIsNone(product)
         self.assertEqual(match.call_count,2)
-        self.assertEqual([p["product_id"] for p in m.load_customer_products(self.db,self.sender)],["F1"])
+        self.assertEqual({p["product_id"] for p in m.load_customer_products(self.db,self.sender)}, {"F1", "F2"})
 
     def test_main_model_reasking_known_product_is_retried(self):
         with patch.object(m,"_call_main_ai_once",side_effect=[{"reply":"دزيلي صورة الموديل"},{"reply":"يرجى الفحص عند الاستلام"}]) as model:
@@ -522,3 +522,44 @@ class ConversationContextTests(unittest.TestCase):
             result=m.call_main_ai(dict(self.ev,text="اي"),"text",{},[],CATALOG,CATALOG[1],None,"",[])
         self.assertFalse(result["create_order"])
         self.assertIn("أثبتلج",result["reply"])
+
+    def test_album_links_both_products_and_preserves_image_order_in_reply(self):
+        self.settings['enabled'] = False
+        urls = ['https://images.test/first.jpg', 'https://images.test/second.jpg']
+        ev = dict(self.ev, image_url=urls[0], attachments=[{'type': 'image', 'url': u} for u in urls])
+        responses = [(p, 'image_recognition', {'product_found': True}) for p in CATALOG]
+        with patch.object(m, '_match_single_product', side_effect=responses) as match:
+            product, _, result = m.match_product(self.db, ev, CATALOG)
+        self.assertEqual([c.args[1]['image_url'] for c in match.call_args_list], urls)
+        self.assertEqual([r['product_id'] for r in result['images']], ['F1', 'F2'])
+        remembered = m.load_customer_products(self.db, self.sender)
+        self.assertEqual({p['product_id'] for p in remembered}, {'F1', 'F2'})
+        self.assertEqual(m.select_customer_context_product('الصورة الأولى', remembered)['product_id'], 'F1')
+        self.assertEqual(m.select_customer_context_product('الصورة الثانية', remembered)['product_id'], 'F2')
+        with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الصورة الأولى متوفرة والثانية متوفرة', 'create_order': False, 'order': {}}) as model:
+            m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
+        self.assertEqual([r['product_id'] for r in model.call_args.args[6]['images']], ['F1', 'F2'])
+        self.assertIn('image_index', model.call_args.args[7])
+        self.assertNotIn('لا تذكر موديلين إلا', model.call_args.args[7])
+
+    def test_repeated_product_keeps_both_image_positions(self):
+        self.settings['enabled'] = False
+        ev = dict(self.ev, attachments=[{'type': 'image', 'url': 'https://images.test/a.jpg'}, {'type': 'image', 'url': 'https://images.test/b.jpg'}])
+        with patch.object(m, '_match_single_product', return_value=(CATALOG[0], 'image_recognition', {'product_found': True})):
+            m.match_product(self.db, ev, CATALOG)
+        remembered = m.load_customer_products(self.db, self.sender)
+        self.assertEqual(len(remembered), 1)
+        self.assertEqual(remembered[0]['image_positions'], [1, 2])
+        self.assertEqual(m.select_customer_context_product('الصورة الثانية', remembered)['product_id'], 'F1')
+
+    def test_unmatched_first_photo_does_not_shift_second_photo_to_first(self):
+        self.settings['enabled'] = False
+        ev = dict(self.ev, attachments=[{'type': 'image', 'url': 'https://images.test/a.jpg'}, {'type': 'image', 'url': 'https://images.test/b.jpg'}])
+        with patch.object(m, '_match_single_product', side_effect=[(None, None, {'product_found': False}), (CATALOG[1], 'image_recognition', {'product_found': True})]):
+            m.match_product(self.db, ev, CATALOG)
+        remembered = m.load_customer_products(self.db, self.sender)
+        self.assertIsNone(m.select_customer_context_product('الصورة الأولى', remembered))
+        self.assertEqual(m.select_customer_context_product('الصورة الثانية', remembered)['product_id'], 'F2')
+        with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الثانية متوفرة', 'create_order': False, 'order': {}}) as model:
+            m.call_main_ai(dict(self.ev, text='الثانية متوفرة؟'), 'text', {}, [], CATALOG, CATALOG[1], None, '', [], customer_products=remembered)
+        self.assertIn('https://images.test/b.jpg', model.call_args.args[7])

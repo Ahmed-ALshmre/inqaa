@@ -107,8 +107,8 @@ class HandoffRecoveryTests(unittest.TestCase):
             {'product_name': 'فستان', 'quantity': 2, 'color': 'أسود', 'size': '40'},
             {'product_name': 'فستان', 'quantity': 1, 'color': 'أحمر', 'size': '44'}]})
         lines = result.splitlines()
-        self.assertTrue(any('اللون: أسود' in line and 'القياس / الوزن: 40' in line and 'العدد: 2' in line for line in lines))
-        self.assertTrue(any('اللون: أحمر' in line and 'القياس / الوزن: 44' in line and 'العدد: 1' in line for line in lines))
+        self.assertTrue(any('اللون: أسود' in line and 'القياس: 40' in line and 'العدد: 2' in line for line in lines))
+        self.assertTrue(any('اللون: أحمر' in line and 'القياس: 44' in line and 'العدد: 1' in line for line in lines))
         self.assertIn('ملاحظات: اتصلي قبل التوصيل', result)
 
     def test_telegram_legacy_order_retains_top_level_options(self):

@@ -497,7 +497,8 @@ class CheckoutRegressionTests(unittest.TestCase):
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "match_product", return_value=(None, None, {"service_error": True, "error_code": "authentication"})), patch.object(self.m, "create_human_review", return_value=88) as review:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
         self.assertEqual(response["reply"], "")
-        self.assertTrue(response["meta"]["ai_paused"])
+        self.assertFalse(response["meta"]["ai_paused"])
+        self.assertTrue(response["meta"]["service_error"])
         self.assertIn("authentication", review.call_args.args[2])
 
     def test_vision_accepts_plain_and_social_image_references_without_ui_filter(self):

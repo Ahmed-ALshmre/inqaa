@@ -47,11 +47,12 @@ class ChatwootTests(unittest.TestCase):
         with patch.object(m.threading, 'Thread') as thread:
             self.assertEqual(self.post().status_code, 200)
             self.assertEqual(self.post().status_code, 200)
-            self.assertEqual(thread.call_count, 1)
+            self.assertEqual(thread.call_count, 0)
         with m.app.app_context():
             db = m.get_db()
             rows = db.execute("SELECT * FROM messages WHERE direction='incoming'").fetchall()
             self.assertEqual(len(rows), 1)
+            self.assertEqual(db.execute('SELECT count(*) FROM ai_jobs').fetchone()[0], 1)
             self.assertEqual(rows[0]['sender_id'], f'{m.DEFAULT_STORE_ID}::cw-1-3')
             self.assertEqual(rows[0]['message_type'], 'audio')
             self.assertEqual(db.execute('SELECT name FROM customers').fetchone()[0], 'Test Customer')
@@ -154,8 +155,12 @@ class ChatwootTests(unittest.TestCase):
                     conversation={'id': number, 'channel': channel, 'additional_attributes': {'referral': {'ad_id': f'ad-{number}'}}})
                 self.assertEqual(self.post(payload).status_code, 200)
                 expected.append((store, number, inbox))
-            self.assertEqual(threads.call_count, 8)
-            workers = [(call.kwargs['target'], call.kwargs['args']) for call in threads.call_args_list]
+            self.assertEqual(threads.call_count, 0)
+            with m.app.app_context():
+                jobs = m.get_db().execute('SELECT * FROM ai_jobs ORDER BY created_at').fetchall()
+                self.assertEqual(len(jobs), 8)
+                workers = [(m._finish_customer_webhook_async, tuple(json.loads(row['payload'])[key] for key in
+                            ('fake_body','subscriber_id','platform','outbound_subscriber_id','saved_id'))) for row in jobs]
         with m.app.app_context():
             db = m.get_db()
             self.assertEqual(db.execute('SELECT count(*) FROM customers').fetchone()[0], 8)

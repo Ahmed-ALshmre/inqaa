@@ -94,7 +94,7 @@ def approved_parts(result, reply):
     if result.get("_single_message") or receipt(reply):
         return [reply]
     # Short answers and courtesies do not benefit from extra message bubbles.
-    if len(compact(reply)) <= 100:
+    if len(compact(reply)) <= 100 and not re.search(r'\n\s*\n', reply):
         return [reply]
     proposed = result.get("reply_parts")
     valid = (isinstance(proposed, list) and proposed
