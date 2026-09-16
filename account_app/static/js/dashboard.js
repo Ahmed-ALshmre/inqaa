@@ -892,6 +892,7 @@ async function _hiSyncGenderIfChosen() {
 async function hiAskAI() {
   if (_hiBusy || !currentSenderId) return;
   const text = (document.getElementById('hiUnifiedText').value || '').trim();
+  const selectedProductId = (document.getElementById('hiTextProduct').value || '').trim();
   _hiSetBusy(true, 'hiBtnAskAI');
   try {
     await _hiSyncGenderIfChosen();
@@ -900,6 +901,8 @@ async function hiAskAI() {
     await askAI({
       text,
       allowEmpty: true,
+      rewriteMode: Boolean(text),
+      productId: selectedProductId || undefined,
       extraInstructions: text
         ? 'مدخلات المشرف التالية هي مسودة أو توجيه للرد. أعد صياغتها باللهجة المناسبة للزبون، والتزم بسياق المحادثة ولا تضف معلومة غير مؤكدة.'
         : 'لم يكتب المشرف أي نص. حلل آخر رسائل المحادثة وسياق المنتج المرتبط إن وجد، ثم اكتب الرد الصحيح والمختصر للزبون.',
@@ -1095,7 +1098,7 @@ async function askAI(options = {}) {
   const extraInstructions = savedInstructions
     ? `${savedInstructions}\n\n${rewriteInstruction}`
     : rewriteInstruction;
-  const productId        = document.getElementById('productSelect').value;
+  const productId        = options.productId !== undefined ? options.productId : document.getElementById('productSelect').value;
 
   const btn = document.getElementById('askAIBtn');
   _isAskingAI = true;
@@ -1106,7 +1109,8 @@ async function askAI(options = {}) {
     const res  = await apiFetch(`/api/conversations/${currentSenderId}/ask_ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, extra_instructions: extraInstructions, product_id: productId, allow_empty: allowEmpty }),
+      body: JSON.stringify({ text, extra_instructions: extraInstructions, product_id: productId, allow_empty: allowEmpty,
+        mode: options.rewriteMode && text ? 'rewrite' : 'conversation' }),
     });
     const data = await res.json();
     if (data.reply) {

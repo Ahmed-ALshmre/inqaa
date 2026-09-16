@@ -41,6 +41,77 @@ class AIConfigurationTests(unittest.TestCase):
         self.assertEqual(post.call_args.kwargs['json']['model'], 'google/gemini-3.1-pro-preview')
         self.assertEqual(m.get_app_setting('ai_main_model', db=self.db), 'Gemini 3.7 Flash')
 
+    def test_reply_payload_keeps_context_once_without_image_or_product_duplicates(self):
+        history = [
+            {'id': 1, 'direction': 'incoming', 'text': 'احب اللون الزيتي', 'created_at': ''},
+            {'id': 2, 'direction': 'outgoing', 'text': 'اي قياس تحتاجين؟', 'created_at': ''},
+            {'id': 3, 'direction': 'incoming', 'text': 'قياس 44', 'created_at': ''},
+        ]
+        ev = dict(self.ev, text='قياس 44', image_url='https://images.test/customer.jpg')
+        response = requests.Response(); response.status_code = 200
+        response._content = json.dumps({'choices': [{'message': {'content': json.dumps({'reply': 'متوفر عيني', 'create_order': False})}}]}).encode()
+        with patch.object(m.requests, 'post', return_value=response) as post:
+            result = m._call_main_ai_once(ev, 'image', self.customer, history,
+                [self.product], self.product, {'product_found': True}, '', [],
+                customer_products=[self.product],
+                conversation_history=[{'role': 'user', 'content': 'احب اللون الزيتي'}])
+        self.assertFalse(result.get('failed'))
+        messages = post.call_args.kwargs['json']['messages']
+        self.assertEqual(len(messages), 2)
+        self.assertTrue(all(isinstance(item['content'], str) for item in messages))
+        text = messages[-1]['content']
+        self.assertEqual(text.count('احب اللون الزيتي'), 1)
+        self.assertEqual(text.count('قياس 44'), 1)
+        self.assertEqual(text.count('"product_id":"P003"'), 1)
+        self.assertIn('[غير مجابة]', text)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM ai_usage_events').fetchone()[0], 1)
+
+    def test_price_and_delivery_use_store_fees_without_guessing_province(self):
+        with patch.object(m, 'get_delivery_settings', return_value={'baghdad_fee': 4000, 'other_fee': 6000}):
+            result = m.known_product_questions_reply('السعر\nتوصيل اشكد', self.product)
+        self.assertIn('12,000', result['reply'])
+        self.assertIn('4,000', result['reply'])
+        self.assertIn('6,000', result['reply'])
+        self.assertFalse(result['create_order'])
+
+    def test_staff_rewrite_is_one_request_preserving_draft_without_image_pipeline(self):
+        m.ai_reply_draft_table(self.db)
+        self.db.execute('INSERT OR REPLACE INTO ai_reply_drafts VALUES(?,?,?,?,?)',
+                        (self.sender, 'old', '{}', 0, m.now_baghdad_iso()))
+        self.db.commit()
+        response = requests.Response(); response.status_code = 200
+        response._content = json.dumps({'choices': [{'message': {'content': 'من عيوني، القماش قطن.'}, 'finish_reason': 'stop'}]}).encode()
+        with patch.object(m, 'OPENROUTER_KEY', 'test'), patch.object(m.requests, 'post', return_value=response) as provider, \
+             patch.object(m, 'collect_unanswered_event') as collect, patch.object(m, 'call_main_ai') as main, \
+             patch.object(m, 'match_product') as vision:
+            result = self.client.post(f'/api/conversations/{self.sender}/ask_ai', json={
+                'text': 'القماش قطن', 'mode': 'rewrite', 'allow_empty': True})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json['reply'], 'من عيوني، القماش قطن.')
+        provider.assert_called_once(); collect.assert_not_called(); main.assert_not_called(); vision.assert_not_called()
+        request = provider.call_args.kwargs['json']
+        self.assertEqual(json.loads(request['messages'][-1]['content'])['draft'], 'القماش قطن')
+        self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 0)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM ai_reply_drafts WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+
+    def test_staff_rewrite_timeout_does_not_start_second_request(self):
+        with patch.object(m, 'OPENROUTER_KEY', 'test'), patch.object(m.requests, 'post', side_effect=requests.ReadTimeout) as provider:
+            response = self.client.post(f'/api/conversations/{self.sender}/ask_ai', json={
+                'text': 'القماش قطن', 'mode': 'rewrite', 'allow_empty': True})
+        self.assertEqual(response.status_code, 502)
+        provider.assert_called_once()
+        self.assertEqual(response.json['reply'], '')
+
+    def test_staff_rewrite_rejects_truncated_suggestion(self):
+        response = requests.Response(); response.status_code = 200
+        response._content = json.dumps({'choices': [{'message': {'content': 'نص مبتور'}, 'finish_reason': 'length'}]}).encode()
+        with patch.object(m, 'OPENROUTER_KEY', 'test'), patch.object(m.requests, 'post', return_value=response):
+            result = self.client.post(f'/api/conversations/{self.sender}/ask_ai', json={
+                'text': 'المسودة', 'mode': 'rewrite'})
+        self.assertEqual(result.status_code, 502)
+        self.assertEqual(result.json['reply'], '')
+
     def test_invalid_save_is_atomic(self):
         m.set_store_setting(self.db, 'ai_enabled', '1', 'khuyoot')
         for name in ['Gemini 3.7 Flash', '', 'google/model with spaces']:

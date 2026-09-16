@@ -9,6 +9,12 @@
   </div>
 </section>
 
+<section class="admin-panel mb-3">
+  <h2><i class="bi bi-check2-all"></i> تصفير التدخل البشري</h2>
+  <p class="admin-muted">يغلق جميع المراجعات البشرية وبلاغات المشاكل المفتوحة في جميع المتاجر، بما فيها المحادثات القديمة. تبقى المحادثات والطلبات محفوظة ولا يتغير تشغيل الرد الآلي. أي مشكلة جديدة تظهر لاحقاً بشكل طبيعي.</p>
+  <button class="btn btn-primary" id="closeAllHumanReviews" type="button" onclick="closeAllHumanReviews()">إغلاق جميع حالات التدخل البشري</button>
+  <p id="closeAllHumanReviewsStatus" class="mt-3 mb-0" role="status" aria-live="polite"></p>
+</section>
 <section class="admin-panel">
   <h2><i class="bi bi-shield-check"></i> النسخ الاحتياطي</h2>
   <p class="admin-muted">زر واحد يحفظ المحادثات والزبائن والطلبات والمنتجات والصور وإعدادات الذكاء الاصطناعي في ملف واحد. مفاتيح الدخول السرية لا تُضمّن.</p>
@@ -43,6 +49,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/settings_pages.js?v=5"></script>
+<script src="/static/js/settings_pages.js?v=6"></script>
 <script>initMaintenancePage();</script>
 {% endblock %}

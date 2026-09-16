@@ -45,17 +45,23 @@ class AuditFixTests(unittest.TestCase):
     def test_manual_order_prices_quantity_shipping_and_resend_snapshot(self):
         self.customer('price')
         catalog=[dict(product_id='A',product_name='تنورة',price='١٢,٠٠٠',colors='اسود',sizes='38 إلى 52',status='active',stock='متوفر')]
-        payload=dict(phone='07701234567',province='بغداد',address='بغداد حي اور',items=[dict(product_id='A',color='اسود',size='44',quantity=2)],total_amount=1)
+        payload=dict(phone='07701234567',province='بغداد',address='بغداد حي اور',items=[dict(product_id='A',color='اسود',size='44',quantity=2)],notes='الاتصال قبل الوصول',total_amount=1)
         with patch.object(self.m,'load_products_from_file',return_value=catalog), patch.object(self.m,'delivery_fee_for_province',return_value=5000), patch.object(self.m,'send_order_to_telegram',return_value=True) as send, patch.object(self.m,'save_booking_to_file'), patch.object(self.m,'send_text_to_facebook',return_value=True):
             response=self.client.post('/api/conversations/price/create_order',json=payload)
             self.assertEqual(response.status_code,200,response.get_json())
             self.assertEqual(send.call_args.args[0]['total_amount'],29000)
+            rendered=self.m.format_order_for_telegram(send.call_args.args[0])
+            for detail in ['اللون: اسود', 'القياس / الوزن: 44', 'العدد: 2', 'ملاحظات: الاتصال قبل الوصول']:
+                self.assertIn(detail,rendered)
             order=dict(self.db.execute('select * from orders').fetchone())
             self.assertEqual((order['product_total'],order['delivery_fee'],order['total_amount']),(24000,5000,29000))
             catalog[0]['price']='20000'
             response=self.client.post(f"/api/orders/{order['id']}/resend_telegram")
             self.assertEqual(response.status_code,200)
             self.assertEqual(send.call_args.args[0]['total_amount'],29000)
+            rendered=self.m.format_order_for_telegram(send.call_args.args[0])
+            for detail in ['اللون: اسود', 'القياس / الوزن: 44', 'العدد: 2', 'ملاحظات: الاتصال قبل الوصول']:
+                self.assertIn(detail,rendered)
             self.assertIn('29000 مع التوصيل', self.m.format_order_for_telegram(send.call_args.args[0]))
             self.assertEqual(self.client.post('/api/conversations/price/create_order',json=payload).get_json()['duplicate'],True)
             self.assertEqual(self.db.execute('select count(*) from orders').fetchone()[0],1)

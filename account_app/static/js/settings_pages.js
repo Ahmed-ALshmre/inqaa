@@ -331,6 +331,26 @@ async function restoreDatabaseBackup(input) {
   input.value = '';
 }
 
+async function closeAllHumanReviews() {
+  const button = document.getElementById('closeAllHumanReviews');
+  const status = document.getElementById('closeAllHumanReviewsStatus');
+  if (button.disabled) return;
+  if (!confirm('إغلاق جميع المراجعات وبلاغات المشاكل المفتوحة في كل المتاجر؟ لن تُحذف المحادثات أو الطلبات ولن يتم تشغيل الرد الآلي.')) return;
+  button.disabled = true;
+  status.textContent = 'جارٍ إغلاق الحالات…';
+  try {
+    const key = new URLSearchParams(location.search).get('key') || '';
+    const response = await fetch(`/api/maintenance/close_human_reviews?key=${encodeURIComponent(key)}`, {method: 'POST'});
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'تعذر إغلاق الحالات');
+    status.textContent = `تم إغلاق حالات ${data.closed_conversations} محادثة: ${data.closed_reviews} مراجعة و${data.closed_problems} بلاغ مشكلة. حدّث قائمة المحادثات لعرض النتيجة.`;
+  } catch (error) {
+    status.textContent = `لم يكتمل الإغلاق: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function clearBrowserCacheAndReload() {
   try {
     if ('caches' in window) {

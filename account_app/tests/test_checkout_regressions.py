@@ -324,15 +324,15 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertTrue(error)
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 0)
 
-    def test_new_image_ignores_old_ad_and_uses_product_image_fallback(self):
+    def test_new_image_ignores_old_ad_without_second_visual_call(self):
         products = copy.deepcopy(CATALOG)
         products[0]["ad_id"] = "old-ad"
         ev = dict(self.ev, image_url="https://example.test/customer.jpg", ad_id="old-ad", text="شكد سعره")
         with patch.object(self.m, "match_customer_image_with_catalog", return_value={"product_found": False}), patch.object(self.m, "confirm_with_vision", return_value={"product_id": "F2", "product_found": True}) as vision, patch.object(self.m, "is_store_feature_enabled", return_value=True):
             product, method, _ = self.m.match_product(self.db, ev, products)
-        vision.assert_called_once()
-        self.assertEqual(product["product_id"], "F2")
-        self.assertEqual(method, "image_recognition")
+        vision.assert_not_called()
+        self.assertIsNone(product)
+        self.assertIsNone(method)
 
     def test_explicit_model_overrides_ad(self):
         products = copy.deepcopy(CATALOG); products[0]["ad_id"] = "old-ad"
@@ -400,6 +400,12 @@ class CheckoutRegressionTests(unittest.TestCase):
         recognized = {"product_found": True, "product_id": selected["product_id"], "confidence": 100}
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "match_customer_image_with_catalog", return_value={"product_found": False} if fallback else recognized), patch.object(self.m, "confirm_with_vision", return_value=recognized) as vision, patch.object(self.m, "call_main_ai", return_value={"reply": "الموديل متوفر، شنو القياس المطلوب؟", "create_order": False}) as ai, patch.object(self.m, "send_webhook_result_to_facebook", return_value=True) as send, patch.object(self.m, "create_human_review") as review:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
+        if fallback:
+            ai.assert_not_called()
+            vision.assert_not_called()
+            review.assert_called_once()
+            self.assertEqual(self.m.load_customer_products(self.db, self.sender), [])
+            return
         self.assertEqual(ai.call_args.args[5]["product_id"], selected["product_id"])
         self.assertTrue(response["meta"]["auto_reply"]["sent"])
         send.assert_called_once()
@@ -422,10 +428,10 @@ class CheckoutRegressionTests(unittest.TestCase):
     def test_photo_different_model_relinks_and_continues(self):
         self.simulate_customer_photo(1)
 
-    def test_photo_same_model_fallback_continues(self):
+    def test_photo_same_model_failure_requires_review(self):
         self.simulate_customer_photo(0, fallback=True)
 
-    def test_photo_different_model_fallback_replaces_old_binding(self):
+    def test_photo_different_model_failure_requires_review(self):
         self.simulate_customer_photo(1, fallback=True)
 
     def test_catalog_sends_and_records_only_images(self):
@@ -456,11 +462,11 @@ class CheckoutRegressionTests(unittest.TestCase):
     def test_enabled_default_greeting_uses_product_without_asking_for_photo(self):
         self.ev["text"] = "سلام عليكم"
         settings = {"enabled": True, "product_id": "F1", "product": CATALOG[0], "send_image": False}
-        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "get_auto_product_settings", return_value=settings), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "generate_first_message_reply") as first, patch.object(self.m, "_call_main_ai_once") as model:
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "get_auto_product_settings", return_value=settings), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "generate_first_message_reply") as first, patch.object(self.m, "_call_main_ai_once", return_value={"reply": "وعليكم السلام تفضلي", "create_order": False}) as model:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
             self.assertEqual(self.m.load_customer_products(self.db, self.sender)[0]["product_id"], "F1")
         first.assert_not_called()
-        model.assert_not_called()
+        model.assert_called_once()
         self.assertNotIn("فستان دانتيل", response["reply"])
         self.assertIn("تفضلي", response["reply"])
         self.assertNotIn("صورة", response["reply"])
@@ -514,20 +520,20 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertIn("F1", content[0]["text"])
         self.assertEqual(result["product_id"], "F1")
 
-    def test_image_second_attempt_success_continues_without_review(self):
+    def test_image_failure_does_not_attempt_second_recognition(self):
         ev = dict(self.ev, image_url="https://example.test/customer.jpg")
         with patch.object(self.m, "_match_single_product", side_effect=[(None, None, {"product_found": False}), (CATALOG[1], "image_recognition", {"product_found": True, "product_id": "F2"})]) as match, patch.object(self.m, "create_human_review") as review:
             product, _, result = self.m.match_product(self.db, ev, CATALOG)
-        self.assertEqual(match.call_count, 2)
-        self.assertEqual(product["product_id"], "F2")
-        self.assertEqual(len(result["images"][0]["attempts"]), 2)
+        self.assertEqual(match.call_count, 1)
+        self.assertIsNone(product)
+        self.assertEqual(len(result["images"][0]["attempts"]), 1)
         review.assert_not_called()
 
-    def test_image_two_failures_then_silent_handoff(self):
+    def test_image_one_failure_then_silent_handoff(self):
         self.ev.update(text="", image_url="https://example.test/customer.jpg")
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "_match_single_product", return_value=(None, None, {"product_found": False})) as match, patch.object(self.m, "create_human_review", return_value=99) as review, patch.object(self.m, "call_main_ai") as ai:
             result = self.m.process_webhook(self.db, {}, use_debounce=False)
-        self.assertEqual(match.call_count, 2)
+        self.assertEqual(match.call_count, 1)
         review.assert_called_once()
         ai.assert_not_called()
         self.assertEqual(result["reply"], "")

@@ -66,11 +66,11 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual(self.m.get_setting(self.db, 'vision_enabled'), '0')
         self.assertEqual(self.m.get_setting(self.db, 'store:khuyoot:vision_enabled'), '1')
 
-    def test_catalog_retries_stop_on_success_and_never_use_product_photos(self):
+    def test_catalog_attempts_once_and_never_uses_fallback_photos(self):
         product = {'product_id':'P005','product_name':'Suit','image_url':'https://images.test/product.jpg'}
         miss = {'product_found':False,'reason':'Catalog returned NONE or unknown product_id'}
         hit = {'product_found':True,'product_id':'P005'}
-        for answers, expected in [([miss, hit], 2), ([miss, miss, miss], 3)]:
+        for answers, expected in [([miss, hit], 1), ([miss, miss, miss], 1)]:
             with patch.object(self.m, '_match_customer_image_with_catalog_once', side_effect=answers) as catalog, patch.object(self.m,'confirm_with_vision') as photos, patch.object(self.m,'find_top_candidates') as clip:
                 result = self.m.match_customer_image_with_catalog('https://images.test/customer.jpg',[product])
             self.assertEqual(catalog.call_count, expected)

@@ -35,6 +35,15 @@ class ConversationContextTests(unittest.TestCase):
         self.settings = dict(enabled=True, product_id="F1", product=CATALOG[0], send_image=False)
         for target, value in [("load_products_from_file", CATALOG), ("load_active_products", CATALOG), ("get_auto_product_settings", self.settings), ("is_ai_enabled", True), ("is_store_feature_enabled", False), ("send_telegram_message", False), ("send_webhook_result_to_facebook", True)]:
             patcher = patch.object(m, target, return_value=value); patcher.start(); self.addCleanup(patcher.stop)
+        def model_fixture(ev, message_type, customer, history, products, matched, *args, **kwargs):
+            # Deterministic provider fixture; validates routing, not language quality.
+            if m.requests_alternative_photo(ev.get('text')):
+                return {'reply': 'ما عندي تصوير إضافي', '_suppress_product_images': True}
+            if matched:
+                return {'reply': f"{matched['product_name']} قماشه {matched.get('fabric', '')} وسعره {int(matched['price']):,}", 'create_order': False, 'order': {}}
+            return {'reply': 'أرسلي اسم الموديل', 'create_order': False, 'order': {}}
+        patcher = patch.object(m, '_call_main_ai_once', side_effect=model_fixture)
+        self.model_fixture = patcher.start(); self.addCleanup(patcher.stop)
         self.ev = dict(sender_id=self.sender, store_id="al-fatena", page_id="page", platform="facebook", text="", image_url=None, attachments=[], ref=None, ad_id=None, postback=None, quick_reply=None, timestamp=0, referral_source=None, referral_type=None)
     def tearDown(self):
         m._current_store_id.reset(self.token); self.ctx.pop()
@@ -319,7 +328,7 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,"_match_single_product",side_effect=responses) as match:
             product, _, result = m.match_product(self.db,ev,CATALOG)
         self.assertIsNone(product)
-        self.assertEqual(match.call_count,3)
+        self.assertEqual(match.call_count,2)
         self.assertEqual([p["product_id"] for p in m.load_customer_products(self.db,self.sender)],["F1"])
 
     def test_main_model_reasking_known_product_is_retried(self):
@@ -357,7 +366,7 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,"DEBOUNCE_DELAY",1), patch.object(m.time,"sleep",side_effect=during_wait), patch.object(m,"match_customer_image_with_catalog",return_value={"product_found":True,"product_id":"F2"}) as vision, patch.object(m,"_call_main_ai_once",return_value={"reply":"قياس 44 متوفر","create_order":False,"order":{}}), patch.object(m,"send_manychat_messages",return_value=True):
             m._process_manychat_webhook_async(photo,self.sender,"facebook")
         self.assertEqual(vision.call_count,1, {"waits":len(calls), "messages":[dict(r) for r in self.db.execute("SELECT sender_id,direction,message_type,text FROM messages WHERE sender_id LIKE ?",("%"+self.sender.split("::",1)[-1],))], "event":m.extract_facebook_event(photo)})
-        self.assertEqual(vision.call_args.args[0],"https://images.test/async.jpg")
+        self.assertTrue(vision.call_args.args[0].startswith("data:image/png;base64,"))
         self.assertEqual(m.load_customer_products(self.db,self.sender)[0]["product_id"],"F2")
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='incoming'",(self.sender,)).fetchone()[0],2)
 
@@ -367,6 +376,47 @@ class ConversationContextTests(unittest.TestCase):
         m.complete_customer_product_link(self.db,self.sender,CATALOG[1],"manual",source="manual_admin")
         self.assertIsNone(m.pending_product_choice(self.db,self.sender))
         self.assertIn("باربي",self.event("شنو القماش؟")["reply"])
+
+    def test_text_followup_does_not_recollect_photo_resolved_by_later_manual_link(self):
+        photo = m.save_message(self.db, self.sender, 'incoming', 'image', 'شنو نوع القماش',
+                               'https://images.test/resolved.jpg', None, None, {})
+        self.db.execute("UPDATE messages SET created_at='2026-09-16T08:00:00+03:00' WHERE id=?", (photo,))
+        m.complete_customer_product_link(self.db, self.sender, CATALOG[0], 'manual', source='manual_admin')
+        self.db.execute("UPDATE customer_product_interests SET last_seen_at='2026-09-16T08:01:00+03:00' WHERE sender_id=?", (self.sender,))
+        latest = m.save_message(self.db, self.sender, 'incoming', 'text', 'شنو القياسات', None, None, None, {})
+        ev = m.collect_unanswered_event(self.db, dict(self.ev, text='شنو القياسات'), latest)
+        self.assertIsNone(ev['image_url'])
+        self.assertEqual(ev['attachments'], [])
+        self.assertIn('شنو نوع القماش', ev['text'])
+        self.assertIn('شنو القياسات', ev['text'])
+
+    def test_newer_or_same_time_photo_is_not_hidden_by_an_older_link(self):
+        m.complete_customer_product_link(self.db, self.sender, CATALOG[0], 'manual', source='manual_admin')
+        self.db.execute("UPDATE customer_product_interests SET last_seen_at='2026-09-16T08:00:00+03:00' WHERE sender_id=?", (self.sender,))
+        photo = m.save_message(self.db, self.sender, 'incoming', 'image', '', 'https://images.test/newer.jpg', None, None, {})
+        self.db.execute("UPDATE messages SET created_at='2026-09-16T08:00:00+03:00' WHERE id=?", (photo,))
+        latest = m.save_message(self.db, self.sender, 'incoming', 'text', 'شكد سعره', None, None, None, {})
+        ev = m.collect_unanswered_event(self.db, dict(self.ev, text='شكد سعره'), latest)
+        self.assertEqual(ev['image_url'], 'https://images.test/newer.jpg')
+
+    def test_image_pause_does_not_send_canned_shipping_reply(self):
+        review = m.create_human_review(self.db, self.ev, 'image unresolved', notify_telegram=False)
+        m.set_customer_ai_enabled(self.db, self.sender, False, reason='image_unresolved')
+        with patch.object(m, '_call_main_ai_once') as model:
+            result = self.event('توصيل اشكد')
+        self.assertEqual(result['reply'], '')
+        self.assertEqual(result['meta']['reason'], 'ai_disabled_for_conversation')
+        self.assertFalse(m.is_customer_ai_enabled(self.db, self.sender))
+        self.assertTrue(m.has_pending_human_review(self.db, self.sender))
+        model.assert_not_called()
+        result = self.event('شكد سعره')
+        self.assertEqual(result['reply'], '')
+
+    def test_manual_pause_still_blocks_even_independent_shipping_question(self):
+        m.set_customer_ai_enabled(self.db, self.sender, False)
+        result = self.event('توصيل اشكد')
+        self.assertEqual(result['reply'], '')
+        self.assertEqual(result['meta']['reason'], 'ai_disabled_for_conversation')
 
     def test_request_for_real_photo_does_not_resend_same_catalog_image(self):
         m.complete_customer_product_link(self.db,self.sender,CATALOG[0],"manual")
@@ -398,7 +448,7 @@ class ConversationContextTests(unittest.TestCase):
                                 elif mode=="failed":
                                     with patch.object(m,"_match_single_product",return_value=(None,None,{"product_found":False})) as match:
                                         result=self.event("",image="https://images.test/fail.jpg")
-                                    self.assertEqual(match.call_count,2)
+                                    self.assertEqual(match.call_count,1)
                                     self.assertEqual(result["reply"],"")
                                     self.assertFalse(m.is_customer_ai_enabled(self.db,self.sender))
                                 else:
