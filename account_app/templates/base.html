@@ -20,6 +20,8 @@
   <link rel="stylesheet" href="/static/css/dashboard.css?v=19">
   {% block styles %}{% endblock %}
   <link rel="stylesheet" href="/static/css/workspace.css?v=1">
+  <link rel="stylesheet" href="/static/css/rewards.css?v=1">
+  <script defer src="/static/js/rewards.js?v=1"></script>
 </head>
 <body class="admin-shell">
   <nav class="admin-topbar">
@@ -31,6 +33,7 @@
       <img class="app-brand-logo" src="/static/icons/icon-192.png?v=6" alt="شعار صوف">
       <span>صوف</span>
     </a>
+    {% include "_rewards_bar.html" %}
     <div class="admin-topbar-actions"><span class="workspace-user">{{ staff_person.name if staff_person else '' }}</span>
       <a class="btn btn-outline-light btn-sm" href="/settings/maintenance"><i class="bi bi-shield-check"></i><span>نسخة احتياطية</span></a>
       <a class="btn btn-outline-light btn-sm" href="/logout"><i class="bi bi-box-arrow-left"></i><span>خروج</span>
@@ -47,6 +50,7 @@
     <div class="p-3"><label for="globalStoreSelect" class="small mb-2">المتجر الحالي</label><select id="globalStoreSelect" class="form-select form-select-sm" disabled><option>جاري تحميل المتاجر…</option></select></div>
     <div class="admin-sidebar-title">التنقل</div>
     <a href="/dashboard"><i class="bi bi-chat-heart"></i> المحادثات والعملاء</a>
+    <a href="/rewards"><i class="bi bi-stars"></i> رصيد الإنجاز</a>
     <a href="/orders"><i class="bi bi-receipt"></i> الطلبات</a>
     <a href="/products"><i class="bi bi-box-seam"></i> المنتجات</a>
     <a href="/advisor"><i class="bi bi-chat-square-heart"></i> مستشار صوف</a>

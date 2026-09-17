@@ -268,7 +268,10 @@ class CheckoutRegressionTests(unittest.TestCase):
     def test_ambiguous_linked_models_ask_before_answering(self):
         self.assertIsNone(self.m.select_customer_context_product("فستان", CATALOG[:2]))
         self.ev["text"] = "شكد سعر الفستان"
-        result = self.m.call_main_ai(self.ev, "text", {}, [], CATALOG, None, None, "", [], customer_products=CATALOG[:2])
+        with patch.object(self.m, '_call_main_ai_once', return_value={'reply': 'عندج أكثر من موديل؛ تقصدين أي فستان؟', 'create_order': False}) as model:
+            result = self.m.call_main_ai(self.ev, "text", {}, [], CATALOG, None, None, "", [], customer_products=CATALOG[:2])
+        model.assert_called_once()
+        self.assertEqual(model.call_args.kwargs['customer_products'], CATALOG[:2])
         self.assertFalse(result["create_order"])
         self.assertIn("أكثر من موديل", result["reply"])
 

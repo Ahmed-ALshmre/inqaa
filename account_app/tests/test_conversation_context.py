@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 import account_app.app as m
+REAL_MAIN_AI_ONCE = m._call_main_ai_once
 
 CATALOG = [
     dict(product_id="F1", product_name="فستان دانتيل", category="فستان", colors="اسود", sizes="38 إلى 52", price="16000", fabric="لينن", stock="متوفر", status="active", image_url="https://images.test/dress1.jpg"),
@@ -153,13 +154,17 @@ class ConversationContextTests(unittest.TestCase):
     def test_ambiguous_or_invalid_selection_keeps_context(self):
         self.recognize()
         before = [dict(r) for r in self.db.execute('SELECT * FROM customer_product_interests WHERE sender_id=?', (self.sender,))]
-        for decision in [None, {'action': 'clarify'},
+        for attempt, decision in enumerate([None, {'action': 'clarify'},
                          {'action': 'change', 'reject_ids': ['UNKNOWN'], 'select_ids': [], 'focus_id': ''},
-                         {'action': 'change', 'reject_ids': ['F2'], 'select_ids': ['F2'], 'focus_id': 'F2'}]:
+                         {'action': 'change', 'reject_ids': ['F2'], 'select_ids': ['F2'], 'focus_id': 'F2'}]):
             with patch.object(m, 'classify_contextual_selection', return_value=decision):
                 result = m.resolve_product_choice(self.db, dict(self.ev, text='ماعجبني'), CATALOG)
-            self.assertIn('دانتيل', result['reply'])
-            self.assertIn('انيقة', result['reply'])
+            if attempt == 0:
+                self.assertIn('دانتيل', result['reply'])
+                self.assertIn('انيقة', result['reply'])
+            else:
+                self.assertEqual(result['reply'], '')
+                self.assertTrue(result['meta']['needs_human'])
             self.assertNotIn('صورة', result['reply'])
             after = [dict(r) for r in self.db.execute('SELECT * FROM customer_product_interests WHERE sender_id=?', (self.sender,))]
             self.assertEqual(before, after)
@@ -563,3 +568,67 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الثانية متوفرة', 'create_order': False, 'order': {}}) as model:
             m.call_main_ai(dict(self.ev, text='الثانية متوفرة؟'), 'text', {}, [], CATALOG, CATALOG[1], None, '', [], customer_products=remembered)
         self.assertIn('https://images.test/b.jpg', model.call_args.args[7])
+
+    def test_color_only_does_not_switch_known_dress_to_pink_abaya(self):
+        products=[dict(CATALOG[0],product_id='P017',product_name='فستان رباط',colors='جوزي'),
+                  dict(CATALOG[1],product_id='P016',product_name='عباء لون وردي',colors='وردي')]
+        self.assertIsNone(m._text_match_product('لون جوزي', products))
+        self.assertIsNone(m.customer_product_target('لون جوزي', products))
+        self.assertEqual(m.customer_product_target('اريد عباء لون وردي', products)['product_id'],'P016')
+
+    def test_global_refusal_stops_choice_loop_without_human_or_order(self):
+        m.complete_customer_product_link(self.db,self.sender,CATALOG[0],'manual')
+        m.complete_customer_product_link(self.db,self.sender,CATALOG[1],'manual',preserve_existing=True)
+        with patch.object(m,'classify_contextual_selection') as classifier, patch.object(m,'create_human_review') as review:
+            result=m.resolve_product_choice(self.db,dict(self.ev,text='ما ااريد بعد'),CATALOG)
+        self.assertTrue(result['meta']['purchase_declined'])
+        self.assertNotIn('موديل',result['reply'])
+        classifier.assert_not_called();review.assert_not_called()
+        self.assertFalse(m.customer_declines_purchase('ما اريد السوت اريد الفستان'))
+
+    def test_second_unresolved_choice_creates_one_review_without_repeating_question(self):
+        ev=dict(self.ev,text='هذا لو هذا')
+        with patch.object(m,'send_telegram_message',return_value=True) as notify:
+            first=m.product_clarification_or_review(self.db,ev,'تقصدين الفستان الأول لو الثاني؟')
+            second=m.product_clarification_or_review(self.db,ev,'تقصدين الفستان الأول لو الثاني؟')
+            third=m.product_clarification_or_review(self.db,ev,'تقصدين الفستان الأول لو الثاني؟')
+        self.assertTrue(first['reply'])
+        self.assertEqual(second['reply'],'')
+        self.assertTrue(second['meta']['needs_human'])
+        self.assertEqual(second['meta']['human_review_id'],third['meta']['human_review_id'])
+        self.assertEqual(notify.call_count,1)
+        self.assertTrue(m.is_customer_ai_enabled(self.db,self.sender))
+
+    def test_multi_product_contact_does_not_get_blocked_before_model(self):
+        # The pre-provider guard must allow an address/refusal in a known basket.
+        with patch.object(m,'OPENROUTER_KEY',''), patch.object(m,'is_product_detail_followup',return_value=False):
+            for text in ['دزيت الج','ثنيهم واحد اسود والثاني جوزي','بغداد العامرية']:
+                result=REAL_MAIN_AI_ONCE(dict(self.ev,text=text),'text',{},[],CATALOG,None,None,'',[],customer_products=CATALOG)
+                self.assertEqual(result.get('failure_reason'),'no_api_key')
+                self.assertNotIn('حدديه',result.get('reply',''))
+        self.assertEqual(m.image_selection_intent('حبيبتي ثنيهم واحد اسود والثاني جوزي'),'add')
+
+    def test_contact_preserves_multi_item_draft_and_weight_type(self):
+        for product in CATALOG:
+            m.complete_customer_product_link(self.db,self.sender,product,'manual',preserve_existing=True)
+        items=[dict(product_id=p['product_id'],color='اسود',size='38',size_type='size',weight='50',quantity=1) for p in CATALOG]
+        m.save_message(self.db,self.sender,'outgoing','text','دزي الرقم',None,None,None,{'checkout_draft':{'items':items,'address':'المقدادية','notes':'واتساب فقط'}})
+        result={'order':{'items':[dict(i,size_type='weight',weight='') for i in items]}}
+        m.restore_checkout_draft(self.db,dict(self.ev,text='07701234567'),result,None)
+        self.assertEqual(result['order']['items'],items)
+        self.assertEqual(result['order']['notes'],'واتساب فقط')
+        self.assertEqual(result['order']['address'],'المقدادية')
+
+    def test_known_price_recovers_without_human_when_model_cannot_answer(self):
+        with patch.object(m,'_call_main_ai_once',return_value={'reply':'','failed':True,'failure_reason':'provider_http_402'}):
+            result=m.call_main_ai(dict(self.ev,text='شكد السعر؟'),'text',{},[],CATALOG,CATALOG[0],None,'',[])
+        self.assertFalse(result['requires_human'])
+        self.assertIn('16,000',result['reply'])
+        self.assertTrue(result['_catalog_fallback'])
+
+    def test_unknown_compound_question_is_not_hidden_by_price_fallback(self):
+        with patch.object(m,'_call_main_ai_once',return_value={'reply':'','requires_human':True,'handoff_reason':'تفصيل غير متوفر'}):
+            result=m.call_main_ai(dict(self.ev,text='شكد السعر وشنو الطول'),'text',{},[],CATALOG,CATALOG[0],None,'',[])
+        self.assertTrue(result['failed'])
+        self.assertTrue(result['requires_human'])
+        self.assertFalse(result.get('_catalog_fallback'))

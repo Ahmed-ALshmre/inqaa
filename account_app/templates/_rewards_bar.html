@@ -1,0 +1,6 @@
+{% if staff_person %}
+<a href="/rewards" class="credit-bar" aria-label="رصيد المكافآت وهدف اليوم">
+  <span aria-hidden="true">✦</span><span data-credit-balance>المكافآت</span>
+  {% if not staff_person.owner %}<span class="credit-goal"><span data-credit-goal>هدف اليوم ٠ / ٥</span><progress data-credit-progress max="5" value="0" aria-label="المشاكل المحلولة اليوم"></progress></span>{% endif %}
+</a>
+{% endif %}

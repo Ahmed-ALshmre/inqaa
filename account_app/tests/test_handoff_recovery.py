@@ -28,6 +28,20 @@ class HandoffRecoveryTests(unittest.TestCase):
         self.assertEqual(model.call_count, 2)
 
 
+    def test_provider_failure_gets_second_reply_attempt(self):
+        failed = {'reply': '', 'failed': True, 'failure_reason': 'provider_http_503'}
+        recovered = {'reply': 'التوصيل خمسة آلاف', 'requires_human': False}
+        with patch.object(app, '_call_main_ai_once', side_effect=[failed, recovered]) as model:
+            self.assertEqual(self.ask('شكد التوصيل؟'), recovered)
+        self.assertEqual(model.call_count, 2)
+
+    def test_unmatched_image_does_not_retry_recognition(self):
+        failed = {'reply': '', 'requires_human': True}
+        with patch.object(app, '_call_main_ai_once', return_value=failed) as model:
+            app.call_main_ai({'text': ''}, 'image', {}, [], [], None,
+                             {'unmatched_customer_image': True}, '', [])
+        model.assert_called_once()
+
     def test_incomplete_or_ambiguous_questions_are_not_guessed(self):
         for text in ['السعر ويا التوصيل؟', 'قياس 70 يلبس وزن 90؟', 'بدلي اللون وردي', 'شكد السعر وأريد ألغي الحجز']:
             self.assertIsNone(app.known_product_question_reply(text, self.product))

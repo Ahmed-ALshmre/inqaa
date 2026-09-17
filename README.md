@@ -168,3 +168,10 @@ Runtime logs and local secrets are intentionally ignored by Git:
 
 ### Separate Telegram notification group
 Set `TELEGRAM_NOTIFICATIONS_CHAT_ID` to the notification group ID. Human review, system alerts and post-order problems use this destination. Keep `TELEGRAM_ORDERS_CHAT_ID`, `TELEGRAM_CHAT_ID`, and per-store booking destinations unchanged. Add the existing bot to the new group with permission to send messages. Review commands are accepted from the notification group.
+
+
+## رصيد الإنجاز للموظفين
+
+من أعلى المحادثات أو صفحة `/rewards` يستطيع الموظف متابعة رصيده وهدف اليوم (٥ مشاكل بتوقيت بغداد). يعرض حساب المالك أرصدة الموظفين. تُسجّل مكافأة ٥٠ ديناراً لكل مراجعة بشرية معلّقة عند إغلاقها بزر تمت المعالجة أو حلها بربط المنتج، بما فيه الربط في الخلفية. كل ٥ مراجعات تساوي ٢٥٠ ديناراً، ويظهر إشعار متحرك عند إضافة الرصيد.
+
+إذا كان الزمن من إنشاء المراجعة إلى حلها أقل من متوسط آخر ١٠ حلول مؤرخة للموظف، تكون مكافأتها ٦٠ ديناراً (×1.2). أول حل والمراجعات ذات التوقيت المفقود لا تأخذ علاوة سرعة. تُحفظ المكافأة مع إغلاق المراجعة في معاملة واحدة داخل `staff_rewards`، ومفتاح المراجعة يمنع تكرارها. لا تُحتسب إجراءات المالك، الإغلاق الجماعي، الرسائل العادية أو المعالجة الآلية. هذه أرصدة تراكمية وليست نظام صرف أو تحويل مالي. لا تُمنح مكافآت بأثر رجعي للمراجعات المغلقة.

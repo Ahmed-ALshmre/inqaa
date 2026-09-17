@@ -2777,3 +2777,6 @@ button,a,input,select,textarea { touch-action:manipulation; }
 .conversation-ad-copy span { color:var(--text-muted, #675c65); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .conversation-ad-context a { flex-shrink:0; color:var(--primary, #642447); font-size:11px; }
 @media(max-width:480px) { .conversation-ad-context { padding:6px 10px; gap:7px; } .conversation-ad-context img { width:36px; height:36px; } }
+
+/* Keep alerts above the conversation on desktop and mobile. */
+body .toast-container, body.mobile-conversation-open .toast-container { top: max(12px, env(safe-area-inset-top)) !important; bottom: auto !important; z-index: 1090; }

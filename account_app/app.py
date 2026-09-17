@@ -24,13 +24,13 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import menger, chatwoot, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard
+    from . import menger, chatwoot, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
     from .checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
-    import ai_efficiency, ai_transport, ai_jobs, rewrite_guard
+    import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
     import menger
     import chatwoot
     import ad_attribution
@@ -3689,6 +3689,7 @@ def handle_human_product_selection(db, review_id, product_id):
         (status, reply, now, review_id),
     )
     db.commit()
+    set_customer_ai_enabled(db, row["sender_id"], True)
     return {
         "ok": True,
         "review_id": review_id,
@@ -4813,8 +4814,9 @@ def _text_match_product(text, products):
                 words.add(stripped)
 
     # A category/color/size shared by several models does not identify a model.
-    generic = _PRODUCT_TYPE_TERMS | _GENERIC_PRODUCT_TERMS | _COLOR_TERMS | {"عباء", "فستان", "فساتين", "قياس", "قياسات", "اسود", "أسود"}
-    identifying = {w for w in words if _strip_arabic_prefix(w) not in generic and not w.isdigit()}
+    generic = _PRODUCT_TYPE_TERMS | _GENERIC_PRODUCT_TERMS | _COLOR_TERMS | {"عباء", "فستان", "فساتين", "قياس", "قياسات", "اسود", "أسود", "لون", "اللون", "الوان", "ألوان", "وزن", "الوزن"}
+    generic |= {_strip_arabic_prefix(w) for w in list(generic)}
+    identifying = {w for w in words if w not in generic and _strip_arabic_prefix(w) not in generic and not w.isdigit()}
 
     best_product, best_score, tied = None, 0, False
     for p in products:
@@ -5868,7 +5870,7 @@ def image_selection_intent(text):
     text = str(text or "").strip()
     if re.search(r"(?:لا|ما)\s*(?:تضيف|تضيفين|تضيفي|اضيف|أضيف)|(?:بس|فقط)\s*(?:هذا|هذه|هاذ|هاي|هذني)|(?:هذا|هذه|هاي)\s*(?:بس|فقط|وحده|وحدها)|بدل|مو هذا|مو هاذا|اقصد هذا|أقصد هذا|عوفي السابق|الغ[يِ] السابق", text):
         return "replace"
-    if re.search(r"ضيف|اضيف|أضيف|بالاضاف|بالإضاف|هم اريد|هم أريد|ويا(?:ه|ها|هم|هن| القديم| السابق| الاول| الأول)|مع السابق|الاثنين|الإثنين|كلاهما", text):
+    if re.search(r"ضيف|اضيف|أضيف|بالاضاف|بالإضاف|هم اريد|هم أريد|ويا(?:ه|ها|هم|هن| القديم| السابق| الاول| الأول)|مع السابق|الاثنين|الإثنين|كلاهما|ثنيهم|ثنينهم|اثنينهم|ثنتينهن", text):
         return "add"
     return ""
 
@@ -6007,11 +6009,43 @@ def resolve_contextual_product_selection(db, ev, products):
                                             {"product_selection_changed": True})
     # Fail closed: preserve all choices if interpretation is unavailable or ambiguous.
     names = " لو ".join(p.get("product_name") or p["product_id"] for p in candidates)
-    return saved_checkout_reply(db, ev, f"حتى أفهم قصدج، تقصدين {names}؟",
-                                {"product_selection_clarification": True})
+    return product_clarification_or_review(db, ev, f"حتى أفهم قصدج، تقصدين {names}؟")
+
+
+def customer_declines_purchase(text):
+    text = str(text or "").translate(str.maketrans("أإآ", "ااا")).strip(" .!،؟")
+    return bool(re.fullmatch(r"(?:(?:حبيبتي|عيني|حبي)\s+)?(?:ما\s*ا+ريد(?:\s+بعد)?|عوفي\s+عيني|خلاص\s+ما\s*اريد)(?:\s+(?:عيني|حبيبتي))?", text))
+
+
+def previous_product_clarification(db, sender_id):
+    row = db.execute("SELECT text,raw_payload FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' ORDER BY id DESC LIMIT 1", (sender_id,)).fetchone()
+    if not row:
+        return False
+    try:
+        metadata = json.loads(row['raw_payload'] or '{}')
+    except (ValueError, TypeError):
+        metadata = {}
+    return bool(metadata.get('product_selection_clarification') or metadata.get('product_choice_pending')
+                or reply_reasks_known_product(row['text'])
+                or re.search(r"تقصدين.+لو|أثبتلج.+لو وياه", row['text'] or ''))
+
+
+def product_clarification_or_review(db, ev, question):
+    if previous_product_clarification(db, ev['sender_id']):
+        review_id = create_human_review(db, ev,
+            "تعذر حسم اختيار المنتجات بعد سؤال توضيح؛ راجع الصور والقطع المطلوبة قبل الحجز")
+        return {'sender_id': ev['sender_id'], 'reply': '', 'send_image': False,
+                'meta': {'needs_human': True, 'human_review_id': review_id, 'reason': 'unresolved_product_decision'}}
+    return saved_checkout_reply(db, ev, question, {'product_selection_clarification': True})
 
 
 def resolve_product_choice(db, ev, products):
+    if customer_declines_purchase(ev.get('text')) and not get_latest_customer_order(db, ev['sender_id']):
+        product_choice_table(db)
+        db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev['sender_id'],))
+        db.commit()
+        return saved_checkout_reply(db, ev, "تدللين عيني، ما راح أثبت أي طلب. إذا احتجتي شي إحنا بخدمتج.",
+                                    {'purchase_declined': True})
     semantic_reply = resolve_contextual_product_selection(db, ev, products)
     if semantic_reply or ev.get("_selection_resolved"):
         return semantic_reply
@@ -6028,8 +6062,7 @@ def resolve_product_choice(db, ev, products):
     intent = image_selection_intent(text)
     if not intent:
         if re.search(r"ثبت|ثبتي|احجز|أحجز|حجز|اطلب|أطلب|طلبيه|طلبية", text) or contact_fields(text):
-            return saved_checkout_reply(db, ev, product_choice_question(previous, selected),
-                                        {"product_choice_pending": True})
+            return product_clarification_or_review(db, ev, product_choice_question(previous, selected))
         return None
     chosen = previous + selected if intent == "add" else selected
     unique = list({p["product_id"]: p for p in chosen}.values())
@@ -6983,6 +7016,14 @@ def call_main_ai(
             + "\nأقر باستبعاد المرفوض باختصار وتابع المنتج الباقي المعروف وأجب عن سؤاله الحالي. "
               "لا تطلب الاسم أو الصورة من جديد ولا تعتبر رفض بديل رغبة بالحجز. المعرفات داخلية لا تذكرها للزبون."
         )
+    instructions_text += (
+        "\nوجود أكثر من منتج معروف لا يعني أن المحادثة غامضة. استخدم الصور المرتبة واللون والقياس ومسودة الحجز "
+        "لفهم كل قطعة. ثنيهم/ثنينهم تعني القطعتين. لا تطلب الاسم أو الصورة بعد تحديدهما، "
+        "ولا تغيّر المنتج عند ذكر لون أو هاتف أو عنوان. أجب عن الأسئلة المتاحة قبل طلب الحجز. "
+        "احترم الرفض والشكاوى ولا ترد عليها بسؤال أي موديل. لا تعِد سؤالاً سبق أن أجاب عنه الزبون. "
+        "إن بقي تعارض فعلي بعد مراجعة السياق وسؤال توضيح، أعد requires_human=true مع handoff_reason دقيق. "
+        "لا تدع أنك موظفة بشرية إذا سُئلت عن كونك ذكاء اصطناعياً."
+    )
     # Every conversational answer is generated by AI with the linked product context.
     question = ev.get("text") or ""
     if matched_product and requests_alternative_photo(question) and len(product_image_urls(matched_product)) <= 1:
@@ -6996,9 +7037,8 @@ def call_main_ai(
                         and reply_reasks_known_product(result.get("reply")))
     needs_review = (lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
-    transport_failure = str(result.get("failure_reason") or "").startswith(("provider_http_", "exception:"))
     format_failure = result.get("failure_reason") == "invalid_ai_response"
-    if needs_review and not transport_failure and not fix_instruction and not ev.get('_staff_preview') and (format_failure or not (image_result or {}).get("unmatched_customer_image")):
+    if needs_review and not fix_instruction and not ev.get('_staff_preview') and not (image_result or {}).get("unmatched_customer_image"):
         kwargs["fix_instruction"] = (
             "راجع قرار التحويل قبل اعتماده. أجب عن أسئلة السعر واللون والقياس والخامة والتوصيل والفحص "
             "من بيانات المنتج والمتجر والطلب المرفقة. الربط الموجود صالح ولا يحتاج إعادة ربط يدوي. "
@@ -7012,13 +7052,28 @@ def call_main_ai(
         if format_failure:
             kwargs["fix_instruction"] += ' الرد السابق تعذر قراءته. أرجع كائن JSON صالح فقط بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder. لا تؤكد حجزاً دون بيانات مكتملة وموافقة الزبون.'
         result = _call_main_ai_once(*args, **kwargs)
+    if (matched_product and (result.get('failed') or result.get('requires_human') is True
+            or reply_reasks_known_product(result.get('reply')))):
+        factual = known_product_questions_reply(question, matched_product)
+        if factual and factual.get('intent') != 'product_photo':
+            return dict(factual, _catalog_fallback=True)
     if matched_product and not is_product_objection(question) and reply_reasks_known_product(result.get("reply")):
         return {"reply": "", "failed": True, "failure_reason": "known_product_context_repeatedly_ignored", "requires_human": True}
+    if result.get('requires_human') is True or is_ai_handoff_reply(result.get('reply')):
+        return dict(result, reply='', create_order=False, failed=True,
+                    failure_reason=result.get('handoff_reason') or 'unresolved_decision_after_context_review')
+    if (has_app_context() and ev.get('sender_id') and reply_reasks_known_product(result.get('reply'))
+            and previous_product_clarification(get_db(), ev['sender_id'])):
+        return {'reply': '', 'create_order': False, 'failed': True, 'requires_human': True,
+                'failure_reason': 'unresolved_product_decision_after_clarification'}
     pending = pending_product_choice(get_db(), ev.get("sender_id")) if has_app_context() else None
     if pending and checkout_requested(get_db(), ev, result):
         catalog = {p["product_id"]: p for p in products}
         previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
         selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
+        if previous_product_clarification(get_db(), ev['sender_id']):
+            return {'reply': '', 'create_order': False, 'failed': True, 'requires_human': True,
+                    'failure_reason': 'unresolved_product_decision_after_clarification'}
         return {"reply": product_choice_question(previous, selected), "create_order": False, "order": {}, "intent": "product_choice"}
     return result
 
@@ -7062,16 +7117,8 @@ def _call_main_ai_once(
             "confidence": 100,
         }
 
-    if not post_order and not matched_product and customer_products:
-        text = ev.get("text") or ""
-        multiple_request = bool(re.search(r"مقارن|الفرق|بين|موديلين|قطعتين|الاثنين|كلهن|كلهم|هذني|هذولي|هذوله", text))
-        named = [p for p in customer_products if p.get("product_name") and p["product_name"] in text]
-        if not multiple_request and len(named) < 2:
-            clarification = ("عندج أكثر من موديل بالمحادثة؛ أي واحد تقصدين؟" if len(customer_products) > 1
-                             else "الموديل المذكور مو واضح من الاختيار السابق.")
-            return {"reply": clarification + " حدديه بالاسم أو الصورة حتى أعطيج التفاصيل الصحيحة.",
-                    "intent": "question", "create_order": False, "order": {}, "confidence": 100}
-
+    # A missing single focus is normal for a multi-item conversation. Let the
+    # model use the full known basket, including contact details and refusals.
     if not OPENROUTER_KEY:
         print("[MainAI] No API key, escalating to human.", flush=True)
         return {
@@ -7796,8 +7843,6 @@ def checkout_requested(db, ev, result):
 
 def restore_checkout_draft(db, ev, result, matched_product):
     """Carry known single-item options across contact-only replies, never corrections."""
-    if not matched_product:
-        return
     text = str(ev.get("text") or "")
     if re.search(r"قياس|مقاس|وزن|كيلو|لون|بدل|مو هذا|ما اريد|لا اريد|عوفي|ضيف", text):
         return
@@ -7812,19 +7857,34 @@ def restore_checkout_draft(db, ev, result, matched_product):
     if not draft or not created or datetime.now(created.tzinfo) - created > timedelta(hours=24):
         return
     items = draft.get("items") or []
-    if len(items) != 1 or items[0].get("product_id") != matched_product.get("product_id"):
+    allowed = {p['product_id'] for p in load_customer_products(db, ev['sender_id'], limit=50)}
+    if matched_product:
+        allowed.add(matched_product['product_id'])
+    if not items or any(not isinstance(i, dict) or i.get('product_id') not in allowed for i in items):
         return
     current = dict(result.get("order") or {})
-    current_items = current.get("items") or []
-    if any(i.get("product_id") and i.get("product_id") != matched_product.get("product_id") for i in current_items if isinstance(i, dict)):
-        return
-    if len(current_items) > 1:
-        return
-    item = dict(items[0])
-    if current_items and isinstance(current_items[0], dict):
-        item.update({k: v for k, v in current_items[0].items() if v not in (None, "")})
-    current["items"] = [item]
-    result["order"] = current
+    current_items = current.get('items') or []
+    if current_items:
+        if len(current_items) != len(items) or any(not isinstance(i, dict) for i in current_items):
+            return
+        if [i.get('product_id') for i in current_items] != [i.get('product_id') for i in items]:
+            return
+    restored = []
+    for index, old in enumerate(items):
+        item = dict(old)
+        if current_items:
+            item.update({k:v for k,v in current_items[index].items() if v not in (None, '')})
+        # Contact-only input cannot silently change known product variants.
+        for key in ('color', 'size', 'size_type', 'weight', 'quantity'):
+            if old.get(key) not in (None, ''):
+                item[key] = old[key]
+        restored.append(item)
+    current['items'] = restored
+    for key in ('customer_name', 'phone', 'province', 'address', 'notes'):
+        if not current.get(key) and draft.get(key):
+            current[key] = draft[key]
+    result['order'] = current
+
 
 def collect_unanswered_event(db, ev, incoming_message_id):
     rows = db.execute("""SELECT * FROM messages WHERE sender_id=? AND direction='incoming'
@@ -9474,6 +9534,8 @@ def reply_human_review(review_id):
         reply, None, None, None, {"human_review_id": review_id, "reply": reply},
     )
     sent = send_human_reply_to_customer(row["sender_id"], reply)
+    if sent:
+        set_customer_ai_enabled(db, row["sender_id"], True)
     return jsonify({
         "status": "ok",
         "review_id": review_id,
@@ -9637,6 +9699,7 @@ def health():
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 current_dashboard_person = install_staff(app, get_db)
+rewards.install(app, get_db, current_dashboard_person)
 def _dash_auth():
     if session.get("dashboard_authenticated") is True:
         return True
@@ -10695,6 +10758,7 @@ def queue_dashboard_ai(sender_id, kind, data):
     if not owner or (owner['store_id'] or DEFAULT_STORE_ID) != current_store_id():
         return jsonify(error='المحادثة غير موجودة في هذا المتجر.'), 404
     payload = dict(data, **{'async': False})
+    payload['_reward_actor'] = {'id': session.get('staff_id'), 'version': session.get('staff_version')}
     key = payload.pop('request_id', None)
     if not key:
         latest = db.execute('SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=?', (sender_id,)).fetchone()[0]
@@ -10729,6 +10793,9 @@ def run_ai_job(job, payload):
                 raise ai_jobs.Busy()
             endpoint = 'ask_ai' if job['kind'] == 'preview' else 'link_product'
             with app.test_request_context(f"/api/conversations/{job['sender_id']}/{endpoint}", method='POST', json=payload):
+                actor = payload.get('_reward_actor') or {}
+                if actor.get('id'):
+                    session.update(dashboard_authenticated=True, staff_id=actor['id'], staff_version=actor.get('version'))
                 function = api_ask_ai if job['kind'] == 'preview' else api_link_product
                 response = app.make_response(function.__wrapped__(job['sender_id']))
                 result = response.get_json() or {}
@@ -11178,13 +11245,7 @@ def api_link_product(sender_id):
         return jsonify({"error": "product_id required"}), 400
 
     db  = get_db()
-    if "resume_ai" in data:
-        resume_ai = _setting_bool(data.get("resume_ai"), False)
-    else:
-        pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
-        resume_ai = is_customer_ai_enabled(db, sender_id) or bool(pause and pause['reason'] in
-                    {'image_unresolved', 'service_error', 'ai_timeout'})
-    resume_ai = resume_ai and is_ai_enabled(db)
+    resume_ai = _setting_bool(data.get("resume_ai"), True)
     now = now_baghdad_iso()
     linked_products = []
     review_cutoff = db.execute('SELECT COALESCE(MAX(id),0) FROM human_reviews WHERE sender_id=?', (sender_id,)).fetchone()[0]
@@ -11226,22 +11287,25 @@ def api_link_product(sender_id):
         f"(silent={silent}, resume_ai={resume_ai})",
         flush=True,
     )
+    # Linking resolves the intervention immediately, even without an outgoing reply.
+    rewards.tables(db)
+    db.execute("BEGIN IMMEDIATE")
+    rewards.award_pending(db, sender_id, current_dashboard_person(), cutoff=review_cutoff)
+    db.execute("UPDATE human_reviews SET status='linked', replied_at=? WHERE sender_id=? AND status='pending' AND id<=?",
+               (now, sender_id, review_cutoff))
+    db.commit()
+    close_human_attention(db, sender_id)
+    if resume_ai:
+        set_customer_ai_enabled(db, sender_id, True)
     auto_reply = None
-    if not silent:
+    if not silent and is_ai_enabled(db):
         auto_reply = auto_reply_after_product_link(db, sender_id, linked_products[-1], staff_action=True)
-        if auto_reply.get('sent'):
-            db.execute("UPDATE human_reviews SET status='linked', replied_at=? WHERE sender_id=? AND status='pending' AND id<=?",
-                       (now, sender_id, review_cutoff))
-            db.commit()
-            latest_pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
-            if resume_ai and is_ai_enabled(db) and (not latest_pause or latest_pause['reason'] != 'manual'):
-                set_customer_ai_enabled(db, sender_id, True)
     return jsonify({
         "ok": True,
         "product": linked_products[-1],
         "products": linked_products,
         "auto_reply": auto_reply,
-        "ai_resumed": bool(resume_ai and auto_reply and auto_reply.get('sent')),
+        "ai_resumed": is_customer_ai_enabled(db, sender_id),
         "silent": silent,
     })
 
@@ -13549,6 +13613,7 @@ def close_human_attention(db, sender_id=None):
     clause = ' AND sender_id=?' if sender_id is not None else ''
     params = (sender_id,) if sender_id is not None else ()
     now = now_baghdad_iso()
+    rewards.tables(db)
     with db:
         # Reserve the write transaction before counting, so the result describes
         # exactly the records closed by this operation, not later incoming issues.
@@ -13557,6 +13622,8 @@ def close_human_attention(db, sender_id=None):
             SELECT sender_id FROM human_reviews WHERE status='pending'{clause}
             UNION SELECT sender_id FROM problem_reports
             WHERE COALESCE(status,'open') IN ('open','needs_attention'){clause})''', params + params).fetchone()[0]
+        if sender_id is not None and rewards.has_request_context():
+            rewards.award_pending(db, sender_id, current_dashboard_person())
         reviews = db.execute("UPDATE human_reviews SET status='reviewed',replied_at=? WHERE status='pending'" + clause,
                              (now,) + params).rowcount
         problems = db.execute("UPDATE problem_reports SET status='closed',updated_at=? WHERE COALESCE(status,'open') IN ('open','needs_attention')" + clause,
@@ -13579,7 +13646,7 @@ def api_mark_reviewed(sender_id):
     data = request.get_json(silent=True) or {}
     db  = get_db()
     closed = close_human_attention(db, sender_id)
-    if _setting_bool(data.get("resume_ai"), False):
+    if _setting_bool(data.get("resume_ai"), True):
         try:
             set_customer_ai_enabled(db, sender_id, True)
         except Exception as exc:
