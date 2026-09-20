@@ -24,13 +24,14 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import menger, chatwoot, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
+    from . import baraah, menger, chatwoot, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
     from .checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
+    import baraah
     import menger
     import chatwoot
     import ad_attribution
@@ -1235,6 +1236,7 @@ def init_db():
             print(f"[DB] Could not add {table_name}.store_id: {exc}", flush=True)
 
     now = now_baghdad_iso()
+    baraah.seed(db, now)
     for store_id, name, webhook_key in (
         (DEFAULT_STORE_ID, "لمسة ستور", LAMSA_WEBHOOK_KEY),
         (KHUYOOT_STORE_ID, KHUYOOT_STORE_NAME, KHUYOOT_STORE_ID),
@@ -6534,6 +6536,8 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
 
 
 def load_ai_config(db, sender_id=None):
+    if current_store_id() == baraah.STORE_ID:
+        return baraah.ai_config(db, sender_id, get_delivery_policy_text(db))
     instructions = db.execute(
         "SELECT content FROM ai_instructions WHERE active=1"
     ).fetchall()
@@ -11079,10 +11083,11 @@ def api_stores():
             DEFAULT_STORE_ID: ("لمسة ستور", LAMSA_WEBHOOK_KEY),
             LAMSA_WEBHOOK_KEY: ("لمسة ستور", LAMSA_WEBHOOK_KEY),
             KHUYOOT_STORE_ID: (KHUYOOT_STORE_NAME, KHUYOOT_STORE_ID),
+            baraah.STORE_ID: (baraah.STORE_NAME, baraah.STORE_ID),
         }
         requested = _safe_store_id(data.get("store_id") or webhook_key)
         if requested not in allowed:
-            return jsonify({"error": "النظام مخصص لمتجري لمسة ستور وخيوط فقط"}), 409
+            return jsonify({"error": "معرّف المتجر غير مدعوم؛ اختر أحد المتاجر المعرّفة بالنظام"}), 409
         fixed_name, fixed_webhook = allowed[requested]
         fixed_store_id = DEFAULT_STORE_ID if requested == LAMSA_WEBHOOK_KEY else requested
         store_id = ensure_store(

@@ -12,7 +12,7 @@ async function loadStores() {
     const config = store.menger || {};
     return `<form class="admin-panel mb-3 store-delivery-form" data-store="${adminEsc(store.store_id)}">
       <h3>${adminEsc(store.name)}</h3>
-      <label class="form-label" for="webhook-${index}">رابط ManyChat</label>
+      <label class="form-label" for="webhook-${index}">رابط استقبال رسائل المتجر</label>
       <input id="webhook-${index}" class="form-control mb-3" dir="ltr" readonly value="${adminEsc(store.webhook_url)}" onclick="this.select()">
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label" for="remote-store-${index}">معرّف المتجر داخل Menger</label>

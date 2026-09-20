@@ -112,7 +112,10 @@ def install(module):
             if configured_account and str(account) != configured_account:
                 return jsonify(error='Unexpected Chatwoot account'), 403
             mapping = json.loads(os.environ.get('CHATWOOT_INBOX_STORES', '{}'))
-            mapped_store = mapping.get(f'{account}:{inbox}', '')
+            db = module.get_db()
+            binding = db.execute('SELECT value FROM app_settings WHERE key=?',
+                                 (f'chatwoot_inbox_store:{account}:{inbox}',)).fetchone()
+            mapped_store = mapping.get(f'{account}:{inbox}', binding['value'] if binding else '')
             if store_key and mapped_store and store_key != mapped_store:
                 raise ValueError()
             # Never silently route an unknown inbox into another store.
