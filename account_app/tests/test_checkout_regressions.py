@@ -43,6 +43,16 @@ class ContactRegressionTests(unittest.TestCase):
             self.assertNotIn("address", contact_fields(text))
         self.assertNotIn("province", contact_fields("شكد توصيل بغداد"))
 
+    def test_shop_location_question_is_not_address(self):
+        self.assertNotIn("address", contact_fields("بغداد ليش انتو في بغداد لو خارجها"))
+
+    def test_landmark_completes_previous_address(self):
+        previous = {"province": "بغداد", "address": "بغداد ساحه واثق"}
+        result = contact_fields("مقابل جوازات عامه", previous)
+        self.assertEqual(result["address"], "بغداد ساحه واثق، مقابل جوازات عامه")
+        corrected = contact_fields("العنوان بغداد حي اور", previous)
+        self.assertEqual(corrected["address"], "بغداد حي اور")
+
     def test_actions_reported_in_fatena_are_blocked(self):
         for reply in ["لغيت القميص وهسه الطلب صار بس الفستان والسوت الملكي", "من عيوني شلت القميص", "عدلت القياس", "أثبتلج القطعة على هذا القياس؟", "تم إلغاء الطلب"]:
             self.assertTrue(unsupported_order_action(reply), reply)
@@ -93,6 +103,14 @@ class CheckoutRegressionTests(unittest.TestCase):
     def incoming(self, text):
         self.ev["text"] = text
         self.m.save_message(self.db, self.sender, "incoming", "text", text, None, None, None, {})
+
+    def test_saved_shop_question_cannot_create_order(self):
+        data = self.data()
+        data["address"] = "بغداد ليش انتو في بغداد لو خارجها"
+        created, reply = self.m.create_order_if_valid(self.db, self.sender, {"order": data}, CATALOG[0])
+        self.assertIsNone(created)
+        self.assertIn("العنوان", reply)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 0)
 
     def test_greeting_and_generic_dress_never_bind_default(self):
         for text in ["سلام عليكم", "فستان", "ما هي مواصفات الفستان؟", "اريد فستان اسود قياس ٤٤"]:

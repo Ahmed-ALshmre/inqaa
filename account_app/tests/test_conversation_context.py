@@ -55,6 +55,64 @@ class ConversationContextTests(unittest.TestCase):
                 with patch.object(m, "_call_main_ai_once", return_value={"reply": model_reply, "order": {}, "create_order": False}):
                     return m.process_webhook(self.db, {}, use_debounce=False)
             return m.process_webhook(self.db, {}, use_debounce=False)
+    def test_opening_duplicate_name_uses_existing_manual_binding(self):
+        catalog = [dict(p, product_name='فستان') for p in CATALOG]
+        with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
+            m.complete_customer_product_link(self.db,self.sender,catalog[1],'manual',source='manual_admin')
+            result=self.event('ما هي مواصفات الفستان؟')
+            self.assertNotIn('first_message_name_ambiguous',result.get('meta',{}))
+            self.assertIn('15,000',result['reply'])
+            self.assertFalse(m.reply_reasks_known_product(result['reply']))
+            self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
+
+    def test_opening_duplicate_name_uses_unique_ad_binding(self):
+        catalog = [dict(p, product_name='فستان',ad_id=str(i+100)) for i,p in enumerate(CATALOG)]
+        self.ev['ad_id']='101'
+        with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
+            result=self.event('ما هي مواصفات الفستان؟')
+            self.assertNotIn('first_message_name_ambiguous',result.get('meta',{}))
+            self.assertIn('15,000',result['reply'])
+
+    def test_fresh_ad_takes_precedence_over_previous_binding(self):
+        catalog = [dict(p,product_name='فستان',ad_id=str(i+100)) for i,p in enumerate(CATALOG)]
+        self.ev['ad_id']='101'
+        with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
+            m.complete_customer_product_link(self.db,self.sender,catalog[0],'manual',source='manual_admin')
+            result=self.event('ما هي مواصفات الفستان؟')
+            self.assertIn('15,000',result['reply'])
+            self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
+
+    def test_ambiguous_opening_without_binding_still_asks(self):
+        catalog = [dict(p,product_name='فستان') for p in CATALOG]
+        with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
+            result=self.event('ما هي مواصفات الفستان؟')
+            self.assertTrue(result['meta']['first_message_name_ambiguous'])
+            self.assertIsNone(m.get_active_product_binding(self.db,self.sender))
+
+    def test_explicit_other_product_overrides_opening_binding(self):
+        m.complete_customer_product_link(self.db,self.sender,CATALOG[0],'manual',source='manual_admin')
+        result=self.event('اريد فستان انيقة')
+        self.assertIn('15,000',result['reply'])
+        self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
+
+    def test_new_reask_variants_are_retried_with_known_context(self):
+        ev=dict(self.ev,text='شكد السعر')
+        for wrong in ['دزلي صورته حتى اعرف السعر','ارسلي صورتها','حددي الموديل حتى اجاوبج','يا موديل تقصدين؟']:
+            with self.subTest(wrong=wrong), patch.object(m,'_call_main_ai_once',side_effect=[{'reply':wrong},{'reply':'سعره 16 ألف','create_order':False}]) as model:
+                result=m.call_main_ai(ev,'text',{},[],CATALOG,CATALOG[0],None,'',[],customer_products=[CATALOG[0]])
+                self.assertEqual(model.call_count,2)
+                self.assertEqual(result['reply'],'سعره 16 ألف')
+        for okay in ['شنو القياس المطلوب؟','دزلي رقم الهاتف','صورته موجودة بالمحادثة','دزلي العنوان حتى نكمل']:
+            self.assertFalse(m.reply_reasks_known_product(okay))
+
+    def test_missing_matched_record_recovers_only_valid_customer_selection(self):
+        with patch.object(m,'_call_main_ai_once',return_value={'reply':'سعره 16 ألف'}) as model:
+            m.call_main_ai(dict(self.ev,text='شكد السعر'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
+            self.assertEqual(model.call_args.args[5]['product_id'],'F1')
+        with patch.object(m,'_call_main_ai_once',return_value={'reply':'سعره 15 ألف'}) as model:
+            m.call_main_ai(dict(self.ev,text='فستان انيقة'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
+            self.assertEqual(model.call_args.args[5]['product_id'],'F2')
+
     def test_audit_product_context_survives_long_history_and_wording(self):
         skirt = dict(CATALOG[0], product_id='SK', product_name='تنورة', category='تنورة', price='12000')
         catalog = [skirt, dict(CATALOG[1], product_id='SU', product_name='سوت نيلي', category='سوت')]

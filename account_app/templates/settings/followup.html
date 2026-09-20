@@ -33,22 +33,23 @@
     </label>
 
     <label class="admin-switch">
-      <input class="form-check-input" type="checkbox" id="followupStopOnOrder">
+      <input class="form-check-input" type="checkbox" id="followupStopOnOrder" checked disabled>
       <span>إيقاف المتابعة عند إنشاء طلب</span>
     </label>
 
     <label class="admin-switch">
-      <input class="form-check-input" type="checkbox" id="followupStopOnRejection">
+      <input class="form-check-input" type="checkbox" id="followupStopOnRejection" checked disabled>
       <span>إيقاف المتابعة عند رفض الزبون</span>
     </label>
 
     <label>
       مدة الانتظار قبل إرسال المتابعة (دقيقة)
       <input class="form-control" type="number" min="1" max="10080" id="followupDelay">
+      <small style="color:var(--text-muted)">نقطة بداية مقترحة: 120 دقيقة. الإعدادات المحفوظة سابقاً لا تتغير تلقائياً.</small>
     </label>
 
     <div class="admin-note">
-      يعمل النظام تلقائياً: يراجع سياق المحادثة ونسبة الاهتمام، ويتأكد أن الزبون لم يرفض ولم يحجز، ثم يكتب ويرسل رسالة عراقية مناسبة.
+      متابعة مفيدة واحدة فقط ما لم يرد الزبون. تتوقف بعد الرفض أو التأجيل أو الحجز، وعند انتظار تدخل موظف. إذا لم يجد المساعد سبباً مفيداً للمتابعة فلن يرسل شيئاً. لا تُرسل متابعة بعد مرور 23 ساعة على آخر رسالة من الزبون.
     </div>
 
     <div class="admin-note">

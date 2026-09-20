@@ -37,6 +37,14 @@ def phone_number(text):
     return digits
 
 
+def invalid_shipping_address(text):
+    """Reject known non-address declarations, including saved model guesses."""
+    clean = normalized(text).strip(" ,،.\n")
+    return (not clean or
+            any(clean == normalized(alias) for aliases in PROVINCES.values() for alias in aliases) or
+            bool(re.search(r"(?:ليش\s+انتو|انتو\s+(?:في|ب)|وين\s+(?:مكانكم|محلكم)|لو\s+خارجها)", clean)))
+
+
 def contact_fields(text, previous=None):
     """Extract declarations, never an address from a shipping question."""
     previous = previous or {}
@@ -48,7 +56,7 @@ def contact_fields(text, previous=None):
     phone = phone_number(original)
     if phone:
         result["phone"] = phone
-    is_question = bool(re.search(r"[؟?]|\b(?:شكد|كم|بشكد|شوكت|يوصل|توصيل|يصير)\b", clean))
+    is_question = bool(re.search(r"[؟?]|\b(?:شكد|كم|بشكد|شوكت|يوصل|توصيل|يصير|ليش|وين)\b", clean))
     declaration = bool(re.search(r"(?:عنواني|العنوان|اني من|انا من)", clean))
     province = ""
     if declaration or not is_question:
@@ -69,7 +77,13 @@ def contact_fields(text, previous=None):
     # A province on its own is not a delivery address.
     address_words = re.findall(r"\w+", normalized(address))
     province_only = any(normalized(address) == normalized(alias) for aliases in PROVINCES.values() for alias in aliases)
-    if address and not province_only and len(address_words) >= 2 and (location_marker or province or len(address_words) >= 3):
+    if address and not province_only and not invalid_shipping_address(address) and len(address_words) >= 2 and (location_marker or province or len(address_words) >= 3):
+        # A landmark sent in the next bubble supplements the established area.
+        previous_address = str(previous.get("address") or "").strip()
+        if (previous_address and not invalid_shipping_address(previous_address) and
+                not province and re.match(r"^(?:مقابل|قرب|خلف)\s", normalized(address)) and
+                normalized(address) not in normalized(previous_address)):
+            address = previous_address + "، " + address
         result["address"] = address[:500]
     return result
 

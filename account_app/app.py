@@ -24,21 +24,22 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import baraah, menger, chatwoot, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
+    from . import baraah, sales_engagement, menger, chatwoot, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
-    from .checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
+    from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
     import baraah
+    import sales_engagement
     import menger
     import chatwoot
     import ad_attribution
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
-    from checkout import contact_fields, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
+    from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
@@ -1115,10 +1116,10 @@ def init_db():
     default_settings = {
         **DEFAULT_APP_SETTINGS,
         "followup_enabled": "0",
-        "followup_max_per_day": "2",
+        "followup_max_per_day": "1",
         "followup_stop_on_order": "1",
         "followup_stop_on_rejection": "1",
-        "followup_default_delay_minutes": "20",
+        "followup_default_delay_minutes": "120",
         "followup_min_interest_score": "50",
         "followup_message_template": "",
         "smart_reviewer_enabled": "0",
@@ -1726,12 +1727,12 @@ def get_followup_settings(db=None):
     db = db or get_db()
     return {
         "enabled": _setting_bool(get_app_setting("followup_enabled", "0", db)),
-        "max_per_day": _setting_int(get_app_setting("followup_max_per_day", "2", db), 2, 1, 10),
-        "stop_on_order": _setting_bool(get_app_setting("followup_stop_on_order", "1", db), True),
-        "stop_on_rejection": _setting_bool(get_app_setting("followup_stop_on_rejection", "1", db), True),
+        "max_per_day": _setting_int(get_app_setting("followup_max_per_day", "1", db), 1, 1, 10),
+        "stop_on_order": True,
+        "stop_on_rejection": True,
         "default_delay_minutes": _setting_int(
-            get_app_setting("followup_default_delay_minutes", "20", db),
-            20,
+            get_app_setting("followup_default_delay_minutes", "120", db),
+            120,
             1,
             10080,
         ),
@@ -1745,10 +1746,10 @@ def get_followup_settings(db=None):
 
 def save_followup_settings(db, data):
     enabled = bool(data.get("enabled"))
-    max_per_day = _setting_int(data.get("max_per_day"), 2, 1, 10)
-    stop_on_order = bool(data.get("stop_on_order", True))
-    stop_on_rejection = bool(data.get("stop_on_rejection", True))
-    delay = _setting_int(data.get("default_delay_minutes"), 20, 1, 10080)
+    max_per_day = _setting_int(data.get("max_per_day"), 1, 1, 10)
+    stop_on_order = True
+    stop_on_rejection = True
+    delay = _setting_int(data.get("default_delay_minutes"), 120, 1, 10080)
     min_interest_score = _setting_int(data.get("min_interest_score"), 50, 0, 100)
     review_interval_minutes = _setting_int(data.get("review_interval_minutes"), 60, 10, 1440)
     message_template = str(data.get("message_template") or "")
@@ -1809,7 +1810,7 @@ def _format_followup_message_template(template, customer_name, product_name, sta
     if not template or not template.strip():
         return None
     result = str(template)
-    result = result.replace("{customer_name}", customer_name or "حبيبتي")
+    result = result.replace("{customer_name}", customer_name or "")
     result = result.replace("{product_name}", product_name or "الموديل")
     result = result.replace("{stage}", stage or "")
     return result.strip()
@@ -1835,31 +1836,35 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
     return None
 
 
+def _followup_block_reason(db, sender_id):
+    owner = db.execute("SELECT store_id,lead_score FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
+    if not owner or (owner['store_id'] or DEFAULT_STORE_ID) != current_store_id():
+        return "wrong_store"
+    if not is_ai_enabled(db):
+        return "store_ai_disabled"
+    if int(owner["lead_score"] or 0) < get_followup_settings(db)["min_interest_score"]:
+        return "insufficient_interest"
+    latest = _latest_incoming_message(db, sender_id)
+    if latest and _looks_like_customer_rejection(latest['text']):
+        return "customer_rejection"
+    return sales_engagement.followup_block_reason(db, sender_id, now_baghdad_iso())
+
+
 def build_followup_message(db, sender_id, stage, product=None):
-    customer_name = _customer_name_from_db(db, sender_id) or "حبيبتي"
+    if _followup_block_reason(db, sender_id):
+        return None
     product_name = (product or {}).get("product_name") or "الموديل"
-    for template in (
-        get_customer_followup_template(db, sender_id),
-        get_setting(db, "followup_message_template", "").strip(),
-    ):
-        custom_message = _format_followup_message_template(template, customer_name, product_name, stage)
+    for template in (get_customer_followup_template(db, sender_id),
+                     get_app_setting("followup_message_template", "", db).strip()):
+        custom_message = _format_followup_message_template(template, "", product_name, stage)
         if custom_message:
             return custom_message
-
-    # إذا لا يوجد قالب محفوظ، استدعِ مولّد AI لتوليد رسالة متابعة قصيرة ومخصصة
     try:
-        ai_msg = generate_ai_followup_message(db, sender_id, stage, product)
-        if ai_msg:
-            return ai_msg
+        # Empty means deliberately abstain, not permission to send a generic nudge.
+        return generate_ai_followup_message(db, sender_id, stage, product)
     except Exception as exc:
         print(f"[FollowUpAI] generation failed for {sender_id}: {exc}", flush=True)
-    if stage in {"price", "asked_price"}:
-        return f"حبيبتي بعدج مهتمة بـ {product_name}؟ أكدر أحجزه إلج إذا تحبين."
-    if stage in {"availability", "asked_availability"}:
-        return f"حبيبتي أتابع وياج بخصوص {product_name}، تحبين أحجزه قبل ما يخلص؟"
-    if stage in {"order", "waiting_for_customer_info"}:
-        return "حبيبتي بقي بس ترسلين العنوان ورقم الهاتف حتى أثبت الحجز."
-    return f"حبيت أتابع وياج بخصوص {product_name}، تحبين أكمل وياج الحجز؟"
+        return None
 
 
 def _followup_day_bounds():
@@ -1874,7 +1879,7 @@ def schedule_followup_if_needed(db, sender_id, stage="conversation", product=Non
     if not settings["enabled"]:
         print(f"[FollowUp] Disabled; not scheduling for {sender_id}", flush=True)
         return None
-    if not sender_id:
+    if not sender_id or _followup_block_reason(db, sender_id):
         return None
     day_start, day_end = _followup_day_bounds()
     today_count = db.execute(
@@ -1919,7 +1924,7 @@ def schedule_ai_review_followup(db, sender_id, message, interest_score, delay_mi
     """Queue the exact message approved by the AI reviewer while enforcing follow-up limits."""
     settings = get_followup_settings(db)
     message = str(message or "").strip()
-    if not settings["enabled"] or not sender_id or not message:
+    if not settings["enabled"] or not sender_id or not message or _followup_block_reason(db, sender_id):
         return None
     day_start, day_end = _followup_day_bounds()
     today_count = db.execute(
@@ -2060,14 +2065,28 @@ def send_due_followups(db=None, limit=25):
            FROM followups f
            LEFT JOIN customers c ON c.sender_id=f.sender_id
            WHERE f.status='pending' AND f.scheduled_at <= ?
+             AND COALESCE(c.store_id, 'default') = ?
            ORDER BY f.scheduled_at ASC
            LIMIT ?""",
-        (now, int(limit)),
+        (now, current_store_id(), int(limit)),
     ).fetchall()
     sent = 0
     skipped = 0
     for row in rows:
         sender_id = row["sender_id"]
+        block_reason = _followup_block_reason(db, sender_id)
+        if block_reason:
+            try:
+                meta = json.loads(row["meta_json"] or "{}")
+            except (ValueError, TypeError):
+                meta = {}
+            if not isinstance(meta, dict):
+                meta = {}
+            meta["cancel_reason"] = block_reason
+            db.execute("UPDATE followups SET status='cancelled',meta_json=? WHERE id=?",
+                       (json.dumps(meta, ensure_ascii=False), row["id"]))
+            skipped += 1
+            continue
         latest_incoming = _latest_incoming_message(db, sender_id)
         if latest_incoming and str(latest_incoming["created_at"] or "") > str(row["created_at"] or ""):
             db.execute(
@@ -3003,6 +3022,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
         f"{rules_text}\n\n"
+        f"{sales_engagement.guide(current_store_id())}\n\n"
         f"{first_output}"
     )
 
@@ -3033,7 +3053,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
-        reply = (parsed.get("reply") or "").strip()
+        reply = sales_engagement.natural_address((parsed.get("reply") or "").strip())
         gender = infer_explicit_customer_gender(customer_text) or "unknown"
         if not reply:
             return get_first_message_fallback(db), detected_context
@@ -3217,18 +3237,14 @@ def _latest_incoming_message(db, sender_id):
 
 
 def _followup_fallback_message(stage, product=None):
-    product_name = (product or {}).get("product_name") or "الموديل"
-    if stage in {"price", "asked_price"}:
-        return f"حبيت أتابع وياك بخصوص {product_name}، تحب أثبته لك قبل ما يخلص؟"
-    if stage in {"availability", "asked_availability"}:
-        return f"بعدك مهتم بخصوص {product_name}؟ أقدر أتأكد لك من القياس وأثبته إذا يناسبك."
-    if stage in {"order", "waiting_for_customer_info"}:
-        return "باقي بس الموبايل والمحافظة والعنوان حتى أثبت الحجز، تحب أكمله لك؟"
-    return f"حبيت أرجع لك بخصوص {product_name}، تحب أكمل وياك ونثبته؟"
+    # No contextual evidence is available in this legacy fallback signature.
+    return None
 
 
 def generate_ai_followup_message(db, sender_id, stage, product=None):
     """Generate a context-aware sales follow-up for a customer who stopped replying."""
+    if _followup_block_reason(db, sender_id):
+        return None
     latest_incoming = _latest_incoming_message(db, sender_id)
     if latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
         return None
@@ -3243,17 +3259,23 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
 
     system_prompt = (
         f"{render_setting_template(db, 'prompt_followup_system', DEFAULT_FOLLOWUP_SYSTEM_PROMPT)}\n\n"
-        f"{SALES_RETENTION_GUIDE}\n\n"
+        f"{sales_engagement.guide(current_store_id())}\n\n"
+        f"{sales_engagement.FOLLOWUP_GUIDE}\n\n"
         "اكتب رسالة متابعة لا تشعر الزبون بالملاحقة. الرسالة قصيرة، مخصصة، وباللهجة العراقية.\n"
         "ممنوع ذكر اسم الزبون، وممنوع تكرار تفاصيل المنتج إلا إذا كانت مطلوبة في السياق.\n"
         "إذا ظهر رفض واضح أو عدم رغبة، اجعل reply فارغاً.\n"
         f"{FOLLOWUP_REVIEW_OUTPUT_PROMPT}"
     )
+    customer = db.execute("SELECT phone,province,address FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
+    missing = [key for key in ("phone", "province", "address") if not customer or not customer[key]]
     user_content = (
         f"Conversation transcript:\n{transcript}\n\n"
         f"Follow-up stage: {stage or 'conversation'}\n"
         f"Linked product: {product_name}\n"
-        "Analyze why the customer stopped replying and write the best single follow-up question."
+        f"Missing contact fields (do not re-ask known fields): {json.dumps(missing)}\n"
+        f"Verified product data: {json.dumps(product or {}, ensure_ascii=False)}\n"
+        f"Current store: {json.dumps(get_store_settings(db), ensure_ascii=False)}\n"
+        "Identify an evidenced unresolved need; silence alone does not reveal a reason. Return an empty reply if no useful follow-up exists."
     )
 
     try:
@@ -3280,6 +3302,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
             return None
         if reply:
             return reply[:500].strip()
+        return None
     except Exception as exc:
         print(f"[FollowUpAI] error for {sender_id}: {exc}", flush=True)
 
@@ -6537,7 +6560,8 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
 
 def load_ai_config(db, sender_id=None):
     if current_store_id() == baraah.STORE_ID:
-        return baraah.ai_config(db, sender_id, get_delivery_policy_text(db))
+        instructions, rules = baraah.ai_config(db, sender_id, get_delivery_policy_text(db))
+        return instructions + "\n\n" + sales_engagement.guide(current_store_id()), rules
     instructions = db.execute(
         "SELECT content FROM ai_instructions WHERE active=1"
     ).fetchall()
@@ -6613,6 +6637,7 @@ def load_ai_config(db, sender_id=None):
     )
     instructions_text = (instructions_text + "\n\n" + delivery_rule).strip()
 
+    instructions_text += "\n\n" + sales_engagement.guide(current_store_id())
     return instructions_text, rules_list
 
 
@@ -6787,11 +6812,13 @@ GENTLE_SALES_GUIDE = """
 
 
 def normalize_ai_reply_parts(result):
+    if isinstance(result.get("reply"), str):
+        result["reply"] = sales_engagement.natural_address(result["reply"])
     parts = result.get("reply_parts")
     if isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts):
         clean = []
         for part in parts:
-            part = part.strip()
+            part = sales_engagement.natural_address(part.strip())
             if part and (not clean or part != clean[-1]): clean.append(part)
         if clean:
             result["reply_parts"] = clean
@@ -6992,7 +7019,14 @@ def requests_alternative_photo(text):
 
 
 def reply_reasks_known_product(reply):
-    return bool(re.search(r"(?:أي|اي|شنو|ما هو|شنهو)\s+(?:موديل|الموديل|فستان)|(?:دزيلي|أرسلي|ارسلي|اعطيني).{0,35}(?:اسم الموديل|صورة الموديل|صورة المنتج)|(?:ما واضح|مو واضح|لم يتحدد).{0,30}(?:موديل|المنتج)", str(reply or "")))
+    text = unicodedata.normalize("NFKC", str(reply or ""))
+    text = re.sub(r"[ـ\u064b-\u065f\u0670]", "", text).translate(str.maketrans("أإآ", "ااا"))
+    return bool(re.search(
+        r"(?:اي|يا|شنو|ما هو|شنهو)\s+(?:موديل|الموديل|فستان)|"
+        r"(?:دزيلي|دزلي|دزي|دز|ارسلي|ارسل|ابعثي|ابعث|اعطيني).{0,35}"
+        r"(?:اسم (?:الموديل|المنتج|القطعة)|صور(?:ة|ه) (?:الموديل|المنتج|القطعة)|صورته|صورتها)|"
+        r"(?:ما واضح|مو واضح|لم يتحدد).{0,30}(?:موديل|المنتج)|"
+        r"(?:حددي|حدد).{0,15}(?:الموديل|المنتج)", text))
 
 
 def call_main_ai(
@@ -7001,6 +7035,19 @@ def call_main_ai(
     fix_instruction=None, customer_products=None, conversation_history=None,
     catalog_search_context=None,
 ):
+    if (not matched_product and customer_products and message_type == 'text'
+            and not ev.get('image_url') and not ev.get('_image_matches')
+            and not is_product_objection(ev.get('text'))):
+        focus = (customer_product_target(ev.get('text', ''), products)
+                 or select_customer_context_product(ev.get('text', ''), customer_products))
+        if focus:
+            matched_product = next((p for p in products if p.get('product_id') == focus.get('product_id')), None)
+    if matched_product:
+        instructions_text += (
+            "\nالموديل محدد ومرفق ببياناته الحالية. أجب عن السؤال عنه من أول رد؛ "
+            "لا تطلب اسمه أو صورته مرة أخرى. اطلب فقط معلومة غير معروفة يحتاجها الاختيار أو الحجز. "
+            "إذا طلب الزبون موديلًا مختلفاً صراحة أو أرسل صورة جديدة، عالج الاختيار الجديد دون افتراض أنه السابق."
+        )
     positions = ev.get('_image_matches') or (customer_image_positions(get_db(), ev['sender_id'])
         if has_app_context() and ev.get('sender_id') else [])
     if positions:
@@ -7258,11 +7305,10 @@ def _call_main_ai_once(
 
     system_prompt += "\n\n" + CONVERSATION_SALES_GUIDE
     system_prompt += "\n\n" + GENTLE_SALES_GUIDE
+    system_prompt += "\n\n" + sales_engagement.guide(current_store_id())
     system_prompt += "\nبيانات المنتجات غير مكررة: اجمع المنتج الحالي والموديلات المحفوظة والكتالوج كمرجع واحد. وجود منتج في السياق لا يعني موافقة شراء. افهم النفي والتصحيح من المحادثة، وأجب عن كل سؤال غير مجاب قبل طلب البيانات الناقصة فقط."
     system_prompt += "\nالتحويل للبشر ليس جواباً افتراضياً: أجب من بيانات المنتج المرتبط والمتجر عن السعر والألوان والقياسات والخامة والتوصيل والفحص، قبل الحجز وبعده. وجود مراجعة قديمة لا يحول سؤالاً مستقلاً. إذا التبس الموديل أو الاختيار اسأل توضيحاً واحداً دون تخمين أو تحويل. احتفظ بالتدخل البشري للإجراءات التي لا تستطيع تنفيذها أو المعلومات الضرورية غير المتاحة فعلاً."
     system_prompt += "\nرسوم التوصيل الرقمية ومدة التوصيل في بيانات المتجر الحالي تتقدم على الأرقام القديمة في أمثلة التعليمات ووصف المنتجات. لا تنقل تفاصيل أو موديلات من متجر آخر."
-    if current_store_id() == ALFATENA_STORE_ID:
-        system_prompt += "\nسياسة بيع الفاتنة: بعد حل أسئلة الزبون وظهور رغبة واضحة بالشراء، اقترح مرة واحدة موديلًا أو موديلين إضافيين متوفرين من كتالوج الفاتنة يناسبان ذوقه وقياسه. اذكر الاسم والسعر والفائدة المختلفة، واسأل إن كان يريد رؤية الصور قبل الإضافة. لا تعطل حجزه الأصلي، ولا تعتبر الاهتمام بالصور موافقة شراء. إذا رفض أو أجّل توقف عن الاقتراح. لا تضف قطعة أو تغير اللون أو القياس دون موافقة صريحة، ولا تعرض منتجًا غير موجود إذا كان الكتالوج يحتوي موديلًا واحدًا."
     if post_order:
         system_prompt += "\n\n" + POST_ORDER_SERVICE_RULES
     sections = []
@@ -7636,6 +7682,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     phone   = (order_data.get("phone")   or "").strip()
     province = (order_data.get("province") or "").strip()
     address = (order_data.get("address") or "").strip()
+    if invalid_shipping_address(address):
+        address = ""
 
     if not phone or not province or not address:
         missing = " و".join(label for value, label in ((phone, "رقم الهاتف"), (province, "المحافظة"), (address, "العنوان الكامل")) if not value)
@@ -8191,6 +8239,25 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     ).fetchone()
     if opening_turn and message_type == 'text' and not ev.get('image_url') and not ev.get('attachments'):
         named_products = first_message_named_products(ev.get('text'), products)
+        known_focus = select_customer_context_product(ev.get('text', ''), customer_products)
+        explicit_focus = customer_product_target(ev.get('text'), products)
+        named_labels = {str(p.get('product_name') or '').replace('ة', 'ه') for p in named_products}
+        contextual_opening = (
+            not explicit_focus and not is_product_objection(ev.get('text'))
+            and len(named_labels) <= 1
+            and (_is_contextual_product_question(ev.get('text', ''))
+                 or is_product_detail_followup(ev.get('text', ''))
+                 or bool(named_products))
+        )
+        # A current ad is fresh evidence; otherwise retain a reliable selection.
+        if contextual_opening:
+            advertised = [p for p in products if any(
+                ev.get(key) and str(p.get(key) or '').strip() == str(ev[key]).strip()
+                for key in ('ref', 'ad_id'))]
+            if len(advertised) == 1 and (not named_products or advertised[0] in named_products):
+                named_products = advertised
+            elif not advertised and known_focus:
+                named_products = [known_focus]
         if len(named_products) == 1:
             ev['_first_message_product_id'] = named_products[0]['product_id']
         elif len(named_products) > 1:
@@ -12741,9 +12808,10 @@ def run_smart_reviewer_cycle(db):
             JOIN customers c ON c.sender_id=m.sender_id
             WHERE m.created_at >= ?
               AND COALESCE(c.lead_score, 0) >= ?
+              AND COALESCE(c.store_id, 'default') = ?
             GROUP BY m.sender_id
             HAVING last_msg_time <= ?
-        """, (conversation_cutoff, min_interest_score, active_cutoff_time)).fetchall()
+        """, (conversation_cutoff, min_interest_score, current_store_id(), active_cutoff_time)).fetchall()
         
         sender_ids = [row["sender_id"] for row in rows]
         if not sender_ids:
@@ -12755,6 +12823,8 @@ def run_smart_reviewer_cycle(db):
         last_message_map = {row["sender_id"]: str(row["last_msg_time"] or "") for row in rows}
         
         for sender_id in sender_ids:
+            if _followup_block_reason(db, sender_id):
+                continue
             last_review = reviewed_map.get(sender_id)
             if last_review and str(last_review) >= last_message_map.get(sender_id, ""):
                 continue
@@ -12805,7 +12875,8 @@ def run_smart_reviewer_cycle(db):
                 "3. If they need a follow-up, write a highly personalized, friendly, and natural Arabic message (Iraqi dialect) based strictly on their previous conversation context. Do not sound like a bot.\n"
                 "4. Do not follow up if the customer refused, asked to stop, bought already, or the last customer text is hostile.\n"
                 "5. The message must contain one clear next-step question and must not mention internal IDs.\n\n"
-                f"{SALES_RETENTION_GUIDE}\n\n"
+                f"{sales_engagement.guide(current_store_id())}\n\n"
+                f"{sales_engagement.FOLLOWUP_GUIDE}\n\n"
                 "Return JSON exactly like this:\n"
                 "{\"tag\": \"string\", \"needs_followup\": true/false, \"followup_message\": \"string or null\"}"
             )
@@ -12877,8 +12948,15 @@ def start_smart_reviewer_thread():
             try:
                 db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
                 db.row_factory = sqlite3.Row
-                send_due_followups(db)
-                run_smart_reviewer_cycle(db)
+                for store in list_stores(db):
+                    if not store.get("active"):
+                        continue
+                    token = _current_store_id.set(store["store_id"])
+                    try:
+                        send_due_followups(db)
+                        run_smart_reviewer_cycle(db)
+                    finally:
+                        _current_store_id.reset(token)
                 db.close()
             except Exception as e:
                 print(f"[SmartReviewer] Thread error: {e}")
