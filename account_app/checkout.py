@@ -39,7 +39,7 @@ def phone_number(text):
 
 def invalid_shipping_address(text):
     """Reject known non-address declarations, including saved model guesses."""
-    clean = normalized(text).strip(" ,،.\n")
+    clean = re.sub(r"^محافظ[ةه]\s+", "", normalized(text).strip(" ,،.\n"))
     return (not clean or
             any(clean == normalized(alias) for aliases in PROVINCES.values() for alias in aliases) or
             bool(re.search(r"(?:ليش\s+انتو|انتو\s+(?:في|ب)|وين\s+(?:مكانكم|محلكم)|لو\s+خارجها)", clean)))
@@ -59,12 +59,20 @@ def contact_fields(text, previous=None):
     is_question = bool(re.search(r"[؟?]|\b(?:شكد|كم|بشكد|شوكت|يوصل|توصيل|يصير|ليش|وين)\b", clean))
     declaration = bool(re.search(r"(?:عنواني|العنوان|اني من|انا من)", clean))
     province = ""
+    # A mall/hospital name must not overrule the city at the start of an address.
+    locality = re.split(r"(?:قرب|مقابل|مقابيل|خلف|يم|مجاور|شارع|مول|جامع|مستشفى)\s", clean, maxsplit=1)[0]
     if declaration or not is_question:
         for canonical, aliases in PROVINCES.items():
-            if any(re.search(r"(?<!\w)(?:بال|ب)?" + re.escape(alias) + r"(?!\w)", clean) for alias in aliases):
+            if any(re.search(r"(?<!\w)(?:بال|ب)?" + re.escape(alias) + r"(?!\w)", locality) for alias in aliases):
                 province = canonical
                 result["province"] = canonical
                 break
+    removal = re.fullmatch(r"(?:احذف|احذفي|شيل|شيلي)\s+(?:كلمة\s+)?(.+?)(?:\s+من العنوان)?[.!]?$", original.strip())
+    if removal and previous.get("address"):
+        token = removal.group(1).strip()
+        address = re.sub(re.escape(token) + r"(?:\s+\d+)?", "", str(previous["address"])).strip()
+        if address and address != previous["address"]:
+            return {"address": address}
     without_phone = PHONE.sub("", original).strip(" ,،.\n")
     explicit = re.search(r"(?:عنواني|العنوان)\s*[:：-]?\s*(.+)", without_phone, re.S)
     location_marker = re.search(r"\b(?:حي|قرب|شارع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|مستشفى|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b", normalized(without_phone))
@@ -76,7 +84,7 @@ def contact_fields(text, previous=None):
         address = ""
     # A province on its own is not a delivery address.
     address_words = re.findall(r"\w+", normalized(address))
-    province_only = any(normalized(address) == normalized(alias) for aliases in PROVINCES.values() for alias in aliases)
+    province_only = any(re.sub(r"^محافظ[ةه]\s+", "", normalized(address)) == normalized(alias) for aliases in PROVINCES.values() for alias in aliases)
     if address and not province_only and not invalid_shipping_address(address) and len(address_words) >= 2 and (location_marker or province or len(address_words) >= 3):
         # A landmark sent in the next bubble supplements the established area.
         previous_address = str(previous.get("address") or "").strip()

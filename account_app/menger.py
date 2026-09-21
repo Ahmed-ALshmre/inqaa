@@ -9,6 +9,11 @@ from urllib.parse import urlparse
 
 import requests
 
+try:
+    from .pricing import quote as price_order
+except ImportError:
+    from pricing import quote as price_order
+
 
 def init_db(db):
     db.execute("""CREATE TABLE IF NOT EXISTS menger_store_settings (
@@ -82,11 +87,13 @@ def save_settings(db, store, data):
 
 def snapshot_prices(order, catalog):
     products = {p['product_id']: p for p in catalog}
+    if any('unit_price' not in item for item in order['items']):
+        order['items'][:] = price_order(order['items'], catalog, order.get('delivery_fee', 0))['items']
     for item in order['items']:
         product = products.get(item.get('product_id'), {})
         item.pop('send_to', None)
         item['order_name'] = str(product.get('order_name') or '').strip() or item['product_name']
-        item['unit_price'] = int(re.sub(r'\D', '', str(item.get('unit_price') or product.get('price') or '')) or '0')
+        item['unit_price'] = int(item['unit_price'])
 
 
 def local_store_name(db, store_id):
@@ -99,11 +106,13 @@ def local_store_name(db, store_id):
 
 def enqueue(db, order_id, order, catalog):
     init_db(db)
+    if any('unit_price' not in item for item in order['items']):
+        snapshot_prices(order, catalog)
     products = {p['product_id']: p for p in catalog}
     items = []
     for item in order['items']:
         product = products.get(item.get('product_id'), {})
-        price = re.sub(r'\D', '', str(item.get('unit_price') or product.get('price') or ''))
+        price = str(item['unit_price'])
         items.append(dict(product_name=item.get('order_name') or item['product_name'],
                           quantity=int(item.get('quantity') or 1),
                           color=item.get('color') or '', size=item.get('size') or '',

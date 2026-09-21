@@ -17,6 +17,12 @@ CATALOG = [
 
 
 class ContactRegressionTests(unittest.TestCase):
+    def test_city_precedes_landmark_and_address_removal(self):
+        self.assertEqual(contact_fields('حله نادر الاولى قرب مول بغداد')['province'], 'بابل')
+        self.assertNotIn('address', contact_fields('محافظة بغداد'))
+        result = contact_fields('احذفي كولاجين من العنوان', {'address':'بغداد حي اور كولاجين 15'})
+        self.assertEqual(result['address'], 'بغداد حي اور')
+
     def test_address_and_phone_arrive_separately(self):
         contact = contact_fields("السليمانية\nمرتفعات السليمانية زون 3\nH611")
         contact.update(contact_fields("٠٧٧٠١٢٣٤٥٦٧", contact))
@@ -103,6 +109,50 @@ class CheckoutRegressionTests(unittest.TestCase):
     def incoming(self, text):
         self.ev["text"] = text
         self.m.save_message(self.db, self.sender, "incoming", "text", text, None, None, None, {})
+
+    def test_multiple_products_book_immediately_and_deduplicate_after_ten_hours(self):
+        self.incoming('اريد ثنينهم احجزي')
+        result = {'create_order': True, 'order': self.data(True)}
+        created, reply = self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
+        self.assertTrue(created)
+        self.assertNotIn('_checkout_proposal', result)
+        row = self.db.execute('SELECT * FROM orders WHERE sender_id=?', (self.sender,)).fetchone()
+        self.assertEqual(len(json.loads(row['order_items'])), 2)
+        from datetime import timedelta
+        earlier = (self.m.datetime.now(self.m.BAGHDAD_TZ) - timedelta(hours=10)).isoformat()
+        self.db.execute('UPDATE orders SET created_at=? WHERE id=?', (earlier,row['id']))
+        self.db.commit()
+        self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
+        self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],1)
+        result['order']['items'][1]['size'] = '48'
+        self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
+        self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],2)
+
+    def test_bundle_price_receipt_confirmation_and_export(self):
+        product = dict(product_id="B1", product_name="سوت بهاري", price="بكج 3 قطع سعره ب 25 الف",
+                       offer="بكج 3 قطع بـ 25 ألف والتوصيل مجاني", delivery="توصيل مجاني", status="active")
+        data = self.data()
+        data["items"] = [dict(product_id="B1", product_name="سوت بهاري", color=color, size="سنتين", quantity=1)
+                         for color in ("وردي", "تركوازي", "أزرق ملكي")]
+        with patch.object(self.m, "load_products_from_file", return_value=[product]):
+            result = {"order": data, "require_cart_confirmation": True}
+            created, reply = self.m.create_order_if_valid(self.db, self.sender, result, product)
+            self.assertIsNone(created)
+            self.assertIn("25,000", reply)
+            self.assertIn("التوصيل: مجاني", reply)
+            self.assertNotIn("325", reply)
+            self.m.save_message(self.db, self.sender, "outgoing", "text", reply, None, None, None,
+                                {"checkout_proposal": result["_checkout_proposal"]})
+            self.incoming("نعم")
+            accepted = self.m.accept_checkout_proposal(self.db, self.ev, [], [product])
+            self.assertTrue(accepted["meta"]["order_created"])
+            row = self.db.execute("SELECT * FROM orders WHERE sender_id=?", (self.sender,)).fetchone()
+            self.assertEqual((row["product_total"], row["delivery_fee"], row["total_amount"]), (25000, 0, 25000))
+            items = json.loads(row["order_items"])
+            self.assertEqual(sum(i["unit_price"] * i["quantity"] for i in items), 25000)
+            delivery = self.db.execute("SELECT payload FROM menger_deliveries WHERE order_id=?", (row["id"],)).fetchone()
+            exported = json.loads(delivery["payload"])["items"]
+            self.assertEqual(sum(i["unit_price"] * i["quantity"] for i in exported), 25000)
 
     def test_saved_shop_question_cannot_create_order(self):
         data = self.data()
@@ -199,7 +249,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertFalse(created); self.assertIn("قياس", reply)
 
     def test_multi_piece_proposal_requires_exact_confirmation(self):
-        result = {"order": self.data(True)}
+        result = {"order": self.data(True), "require_cart_confirmation": True}
         created, reply = self.m.create_order_if_valid(self.db, self.sender, result, None)
         self.assertFalse(created); self.assertIn("39,000", reply)
         self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
@@ -211,7 +261,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertIsNone(self.m.accept_checkout_proposal(self.db, self.ev, [], CATALOG))
 
     def test_yes_with_correction_does_not_confirm_stale_cart(self):
-        result = {"order": self.data(True)}
+        result = {"order": self.data(True), "require_cart_confirmation": True}
         _, reply = self.m.create_order_if_valid(self.db, self.sender, result, None)
         self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
         self.incoming("عوفي السوت"); self.incoming("اي حياتي")
@@ -219,7 +269,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 0)
 
     def test_price_change_requires_new_summary(self):
-        result = {"order": self.data(True)}
+        result = {"order": self.data(True), "require_cart_confirmation": True}
         _, reply = self.m.create_order_if_valid(self.db, self.sender, result, None)
         self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
         self.incoming("تمام")
@@ -255,7 +305,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         created, reply = self.m.create_order_if_valid(self.db, self.sender, {"order": data}, None)
         self.assertFalse(created); self.assertIn("أكثر من قياس", reply)
         self.incoming("السوت قياس 46")
-        result = {"order": data}
+        result = {"order": data, "require_cart_confirmation": True}
         _, reply = self.m.create_order_if_valid(self.db, self.sender, result, None)
         self.assertIn("هذه القطع المقترحة", reply)
 
@@ -395,7 +445,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertIsNone(self.m.get_active_product_binding(self.db, self.sender))
 
     def test_dashboard_send_accepts_confirmed_cart_once(self):
-        result = {"order": self.data(True)}
+        result = {"order": self.data(True), "require_cart_confirmation": True}
         _, reply = self.m.create_order_if_valid(self.db, self.sender, result, None)
         self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
         self.incoming("تمام")

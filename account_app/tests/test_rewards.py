@@ -33,6 +33,36 @@ class RewardTests(unittest.TestCase):
         self.assertEqual(result['today']['solved'],2)
         self.assertEqual(self.client.get('/rewards').status_code,200)
 
+    def test_withdrawal_reserves_balance_and_owner_settles_once(self):
+        self.employee()
+        self.assertEqual(self.client.post('/api/rewards/withdraw',json={},headers=self.headers).status_code,409)
+        self.review('earned'); self.close('earned')
+        self.assertEqual(self.client.post('/api/rewards/withdraw',json={}).status_code,403)
+        response=self.client.post('/api/rewards/withdraw',json={'amount':999999,'staff_id':999},headers=self.headers)
+        self.assertEqual(response.json['amount'],50)
+        self.assertEqual(self.client.post('/api/rewards/withdraw',json={},headers=self.headers).status_code,409)
+        data=self.client.get('/api/rewards').json
+        self.assertEqual((data['available'],data['reserved'],data['paid']),(0,50,0))
+        wid=data['withdrawals'][0]['id']
+        self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'paid'},headers=self.headers).status_code,403)
+        with self.client.session_transaction() as session:
+            session.pop('staff_id',None);session['csrf_token']='test-token'
+        self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'paid'}).status_code,403)
+        self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'paid'},headers={'X-CSRF-Token':'test-token'}).status_code,200)
+        self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'paid'},headers={'X-CSRF-Token':'test-token'}).status_code,409)
+        data=self.client.get('/api/rewards').json['employees'][0]
+        self.assertEqual((data['balance'],data['available'],data['reserved'],data['paid']),(50,0,0,50))
+
+    def test_rejected_withdrawal_returns_credit(self):
+        self.employee();self.review('return');self.close('return')
+        self.client.post('/api/rewards/withdraw',json={},headers=self.headers)
+        wid=self.client.get('/api/rewards').json['withdrawals'][0]['id']
+        with self.client.session_transaction() as session:
+            session.pop('staff_id',None);session['csrf_token']='test-token'
+        self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'rejected'},headers={'X-CSRF-Token':'test-token'}).status_code,200)
+        data=self.client.get('/api/rewards').json['employees'][0]
+        self.assertEqual((data['available'],data['reserved'],data['paid']),(50,0,0))
+
     def test_owner_bulk_and_unauthenticated_do_not_earn(self):
         self.review('owner')
         self.close('owner')
@@ -82,6 +112,6 @@ class RewardTests(unittest.TestCase):
         job=dict(m.get_db().execute('SELECT * FROM ai_jobs WHERE id=?',(response.json['job_id'],)).fetchone())
         payload=json.loads(job['payload'])
         self.assertEqual(payload['_reward_actor']['id'],self.id)
-        with patch.object(m,'find_product_by_id',return_value={'product_id':'p','product_name':'فستان'}), patch.object(m,'auto_reply_after_product_link',return_value=None):
+        with patch.object(m,'find_product_by_id',return_value={'product_id':'p','product_name':'فستان'}), patch.object(m,'auto_reply_after_product_link',return_value={'sent':True}):
             m.run_ai_job(job,payload)
         self.assertEqual(self.client.get('/api/rewards').json['balance'],50)

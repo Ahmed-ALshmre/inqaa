@@ -1,6 +1,7 @@
 """Immutable employee credit ledger; awards share the resolution transaction."""
 from datetime import datetime, timedelta, timezone
-from flask import has_request_context, jsonify, redirect, render_template
+import secrets
+from flask import has_request_context, jsonify, redirect, render_template, request, session
 
 BAGHDAD = timezone(timedelta(hours=3))
 DAILY_GOAL = 5
@@ -13,6 +14,11 @@ def tables(db):
         amount INTEGER NOT NULL, duration_seconds REAL,
         multiplier REAL NOT NULL, created_at TEXT NOT NULL)''')
     db.execute('CREATE INDEX IF NOT EXISTS staff_rewards_person ON staff_rewards(staff_id,id)')
+    db.execute('''CREATE TABLE IF NOT EXISTS staff_reward_withdrawals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, staff_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL CHECK(amount>0), status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL, resolved_at TEXT)''')
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS one_pending_withdrawal ON staff_reward_withdrawals(staff_id) WHERE status='pending'")
 
 
 def award_pending(db, sender_id, person, cutoff=None, now=None):
@@ -50,11 +56,47 @@ def summary(db, staff_id):
         FROM staff_rewards WHERE staff_id=? AND substr(created_at,1,10)=?''', (staff_id,today)).fetchone()
     history = [dict(r) for r in db.execute('SELECT * FROM staff_rewards WHERE staff_id=? ORDER BY id DESC LIMIT 50', (staff_id,))]
     durations = [r[0] for r in db.execute('SELECT duration_seconds FROM staff_rewards WHERE staff_id=? AND duration_seconds IS NOT NULL ORDER BY id DESC LIMIT 10', (staff_id,))]
-    return dict(total, today=dict(daily), goal=DAILY_GOAL, history=history,
+    withdrawals = [dict(r) for r in db.execute('SELECT * FROM staff_reward_withdrawals WHERE staff_id=? ORDER BY id DESC', (staff_id,))]
+    reserved = sum(r['amount'] for r in withdrawals if r['status'] == 'pending')
+    paid = sum(r['amount'] for r in withdrawals if r['status'] == 'paid')
+    return dict(total, available=max(0,total['balance']-reserved-paid), reserved=reserved, paid=paid,
+                withdrawals=withdrawals, day=today, today=dict(daily), goal=DAILY_GOAL, history=history,
                 baseline_seconds=sum(durations)/len(durations) if durations else None)
 
 
 def install(app, get_db, current):
+    @app.post('/api/rewards/withdraw')
+    def withdraw():
+        person = current()
+        if not person: return jsonify(error='سجل الدخول أولاً'), 401
+        if person['owner']: return jsonify(error='السحب مخصص لرصيد الموظف'), 403
+        db = get_db(); tables(db); db.commit()
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            data = summary(db, person['id'])
+            if data['reserved']: return jsonify(error='لديك طلب سحب قيد المراجعة'), 409
+            if data['available'] <= 0: return jsonify(error='لا يوجد رصيد متاح للسحب'), 409
+            db.execute('INSERT INTO staff_reward_withdrawals(staff_id,amount,created_at) VALUES(?,?,?)',
+                       (person['id'],data['available'],datetime.now(BAGHDAD).isoformat()))
+        return jsonify(ok=True, amount=data['available'])
+
+    @app.post('/api/rewards/withdrawals/<int:withdrawal_id>')
+    def settle_withdrawal(withdrawal_id):
+        person = current()
+        if not person: return jsonify(error='سجل الدخول أولاً'), 401
+        if not person['owner']: return jsonify(error='هذا الإجراء للمالك فقط'), 403
+        if not secrets.compare_digest(request.headers.get('X-CSRF-Token',''), session.get('csrf_token') or secrets.token_hex(32)):
+            return jsonify(error='حدّث الصفحة ثم حاول مجدداً'), 403
+        status = (request.get_json(silent=True) or {}).get('status')
+        if status not in {'paid','rejected'}: return jsonify(error='حالة غير صحيحة'), 400
+        db = get_db(); tables(db); db.commit()
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            changed = db.execute("UPDATE staff_reward_withdrawals SET status=?,resolved_at=? WHERE id=? AND status='pending'",
+                                 (status,datetime.now(BAGHDAD).isoformat(),withdrawal_id)).rowcount
+            if not changed: return jsonify(error='تمت معالجة الطلب مسبقاً أو غير موجود'), 409
+        return jsonify(ok=True)
+
     @app.get('/rewards')
     def rewards_page():
         if not current():

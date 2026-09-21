@@ -28,6 +28,8 @@ try:
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
+    from . import conversation_quality, order_actions
+    from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
@@ -39,6 +41,8 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
+    import conversation_quality, order_actions
+    from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
@@ -3588,7 +3592,7 @@ def _norm_order_value(value):
     return re.sub(r"\s+", " ", str(value or "").strip()).lower()
 
 
-def find_duplicate_order(db, sender_id, phone="", product_id="", address="", minutes=120):
+def find_duplicate_order(db, sender_id, phone="", product_id="", address="", minutes=1440, items=None):
     """Return a recent matching order so repeated submits/webhooks do not create duplicates."""
     sender_id = str(sender_id or "").strip()
     if not sender_id:
@@ -3600,17 +3604,31 @@ def find_duplicate_order(db, sender_id, phone="", product_id="", address="", min
            ORDER BY id DESC LIMIT 30""",
         (sender_id, cutoff),
     ).fetchall()
+    def cart_key(lines):
+        totals = {}
+        for line in lines:
+            key = tuple(_norm_order_value(line.get(k)) for k in ("product_id", "color", "size"))
+            totals[key] = totals.get(key, 0) + int(line.get("quantity") or 1)
+        return totals
     wanted_phone = _norm_order_value(phone)
     wanted_product = _norm_order_value(product_id)
     wanted_address = _norm_order_value(address)
     for row in rows:
+        if str(row["status"] or "").lower() in {"cancelled", "canceled", "ملغي", "delivered", "returned"}:
+            continue
+        if items is not None:
+            try:
+                if cart_key(json.loads(row["order_items"] or "[]")) != cart_key(items):
+                    continue
+            except (ValueError, TypeError):
+                continue
         row_phone = _norm_order_value(row["phone"])
         row_product = _norm_order_value(row["product_id"])
         row_address = _norm_order_value(row["address"])
         phone_match = wanted_phone and row_phone == wanted_phone
         product_match = wanted_product and row_product == wanted_product
         address_match = wanted_address and row_address == wanted_address
-        if phone_match and (product_match or address_match):
+        if phone_match and product_match and address_match:
             return dict(row)
     return None
 
@@ -3911,7 +3929,7 @@ def _requests_product_photo(text):
 def _promises_product_photo(text):
     if re.search(r"(?:دزيلي|ارسلي|أرسلي|ابعثي|ابعثلي).{0,30}(?:صور|صوره|صورة)", str(text or "")):
         return False
-    return bool(re.search(r"(?:هذي|هذه|هاي|أدز|ادز|أرسل|ارسل|دزيت|أرفق|ارفق).{0,35}(?:صور|صوره|صورة)", str(text or "")))
+    return bool(re.search(r"(?:هذي|هذه|هاي|أدز|ادز|أرسل|ارسل|دزيت|أرفق|ارفق|رفعت|تظهر|توصلج|هذا).{0,35}(?:صور|صوره|صورة)", str(text or "")))
 
 
 def _should_send_image(db, sender_id: str, product: dict, ev: dict) -> bool:
@@ -5247,7 +5265,7 @@ def is_product_detail_followup(text):
     return bool(re.search(r"قماش|خام|قياس|مقاس|طول|سعر|توصيل|صور|تصوير|فحص|لون", text))
 
 
-def select_product_mentioned_in_reply(reply, customer_products):
+def select_product_mentioned_in_reply(reply, customer_products, require_name=False):
     """Select the product actually described by the assistant's reply.
 
     A catalog search may expose several products to the model. The product used for
@@ -5267,6 +5285,8 @@ def select_product_mentioned_in_reply(reply, customer_products):
     for product in customer_products:
         score = 0
         name = context_text(product.get("product_name") or "")
+        if require_name and (not name or name not in normalized_reply):
+            continue
         if name and name in normalized_reply:
             score += 100
 
@@ -5895,7 +5915,7 @@ def image_selection_intent(text):
     text = str(text or "").strip()
     if re.search(r"(?:لا|ما)\s*(?:تضيف|تضيفين|تضيفي|اضيف|أضيف)|(?:بس|فقط)\s*(?:هذا|هذه|هاذ|هاي|هذني)|(?:هذا|هذه|هاي)\s*(?:بس|فقط|وحده|وحدها)|بدل|مو هذا|مو هاذا|اقصد هذا|أقصد هذا|عوفي السابق|الغ[يِ] السابق", text):
         return "replace"
-    if re.search(r"ضيف|اضيف|أضيف|بالاضاف|بالإضاف|هم اريد|هم أريد|ويا(?:ه|ها|هم|هن| القديم| السابق| الاول| الأول)|مع السابق|الاثنين|الإثنين|كلاهما|ثنيهم|ثنينهم|اثنينهم|ثنتينهن", text):
+    if re.search(r"ضيف|اضيف|أضيف|بالاضاف|بالإضاف|هم اريد|هم أريد|ويا(?:ه|ها|هم|هن| القديم| السابق| الاول| الأول)|مع السابق|الاثنين|الإثنين|كلاهما|ثنيهم|ثنينهم|اثنينهم|ثنتينهن|ثنينه|ثنينهن|كلهن|كلهم", text):
         return "add"
     return ""
 
@@ -5959,7 +5979,9 @@ def resolve_contextual_product_selection(db, ev, products):
     if ev.get("_selection_resolved") or ev.get("image_url") or ev.get("attachments"):
         return None
     text = str(ev.get("text") or "").strip()
-    if is_product_detail_followup(text):
+    if (is_product_detail_followup(text) or is_conditional_return_question(text)
+            or is_existing_order_followup(text)
+            or re.search(r"(?:سعر|الف|ألف|توصيل|خصم|بعشرين|بخمسه|بخمسة)", text)):
         return None
     # A broad intent gate only decides when to ask the language model; it never
     # decides which product is wanted or rejected.
@@ -6529,10 +6551,14 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
 
+    image_urls = requested_reply_images(ai_result, products, matched_product, ev.get("text"), reply) if not order_created and (_promises_product_photo(reply) or ai_result.get("image_product_ids") or _requests_product_photo(ev.get("text", ""))) else []
+    if not image_urls and _promises_product_photo(reply):
+        reply = "ما عندي صورة مطابقة محفوظة لهذا الطلب حالياً."
     parts = approved_reply_parts(ai_result, reply)
     sent = send_webhook_result_to_facebook({"sender_id": sender_id, "reply": reply,
         "reply_parts": parts, "_single_message": bool(ai_result.get("_single_message")),
-        "page_id": ev["page_id"], "platform": ev["platform"]})
+        "page_id": ev["page_id"], "platform": ev["platform"], "send_image": bool(image_urls),
+        "image_urls": image_urls, "product_image_urls": image_urls})
     if not sent:
         return {'sent': False, 'reply': reply, 'reason': 'manychat_send_failed'}
     for part in parts:
@@ -6542,6 +6568,8 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
             {"auto_after_product_link": True, "product_id": matched_product.get("product_id"),
              "checkout_proposal": ai_result.get("_checkout_proposal"), "checkout_draft": ai_result.get("order") if not order_created else None},
         )
+    for url in image_urls:
+        save_message(db, sender_id, "outgoing", "image", None, url, None, None, {"auto_after_product_link": True})
     save_conversation_message(db, sender_id, "assistant", reply)
     if not order_created:
         try:
@@ -6693,8 +6721,8 @@ def _text_contains_any(text: str, keywords) -> bool:
 def is_conditional_return_question(text):
     """Distinguish asking about inspection/returns from reporting an actual fault."""
     text = str(text or "").strip().lower()
-    hypothetical = re.search(r"(?:^|\s)(?:و)?(?:اذا|إذا|لو|في حال)(?:\s|$)", text)
-    return_terms = ("ارجع", "أرجع", "يرجع", "ترجع", "معجب", "يعجب", "مو نفس", "ما اجه نفس", "ما إجه نفس")
+    hypothetical = re.search(r"(?:^|\s)(?:و)?(?:اذا|إذا|يذا|لو|في حال)(?:\s|$)", text)
+    return_terms = ("ارجع", "أرجع", "يرجع", "يرجه", "ترجع", "معجب", "يعجب", "مو نفس", "ما اجه نفس", "ما إجه نفس")
     actual_problem = ("استلمت", "وصلني", "وصلتني", "رجعته", "رجعت الطلب", "اريد الغي", "أريد ألغي", "الغوا الطلب")
     return bool(hypothetical and any(w in text for w in return_terms) and not any(w in text for w in actual_problem))
 
@@ -6850,6 +6878,19 @@ POST_ORDER_SERVICE_RULES = """
 
 def handle_post_order_message(db, ev, customer, history, products, customer_products, order, conversation_history=None):
     """Continue after-sales chat without silently pausing or mutating booked orders."""
+    action = conversation_quality.operational_request(ev.get("text"))
+    if action and action["kind"] in {"cancel", "size"}:
+        if action["kind"] == "size" and str(order.get("size")) == action["value"]:
+            return saved_checkout_reply(db, ev, f"القياس المسجل بطلبج هو {action['value']} بالفعل.", {"post_order_followup": True})
+        request_id = order_actions.record(db, ev["sender_id"], order["id"], action, now_baghdad_iso())
+        review_id = has_pending_human_review(db, ev["sender_id"]) or create_human_review(db, ev,
+            f"إجراء طلب #{order['id']}: {action['kind']} → {action['value']}؛ يجب تنفيذ التغيير من الطلب قبل إغلاق المراجعة")
+        # Do not claim a shipping change: the external delivery may already be underway.
+        reply = ("طلب الإلغاء وصل، لكن الحجز ما زال مسجلاً إلى أن يتأكد تنفيذ الإلغاء."
+                 if action["kind"] == "cancel" else
+                 f"وصل طلب تغيير القياس إلى {action['value']}؛ القياس المسجل حالياً {order.get('size') or 'ضمن تفاصيل القطع'}، ولم يتغير بعد.")
+        return saved_checkout_reply(db, ev, reply, {"post_order_followup": True, "order_action_request": request_id,
+                                                  "human_review_id": review_id, "needs_human": True})
     event = dict(ev)
     event["_post_order"] = dict(order)
     review_id = has_pending_human_review(db, ev["sender_id"])
@@ -6883,7 +6924,7 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
     elif is_ai_handoff_reply(reply):
         reason = "استفسار بعد الحجز يحتاج معلومات غير متاحة للمساعد"
     # No model reply can claim an operational change which this path never executes.
-    if unsupported_order_action(reply):
+    if unsupported_order_action(reply) or conversation_quality.unsupported_claim(reply):
         reason = "طلب تعديل أو متابعة تنفيذية يحتاج تأكيداً من الموظف"
     if not reason and not courtesy_only and is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db):
         check = local_reply_validation(reply, matched, customer_products)
@@ -6913,8 +6954,8 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
         # Human review stays internal; no placeholder or replacement is sent.
         reply = ""
     image_urls = []
-    if not reason and matched and (_requests_product_photo(ev.get("text", "")) or _promises_product_photo(reply)):
-        image_urls = select_product_image_urls(matched, str(result.get("image_color") or ""))
+    if not reason and (_requests_product_photo(ev.get("text", "")) or _promises_product_photo(reply) or result.get("image_product_ids")):
+        image_urls = requested_reply_images(result, products, matched, ev.get("text"), reply)
     if not image_urls and _promises_product_photo(reply):
         reply = "ما عندي صورة مطابقة جاهزة للإرسال لهذا الموديل أو اللون حالياً. أحتاج أتأكد منها حتى ما أدزلج صورة مختلفة."
     # A pending action is not a blanket stop on all future customer questions.
@@ -7029,6 +7070,80 @@ def reply_reasks_known_product(reply):
         r"(?:حددي|حدد).{0,15}(?:الموديل|المنتج)", text))
 
 
+def factual_customer_request(ev, products, matched_product=None):
+    """Answer independent policy/media questions without losing their filters."""
+    text = str(ev.get("text") or "")
+    clean = conversation_quality.normalized(text)
+    result = {"create_order": False, "order": {}, "requires_human": False}
+    if not has_app_context():
+        return None
+    if re.fullmatch(r"[\s؟?!.]*(?:(?:هلو|مرحبا|السلام عليكم)\s*)?(?:كيفية الدفع(?: والشحن| والتوصيل)?|كيف ادفع|شلون الدفع|اكو توصيل|هل يوجد توصيل[^؟?]*|(?:شكد|كم|متى|يمتى)\s+(?:توصيل|التوصيل)[^؟?]*|(?:ما هي طريقة التوصيل))[؟?!.\s]*", clean):
+        delivery = get_delivery_settings(get_db())
+        fee = delivery["other_fee"]
+        if matched_product:
+            try:
+                if price_order([dict(product_id=matched_product["product_id"], quantity=1)], [matched_product], fee)["delivery_fee"] == 0:
+                    fee = 0
+            except ValueError:
+                if "مجاني" in str(matched_product.get("delivery")):
+                    fee = 0
+        price_text = "التوصيل مجاني حسب عرض المنتج." if not fee else (f"التوصيل {fee:,} د.ع لكل المحافظات." if delivery["baghdad_fee"] == delivery["other_fee"] else f"التوصيل لبغداد {delivery['baghdad_fee']:,} د.ع وبقية المحافظات {delivery['other_fee']:,} د.ع.")
+        if re.search(r"متى|يمتى", clean):
+            return dict(result, reply="موعد الوصول الدقيق يحتاج تأكيد المتجر؛ ما عندي موعد مؤكد حالياً.")
+        return dict(result, reply="الدفع عند الاستلام مع الفحص حسب سياسة المتجر. " + price_text)
+    age = conversation_quality.child_age(text)
+    if current_store_id() == baraah.STORE_ID and age is not None and age < 1:
+        # Only reject when every age-described product starts at one year.
+        relevant = [p for p in products if _stock_state(p) == "available"]
+        if relevant and all("سنة" in str(p.get("sizes")) and not re.search(r"اشهر|أشهر|شهر", str(p.get("sizes"))) for p in relevant):
+            return dict(result, reply="حالياً ما عدنا موديل مسجل يناسب هذا العمر؛ المتوفر يبدأ من عمر سنة. ما أريد أدزلج موديل قياسه غير مناسب.", _suppress_product_images=True)
+    if not conversation_quality.wants_photos(text):
+        return None
+    price = conversation_quality.budget(text)
+    named = first_message_named_products(text, products)
+    if price is None and not named:
+        return None
+    candidates = [p for p in (named or products) if _stock_state(p) == "available"]
+    if price is not None:
+        def within(p):
+            try:
+                return conversation_quality.terms(p)[1] == price
+            except ValueError:
+                return False
+        candidates = [p for p in candidates if within(p)]
+    if not candidates:
+        return dict(result, reply="ما عندي موديل متوفر مطابق لهذا الطلب في الكتالوج حالياً.", _suppress_product_images=True)
+    ids = [p["product_id"] for p in candidates if product_image_urls(p)]
+    if not ids:
+        return dict(result, reply="الموديلات موجودة لكن ما عندي صور محفوظة إلها حالياً.", _suppress_product_images=True)
+    return dict(result, reply="هذه صور الموديلات المطابقة لطلبج: " + "، ".join(p["product_name"] for p in candidates),
+                image_product_ids=ids, _catalog_fallback=True)
+
+
+def requested_reply_images(result, products, matched, text, reply):
+    """Select images only from catalog ids; apply price filter again at output."""
+    if result.get("_suppress_product_images"):
+        return []
+    ids = result.get("image_product_ids")
+    if not isinstance(ids, list):
+        ids = []
+    named = first_message_named_products(reply, products) if _promises_product_photo(reply) else []
+    selected = [p for p in products if p["product_id"] in ids] or named or ([matched] if matched else [])
+    price = conversation_quality.budget(text) if conversation_quality.wants_photos(text) else None
+    urls = []
+    for product in selected:
+        if _stock_state(product) != "available":
+            continue
+        if price is not None:
+            try:
+                if conversation_quality.terms(product)[1] != price:
+                    continue
+            except ValueError:
+                continue
+        urls.extend(select_product_image_urls(product, str(result.get("image_color") or "")))
+    return list(dict.fromkeys(urls))
+
+
 def call_main_ai(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
@@ -7067,6 +7182,7 @@ def call_main_ai(
             + "\nأقر باستبعاد المرفوض باختصار وتابع المنتج الباقي المعروف وأجب عن سؤاله الحالي. "
               "لا تطلب الاسم أو الصورة من جديد ولا تعتبر رفض بديل رغبة بالحجز. المعرفات داخلية لا تذكرها للزبون."
         )
+    instructions_text += "\n" + conversation_quality.GUIDE
     instructions_text += (
         "\nوجود أكثر من منتج معروف لا يعني أن المحادثة غامضة. استخدم الصور المرتبة واللون والقياس ومسودة الحجز "
         "لفهم كل قطعة. ثنيهم/ثنينهم تعني القطعتين. لا تطلب الاسم أو الصورة بعد تحديدهما، "
@@ -7083,13 +7199,19 @@ def call_main_ai(
             image_result, instructions_text + "\nأسلوب المحادثة: رد عراقي مختصر وطبيعي. التحية وحدها تجاب بتحية وتفضلي دون عرض منتج. صورة الموديل تنقل الحديث إليه؛ أجب عن السؤال واللون والقياس مباشرة، ولا تقل الصورة تطابق ولا تسأل إضافة أو استبدال أثناء الاستفسار. إذا أرسل صور عدة موديلات، أجب عن كل موديل حسب ترتيب صوره. إن بقي اختيار الحجز غامضاً فاطلب توضيحه. افصل المعلومة عن سؤال المتابعة في reply_parts.", rules_list)
     kwargs = dict(fix_instruction=fix_instruction, customer_products=customer_products,
                   conversation_history=conversation_history, catalog_search_context=catalog_search_context)
+    factual = factual_customer_request(ev, products, matched_product)
+    if factual:
+        return factual
     result = _call_main_ai_once(*args, **kwargs)
+    grounding = conversation_quality.grounded_error(result.get("reply"), matched_product, products)
     lost_context = bool(matched_product and not is_product_objection(question)
                         and reply_reasks_known_product(result.get("reply")))
-    needs_review = (lost_context or result.get("failed") or result.get("requires_human") is True
+    needs_review = (bool(grounding) or lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
     format_failure = result.get("failure_reason") == "invalid_ai_response"
-    if needs_review and not fix_instruction and not ev.get('_staff_preview') and not (image_result or {}).get("unmatched_customer_image"):
+    # The provider client already retries transient HTTP failures.
+    permanent_failure = result.get("_provider_retries_exhausted") or result.get("failure_reason") in {"provider_http_400", "provider_http_401", "provider_http_402", "provider_http_403", "provider_http_404", "no_api_key"}
+    if needs_review and not permanent_failure and not fix_instruction and not ev.get('_staff_preview') and not (image_result or {}).get("unmatched_customer_image"):
         kwargs["fix_instruction"] = (
             "راجع قرار التحويل قبل اعتماده. أجب عن أسئلة السعر واللون والقياس والخامة والتوصيل والفحص "
             "من بيانات المنتج والمتجر والطلب المرفقة. الربط الموجود صالح ولا يحتاج إعادة ربط يدوي. "
@@ -7098,11 +7220,16 @@ def call_main_ai(
             "غير متاح؛ هذه الإجراءات تبقى للبشر. لا تخترع معلومة ناقصة ولا ترسل إشعار تحويل للزبون. "
             "عند القدرة على الإجابة أعد requires_human=false."
         )
+        if grounding:
+            kwargs["fix_instruction"] += " " + grounding
         if lost_context:
             kwargs["fix_instruction"] += " المنتج محدد بالفعل: " + str(matched_product.get("product_name")) + ". أجب عن السؤال الحالي من بياناته؛ لا تطلب اسمه أو صورته مجدداً."
         if format_failure:
             kwargs["fix_instruction"] += ' الرد السابق تعذر قراءته. أرجع كائن JSON صالح فقط بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder. لا تؤكد حجزاً دون بيانات مكتملة وموافقة الزبون.'
         result = _call_main_ai_once(*args, **kwargs)
+    if conversation_quality.grounded_error(result.get("reply"), matched_product, products):
+        return {"reply": "هذه التفاصيل تحتاج تأكيداً من المتجر حتى أنطيج معلومة صحيحة.", "create_order": False,
+                "order": {}, "_needs_fact_review": True, "_suppress_product_images": True}
     if (matched_product and (result.get('failed') or result.get('requires_human') is True
             or reply_reasks_known_product(result.get('reply')))):
         factual = known_product_questions_reply(question, matched_product)
@@ -7110,6 +7237,11 @@ def call_main_ai(
             return dict(factual, _catalog_fallback=True)
     if matched_product and not is_product_objection(question) and reply_reasks_known_product(result.get("reply")):
         return {"reply": "", "failed": True, "failure_reason": "known_product_context_repeatedly_ignored", "requires_human": True}
+    if (result.get('failed') or result.get('requires_human') is True) and has_app_context() and not ev.get('_post_order') and not ev.get('_staff_preview'):
+        candidate = {'reply': '', 'create_order': False, 'order': {}}
+        restore_checkout_draft(get_db(), ev, candidate, matched_product)
+        if candidate.get('order', {}).get('items') and checkout_requested(get_db(), ev, candidate) and not pending_product_choice(get_db(), ev.get('sender_id')):
+            return dict(candidate, create_order=True, _recovered_checkout=True)
     if result.get('requires_human') is True or is_ai_handoff_reply(result.get('reply')):
         return dict(result, reply='', create_order=False, failed=True,
                     failure_reason=result.get('handoff_reason') or 'unresolved_decision_after_context_review')
@@ -7501,7 +7633,7 @@ def _call_main_ai_once(
         return {
             "reply": "", "intent": "unknown",
             "create_order": False, "order": {}, "confidence": 0,
-            "failed": True, "failure_reason": reason,
+            "failed": True, "failure_reason": reason, "_provider_retries_exhausted": bool(status),
         }
 
 
@@ -7638,6 +7770,9 @@ def checkout_customer_data(db, sender_id, order_data):
     for field in ("phone", "province", "address"):
         data[field] = customer.get(field) or data.get(field) or ""
     data["customer_name"] = data.get("customer_name") or customer.get("name") or ""
+    location = contact_fields("العنوان " + str(data.get("address") or ""))
+    if location.get("province"):
+        data["province"] = location["province"]
     return data
 
 
@@ -7653,17 +7788,19 @@ def checkout_lines(order_data, matched_product=None):
 
 
 def checkout_receipt(data, items, catalog, delivery_fee, confirmation=""):
-    by_id = {p.get("product_id"): p for p in catalog}
-    lines, total = [], 0
-    for item in items:
-        product = by_id[item["product_id"]]
-        price = int(re.sub(r"\D", "", str(product.get("price") or "0")) or "0")
-        amount = price * item["quantity"]
-        total += amount
-        measurement = ("وزن " if item.get("size_type") == "weight" else "قياس ") + str(item.get("size") or "")
-        details = " / ".join(str(v) for v in (item.get("color"), measurement if item.get("size") else "") if v)
-        lines.append(f"{item['product_name']} ×{item['quantity']} — {details} — {amount:,} د.ع")
-    lines.extend([f"التوصيل: {int(delivery_fee):,} د.ع", f"المجموع: {total + int(delivery_fee):,} د.ع",
+    pricing = price_order(items, catalog, delivery_fee)
+    lines = []
+    for group in pricing["groups"]:
+        if group["bundle_size"] > 1:
+            lines.append(f"{group['items'][0]['product_name']} — بكج {group['bundle_size']} قطع ×{group['bundles']} — {group['amount']:,} د.ع")
+        for item in group["items"]:
+            measurement = ("وزن " if item.get("size_type") == "weight" else "قياس ") + str(item.get("size") or "")
+            details = " / ".join(str(v) for v in (item.get("color"), measurement if item.get("size") else "") if v)
+            suffix = "" if group["bundle_size"] > 1 else f" — {group['amount'] * item['quantity'] // sum(i['quantity'] for i in group['items']):,} د.ع"
+            lines.append(f"{item['product_name']} ×{item['quantity']} — {details}{suffix}")
+    fee = pricing["delivery_fee"]
+    shipping = "مجاني" if fee == 0 else f"{fee:,} د.ع"
+    lines.extend([f"التوصيل: {shipping}", f"المجموع: {pricing['product_total'] + fee:,} د.ع",
                   f"العنوان: {data.get('province', '')} / {data.get('address', '')}", f"الهاتف: {data.get('phone', '')}"])
     delivery_time = get_delivery_settings().get("delivery_time")
     lines.append("مدة التوصيل: " + (str(delivery_time) if delivery_time else "يؤكدها فريق المتجر"))
@@ -7696,6 +7833,10 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     phone = order_data["phone"] = valid_phone
     catalog_products = load_products_from_file()
     raw_items = checkout_lines(order_data, matched_product)
+    try:
+        raw_items = expand_bundles(raw_items, catalog_products)
+    except (ValueError, KeyError, TypeError) as exc:
+        return None, str(exc)
     error = order_line_error(raw_items, catalog_products)
     if error:
         return None, error
@@ -7723,15 +7864,14 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         return None, "باقي نحدد " + " و".join(missing_options) + " حتى أثبت الطلب 🌸"
     product_id = ", ".join(item["product_id"] for item in items if item.get("product_id"))
     product_name = order_items_summary(items)
-    product_total = 0
-    for item in items:
-        product = catalog.get(item.get("product_id")) or {}
-        price_digits = re.sub(r"[^0-9]", "", str(product.get("price") or ""))
-        product_total += (int(price_digits) if price_digits else 0) * int(item.get("quantity") or 1)
-    delivery_fee = delivery_fee_for_province(province, db)
+    try:
+        pricing = price_order(items, catalog_products, delivery_fee_for_province(province, db))
+    except ValueError as exc:
+        return None, str(exc)
+    product_total, delivery_fee = pricing["product_total"], pricing["delivery_fee"]
     total_amount = product_total + int(delivery_fee or 0)
 
-    duplicate = find_duplicate_order(db, sender_id, phone, product_id, address)
+    duplicate = find_duplicate_order(db, sender_id, phone, product_id, address, items=items)
     if duplicate:
         print(f"[Order] Duplicate skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
         # The confirmation was already sent when this order was first created.
@@ -7743,9 +7883,9 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
             linked_ids.add(matched_product.get("product_id"))
         if len(items) == 1 and any(item.get("product_id") not in linked_ids for item in items):
             return None, "قبل الحجز نحتاج نحدد الموديلات المطلوبة بالاسم أو الصورة؛ الاستفسار عن قطعة ما يضيفها للطلب."
-        if len(items) > 1:
+        if ai_result.get("require_cart_confirmation") is True:
             proposal = dict(order_data, items=items)
-            proposal["_catalog_snapshot"] = [{k: p.get(k) for k in ("product_id", "product_name", "price", "colors", "sizes", "stock", "status")}
+            proposal["_catalog_snapshot"] = [{k: p.get(k) for k in ("product_id", "product_name", "price", "offer", "notes", "delivery", "colors", "sizes", "stock", "status")}
                                               for p in catalog_products if p.get("product_id") in {i["product_id"] for i in items}]
             proposal["_delivery_fee"] = delivery_fee
             ai_result["_checkout_proposal"] = proposal
@@ -7772,6 +7912,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         "store_id": current_store_id(),
     }
 
+    items[:] = pricing["items"]
     menger.snapshot_prices(booking_data, catalog_products)
     order_cursor = db.execute(
         """INSERT INTO orders
@@ -7866,9 +8007,13 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True):
     # A correction or attachment in the same burst invalidates a bare 'yes'.
     if not incoming or not all(r["message_type"] in {"text", "emoji"} and is_confirmation(r["text"]) for r in incoming):
         return None
-    current = [{k: p.get(k) for k in ("product_id", "product_name", "price", "colors", "sizes", "stock", "status")}
+    current = [{k: p.get(k) for k in ("product_id", "product_name", "price", "offer", "notes", "delivery", "colors", "sizes", "stock", "status")}
                for p in products if p.get("product_id") in {i["product_id"] for i in proposal["items"]}]
-    if current != proposal.get("_catalog_snapshot") or delivery_fee_for_province(proposal.get("province"), db) != proposal.get("_delivery_fee"):
+    try:
+        fee = price_order(proposal["items"], products, delivery_fee_for_province(proposal.get("province"), db))["delivery_fee"]
+    except ValueError:
+        fee = None
+    if current != proposal.get("_catalog_snapshot") or fee != proposal.get("_delivery_fee"):
         return finish("تغيرت بعض تفاصيل المنتجات أو الأسعار؛ نحتاج نراجع ملخص الطلب قبل تثبيته.", {"checkout_changed": True})
     result = {"order": proposal}
     created, reply = create_order_if_valid(db, ev["sender_id"], result, None, cart_confirmed=True)
@@ -8260,6 +8405,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 named_products = [known_focus]
         if len(named_products) == 1:
             ev['_first_message_product_id'] = named_products[0]['product_id']
+        elif len(named_products) > 1 and re.search(r"اريد|أريد|احجز|أحجز|ثبتي|اثنين|ثنين", ev.get("text", "")) and not re.search(r"\b(?:لو|او|أو)\b", ev.get("text", "")):
+            for product in named_products:
+                complete_customer_product_link(db, ev["sender_id"], product, "text", preserve_existing=True)
+            customer_products = load_customer_products(db, ev["sender_id"])
         elif len(named_products) > 1:
             names = ' لو '.join(dict.fromkeys(p.get('product_name') or p['product_id'] for p in named_products))
             question = (f'تقصدين {names}؟' if len({str(p.get('product_name') or '').replace('ة', 'ه') for p in named_products}) > 1
@@ -8626,7 +8775,13 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         }
 
     if routing.get("wants_catalog"):
-        image_messages = build_catalog_image_messages(products)
+        filtered = factual_customer_request(ev, products, matched_product)
+        catalog_products = products
+        if filtered:
+            catalog_products = [p for p in products if p["product_id"] in filtered.get("image_product_ids", [])]
+        image_messages = build_catalog_image_messages(catalog_products)
+        if filtered and not image_messages:
+            return saved_checkout_reply(db, ev, filtered["reply"], {"catalog_filtered": True})
         image_urls = [m["url"] for m in image_messages]
         for image_url in image_urls:
             save_message(
@@ -8697,8 +8852,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             },
         }
 
+    if ai_result.get("_needs_fact_review"):
+        create_human_review(db, ev, "تفاصيل غير موثقة في الكتالوج؛ يلزم تأكيدها قبل الرد", notify_telegram=True)
     reply = ai_result.get("reply") or FALLBACK_REPLY
-    reply_product = select_product_mentioned_in_reply(reply, customer_products)
+    reply_product = select_product_mentioned_in_reply(reply, products, require_name=True)
     if reply_product and reply_product.get("product_id") != (matched_product or {}).get("product_id"):
         log(10, "PRODUCT CONTEXT", "Reply selected a different product; aligning product and image", {
             "previous_product_id": (matched_product or {}).get("product_id"),
@@ -8873,7 +9030,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     # The checker retry may have changed the offered product. Align once more
     # immediately before building an order or attaching an image.
-    final_reply_product = select_product_mentioned_in_reply(reply, customer_products)
+    final_reply_product = select_product_mentioned_in_reply(reply, products, require_name=True)
     if final_reply_product and final_reply_product.get("product_id") != (matched_product or {}).get("product_id"):
         matched_product = final_reply_product
         match_method = final_reply_product.get("match_method") or "matched_product_context"
@@ -8924,10 +9081,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             if normalized_variant and normalized_variant in normalized_context:
                 requested_image_color = variant_color
                 break
-    outgoing_image_urls = (
-        select_product_image_urls(matched_product, requested_image_color)
-        if send_img else []
-    )
+    if ai_result.get("image_product_ids") and not order_created:
+        send_img = True
+    ai_result["image_color"] = requested_image_color
+    outgoing_image_urls = requested_reply_images(ai_result, products, matched_product, ev.get("text"), reply) if send_img else []
     if send_img and requested_image_color and not outgoing_image_urls:
         log(13, "IMAGE COLOR", "No image is assigned to the requested color; skipped sending a wrong image", {
             "product_id": (matched_product or {}).get("product_id"),
@@ -10005,6 +10162,32 @@ def api_update_order(order_id):
         if field in data:
             updates[field] = str(data.get(field) or "").strip()
 
+    items = current.get("items") or []
+    if "items" in data:
+        supplied = data["items"]
+        if not isinstance(supplied, list) or len(supplied) != len(items) or not items:
+            return jsonify(ok=False, error="عدد قطع الطلب لا يطابق التفاصيل المحفوظة"), 400
+        for item, changed in zip(items, supplied):
+            if not isinstance(changed, dict) or changed.get('product_id') != item.get('product_id'):
+                return jsonify(ok=False, error="الموديلات لا تطابق الطلب المحفوظ"), 400
+            for key in ('size', 'color'):
+                value = str(changed.get(key) or '').strip()
+                if not value:
+                    return jsonify(ok=False, error="حدد قياس ولون كل قطعة"), 400
+                item[key] = value
+        updates['order_items'] = json.dumps(items, ensure_ascii=False)
+        updates['product_name'] = order_items_summary(items)
+        updates['size'] = items[0]['size'] if len(items) == 1 else ''
+        updates['color'] = items[0]['color'] if len(items) == 1 else ''
+    elif "size" in updates or "color" in updates:
+        if len(items) > 1:
+            return jsonify(ok=False, error="الطلب يحتوي عدة قطع؛ حدد تفاصيل كل قطعة قبل تعديل اللون أو القياس"), 400
+        if len(items) == 1:
+            for key in ("size", "color"):
+                if key in updates:
+                    items[0][key] = updates[key]
+            updates["order_items"] = json.dumps(items, ensure_ascii=False)
+            updates["product_name"] = order_items_summary(items)
     if "product_total" in data or "delivery_fee" in data:
         try:
             amounts = [int(str(data[k])) for k in ("product_total", "delivery_fee")]
@@ -10019,9 +10202,22 @@ def api_update_order(order_id):
     set_clause = ", ".join(f"{field}=?" for field in updates)
     values = list(updates.values()) + [order_id]
     db.execute(f"UPDATE orders SET {set_clause} WHERE id=?", values)
-    db.commit()
     order = _order_payload_by_id(db, order_id)
-    return jsonify({"ok": True, "order": order})
+    order_actions.resolve_applied(db, order, now_baghdad_iso())
+    # A pending export must never send an older item or a cancelled order.
+    delivery = db.execute("SELECT status,attempts,remote_order_id FROM menger_deliveries WHERE order_id=?", (order_id,)).fetchone()
+    if delivery and delivery["status"] == "pending" and not delivery["attempts"] and not delivery["remote_order_id"]:
+        if order.get("status") in {"cancelled", "canceled", "ملغي"}:
+            db.execute("UPDATE menger_deliveries SET status='cancelled' WHERE order_id=?", (order_id,))
+        else:
+            db.execute("DELETE FROM menger_deliveries WHERE order_id=?", (order_id,))
+            token = _current_store_id.set(order.get("store_id") or "default")
+            try:
+                menger.enqueue(db, order_id, order, load_products_from_file())
+            finally:
+                _current_store_id.reset(token)
+    db.commit()
+    return jsonify({"ok": True, "order": order, "external_followup_required": bool(delivery and (delivery["attempts"] or delivery["remote_order_id"]))})
 
 
 @app.route("/api/orders/<int:order_id>/resend_telegram", methods=["POST"])
@@ -10713,6 +10909,9 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
     if payload.get('rewrite_only'):
         return text, {'manual_reply': True, 'ai_generated': True, 'rewrite_only': True}, None
     result = payload["result"]
+    existing = get_latest_customer_order(db, sender_id)
+    if existing and (result.get("create_order") or unsupported_order_action(text) or conversation_quality.unsupported_claim(text)):
+        return text, {}, "هذا الرد يؤكد حجزاً أو إجراءً على طلب موجود. حدّث الطلب من لوحة الطلبات قبل تأكيد التنفيذ."
     product = find_product_by_id(payload.get("product_id"))
     ev = dict(latest_incoming_message(db, sender_id), sender_id=sender_id)
     accepted = accept_checkout_proposal(db, ev, [], load_active_products(db), persist_reply=False)
@@ -10724,7 +10923,11 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
     if checkout_requested(db, ev, result):
         created, reply = create_order_if_valid(db, sender_id, result, product)
         text = reply or ("طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً." if created else "نحتاج مراجعة تفاصيل الطلب قبل تثبيته.")
+    images = requested_reply_images(result, load_active_products(db), product, ev.get('text'), text) if not created and (_promises_product_photo(text) or result.get('image_product_ids')) else []
+    if _promises_product_photo(text) and not images:
+        text = 'ما عندي صورة مطابقة محفوظة لهذا الطلب حالياً.'
     return text, {"manual_reply": True, "ai_generated": True, "order_created": bool(created),
+                  "image_urls": images,
                   "checkout_proposal": result.get("_checkout_proposal"),
                   "checkout_draft": result.get("order") if not created else None}, None
 
@@ -10778,8 +10981,9 @@ def api_send_message(sender_id):
                 save_message(db, sender_id, 'outgoing', 'text', part, None, None, None,
                              dict(reply_meta, delivery_id=delivery_id))
         text_result = dict(text_result or {}, parts_sent=len(delivered_parts))
-    if image_url:
-        public_img = build_public_image_url(image_url)
+    image_urls = list(dict.fromkeys(([image_url] if image_url else []) + reply_meta.get('image_urls', [])))
+    for image_to_send in image_urls:
+        public_img = build_public_image_url(image_to_send)
         print(f"[Dashboard] Sending image: {public_img}", flush=True)
         if not text or (text_result and text_result.get('ok')):
             image_result = ai_jobs.deliver(db, delivery_id, ['image', public_img],
@@ -10789,10 +10993,12 @@ def api_send_message(sender_id):
                     (sender_id, public_img, '%' + delivery_id + '%')).fetchone():
                 save_message(db, sender_id, 'outgoing', 'image', None, public_img, None, None,
                              dict(reply_meta, delivery_id=delivery_id))
+            if not image_result.get('ok'):
+                break
 
     sent = bool(
         (not text or (text_result and text_result.get("ok")))
-        and (not image_url or (image_result and image_result.get("ok")))
+        and (not image_urls or (image_result and image_result.get("ok")))
     )
     manychat_key = os.environ.get("CHATWOOT_API_TOKEN", "") if chatwoot.enabled() else manychat_api_key_for_page(page_id, current_store_id())
     primary = text_result or image_result or {}
@@ -11002,6 +11208,9 @@ def api_ask_ai(sender_id):
         "_staff_preview": True,
     }
     image_result = None
+    existing_order = get_latest_customer_order(db, sender_id)
+    if existing_order:
+        ev["_post_order"] = dict(existing_order)
     if allow_empty:
         latest_id = db.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=? AND direction='incoming'", (sender_id,)).fetchone()[0]
         ev = collect_unanswered_event(db, ev, latest_id)
@@ -11359,19 +11568,21 @@ def api_link_product(sender_id):
         f"(silent={silent}, resume_ai={resume_ai})",
         flush=True,
     )
-    # Linking resolves the intervention immediately, even without an outgoing reply.
-    rewards.tables(db)
-    db.execute("BEGIN IMMEDIATE")
-    rewards.award_pending(db, sender_id, current_dashboard_person(), cutoff=review_cutoff)
-    db.execute("UPDATE human_reviews SET status='linked', replied_at=? WHERE sender_id=? AND status='pending' AND id<=?",
-               (now, sender_id, review_cutoff))
-    db.commit()
-    close_human_attention(db, sender_id)
-    if resume_ai:
-        set_customer_ai_enabled(db, sender_id, True)
+    pause = db.execute("SELECT reason FROM conversation_pause_state WHERE sender_id=?", (sender_id,)).fetchone()
     auto_reply = None
     if not silent and is_ai_enabled(db):
         auto_reply = auto_reply_after_product_link(db, sender_id, linked_products[-1], staff_action=True)
+    if (silent or (auto_reply or {}).get("sent")) and not order_actions.pending(db, sender_id):
+        rewards.tables(db)
+        db.commit()
+        db.execute("BEGIN IMMEDIATE")
+        rewards.award_pending(db, sender_id, current_dashboard_person(), cutoff=review_cutoff)
+        db.execute("UPDATE human_reviews SET status='linked', replied_at=? WHERE sender_id=? AND status='pending' AND id<=?",
+                   (now, sender_id, review_cutoff))
+        db.commit()
+        close_human_attention(db, sender_id)
+        if resume_ai and (silent or not pause or pause['reason'] != 'manual' or 'resume_ai' in data):
+            set_customer_ai_enabled(db, sender_id, True)
     return jsonify({
         "ok": True,
         "product": linked_products[-1],
@@ -13580,7 +13791,7 @@ def api_create_order(sender_id):
         raw_items = [{"product_name": name, "quantity": 1} for name in product_names]
     # Manual checkout follows the same completeness rules as automatic checkout.
     contact = checkout_customer_data(db, sender_id, data)
-    contact.update({key: data[key] for key in ("phone", "province", "address") if data.get(key)})
+    contact.update({key: data[key] for key in ("phone", "address") if data.get(key)})
     missing = [label for key, label in (("phone", "رقم الهاتف"), ("province", "المحافظة"), ("address", "العنوان")) if not contact.get(key)]
     if missing:
         return jsonify({"ok": False, "error": "أكمل " + " و".join(missing) + " قبل تثبيت الطلب"}), 400
@@ -13588,22 +13799,22 @@ def api_create_order(sender_id):
         return jsonify({"ok": False, "error": "رقم الهاتف غير صحيح"}), 400
     data.update({k: contact[k] for k in ("phone", "province", "address")})
     catalog = load_products_from_file()
+    try:
+        raw_items = expand_bundles(raw_items, catalog)
+    except (ValueError, KeyError, TypeError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
     error = order_line_error(raw_items, catalog)
     if error:
         return jsonify({"ok": False, "error": error}), 400
     items = normalize_order_items({"items": raw_items}, products=catalog)
     if len(items) != len(raw_items):
         return jsonify({"ok": False, "error": "إحدى القطع غير متوفرة؛ راجع الطلب قبل التثبيت"}), 400
-    by_id = {str(p.get("product_id")): p for p in catalog}
-    product_total = 0
-    for item in items:
-        raw_price = str(by_id.get(item["product_id"], {}).get("price") or "").translate(_ARABIC_DIGIT_TRANS)
-        price = int(re.sub(r"\D", "", raw_price) or "0")
-        if price <= 0:
-            return jsonify({"ok": False, "error": "سعر إحدى القطع غير محدد؛ حدّث سعر المنتج قبل تثبيت الطلب"}), 400
-        item["unit_price"] = price
-        product_total += price * item["quantity"]
-    delivery_fee = int(delivery_fee_for_province(data["province"], db) or 0)
+    try:
+        pricing = price_order(items, catalog, delivery_fee_for_province(data["province"], db))
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    items = pricing["items"]
+    product_total, delivery_fee = pricing["product_total"], pricing["delivery_fee"]
     total_amount = product_total + delivery_fee
     product_id_text = ", ".join(item["product_id"] for item in items if item.get("product_id"))
     product_name_text = order_items_summary(items)
@@ -13616,6 +13827,7 @@ def api_create_order(sender_id):
         data.get("phone"),
         product_id_text,
         data.get("address"),
+        items=items,
     )
     if duplicate:
         print(f"[Dashboard] Duplicate manual order skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
@@ -13693,7 +13905,10 @@ def api_create_order(sender_id):
 
 def close_human_attention(db, sender_id=None):
     """Close both persisted sources of the human-intervention inbox filter."""
-    clause = ' AND sender_id=?' if sender_id is not None else ''
+    order_actions.init(db)
+    clause = ' AND sender_id NOT IN (SELECT sender_id FROM order_action_requests WHERE status="pending")'
+    if sender_id is not None:
+        clause += ' AND sender_id=?'
     params = (sender_id,) if sender_id is not None else ()
     now = now_baghdad_iso()
     rewards.tables(db)
@@ -13728,6 +13943,8 @@ def api_close_all_human_reviews():
 def api_mark_reviewed(sender_id):
     data = request.get_json(silent=True) or {}
     db  = get_db()
+    if order_actions.pending(db, sender_id):
+        return jsonify(ok=False, error="يوجد إلغاء أو تعديل طلب لم يُنفذ بعد؛ نفّذه من الطلب قبل إغلاق المراجعة"), 409
     closed = close_human_attention(db, sender_id)
     if _setting_bool(data.get("resume_ai"), True):
         try:

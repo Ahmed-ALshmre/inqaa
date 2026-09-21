@@ -2780,3 +2780,22 @@ button,a,input,select,textarea { touch-action:manipulation; }
 
 /* Keep alerts above the conversation on desktop and mobile. */
 body .toast-container, body.mobile-conversation-open .toast-container { top: max(12px, env(safe-area-inset-top)) !important; bottom: auto !important; z-index: 1090; }
+
+/* On phones, ordinary pages use the document as their only vertical scroller.
+   A fixed-height body with overflow:auto creates a second touch-scroll surface. */
+@media (max-width: 1024px) and (pointer: coarse) {
+  html {
+    height: auto;
+    min-height: 100%;
+    overflow-x: clip;
+    overflow-y: auto;
+    touch-action: auto;
+  }
+  body:not(.messenger-page):not(.advisor-workspace):not(.modal-open) {
+    height: auto !important;
+    min-height: 100dvh;
+    overflow: visible !important;
+    overscroll-behavior-y: auto;
+    touch-action: auto;
+  }
+}

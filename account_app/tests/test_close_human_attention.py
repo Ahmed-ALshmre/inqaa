@@ -75,13 +75,14 @@ class CloseHumanAttentionTests(unittest.TestCase):
         self.assertTrue(result['ok'])
         self.assertTrue(m.is_customer_ai_enabled(self.db, 'old'))
 
-    def test_link_resumes_even_if_first_reply_cannot_be_sent(self):
+    def test_failed_link_reply_retains_review_and_pause(self):
         product = {'product_id': 'P1', 'product_name': 'فستان'}
         def reply(*args, **kwargs):
-            self.assertTrue(m.is_customer_ai_enabled(self.db, 'old'))
+            self.assertFalse(m.is_customer_ai_enabled(self.db, 'old'))
             return {'sent': False, 'reason': 'send_failed'}
         with patch.object(m, 'find_product_by_id', return_value=product), patch.object(m, 'is_ai_enabled', return_value=True), patch.object(m, 'auto_reply_after_product_link', side_effect=reply):
             response = self.client.post('/api/conversations/old/link_product', json={'product_id': 'P1'})
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json['ai_resumed'])
+        self.assertFalse(response.json['ai_resumed'])
+        self.assertTrue(m.has_pending_human_review(self.db, 'old'))
         self.assertFalse(response.json['auto_reply']['sent'])

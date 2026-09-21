@@ -184,6 +184,14 @@ function openEditOrder(orderId) {
   setEditValue('editProductId', order.product_id);
   setEditValue('editColor', order.color);
   setEditValue('editSize', order.size);
+  const lines = Array.isArray(order.items) ? order.items : [];
+  document.getElementById('editOrderItems').innerHTML = lines.map((item, index) => `
+    <fieldset class="border rounded p-2 mb-2"><legend class="fs-6">${esc(item.product_name)} × ${esc(item.quantity)}</legend>
+    <label class="me-2">اللون<input class="form-control" data-line-color="${index}" value="${esc(item.color)}" required></label>
+    <label>القياس<input class="form-control" data-line-size="${index}" value="${esc(item.size)}" required></label></fieldset>`).join('');
+  for (const id of ['editColor', 'editSize', 'editProductId', 'editProductName']) {
+    document.getElementById(id).disabled = lines.length > 0;
+  }
   setEditValue('editNotes', order.notes);
   setEditValue('editProductTotal', order.product_total);
   setEditValue('editDeliveryFee', order.delivery_fee);
@@ -211,6 +219,13 @@ async function saveEditedOrder(event) {
     status: document.getElementById('editStatus').value,
   };
   const productTotal = document.getElementById('editProductTotal').value;
+  const original = allOrders.find(item => Number(item.id) === Number(orderId));
+  if (original?.items?.length) {
+    payload.items = original.items.map((item, index) => ({product_id: item.product_id,
+      color: document.querySelector(`[data-line-color="${index}"]`).value,
+      size: document.querySelector(`[data-line-size="${index}"]`).value}));
+    for (const key of ['color', 'size', 'product_id', 'product_name']) delete payload[key];
+  }
   const deliveryFee = document.getElementById('editDeliveryFee').value;
   if (productTotal !== '' || deliveryFee !== '') { payload.product_total = productTotal; payload.delivery_fee = deliveryFee; }
   try {
@@ -225,7 +240,7 @@ async function saveEditedOrder(event) {
     if (index >= 0) allOrders[index] = data.order;
     await loadOrders();
     editModal?.hide();
-    showOrderToast('تم حفظ تعديل الطلب', 'success');
+    showOrderToast(data.external_followup_required ? 'تم حفظ التعديل محلياً. الطلب أُرسل سابقاً؛ تأكد من تعديل نسخته لدى جهة التوصيل أيضاً.' : 'تم حفظ تعديل الطلب', data.external_followup_required ? 'warning' : 'success');
   } catch (err) {
     status.textContent = err.message || 'فشل حفظ الطلب';
   }

@@ -42,6 +42,18 @@ class AuditFixTests(unittest.TestCase):
         self.db.execute("INSERT INTO customers(sender_id,store_id,first_seen_at) VALUES(?,?,?)",(sender,store,'2026-09-10T10:00:00+03:00'))
         self.db.commit()
 
+    def test_manual_bundle_uses_package_price_and_free_delivery(self):
+        self.customer('bundle')
+        catalog = [dict(product_id='B', product_name='سوت بهاري', price='بكج 3 قطع سعره ب 25 الف',
+                        delivery='توصيل مجاني', status='active')]
+        payload = dict(phone='07701234567', province='بغداد', address='بغداد حي اور',
+                       items=[dict(product_id='B', color='وردي', size='سنتين', quantity=3)])
+        with patch.object(self.m, 'load_products_from_file', return_value=catalog), patch.object(self.m, 'delivery_fee_for_province', return_value=5000), patch.object(self.m, 'send_order_to_telegram', return_value=True), patch.object(self.m, 'save_booking_to_file'), patch.object(self.m, 'send_text_to_facebook', return_value=True):
+            response = self.client.post('/api/conversations/bundle/create_order', json=payload)
+            self.assertEqual(response.status_code, 200, response.get_json())
+            order = self.db.execute('SELECT * FROM orders').fetchone()
+            self.assertEqual((order['product_total'], order['delivery_fee'], order['total_amount']), (25000, 0, 25000))
+
     def test_manual_order_prices_quantity_shipping_and_resend_snapshot(self):
         self.customer('price')
         catalog=[dict(product_id='A',product_name='تنورة',price='١٢,٠٠٠',colors='اسود',sizes='38 إلى 52',status='active',stock='متوفر')]
@@ -73,7 +85,7 @@ class AuditFixTests(unittest.TestCase):
             for i, phrase in enumerate(phrases):
                 sender='cart-'+str(i);self.customer(sender)
                 event=dict(sender_id=sender,text=phrase)
-                result={'order':dict(phone='07701234567',province='بغداد',address='حي اور',items=[dict(product_id='A',color='اسود',size='44',quantity=1),dict(product_id='A',color='اسود',size='48',quantity=1)])}
+                result={'require_cart_confirmation': True, 'order':dict(phone='07701234567',province='بغداد',address='حي اور',items=[dict(product_id='A',color='اسود',size='44',quantity=1),dict(product_id='A',color='اسود',size='48',quantity=1)])}
                 _,reply=self.m.create_order_if_valid(self.db,sender,result,None)
                 self.m.saved_checkout_reply(self.db,event,reply,{}, {'checkout_proposal':result['_checkout_proposal']})
                 self.m.save_message(self.db,sender,'incoming','text',phrase,None,None,None,{})
