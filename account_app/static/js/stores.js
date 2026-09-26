@@ -74,4 +74,23 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });
+  const syncButton = document.getElementById('syncMengerStores');
+  syncButton.addEventListener('click', async () => {
+    const status = form.querySelector('[role="status"]');
+    syncButton.disabled = true;
+    status.textContent = 'جارٍ اختبار الاتصال ومطابقة المتاجر…';
+    try {
+      const result = await storesRequest('/api/settings/menger/sync-stores', {method:'POST', body:'{}'});
+      const matched = (result.matched || []).length;
+      const unmatched = result.unmatched || [];
+      status.textContent = unmatched.length
+        ? `تم ربط ${matched} متجر. غير المطابق: ${unmatched.join('، ')}`
+        : `تم الاتصال وربط جميع المتاجر (${matched}) بنجاح`;
+      await loadStores();
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      syncButton.disabled = false;
+    }
+  });
 });

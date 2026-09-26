@@ -125,6 +125,31 @@ class MengerTests(unittest.TestCase):
         self.assertEqual(menger.connection(self.db)['api_key'], 'legacy-key')
         self.assertEqual(menger.settings(self.db, 'legacy')['store_id'], 'legacy-store')
 
+    def test_sync_stores_matches_each_store_by_name(self):
+        self.db.execute('CREATE TABLE stores(store_id TEXT PRIMARY KEY,name TEXT,active INTEGER)')
+        self.db.executemany('INSERT INTO stores VALUES(?,?,1)', [
+            ('lamsa', 'لمسة ستور'), ('kids', 'عالم البراءة لملابس الأطفال'),
+            ('missing', 'متجر غير موجود'),
+        ])
+        response = Mock(status_code=200, json=Mock(return_value={
+            'ok': True,
+            'stores': [
+                {'store_id': 'remote-lamsa', 'name': 'لمسة ستور'},
+                {'store_id': 'remote-kids', 'name': 'عالم البراءة لملابس الأطفال'},
+            ],
+        }))
+        get = Mock(return_value=response)
+
+        result = menger.sync_stores(self.db, get=get)
+
+        self.assertEqual(len(result['matched']), 2)
+        self.assertEqual(result['unmatched'], ['متجر غير موجود'])
+        self.assertEqual(menger.settings(self.db, 'lamsa')['store_id'], 'remote-lamsa')
+        self.assertEqual(menger.settings(self.db, 'kids')['store_id'], 'remote-kids')
+        self.assertEqual(menger.settings(self.db, 'missing')['store_id'], '')
+        self.assertEqual(get.call_args.args[0], 'https://menger.example/api/v1/stores')
+        self.assertNotIn('test-secret', str(result))
+
     def test_order_name_frozen_for_retry_and_customer_name_preserved(self):
         self.db.execute('DELETE FROM menger_deliveries')
         catalog = [dict(product_id='p1', price=18000, order_name='اسم منجر')]

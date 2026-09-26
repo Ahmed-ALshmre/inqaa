@@ -5,6 +5,7 @@ import re
 import sqlite3
 import threading
 import time
+import unicodedata
 from urllib.parse import urlparse
 
 import requests
@@ -83,6 +84,65 @@ def save_settings(db, store, data):
             current[field] = str(data[field] or '').strip()
     db.execute('INSERT INTO menger_store_settings(local_store,store_id,telegram_chat_id) VALUES(?,?,?) ON CONFLICT(local_store) DO UPDATE SET store_id=excluded.store_id,telegram_chat_id=excluded.telegram_chat_id',
                (store, current['store_id'], current['telegram_chat_id']))
+
+
+def _normalized_store_name(value):
+    value = unicodedata.normalize('NFKC', str(value or '')).casefold()
+    value = re.sub(r'[\u064b-\u065f\u0670]', '', value)
+    value = value.translate(str.maketrans({'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ى': 'ي', 'ة': 'ه'}))
+    return re.sub(r'[^\w\u0600-\u06ff]+', ' ', value).strip()
+
+
+def sync_stores(db, get=None):
+    """Verify the shared API and bind local stores to Menger by stable name."""
+    get = get or requests.get
+    config = connection(db)
+    parsed = urlparse(config.get('api_url') or '')
+    if parsed.scheme != 'https' or not parsed.hostname or not config.get('api_key'):
+        raise ValueError('احفظ رابط Menger ومفتاح API أولاً')
+    base_path = parsed.path.rstrip('/')
+    if base_path.endswith('/orders'):
+        base_path = base_path[:-len('/orders')]
+    stores_url = parsed._replace(path=f'{base_path}/stores', params='', query='', fragment='').geturl()
+    try:
+        response = get(stores_url, headers={
+            'Authorization': f"Bearer {config['api_key']}",
+            'Accept': 'application/json',
+        }, timeout=20, allow_redirects=False)
+    except requests.RequestException as exc:
+        raise ValueError('تعذر الاتصال بـ Menger حالياً') from exc
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise ValueError(f'استجابة Menger غير صالحة (HTTP {response.status_code})') from exc
+    if response.status_code != 200 or not isinstance(payload, dict) or payload.get('ok') is not True:
+        message = payload.get('error') if isinstance(payload, dict) else None
+        raise ValueError(message or f'فشل اختبار الربط مع Menger (HTTP {response.status_code})')
+    remote_stores = payload.get('stores')
+    if not isinstance(remote_stores, list):
+        raise ValueError('لم يُرجع Menger قائمة متاجر صالحة')
+    remote_by_name = {}
+    for store in remote_stores:
+        if not isinstance(store, dict):
+            continue
+        name = _normalized_store_name(store.get('name'))
+        store_id = str(store.get('store_id') or '').strip()
+        if name and store_id:
+            remote_by_name.setdefault(name, []).append(store_id)
+    try:
+        local_stores = db.execute('SELECT store_id,name FROM stores WHERE active=1 ORDER BY name').fetchall()
+    except sqlite3.OperationalError as exc:
+        raise ValueError('تعذر قراءة المتاجر المحلية') from exc
+    matched, unmatched = [], []
+    for local in local_stores:
+        candidates = remote_by_name.get(_normalized_store_name(local['name']), [])
+        if len(candidates) != 1:
+            unmatched.append(local['name'])
+            continue
+        save_settings(db, local['store_id'], {'store_id': candidates[0]})
+        matched.append({'local_store': local['store_id'], 'name': local['name'], 'store_id': candidates[0]})
+    db.commit()
+    return {'matched': matched, 'unmatched': unmatched, 'remote_count': len(remote_stores)}
 
 
 def snapshot_prices(order, catalog):

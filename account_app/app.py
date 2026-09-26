@@ -11401,6 +11401,16 @@ def api_menger_connection():
     return jsonify(ok=True, connection=menger.connection(db, public=True))
 
 
+@app.post("/api/settings/menger/sync-stores")
+@_dash_require
+def api_menger_sync_stores():
+    try:
+        result = menger.sync_stores(get_db())
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+    return jsonify(ok=True, **result)
+
+
 @app.route("/api/stores/<store_id>", methods=["PUT"])
 @_dash_require
 def api_update_store(store_id):

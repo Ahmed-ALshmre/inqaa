@@ -14,7 +14,11 @@
       <div class="col-md-6"><label class="form-label" for="mengerApiKey">مفتاح API الموحد</label><input class="form-control" type="password" name="api_key" id="mengerApiKey" dir="ltr" autocomplete="new-password"><label class="small mt-2"><input type="checkbox" name="clear_api_key"> حذف المفتاح المحفوظ</label></div>
       <div class="col-md-6"><label class="form-label" for="mengerSource">اسم المشروع المرسل (source)</label><input class="form-control" name="source" id="mengerSource" dir="ltr" value="lamsa-project" required></div>
     </div>
-    <button class="btn btn-primary mt-3" type="submit">حفظ الربط الموحد</button> <span role="status"></span>
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+      <button class="btn btn-primary" type="submit">حفظ الربط الموحد</button>
+      <button class="btn btn-outline-success" type="button" id="syncMengerStores"><i class="fas fa-link"></i> اختبار الربط ومزامنة المتاجر</button>
+      <span role="status"></span>
+    </div>
   </form>
 </section>
 <section class="admin-panel mt-3"><h2>المتاجر الحالية</h2><div class="admin-list" id="storesList"></div></section>
