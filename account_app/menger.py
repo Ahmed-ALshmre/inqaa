@@ -10,6 +10,15 @@ from urllib.parse import urlparse
 
 import requests
 
+# Names verified against the receiving API; never route an unknown store to Lamsa.
+REMOTE_STORE_NAMES = {
+    'default': 'لمسة ستور',
+    'khuyoot': 'خيوط ستور',
+    'al-fatena': 'ملابس الفاتنة',
+    'baraah-kids': 'عالم البراءة لملابس الأطفال',
+}
+EMPLOYEE_NAME = 'صوف'
+
 try:
     from .pricing import quote as price_order
 except ImportError:
@@ -26,6 +35,9 @@ def init_db(db):
         id INTEGER PRIMARY KEY CHECK(id=1), api_url TEXT NOT NULL DEFAULT '',
         api_key TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'lamsa-project'
     )""")
+    columns = {row[1] for row in db.execute('PRAGMA table_info(menger_store_settings)')}
+    if 'store_name' not in columns:
+        db.execute("ALTER TABLE menger_store_settings ADD COLUMN store_name TEXT NOT NULL DEFAULT ''")
     # Preserve an unambiguous previous connection; conflicting store connections
     # require selecting one shared connection in the settings screen.
     if not db.execute('SELECT 1 FROM menger_connection').fetchone():
@@ -42,7 +54,8 @@ def init_db(db):
 
 def connection(db, public=False):
     row = db.execute('SELECT api_url,api_key,source FROM menger_connection WHERE id=1').fetchone()
-    data = dict(row) if row else dict(api_url=os.environ.get('MENGER_ORDERS_API_URL', '').strip(),
+    base_url = os.environ.get('MENGER_BASE_URL', '').strip().rstrip('/')
+    data = dict(row) if row else dict(api_url=os.environ.get('MENGER_ORDERS_API_URL', '').strip() or (base_url + '/api/v1/orders' if base_url else ''),
                                     api_key=os.environ.get('MENGER_ORDERS_API_KEY', '').strip(), source='lamsa-project')
     if public:
         data['key_configured'] = bool(data.pop('api_key'))
@@ -60,8 +73,13 @@ def save_connection(db, data):
         current['api_key'] = ''
     if current['api_url']:
         parsed = urlparse(current['api_url'])
-        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment or parsed.query:
             raise ValueError('أدخل رابط API صحيحاً يبدأ بـ https://')
+        if parsed.path in ('', '/'):
+            current['api_url'] = current['api_url'].rstrip('/') + '/api/v1/orders'
+        elif parsed.path.rstrip('/') != '/api/v1/orders':
+            raise ValueError('يجب أن ينتهي رابط مينجر بـ /api/v1/orders')
+        current['api_url'] = current['api_url'].rstrip('/')
     if not current['source']:
         raise ValueError('اسم المشروع المرسل مطلوب')
     db.execute('INSERT INTO menger_connection VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET api_url=excluded.api_url,api_key=excluded.api_key,source=excluded.source',
@@ -71,19 +89,52 @@ def save_connection(db, data):
 
 
 def settings(db, store, public=False):
-    row = db.execute('SELECT store_id,telegram_chat_id FROM menger_store_settings WHERE local_store=?', (store,)).fetchone()
-    return dict(row) if row else dict(store_id='', telegram_chat_id='')
+    row = db.execute('SELECT store_id,store_name,telegram_chat_id FROM menger_store_settings WHERE local_store=?', (store,)).fetchone()
+    data = dict(row) if row else dict(store_id='', store_name='', telegram_chat_id='')
+    if not data['store_id'] and not data['store_name']:
+        data['store_name'] = REMOTE_STORE_NAMES.get(store, '')
+    return data
+
+
+def remote_stores(db):
+    config = connection(db)
+    parsed = urlparse(config['api_url'])
+    if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
+            or parsed.query or parsed.fragment or not config['api_key']):
+        raise ValueError('احفظ رابط مينجر ومفتاح الربط أولاً')
+    if not parsed.path.rstrip('/').endswith('/api/v1/orders'):
+        raise ValueError('يجب أن ينتهي رابط مينجر بـ /api/v1/orders')
+    url = config['api_url'].rstrip('/').rsplit('/', 1)[0] + '/stores'
+    try:
+        response = requests.get(url, headers={'Authorization': 'Bearer ' + config['api_key'], 'Accept': 'application/json'},
+                                timeout=15, allow_redirects=False)
+        if response.status_code != 200:
+            raise ValueError(f'فشل الاتصال بمينجر (HTTP {response.status_code})')
+        result = response.json()
+        if not isinstance(result, dict) or result.get('ok') is not True or not isinstance(result.get('stores'), list):
+            raise ValueError('استجابة المتاجر من مينجر غير صحيحة')
+        return [dict(store_id=s['store_id'], name=s['name']) for s in result['stores']
+                if isinstance(s, dict) and isinstance(s.get('store_id'), str) and isinstance(s.get('name'), str)]
+    except requests.RequestException as exc:
+        raise ValueError('تعذر الاتصال بمينجر؛ تحقق من الرابط والمفتاح') from exc
 
 
 def save_settings(db, store, data):
     if any(field in data for field in ('api_url','api_key','source','clear_api_key')):
         raise ValueError('احفظ رابط API والمفتاح من إعدادات الربط الموحدة أعلى الصفحة')
     current = settings(db, store)
-    for field in ('store_id', 'telegram_chat_id'):
+    for field in ('store_id', 'store_name', 'telegram_chat_id'):
         if field in data:
             current[field] = str(data[field] or '').strip()
-    db.execute('INSERT INTO menger_store_settings(local_store,store_id,telegram_chat_id) VALUES(?,?,?) ON CONFLICT(local_store) DO UPDATE SET store_id=excluded.store_id,telegram_chat_id=excluded.telegram_chat_id',
-               (store, current['store_id'], current['telegram_chat_id']))
+    if 'store_id' in data and 'store_name' not in data:
+        current['store_name'] = ''
+    if current['store_id']:
+        duplicate = db.execute('SELECT local_store FROM menger_store_settings WHERE store_id=? AND local_store!=?',
+                               (current['store_id'], store)).fetchone()
+        if duplicate:
+            raise ValueError('متجر مينجر هذا مرتبط بمتجر آخر؛ اختر الوجهة الخاصة بهذا المتجر')
+    db.execute('INSERT INTO menger_store_settings(local_store,store_id,store_name,telegram_chat_id) VALUES(?,?,?,?) ON CONFLICT(local_store) DO UPDATE SET store_id=excluded.store_id,store_name=excluded.store_name,telegram_chat_id=excluded.telegram_chat_id',
+               (store, current['store_id'], current['store_name'], current['telegram_chat_id']))
 
 
 def _normalized_store_name(value):
@@ -128,7 +179,7 @@ def sync_stores(db, get=None):
         name = _normalized_store_name(store.get('name'))
         store_id = str(store.get('store_id') or '').strip()
         if name and store_id:
-            remote_by_name.setdefault(name, []).append(store_id)
+            remote_by_name.setdefault(name, []).append({'store_id': store_id, 'store_name': str(store['name']).strip()})
     try:
         local_stores = db.execute('SELECT store_id,name FROM stores WHERE active=1 ORDER BY name').fetchall()
     except sqlite3.OperationalError as exc:
@@ -136,11 +187,13 @@ def sync_stores(db, get=None):
     matched, unmatched = [], []
     for local in local_stores:
         candidates = remote_by_name.get(_normalized_store_name(local['name']), [])
+        if not candidates:
+            candidates = remote_by_name.get(_normalized_store_name(REMOTE_STORE_NAMES.get(local['store_id'], '')), [])
         if len(candidates) != 1:
             unmatched.append(local['name'])
             continue
-        save_settings(db, local['store_id'], {'store_id': candidates[0]})
-        matched.append({'local_store': local['store_id'], 'name': local['name'], 'store_id': candidates[0]})
+        save_settings(db, local['store_id'], candidates[0])
+        matched.append({'local_store': local['store_id'], 'name': local['name'], **candidates[0]})
     db.commit()
     return {'matched': matched, 'unmatched': unmatched, 'remote_count': len(remote_stores)}
 
@@ -156,14 +209,6 @@ def snapshot_prices(order, catalog):
         item['unit_price'] = int(item['unit_price'])
 
 
-def local_store_name(db, store_id):
-    try:
-        row = db.execute('SELECT name FROM stores WHERE store_id=?', (store_id,)).fetchone()
-    except sqlite3.OperationalError:
-        return ''
-    return str(row['name'] if row else '').strip()
-
-
 def enqueue(db, order_id, order, catalog):
     init_db(db)
     if any('unit_price' not in item for item in order['items']):
@@ -172,6 +217,8 @@ def enqueue(db, order_id, order, catalog):
     items = []
     for item in order['items']:
         product = products.get(item.get('product_id'), {})
+        if product.get('store_id') and product['store_id'] != (order.get('store_id') or 'default'):
+            raise ValueError('لا يمكن إرسال منتج من متجر آخر ضمن هذا الطلب')
         price = str(item['unit_price'])
         items.append(dict(product_name=item.get('order_name') or item['product_name'],
                           quantity=int(item.get('quantity') or 1),
@@ -181,16 +228,31 @@ def enqueue(db, order_id, order, catalog):
         return
     config = connection(db)
     local_store = order.get('store_id') or 'default'
-    store_name = local_store_name(db, local_store)
+    store_name = settings(db, local_store)['store_name']
+    notes = [str(order.get('notes') or '').strip()]
+    for item in order['items']:
+        if str(item.get('notes') or '').strip():
+            notes.append(f"{item.get('order_name') or item['product_name']} ({item.get('color') or ''} / {item.get('size') or ''}): {item['notes']}")
+    # The receiver stores one final order price, including shipping exactly once.
+    total = order.get('total_amount')
+    if total is None:
+        subtotal = order.get('product_total')
+        if subtotal is None:
+            subtotal = sum(i['unit_price'] * i['quantity'] for i in items)
+        total = int(subtotal) + int(order.get('delivery_fee') or 0)
     payload = dict(source=config['source'], external_order_id=str(order_id),
                    store_name=store_name,
                    created_at=order['created_at'],
                    customer=dict(name=order.get('customer_name') or '', phone=order['phone'],
                                  province=order['province'], address=order['address']),
-                   items=items, total_price=sum(i['unit_price'] * i['quantity'] for i in items), notes=order.get('notes') or '')
+                   items=items, total_price=int(total), employee_name=EMPLOYEE_NAME,
+                   notes='\n'.join(note for note in notes if note))
     if order.get('is_paid'):
         payload['total_price'] = 0
         payload['notes'] = paid_notes(payload['notes'])
+    # Older receivers use `total_price or total_amount`; provide both so a paid
+    # order's explicit zero never falls back to the nonzero sum of its items.
+    payload['total_amount'] = payload['total_price']
     db.execute('INSERT OR IGNORE INTO menger_deliveries(order_id,local_store,payload) VALUES(?,?,?)',
                (order_id, local_store, json.dumps(payload, ensure_ascii=False)))
 
@@ -227,8 +289,16 @@ def deliver_due(db, post=None, now=None):
         if not target_key or parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
             continue
         payload = json.loads(row['payload'])
-        destination = payload.get('store_id') or (config['store_id'] if configured else stores.get(row['local_store']))
-        store_name = local_store_name(db, row['local_store']) or str(payload.get('store_name') or '').strip()
+        destination = payload.get('store_id')
+        if not row['attempts']:
+            destination = destination or (config['store_id'] if configured else stores.get(row['local_store']))
+        if row['attempts']:
+            store_name = str(payload.get('store_name') or '').strip()
+        else:
+            store_name = config['store_name'] or str(payload.get('store_name') or '').strip()
+        # An explicit legacy ID has no verified fallback name. Do not guess one.
+        if destination and not config['store_name'] and not row['attempts']:
+            store_name = ''
         if (not isinstance(destination, str) or not destination.strip()) and not store_name:
             continue
         delivered += 1
@@ -236,6 +306,8 @@ def deliver_due(db, post=None, now=None):
             payload['store_id'] = destination.strip()
         if store_name:
             payload['store_name'] = store_name
+        else:
+            payload.pop('store_name', None)
         # Atomic lease supports several server processes; destination stays fixed on retry.
         claim = db.execute("UPDATE menger_deliveries SET status='sending', next_attempt=?, attempts=attempts+1,payload=? WHERE order_id=? AND status IN ('pending','retry','sending') AND next_attempt<=?",
                            (now + 120, json.dumps(payload, ensure_ascii=False), row['order_id'], now))
@@ -245,7 +317,7 @@ def deliver_due(db, post=None, now=None):
         status, remote, error = 'retry', None, 'network_error'
         try:
             response = post(target_url, json=payload, headers={'Authorization': f'Bearer {target_key}',
-                            'Content-Type': 'application/json'}, timeout=20, allow_redirects=False)
+                            'Content-Type': 'application/json', 'Accept': 'application/json'}, timeout=20, allow_redirects=False)
             if response.status_code in (200, 201):
                 try:
                     result = response.json()
@@ -256,8 +328,19 @@ def deliver_due(db, post=None, now=None):
                 else:
                     error = 'invalid_success_response'
             else:
-                status = 'retry' if response.status_code in (500, 502, 503, 504) else 'blocked'
+                status = 'retry' if 500 <= response.status_code < 600 else 'blocked'
                 error = f'http_{response.status_code}'
+                try:
+                    detail = response.json()
+                    if isinstance(detail, dict):
+                        messages = [detail.get('error')]
+                        if isinstance(detail.get('details'), list):
+                            messages.extend(detail['details'])
+                        explanation = '؛ '.join(s for s in messages if isinstance(s, str))
+                        if explanation:
+                            error += ': ' + explanation.replace(target_key, '[hidden]')[:600]
+                except ValueError:
+                    pass
         except requests.RequestException:
             pass
         delay = min(3600, 60 * 2 ** min(row['attempts'], 6))

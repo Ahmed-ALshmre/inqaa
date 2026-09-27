@@ -7811,10 +7811,20 @@ def checkout_receipt(data, items, catalog, delivery_fee, confirmation=""):
     return "\n".join(lines)
 
 
+def order_store_error(db, sender_id):
+    customer = db.execute('SELECT store_id FROM customers WHERE sender_id=?', (sender_id,)).fetchone()
+    if customer and (customer['store_id'] or DEFAULT_STORE_ID) != current_store_id():
+        return 'المحادثة تخص متجراً آخر؛ افتح الطلب من متجر المحادثة الصحيح'
+    return None
+
+
 def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_confirmed=False):
     actor = getattr(g, 'staff_person', None) if has_app_context() else None
     if actor and 'orders' not in actor['permissions']:
         raise StaffPermissionDenied('تثبيت الطلب يحتاج صلاحية إدارة الطلبات، حتى عند إرسال رد مقترح بالذكاء الاصطناعي.')
+    error = order_store_error(db, sender_id)
+    if error:
+        return None, error
     order_data = checkout_customer_data(db, sender_id, ai_result.get("order"))
     phone   = (order_data.get("phone")   or "").strip()
     province = (order_data.get("province") or "").strip()
@@ -11411,6 +11421,15 @@ def api_menger_sync_stores():
     return jsonify(ok=True, **result)
 
 
+@app.get('/api/settings/menger/stores')
+@_dash_require
+def api_menger_stores():
+    try:
+        return jsonify(ok=True, stores=menger.remote_stores(get_db()))
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+
+
 @app.route("/api/stores/<store_id>", methods=["PUT"])
 @_dash_require
 def api_update_store(store_id):
@@ -13771,6 +13790,9 @@ def api_set_customer_gender(sender_id):
 def api_create_order(sender_id):
     data = request.get_json(silent=True) or {}
     db   = get_db()
+    error = order_store_error(db, sender_id)
+    if error:
+        return jsonify(ok=False, error=error), 409
     now  = now_baghdad_iso()
     if not isinstance(data.get("is_paid", False), bool):
         return jsonify(ok=False, error="حالة الدفع غير صحيحة"), 400

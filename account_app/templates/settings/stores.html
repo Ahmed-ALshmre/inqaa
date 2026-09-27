@@ -7,10 +7,10 @@
 <section class="admin-panel"><p class="admin-muted">كل متجر معزول بمنتجاته وإعداداته ورابطه. قنوات Chatwoot المربوطة توجه الرسائل إلى متجرها المحدد.</p><span class="admin-status" id="storesStatus"></span></section>
 <section class="admin-panel mt-3">
   <h2>ربط Menger الموحد لجميع المتاجر</h2>
-  <p>كل طلب مثبت يُرسل كاملاً إلى تلغرام وإلى Menger. أدخل رابط الربط والمفتاح مرة واحدة، ثم اربط كل متجر بمعرّفه أدناه.</p>
+  <p>كل طلب مثبت يُرسل إلى متجره في Menger، بسعر إجمالي يشمل التوصيل مرة واحدة وتفاصيل كل قطعة. اسم موظف المبيعات المرسل: صوف. أدخل رابط الربط والمفتاح مرة واحدة، ثم اختر المتجر المستلم لكل متجر أدناه.</p>
   <form id="mengerConnectionForm">
     <div class="row g-3">
-      <div class="col-md-6"><label class="form-label" for="mengerApiUrl">رابط API الموحد</label><input class="form-control" type="url" name="api_url" id="mengerApiUrl" dir="ltr" placeholder="https://your-domain/api/v1/orders"></div>
+      <div class="col-md-6"><label class="form-label" for="mengerApiUrl">رابط API الموحد</label><input class="form-control" type="url" name="api_url" id="mengerApiUrl" dir="ltr" placeholder="https://web-production-b168b0.up.railway.app/api/v1/orders"></div>
       <div class="col-md-6"><label class="form-label" for="mengerApiKey">مفتاح API الموحد</label><input class="form-control" type="password" name="api_key" id="mengerApiKey" dir="ltr" autocomplete="new-password"><label class="small mt-2"><input type="checkbox" name="clear_api_key"> حذف المفتاح المحفوظ</label></div>
       <div class="col-md-6"><label class="form-label" for="mengerSource">اسم المشروع المرسل (source)</label><input class="form-control" name="source" id="mengerSource" dir="ltr" value="lamsa-project" required></div>
     </div>
@@ -21,6 +21,6 @@
     </div>
   </form>
 </section>
-<section class="admin-panel mt-3"><h2>المتاجر الحالية</h2><div class="admin-list" id="storesList"></div></section>
+<section class="admin-panel mt-3"><h2>المتاجر الحالية</h2><button class="btn btn-outline-primary mb-3" type="button" id="refreshMengerStores">فحص الاتصال وجلب متاجر مينجر</button><p id="mengerStoresStatus" role="status"></p><div class="admin-list" id="storesList"></div></section>
 {% endblock %}
-{% block scripts %}<script src="/static/js/stores.js?v=4"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/stores.js?v=5"></script>{% endblock %}

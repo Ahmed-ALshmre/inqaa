@@ -72,7 +72,9 @@ class IntegrationTests(unittest.TestCase):
                 self.assertTrue(all('send_to' not in i for i in saved))
                 payload = json.loads(m.get_db().execute('SELECT payload FROM menger_deliveries WHERE order_id=?',(order['id'],)).fetchone()[0])
                 self.assertEqual([i['product_name'] for i in payload['items']], ['موديل منجر 101','سوت'])
-                self.assertEqual(payload['total_price'], 38000)
+                self.assertEqual(payload['total_price'], 43000)
+                self.assertEqual(payload['employee_name'], 'صوف')
+                self.assertNotIn('اسم الموظف:', payload['notes'])
                 text = telegram.call_args.args[0]
                 self.assertIn('سوت', text)
                 self.assertIn('موديل منجر 101', text)
@@ -94,6 +96,54 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.get_json()['product']['order_name'], '')
 
+    def test_conversation_store_cannot_be_overridden_when_booking(self):
+        m.get_or_create_customer(m.get_db(), 'own-store', '', 'facebook')
+        response = self.client.post('/api/conversations/own-store/create_order?store_id=al-fatena',
+                                    json={}, headers=self.headers)
+        self.assertEqual(response.status_code, 409)
+        token = m._current_store_id.set('al-fatena')
+        try:
+            created, error = m.create_order_if_valid(m.get_db(), 'own-store', {'order': {}}, None)
+            self.assertFalse(created)
+            self.assertIn('متجراً آخر', error)
+        finally:
+            m._current_store_id.reset(token)
+        self.assertEqual(m.get_db().execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
+
+    def test_each_store_books_into_its_own_destination(self):
+        with patch.object(m, 'send_telegram_message', return_value=True), patch.object(m, 'save_booking_to_file'), patch.object(m, 'send_text_to_facebook', return_value=True):
+            for store_id, remote_name in menger.REMOTE_STORE_NAMES.items():
+                catalog = [dict(product_id='same-id', product_name='اسم محلي', order_name='اسم ' + store_id,
+                                store_id=store_id, price='18000', status='active')]
+                token = m._current_store_id.set(store_id)
+                sender = 'routing-store-' + store_id
+                try:
+                    m.get_or_create_customer(m.get_db(), sender, '', 'facebook')
+                finally:
+                    m._current_store_id.reset(token)
+                with patch.object(m, 'load_products_from_file', return_value=catalog):
+                    response = self.client.post(f'/api/conversations/{sender}/create_order',
+                        json=dict(phone='07701234567', province='بغداد', address='المنصور', notes='اتصل أولاً',
+                                  items=[dict(product_id='same-id', quantity=2, color='أسود', size='44')]), headers=self.headers)
+                self.assertEqual(response.status_code, 200, response.get_json())
+                row = m.get_db().execute('SELECT * FROM menger_deliveries WHERE local_store=?', (store_id,)).fetchone()
+                payload = json.loads(row['payload'])
+                self.assertEqual(payload['store_name'], remote_name)
+                self.assertEqual(payload['items'][0]['product_name'], 'اسم ' + store_id)
+                self.assertEqual(payload['total_price'], 41000)
+                self.assertEqual(payload['items'][0]['quantity'], 2)
+
+    def test_remote_store_list_requires_dashboard_login(self):
+        with patch.object(menger, 'remote_stores', return_value=[dict(store_id='fatena', name='ملابس الفاتنة')]) as remote:
+            response = self.client.get('/api/settings/menger/stores')
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.get_json()['stores'][0]['store_id'], 'fatena')
+            with self.client.session_transaction() as session:
+                session.clear()
+            response = self.client.get('/api/settings/menger/stores')
+            self.assertIn(response.status_code, (302, 401, 403))
+            self.assertEqual(remote.call_count, 1)
+
     def test_manual_multiple_variants_paid_and_unpaid(self):
         catalog = [dict(product_id='P1', product_name='فستان', price='18000', status='active', order_name='اسم الإرسال')]
         items = [dict(product_id='P1', quantity=2, color='أسود',size='44'), dict(product_id='P1',quantity=1,color='أزرق',size='46')]
@@ -110,7 +160,8 @@ class IntegrationTests(unittest.TestCase):
                 self.assertEqual([i['quantity'] for i in json.loads(order['order_items'])],[2,1])
                 payload = json.loads(m.get_db().execute('SELECT payload FROM menger_deliveries WHERE order_id=?',(order['id'],)).fetchone()[0])
                 self.assertEqual(len(payload['items']),2)
-                self.assertEqual(payload['total_price'],0 if paid else 54000)
+                self.assertEqual(payload['total_price'],0 if paid else 59000)
+                self.assertEqual(payload['total_amount'],0 if paid else 59000)
                 self.assertEqual(payload['items'][0]['unit_price'],18000)
                 self.assertEqual('مدفوع بالكامل' in order['notes'],paid)
                 self.assertIn('اتصل قبل الوصول', payload['notes'])

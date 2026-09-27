@@ -56,7 +56,7 @@ class MengerTests(unittest.TestCase):
         self.assertEqual(self.row()['status'], 'sent')
 
     def test_http_errors(self):
-        for code in (401, 422, 500, 502, 503, 504):
+        for code in (401, 422, 500, 501, 502, 503, 504, 507):
             with self.subTest(code=code):
                 self.db.execute("UPDATE menger_deliveries SET status='pending',next_attempt=0")
                 self.db.commit()
@@ -65,7 +65,8 @@ class MengerTests(unittest.TestCase):
                 self.assertEqual(self.row()['status'], 'blocked' if code in (401,422) else 'retry')
 
     def test_other_store_is_not_sent_to_lamsa(self):
-        self.db.execute("UPDATE menger_deliveries SET local_store='other'")
+        self.db.execute('DELETE FROM menger_deliveries')
+        menger.enqueue(self.db, 12, dict(self.order, store_id='other'), [])
         self.db.commit()
         post = Mock()
         menger.deliver_due(self.db, post, 100)
@@ -169,3 +170,106 @@ class MengerTests(unittest.TestCase):
         for alias in ('', '   ', None):
             menger.snapshot_prices(self.order, [dict(product_id='p1', order_name=alias)])
             self.assertEqual(self.order['items'][0]['order_name'], 'فستان')
+
+    def test_final_price_includes_shipping_once_and_preserves_notes(self):
+        self.db.execute('DELETE FROM menger_deliveries')
+        order = dict(self.order, delivery_fee=5000, total_amount=41000, notes='اتصل قبل الوصول')
+        order['items'][0]['notes'] = 'تغليف منفصل'
+        menger.enqueue(self.db, 12, order, [])
+        payload = json.loads(self.row()['payload'])
+        self.assertEqual(payload['total_price'], 41000)
+        self.assertEqual(payload['total_amount'], 41000)
+        self.assertNotIn('delivery_fee', payload)
+        self.assertEqual(payload['employee_name'], 'صوف')
+        self.assertNotIn('اسم الموظف:', payload['notes'])
+        self.assertIn('اتصل قبل الوصول', payload['notes'])
+        self.assertIn('تغليف منفصل', payload['notes'])
+        self.assertEqual([(i['color'], i['size'], i['quantity']) for i in payload['items']],
+                         [('أسود', '44', 1), ('جوزي', '46', 1)])
+
+    def test_free_shipping_discount_and_paid_totals(self):
+        for paid, total in [(False, 36000), (False, 33000), (True, 41000)]:
+            with self.subTest(paid=paid, total=total):
+                self.db.execute('DELETE FROM menger_deliveries')
+                menger.enqueue(self.db, 12, dict(self.order, is_paid=paid, total_amount=total), [])
+                payload = json.loads(self.row()['payload'])
+                expected = 0 if paid else total
+                self.assertEqual(payload['total_price'], expected)
+                # Actual receiver expression: an explicit paid zero must survive.
+                self.assertEqual(payload.get('total_price') or payload.get('total_amount'), expected)
+                self.assertEqual(payload['items'][0]['unit_price'], 18000)
+
+    def test_shipping_fallback_for_older_orders(self):
+        self.db.execute('DELETE FROM menger_deliveries')
+        menger.enqueue(self.db, 12, dict(self.order, delivery_fee=5000), [])
+        self.assertEqual(json.loads(self.row()['payload'])['total_price'], 41000)
+
+    def test_all_known_stores_have_separate_receiver_names(self):
+        self.db.execute('DELETE FROM menger_deliveries')
+        for index, store in enumerate(menger.REMOTE_STORE_NAMES, 1):
+            menger.enqueue(self.db, index, dict(self.order, store_id=store), [])
+        self.db.commit()
+        post = Mock(return_value=self.response())
+        with patch.dict('os.environ', {'MENGER_STORE_ID': ''}):
+            menger.deliver_due(self.db, post, 100)
+        self.assertEqual([c.kwargs['json']['store_name'] for c in post.call_args_list],
+                         list(menger.REMOTE_STORE_NAMES.values()))
+
+    def test_retry_keeps_name_destination_after_mapping_changes(self):
+        self.db.execute('DELETE FROM menger_deliveries')
+        menger.enqueue(self.db, 12, dict(self.order, store_id='al-fatena'), [])
+        self.db.commit()
+        post = Mock(side_effect=[requests.Timeout(), self.response()])
+        menger.deliver_due(self.db, post, 100)
+        menger.save_settings(self.db, 'al-fatena', dict(store_id='changed', store_name='متجر مختلف'))
+        self.db.commit()
+        menger.deliver_due(self.db, post, 161)
+        self.assertEqual(post.call_args_list[0].kwargs['json'], post.call_args_list[1].kwargs['json'])
+        self.assertEqual(post.call_args.kwargs['json']['store_name'], 'ملابس الفاتنة')
+
+    def test_duplicate_store_destination_is_rejected(self):
+        menger.save_settings(self.db, 'default', dict(store_id='one'))
+        with self.assertRaises(ValueError):
+            menger.save_settings(self.db, 'al-fatena', dict(store_id='one'))
+
+    def test_cross_store_product_is_rejected(self):
+        with self.assertRaises(ValueError):
+            menger.enqueue(self.db, 13, self.order, [dict(product_id='p1', store_id='al-fatena')])
+
+    def test_remote_stores_is_read_only_and_does_not_expose_key(self):
+        response = Mock(status_code=200, json=Mock(return_value=dict(ok=True, stores=[
+            dict(store_id='fatena', name='ملابس الفاتنة', private='ignored')])))
+        with patch.object(menger.requests, 'get', return_value=response) as get:
+            result = menger.remote_stores(self.db)
+        self.assertEqual(result, [dict(store_id='fatena', name='ملابس الفاتنة')])
+        self.assertEqual(get.call_args.args[0], 'https://menger.example/api/v1/stores')
+        self.assertFalse(get.call_args.kwargs['allow_redirects'])
+
+    def test_connection_accepts_site_root_and_rejects_dashboard(self):
+        menger.save_connection(self.db, dict(api_url='https://menger.example/'))
+        self.assertEqual(menger.connection(self.db)['api_url'], 'https://menger.example/api/v1/orders')
+        with self.assertRaises(ValueError):
+            menger.save_connection(self.db, dict(api_url='https://menger.example/dashboard'))
+
+    def test_product_rejection_records_explanation_without_rerouting(self):
+        response = Mock(status_code=422, json=Mock(return_value=dict(
+            error='لم يتم حفظ الطلب', details=['المنتج غير موجود داخل هذا المتجر'])))
+        post = Mock(return_value=response)
+        menger.deliver_due(self.db, post, 100)
+        self.assertEqual(self.row()['status'], 'blocked')
+        self.assertIn('المنتج غير موجود', self.row()['last_error'])
+        menger.deliver_due(self.db, post, 1000)
+        self.assertEqual(post.call_count, 1)
+
+    def test_documented_base_url_is_supported(self):
+        with patch.dict('os.environ', {'MENGER_ORDERS_API_URL': '', 'MENGER_BASE_URL': 'https://receiver.test/'}):
+            self.assertEqual(menger.connection(self.db)['api_url'], 'https://receiver.test/api/v1/orders')
+
+    def test_employee_is_separate_from_empty_customer_notes(self):
+        payload = json.loads(self.row()['payload'])
+        self.assertEqual(payload['employee_name'], 'صوف')
+        self.assertEqual(payload['notes'], '')
+        self.db.commit()
+        post = Mock(return_value=self.response())
+        menger.deliver_due(self.db, post, 100)
+        self.assertEqual(post.call_args.kwargs['headers']['Accept'], 'application/json')

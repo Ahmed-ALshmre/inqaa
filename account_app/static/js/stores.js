@@ -5,6 +5,16 @@ async function storesRequest(path, options = {}) {
   return data;
 }
 
+let mengerStores = [];
+
+function remoteStoreOptions(config) {
+  const saved = config.store_id || '';
+  const missing = saved && !mengerStores.some(store => store.store_id === saved);
+  return `<option value="">مطابقة الاسم: ${adminEsc(config.store_name || 'غير مرتبط')}</option>` +
+    (missing ? `<option value="${adminEsc(saved)}" selected>${adminEsc(config.store_name || saved)} — محفوظ، لم يُتحقق منه</option>` : '') +
+    mengerStores.map(store => `<option value="${adminEsc(store.store_id)}" ${store.store_id === saved ? 'selected' : ''}>${adminEsc(store.name)}</option>`).join('');
+}
+
 async function loadStores() {
   const data = await storesRequest('/api/stores');
   const list = document.getElementById('storesList');
@@ -15,13 +25,13 @@ async function loadStores() {
       <label class="form-label" for="webhook-${index}">رابط استقبال رسائل المتجر</label>
       <input id="webhook-${index}" class="form-control mb-3" dir="ltr" readonly value="${adminEsc(store.webhook_url)}" onclick="this.select()">
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label" for="remote-store-${index}">معرّف المتجر داخل Menger</label>
-          <input id="remote-store-${index}" class="form-control" name="store_id" dir="ltr" value="${adminEsc(config.store_id || '')}" placeholder="معرّف المتجر المستلم"></div>
+        <div class="col-md-6"><label class="form-label" for="remote-store-${index}">المتجر المستلم داخل Menger</label>
+          <select id="remote-store-${index}" class="form-select" name="store_id" data-saved-name="${adminEsc(config.store_name || '')}">${remoteStoreOptions(config)}</select></div>
         <div class="col-md-6"><label class="form-label" for="telegram-${index}">معرّف محادثة تلغرام للطلبات</label>
           <input id="telegram-${index}" class="form-control" name="telegram_chat_id" dir="ltr" value="${adminEsc(config.telegram_chat_id || '')}" placeholder="-100...">
           <div class="small text-muted mt-1">يستخدم بوت تلغرام الحالي. اتركه فارغاً لاستخدام محادثة الطلبات العامة.</div></div>
       </div>
-      <p class="small text-muted mt-3">تُرسل طلبات هذا المتجر كاملة إلى تلغرام وإلى Menger عبر الرابط الموحد. معرّف Menger يحدد المتجر المستلم، ويجب أن تطابق أسماء المنتجات أسماءها فيه.</p>
+      <p class="small text-muted mt-3">تُرسل طلبات هذا المتجر فقط إلى وجهته المحددة. أدخل اسم كل منتج كما هو في مينجر بحقل «اسم الإرسال» في إعدادات المنتج؛ لا يُنقل الطلب إلى متجر آخر عند اختلاف اسم المنتج.</p>
       <button class="btn btn-primary" type="submit">حفظ بيانات الإرسال</button>
       <span class="small ms-2" role="status"></span>
     </form>`;
@@ -32,12 +42,15 @@ async function loadStores() {
       const button = form.querySelector('button[type="submit"]');
       const status = form.querySelector('[role="status"]');
       const values = Object.fromEntries(new FormData(form));
+      const remote = mengerStores.find(store => store.store_id === values.store_id);
+      values.store_name = remote ? remote.name : form.elements.store_id.dataset.savedName;
       button.disabled = true;
       status.textContent = 'جارٍ الحفظ…';
       try {
         await storesRequest(`/api/stores/${encodeURIComponent(form.dataset.store)}`, {
           method: 'PUT', body: JSON.stringify({menger: values})
         });
+        form.elements.store_id.dataset.savedName = values.store_name;
         status.textContent = 'تم حفظ بيانات المتجر';
       } catch (error) {
         status.textContent = error.message;
@@ -57,6 +70,21 @@ async function loadConnection() {
 document.addEventListener('DOMContentLoaded', () => {
   loadStores().catch(error => setAdminStatus('storesStatus', error.message, false));
   loadConnection().catch(error => setAdminStatus('storesStatus', error.message, false));
+  document.getElementById('refreshMengerStores').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    const status = document.getElementById('mengerStoresStatus');
+    button.disabled = true;
+    status.textContent = 'جارٍ فحص الاتصال…';
+    try {
+      const data = await storesRequest('/api/settings/menger/stores');
+      mengerStores = data.stores;
+      document.querySelectorAll('.store-delivery-form select[name="store_id"]').forEach(select => {
+        select.innerHTML = remoteStoreOptions({store_id: select.value, store_name: select.dataset.savedName});
+      });
+      status.textContent = `تم الاتصال؛ ${mengerStores.length} متاجر متاحة. اختر وجهة كل متجر ثم احفظ بياناته.`;
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
   const form = document.getElementById('mengerConnectionForm');
   form.addEventListener('submit', async event => {
     event.preventDefault();
