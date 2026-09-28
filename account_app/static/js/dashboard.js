@@ -337,8 +337,13 @@ async function loadInboxStores() {
     if (!res.ok) throw new Error('stores');
     const data = await res.json();
     const select = document.getElementById('conversationStoreFilter');
-    select.replaceChildren(new Option('كل المتاجر','all'), ...data.stores.map(s => new Option(s.name,s.store_id)));
+    const statsSelect = document.getElementById('dashboardStatsStore');
+    const options = () => [new Option('كل المتاجر','all'), ...data.stores.map(s => new Option(s.name,s.store_id))];
+    select.replaceChildren(...options());
+    statsSelect.replaceChildren(...options());
     select.value = currentStoreFilter;
+    statsSelect.value = currentStoreFilter;
+    loadStats();
   } catch { showToast('تعذر تحميل قائمة المتاجر؛ أعد تحديث الصفحة', 'warning'); }
 }
 function refreshInboxFilters() {
@@ -356,7 +361,7 @@ function refreshInboxFilters() {
 }
 function scheduleInboxSearch() { clearTimeout(inboxSearchTimer); inboxSearchTimer = setTimeout(refreshInboxFilters,300); }
 function filterCustomers() { scheduleInboxSearch(); }
-function setConversationStoreFilter(storeId) { currentStoreFilter = storeId || 'all'; refreshInboxFilters(); loadStats(); }
+function setConversationStoreFilter(storeId) { currentStoreFilter = storeId || 'all'; refreshInboxFilters(); }
 function resetInboxFilters() {
   currentFilter = 'all'; currentStoreFilter = 'all';
   document.getElementById('conversationStoreFilter').value = 'all';
@@ -365,7 +370,7 @@ function resetInboxFilters() {
     const el = document.getElementById(id);
     if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
   }
-  syncConversationFilterUI(); refreshInboxFilters(); loadStats();
+  syncConversationFilterUI(); refreshInboxFilters();
 }
 
 let inboxScrollAnchor = 0;
@@ -1532,9 +1537,11 @@ async function loadStats() {
   const controller = new AbortController();
   statsRequest = controller;
   try {
-    const period = document.getElementById('dashboardStatsPeriod')?.value || 'today';
+    const period = document.getElementById('dashboardStatsPeriod')?.value || '24h';
+    const storeSelect = document.getElementById('dashboardStatsStore');
+    const storeId = storeSelect?.value || 'all';
     const params = new URLSearchParams({period});
-    if (currentStoreFilter !== 'all') params.set('store_id', currentStoreFilter);
+    if (storeId !== 'all') params.set('store_id', storeId);
     const res  = await apiFetch(`/api/dashboard_stats?${params}`, {signal: controller.signal});
     if (!res.ok) throw new Error('تعذر تحميل الإحصائيات');
     const data = await res.json();
@@ -1552,8 +1559,8 @@ async function loadStats() {
     setText('statGoalGap', data.people_total ? (data.goal_gap ? `باقي ${fmtNumber(data.goal_gap)} حجز` : 'تحقق الهدف ✦') : 'بانتظار أول مراسل');
     const progress = document.getElementById('statGoalProgress');
     if (progress) progress.value = Math.min(30, Number(data.message_to_order_conversion || 0));
-    const storeName = currentStoreFilter === 'all' ? 'كل المتاجر' : document.getElementById('conversationStoreFilter')?.selectedOptions[0]?.textContent || currentStoreFilter;
-    const periodName = document.getElementById('dashboardStatsPeriod')?.selectedOptions[0]?.textContent || 'اليوم';
+    const storeName = storeSelect?.selectedOptions[0]?.textContent || 'كل المتاجر';
+    const periodName = document.getElementById('dashboardStatsPeriod')?.selectedOptions[0]?.textContent || 'آخر 24 ساعة';
     setText('statsScope', `${storeName} · ${periodName} · التوقيت بغداد`);
     const top = (data.top_products || [])[0];
     setText('statTopProduct', top ? `${top.product_name || top.product_id} (${top.orders})` : 'لا يوجد');

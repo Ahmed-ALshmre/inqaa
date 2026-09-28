@@ -41,7 +41,8 @@
     try { localStorage.setItem(key, String(milestone)); } catch (_) {}
     document.querySelector('.reward-celebration')?.remove();
     const panel = document.createElement('div'); panel.className='reward-celebration'; panel.setAttribute('role','status');
-    panel.innerHTML=`<div class="reward-celebration-card"><span class="reward-medal" aria-hidden="true">✦</span><strong>أبدعت! ${number(milestone)} إنجاز</strong><p>جهدك يصنع فرقاً، ورصيدك يكبر مع كل حل صحيح.</p><span>باقي ${number(5-data.solved%5)} للإنجاز القادم — كمّل على راحتك 🌟</span></div>` + Array.from({length:20},(_,i)=>`<i aria-hidden="true" style="--x:${i*5}vw;--delay:${i%5*.08}s;--spin:${i%2 ? 240 : -240}deg;--hue:${i*29}"></i>`).join('');
+    panel.innerHTML=`<div class="reward-celebration-card"><img class="reward-mascot" src="/static/icons/soof-mascot-celebrate.png?v=1" alt="" aria-hidden="true"><strong>أبدعت! ${number(milestone)} إنجاز</strong><p>جهدك يصنع فرقاً، ورصيدك يكبر مع كل حل صحيح.</p><span>باقي ${number(5-data.solved%5)} للإنجاز القادم — كمّل على راحتك 🌟</span></div>` + Array.from({length:20},(_,i)=>`<i aria-hidden="true" style="--x:${i*5}vw;--delay:${i%5*.08}s;--spin:${i%2 ? 240 : -240}deg;--hue:${i*29}"></i>`).join('');
+    document.dispatchEvent(new Event('soof:celebrate'));
     document.body.append(panel); setTimeout(()=>panel.remove(),6000);
   }
   document.addEventListener('click', async event => {
@@ -87,8 +88,11 @@
         document.querySelectorAll('[data-credit-progress]').forEach(e => {e.max=target;e.value=data.today.solved;});
         if (balance !== undefined && data.balance > balance) {
           const toast = document.createElement('div'); toast.className='reward-toast';toast.setAttribute('role','status');
-          toast.textContent=`✦ +${money(data.balance-balance)}${data.history[0]?.multiplier > 1 ? ' · مكافأة سرعة ×1.2 ⚡' : ' · أحسنت، تم تسجيل إنجازك!'}`;
+          const mascot=document.createElement('img'); mascot.src='/static/icons/soof-mascot-celebrate.png?v=1'; mascot.alt=''; mascot.setAttribute('aria-hidden','true');
+          const label=document.createElement('span'); label.textContent=`✦ +${money(data.balance-balance)}${data.history[0]?.multiplier > 1 ? ' · مكافأة سرعة ×1.2 ⚡' : ' · أحسنت، تم تسجيل إنجازك!'}`;
+          toast.append(mascot,label);
           document.body.append(toast);setTimeout(()=>toast.remove(),4500);
+          document.dispatchEvent(new Event('soof:celebrate'));
           document.querySelectorAll('.credit-bar').forEach(e=>{e.classList.remove('credit-pulse');void e.offsetWidth;e.classList.add('credit-pulse');});
         }
         balance = data.balance;

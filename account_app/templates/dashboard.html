@@ -13,16 +13,17 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>صوف</title>
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=6">
-  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png?v=6">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=7">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png?v=7">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=23">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=25">
   <link rel="stylesheet" href="/static/css/messenger.css?v=3">
   <link rel="stylesheet" href="/static/css/workspace.css?v=1">
-  <link rel="stylesheet" href="/static/css/rewards.css?v=2">
-  <script defer src="/static/js/rewards.js?v=2"></script>
+  <link rel="stylesheet" href="/static/css/rewards.css?v=3">
+  <script defer src="/static/js/mascot.js?v=1"></script>
+  <script defer src="/static/js/rewards.js?v=3"></script>
 </head>
 <body class="messenger-page">
 
@@ -33,7 +34,9 @@
       <i class="bi bi-list"></i>
     </button>
     <span class="navbar-brand fw-bold fs-6 mb-0">
-      <img class="app-brand-logo me-2" src="/static/icons/icon-192.png?v=6" alt="شعار صوف">صوف
+      <button class="mascot-button me-2" type="button" data-mascot-action aria-label="لوّح لصوف" title="لوّح لصوف">
+        <img class="app-brand-logo" data-soof-mascot src="/static/icons/soof-mascot-idle.png?v=1" alt="شعار صوف">
+      </button>صوف
     </span>
     <button class="dashboard-drawer-toggle" type="button" onclick="toggleDashboardDrawer()" title="القائمة">
       <i class="bi bi-grid-3x3-gap"></i>
@@ -431,28 +434,33 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div class="d-flex align-items-center gap-2 mb-3">
-          <label class="small text-nowrap" for="dashboardStatsPeriod">الفترة</label>
+        <div class="stats-filters mb-3">
+          <label for="dashboardStatsPeriod">الفترة</label>
           <select class="form-select" id="dashboardStatsPeriod" onchange="loadStats()">
+            <option value="24h">آخر 24 ساعة</option>
             <option value="today">اليوم</option>
             <option value="yesterday">أمس</option>
             <option value="7d">آخر 7 أيام</option>
             <option value="30d">آخر 30 يوماً</option>
             <option value="all">الكل</option>
           </select>
+          <label for="dashboardStatsStore">المتجر</label>
+          <select class="form-select" id="dashboardStatsStore" onchange="loadStats()">
+            <option value="all">كل المتاجر</option>
+          </select>
         </div>
-        <p class="stats-scope" id="statsScope">جاري تحديث بيانات اليوم…</p>
+        <p class="stats-scope" id="statsScope">جاري تحديث بيانات آخر 24 ساعة…</p>
         <div class="dashboard-metrics isolated-stats" id="dashboardMetrics" aria-live="polite">
           <div class="metric-card">
-            <small>المراسلون في الفترة</small>
+            <small>محادثات جديدة بدأت بالفترة</small>
             <strong id="statTotalMessages">0</strong>
           </div>
           <div class="metric-card">
-            <small>أصحاب الحجوزات</small>
+            <small>من حجزوا من هذه المحادثات</small>
             <strong id="statBookedPeople">0</strong>
           </div>
           <div class="metric-card">
-            <small>الطلبات المسجلة</small>
+            <small>كل الحجوزات خلال الفترة</small>
             <strong id="statTotalOrders">0</strong>
           </div>
           <div class="metric-card stats-conversion-card">
@@ -462,7 +470,7 @@
           <div class="stats-goal metric-wide">
             <div><span>التقدم نحو هدف 30%</span><strong id="statGoalGap">—</strong></div>
             <progress id="statGoalProgress" max="30" value="0" aria-label="نسبة التحويل من هدف 30 بالمئة"></progress>
-            <small>التحويل = أصحاب الحجوزات من نفس المراسلين ÷ المراسلين خلال الفترة المختارة.</small>
+            <small>كل شخص يُحسب مرة واحدة عند أول رسالة له بهذا المتجر. التحويل = من حجزوا بعد بدء محادثتهم الجديدة ÷ المحادثات الجديدة. الحجوزات الملغاة مستبعدة.</small>
           </div>
           <div class="metric-card"><small>الرسائل الواردة</small><strong id="statIncoming">0</strong></div>
           <div class="metric-card"><small>الرسائل الصادرة</small><strong id="statOutgoing">0</strong></div>
@@ -610,7 +618,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=3"></script>
-<script src="/static/js/dashboard.js?v=27"></script>
+  <script src="/static/js/dashboard.js?v=28"></script>
 <script src="/static/js/conversation_tools.js?v=1"></script>
 <script>
   if ('serviceWorker' in navigator) {

@@ -402,6 +402,8 @@ body {
 
 #statsModal .modal-content { border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
 #statsModal .modal-body { max-height: min(78vh, 780px); overflow-y: auto; padding: 22px; }
+#statsModal .stats-filters { display: grid; grid-template-columns: auto minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 10px; }
+#statsModal .stats-filters label { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
 #statsModal .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 #statsModal .metric-card { display: block; padding: 18px; border-radius: 14px; }
 #statsModal .metric-card small { font-size: 12px; line-height: 1.4; }
@@ -416,7 +418,7 @@ body {
 #statsModal .stats-goal small { color: var(--text-muted); line-height: 1.5; }
 #statsModal .top-products-list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px; gap: 10px; font-size: 13px; }
 #statsModal .top-product-row { padding: 6px 0; }
-@media (max-width: 540px) { #statsModal .modal-body { padding: 16px; } #statsModal .metric-card { padding: 14px; } }
+@media (max-width: 540px) { #statsModal .modal-body { padding: 16px; } #statsModal .metric-card { padding: 14px; } #statsModal .stats-filters { grid-template-columns: auto minmax(0,1fr); } }
 
 .customer-item {
   display: flex;
@@ -2480,6 +2482,12 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans Arabic',s
 .login-brand-mark { width:72px; height:72px; margin:0 auto 16px; display:grid; place-items:center; border-radius:24px; color:#fff; font-size:30px; background:linear-gradient(135deg,var(--primary),#c66097); box-shadow:0 14px 32px rgba(163,58,116,.32); }
 .app-brand-logo { width:36px; height:36px; object-fit:cover; border-radius:11px; flex:0 0 auto; }
 .login-brand-mark img { width:100%; height:100%; object-fit:cover; border-radius:24px; }
+.app-brand-logo{object-fit:contain;background:#11374b;border-radius:50%;padding:2px}
+.mascot-button{display:inline-grid;place-items:center;width:48px;height:48px;border:1px solid #ffffff45;background:#123851;padding:0;border-radius:50%;cursor:pointer;vertical-align:middle}
+.mascot-button .app-brand-logo{width:46px;height:46px;padding:0;background:transparent}
+.mascot-button:focus-visible{outline:2px solid #fbd586;outline-offset:3px}
+.mascot-button:hover .app-brand-logo,.mascot-button.mascot-active .app-brand-logo{animation:soof-mascot-wave .7s ease-in-out}
+@keyframes soof-mascot-wave{50%{transform:translateY(-3px) rotate(-9deg) scale(1.08)}}
 .app-back-btn { display:none; width:40px; height:40px; place-items:center; border:0; border-radius:12px; color:#fff; background:rgba(255,255,255,.12); }
 .mobile-chat-back{display:none}
 .mobile-app-nav { display:none!important; }
@@ -2594,6 +2602,10 @@ body { transition:opacity .14s ease, transform .14s ease; }
 .navbar-custom,.admin-topbar { background:linear-gradient(135deg,#163f3b,#0f766e)!important; }
 .login-page { background:radial-gradient(circle at 15% 15%,rgba(228,168,75,.23),transparent 27%),radial-gradient(circle at 86% 82%,rgba(42,157,143,.25),transparent 33%),linear-gradient(145deg,#102e2b,#155a53 55%,#23877d)!important; }
 .login-brand-mark,.login-submit { background:linear-gradient(135deg,#0f766e,#2a9d8f)!important; box-shadow:0 14px 32px rgba(15,118,110,.3)!important; }
+.login-brand-mark{width:136px;height:136px;background:transparent!important;box-shadow:none!important;overflow:visible}
+.login-brand-mark img{width:100%;height:100%;object-fit:contain;border-radius:0;filter:drop-shadow(0 12px 15px rgba(8,46,59,.25))}
+@media(prefers-reduced-motion:reduce){.mascot-button:hover .app-brand-logo,.mascot-button.mascot-active .app-brand-logo{animation:none}}
+@media(max-width:540px){.mascot-button{width:44px;height:44px}.mascot-button .app-brand-logo{width:42px;height:42px}}
 .chat-panel { background:var(--chat-bg)!important; }
 .chat-header { min-height:70px; padding:10px 16px!important; background:rgba(255,255,255,.96)!important; border-bottom:1px solid var(--border)!important; box-shadow:0 5px 18px rgba(32,52,49,.05); }
 .avatar-circle,.cust-avatar { background:linear-gradient(135deg,#0f766e,#33a99d)!important; color:#fff!important; }

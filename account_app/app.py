@@ -11982,7 +11982,7 @@ def api_manychat_test():
     })
 
 
-def _top_ordered_products(db, limit=5, date_from=None, date_to=None, store_id=None):
+def _top_ordered_products(db, limit=5, date_from=None, date_to=None, store_id=None, exclude_cancelled=False):
     query = """SELECT product_id, product_name, order_items
                FROM orders
                WHERE (COALESCE(product_id, '') != '' OR COALESCE(product_name, '') != '')"""
@@ -11990,6 +11990,8 @@ def _top_ordered_products(db, limit=5, date_from=None, date_to=None, store_id=No
     if store_id:
         query += " AND COALESCE(store_id,'default') = ?"
         params.append(store_id)
+    if exclude_cancelled:
+        query += " AND LOWER(TRIM(COALESCE(status,'new'))) NOT IN ('cancelled','canceled')"
     if date_from:
         query += " AND created_at >= ?"
         params.append(date_from)
@@ -12040,47 +12042,58 @@ def _top_ordered_products(db, limit=5, date_from=None, date_to=None, store_id=No
 def api_dashboard_stats():
     db = get_db()
     today = datetime.now(BAGHDAD_TZ).date().isoformat()
-    period, date_from, date_to = _analytics_range(default_period="all")
+    period, date_from, date_to = _analytics_range(default_period="24h")
     store_id = request.args.get("store_id", "").strip()
     if store_id == "all":
         store_id = ""
-    where = ""
-    params = []
+    date_where = ""
+    date_params = []
     if date_from and date_to:
-        where = " AND created_at >= ? AND created_at < ?"
-        params = [date_from, date_to]
-    message_where = where + (" AND COALESCE(store_id,'default')=?" if store_id else "")
-    message_params = params + ([store_id] if store_id else [])
-    order_where = message_where
-    order_params = message_params
-    total_people = db.execute(
-        "SELECT COUNT(DISTINCT sender_id) FROM messages "
-        "WHERE direction='incoming' AND COALESCE(sender_id, '') != ''" + message_where,
-        message_params,
+        date_where = " AND created_at >= ? AND created_at < ?"
+        date_params = [date_from, date_to]
+    store_where = " AND COALESCE(NULLIF(store_id,''),'default')=?" if store_id else ""
+    scope_params = date_params + ([store_id] if store_id else [])
+    message_where = date_where + store_where
+    valid_order = " AND LOWER(TRIM(COALESCE(status,'new'))) NOT IN ('cancelled','canceled')"
+    total_orders = db.execute(
+        "SELECT COUNT(*) FROM orders WHERE 1=1" + message_where + valid_order, scope_params
     ).fetchone()[0]
-    total_orders = db.execute("SELECT COUNT(*) FROM orders WHERE 1=1" + order_where, order_params).fetchone()[0]
     booked_people = db.execute(
-        "SELECT COUNT(DISTINCT sender_id) FROM orders WHERE COALESCE(sender_id, '') != ''" + order_where,
-        order_params,
+        "SELECT COUNT(DISTINCT COALESCE(NULLIF(store_id,''),'default') || char(31) || sender_id) "
+        "FROM orders WHERE COALESCE(sender_id,'')!=''" + message_where + valid_order, scope_params
     ).fetchone()[0]
-    cohort_buyers = db.execute(
-        "SELECT COUNT(DISTINCT o.sender_id) FROM orders o WHERE COALESCE(o.sender_id,'')!=''" +
-        (" AND o.created_at >= ? AND o.created_at < ?" if date_from and date_to else "") +
-        (" AND COALESCE(o.store_id,'default')=?" if store_id else "") +
-        " AND EXISTS (SELECT 1 FROM messages m WHERE m.sender_id=o.sender_id AND m.direction='incoming'" +
-        (" AND m.created_at >= ? AND m.created_at < ?" if date_from and date_to else "") +
-        (" AND COALESCE(m.store_id,'default')=?" if store_id else "") + ")",
-        order_params + message_params,
-    ).fetchone()[0]
+
+    # A conversation starts at its first incoming message in that store.
+    # Returning customers and repeat messages cannot enlarge this cohort.
+    cohort_sql = """WITH first_contacts AS (
+        SELECT COALESCE(NULLIF(store_id,''),'default') store_id,
+               sender_id, MIN(created_at) first_message
+        FROM messages
+        WHERE direction='incoming' AND COALESCE(sender_id,'')!=''""" + store_where + """
+        GROUP BY COALESCE(NULLIF(store_id,''),'default'), sender_id
+    ), cohort AS (
+        SELECT * FROM first_contacts WHERE 1=1""" + (
+        " AND first_message >= ? AND first_message < ?" if date_from and date_to else ""
+    ) + """
+    ) SELECT COUNT(*) people, COALESCE(SUM(CASE WHEN EXISTS (
+        SELECT 1 FROM orders o WHERE o.sender_id=cohort.sender_id
+          AND COALESCE(NULLIF(o.store_id,''),'default')=cohort.store_id
+          AND o.created_at >= cohort.first_message""" + (
+        " AND o.created_at >= ? AND o.created_at < ?" if date_from and date_to else ""
+    ) + """ AND LOWER(TRIM(COALESCE(o.status,'new'))) NOT IN ('cancelled','canceled')
+    ) THEN 1 ELSE 0 END),0) booked FROM cohort"""
+    cohort_params = ([store_id] if store_id else []) + date_params + date_params
+    cohort = db.execute(cohort_sql, cohort_params).fetchone()
+    total_people, cohort_buyers = cohort["people"], cohort["booked"]
     incoming_messages = db.execute(
-        "SELECT COUNT(*) FROM messages WHERE direction='incoming'" + message_where, message_params
+        "SELECT COUNT(*) FROM messages WHERE direction='incoming'" + message_where, scope_params
     ).fetchone()[0]
     outgoing_messages = db.execute(
-        "SELECT COUNT(*) FROM messages WHERE direction='outgoing'" + message_where, message_params
+        "SELECT COUNT(*) FROM messages WHERE direction='outgoing'" + message_where, scope_params
     ).fetchone()[0]
     conversion_rate = round((cohort_buyers / total_people) * 100, 2) if total_people else 0
     goal_people = (total_people * 30 + 99) // 100
-    review_where = " AND COALESCE(store_id,'default')=?" if store_id else ""
+    review_where = store_where
     review_params = [store_id] if store_id else []
     return jsonify({
         "period": period,
@@ -12095,22 +12108,25 @@ def api_dashboard_stats():
         "goal_people": goal_people,
         "goal_gap": max(0, goal_people - cohort_buyers),
         "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'" + review_where, review_params).fetchone()[0],
-        "orders_today":        db.execute("SELECT COUNT(*) FROM orders WHERE created_at >= ?" + (" AND COALESCE(store_id,'default')=?" if store_id else ""), [today] + review_params).fetchone()[0],
-        "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?" + (" AND COALESCE(store_id,'default')=?" if store_id else ""), [today] + review_params).fetchone()[0],
+        "orders_today":        db.execute("SELECT COUNT(*) FROM orders WHERE created_at >= ?" + review_where + valid_order, [today] + review_params).fetchone()[0],
+        "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?" + review_where, [today] + review_params).fetchone()[0],
         "messages_total":      total_people,
         "incoming_messages":   incoming_messages,
         "outgoing_messages":   outgoing_messages,
         "orders_total":        total_orders,
         "message_to_order_conversion": conversion_rate,
         "conversation_to_order_conversion": conversion_rate,
-        "top_products":        _top_ordered_products(db, date_from=date_from, date_to=date_to, store_id=store_id or None),
+        "top_products":        _top_ordered_products(db, date_from=date_from, date_to=date_to, store_id=store_id or None, exclude_cancelled=True),
         "ai_enabled":          is_ai_enabled(db),
     })
 
 
 def _analytics_range(default_period="today"):
     period = (request.args.get("period") or default_period).strip()
-    today = datetime.now(BAGHDAD_TZ).date()
+    now = datetime.now(BAGHDAD_TZ).replace(microsecond=0)
+    today = now.date()
+    if period == "24h":
+        return period, (now - timedelta(hours=24)).isoformat(), now.isoformat()
     if period == "yesterday":
         date_from = datetime.fromordinal(today.toordinal() - 1).date()
         date_to = today
