@@ -338,6 +338,8 @@ body {
   flex: 1;
   overflow-y: auto;
 }
+.inbox-load-status { min-height: 0; color: var(--text-muted); font-size: 12px; text-align: center; }
+.inbox-load-status:not(:empty) { padding: 8px 12px; border-top: 1px solid var(--border); }
 
 .dashboard-metrics {
   display: grid;
@@ -397,6 +399,24 @@ body {
   color: var(--primary-light);
   flex-shrink: 0;
 }
+
+#statsModal .modal-content { border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+#statsModal .modal-body { max-height: min(78vh, 780px); overflow-y: auto; padding: 22px; }
+#statsModal .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+#statsModal .metric-card { display: block; padding: 18px; border-radius: 14px; }
+#statsModal .metric-card small { font-size: 12px; line-height: 1.4; }
+#statsModal .metric-card strong { font-size: clamp(21px, 4vw, 30px); line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
+#statsModal .stats-conversion-card { background: color-mix(in srgb, var(--primary) 12%, var(--surface)); border-color: var(--primary); }
+#statsModal .stats-conversion-card strong { color: var(--primary-light); }
+#statsModal .stats-scope { color: var(--text-muted); font-size: 13px; margin: 0 0 14px; }
+#statsModal .stats-goal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+#statsModal .stats-goal > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#statsModal .stats-goal strong { color: var(--primary-light); }
+#statsModal .stats-goal progress { display: block; width: 100%; height: 12px; margin: 14px 0 8px; accent-color: var(--primary); }
+#statsModal .stats-goal small { color: var(--text-muted); line-height: 1.5; }
+#statsModal .top-products-list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px; gap: 10px; font-size: 13px; }
+#statsModal .top-product-row { padding: 6px 0; }
+@media (max-width: 540px) { #statsModal .modal-body { padding: 16px; } #statsModal .metric-card { padding: 14px; } }
 
 .customer-item {
   display: flex;

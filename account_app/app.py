@@ -1247,6 +1247,10 @@ def init_db():
         except Exception as exc:
             print(f"[DB] Could not add {table_name}.store_id: {exc}", flush=True)
 
+    db.execute("CREATE INDEX IF NOT EXISTS idx_messages_stats ON messages(store_id,direction,created_at,sender_id)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_orders_stats ON orders(store_id,created_at,sender_id)")
+    db.commit()
+
     now = now_baghdad_iso()
     baraah.seed(db, now)
     for store_id, name, webhook_key in (
@@ -10718,7 +10722,7 @@ def api_import_database():
 @_dash_require
 def api_conversations():
     try:
-        limit = max(1, int(request.args.get("limit", 20)))
+        limit = min(100, max(1, int(request.args.get("limit", 20))))
         offset = max(0, int(request.args.get("offset", 0)))
     except ValueError:
         return jsonify({"error": "Invalid pagination"}), 400
@@ -10748,6 +10752,12 @@ def api_conversations():
             except ValueError: return jsonify({"error": "Invalid date"}), 400
             conditions.append(f"substr(last_time,1,10) {operator} ?")
             params.append(value)
+    cursor_time = request.args.get("cursor_time", "")
+    cursor_sender = request.args.get("cursor_sender", "")
+    if cursor_time and cursor_sender and request.args.get("sort", "latest") in ("", "latest"):
+        conditions.append("(last_time < ? OR (last_time = ? AND sender_id > ?))")
+        params.extend([cursor_time, cursor_time, cursor_sender])
+        offset = 0
     where = " AND ".join(conditions) or "1=1"
     sort = {"oldest": "last_time ASC, sender_id ASC", "score": "lead_score DESC, last_time DESC, sender_id ASC"}.get(request.args.get("sort"), "last_time DESC, sender_id ASC")
     db = get_db()
@@ -11972,11 +11982,14 @@ def api_manychat_test():
     })
 
 
-def _top_ordered_products(db, limit=5, date_from=None, date_to=None):
+def _top_ordered_products(db, limit=5, date_from=None, date_to=None, store_id=None):
     query = """SELECT product_id, product_name, order_items
                FROM orders
                WHERE (COALESCE(product_id, '') != '' OR COALESCE(product_name, '') != '')"""
     params = []
+    if store_id:
+        query += " AND COALESCE(store_id,'default') = ?"
+        params.append(store_id)
     if date_from:
         query += " AND created_at >= ?"
         params.append(date_from)
@@ -12028,42 +12041,69 @@ def api_dashboard_stats():
     db = get_db()
     today = datetime.now(BAGHDAD_TZ).date().isoformat()
     period, date_from, date_to = _analytics_range(default_period="all")
+    store_id = request.args.get("store_id", "").strip()
+    if store_id == "all":
+        store_id = ""
     where = ""
     params = []
     if date_from and date_to:
         where = " AND created_at >= ? AND created_at < ?"
         params = [date_from, date_to]
+    message_where = where + (" AND COALESCE(store_id,'default')=?" if store_id else "")
+    message_params = params + ([store_id] if store_id else [])
+    order_where = message_where
+    order_params = message_params
     total_people = db.execute(
         "SELECT COUNT(DISTINCT sender_id) FROM messages "
-        "WHERE direction='incoming' AND COALESCE(sender_id, '') != ''" + where,
-        params,
+        "WHERE direction='incoming' AND COALESCE(sender_id, '') != ''" + message_where,
+        message_params,
     ).fetchone()[0]
-    total_orders = db.execute("SELECT COUNT(*) FROM orders WHERE 1=1" + where, params).fetchone()[0]
+    total_orders = db.execute("SELECT COUNT(*) FROM orders WHERE 1=1" + order_where, order_params).fetchone()[0]
     booked_people = db.execute(
-        "SELECT COUNT(DISTINCT sender_id) FROM orders WHERE COALESCE(sender_id, '') != ''" + where,
-        params,
+        "SELECT COUNT(DISTINCT sender_id) FROM orders WHERE COALESCE(sender_id, '') != ''" + order_where,
+        order_params,
+    ).fetchone()[0]
+    cohort_buyers = db.execute(
+        "SELECT COUNT(DISTINCT o.sender_id) FROM orders o WHERE COALESCE(o.sender_id,'')!=''" +
+        (" AND o.created_at >= ? AND o.created_at < ?" if date_from and date_to else "") +
+        (" AND COALESCE(o.store_id,'default')=?" if store_id else "") +
+        " AND EXISTS (SELECT 1 FROM messages m WHERE m.sender_id=o.sender_id AND m.direction='incoming'" +
+        (" AND m.created_at >= ? AND m.created_at < ?" if date_from and date_to else "") +
+        (" AND COALESCE(m.store_id,'default')=?" if store_id else "") + ")",
+        order_params + message_params,
     ).fetchone()[0]
     incoming_messages = db.execute(
-        "SELECT COUNT(*) FROM messages WHERE direction='incoming'" + where, params
+        "SELECT COUNT(*) FROM messages WHERE direction='incoming'" + message_where, message_params
     ).fetchone()[0]
     outgoing_messages = db.execute(
-        "SELECT COUNT(*) FROM messages WHERE direction='outgoing'" + where, params
+        "SELECT COUNT(*) FROM messages WHERE direction='outgoing'" + message_where, message_params
     ).fetchone()[0]
-    conversion_rate = round((booked_people / total_people) * 100, 2) if total_people else 0
+    conversion_rate = round((cohort_buyers / total_people) * 100, 2) if total_people else 0
+    goal_people = (total_people * 30 + 99) // 100
+    review_where = " AND COALESCE(store_id,'default')=?" if store_id else ""
+    review_params = [store_id] if store_id else []
     return jsonify({
         "period": period,
+        "store_id": store_id or "all",
+        "period_start": date_from,
+        "period_end_exclusive": date_to,
         "total_conversations": total_people,
         "people_total": total_people,
-        "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0],
-        "orders_today":        db.execute("SELECT COUNT(*) FROM orders WHERE created_at >= ?", (today,)).fetchone()[0],
-        "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?", (today,)).fetchone()[0],
+        "booked_people": cohort_buyers,
+        "orders_booked_people": booked_people,
+        "conversion_goal": 30,
+        "goal_people": goal_people,
+        "goal_gap": max(0, goal_people - cohort_buyers),
+        "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'" + review_where, review_params).fetchone()[0],
+        "orders_today":        db.execute("SELECT COUNT(*) FROM orders WHERE created_at >= ?" + (" AND COALESCE(store_id,'default')=?" if store_id else ""), [today] + review_params).fetchone()[0],
+        "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?" + (" AND COALESCE(store_id,'default')=?" if store_id else ""), [today] + review_params).fetchone()[0],
         "messages_total":      total_people,
         "incoming_messages":   incoming_messages,
         "outgoing_messages":   outgoing_messages,
         "orders_total":        total_orders,
         "message_to_order_conversion": conversion_rate,
         "conversation_to_order_conversion": conversion_rate,
-        "top_products":        _top_ordered_products(db, date_from=date_from, date_to=date_to),
+        "top_products":        _top_ordered_products(db, date_from=date_from, date_to=date_to, store_id=store_id or None),
         "ai_enabled":          is_ai_enabled(db),
     })
 

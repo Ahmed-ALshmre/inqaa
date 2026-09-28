@@ -16,6 +16,8 @@ let convOffset = 0;
 let isLoadingMoreConv = false;
 let hasMoreConv = true;
 let pollConvTimer     = null;
+let statsPollTimer    = null;
+let statsRequest      = null;
 let pollMsgTimer      = null;
 let messageRequest = null;
 const messageCache = new Map();
@@ -63,7 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
   loadConversations();
   loadStats();
   loadProducts();
-  pollConvTimer = setInterval(() => { if (!document.hidden && !inboxRequest) { loadConversations(false); loadStats(); } }, 4000);
+  statsPollTimer = setInterval(() => { if (!document.hidden) loadStats(); }, 30000);
+  pollConvTimer = setInterval(() => {
+    if (document.hidden || inboxRequest) return;
+    loadConversations(false);
+  }, 12000);
   if (INITIAL_SENDER_ID && window.innerWidth <= 768) {
     history.replaceState({...(history.state || {}), dashboardConversation: INITIAL_SENDER_ID}, '', location.href);
   }
@@ -177,36 +183,53 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
       '<div class="small">جاري التحميل...</div></div>';
   }
   try {
-    if (isLoadMore) isLoadingMoreConv = true;
+    if (isLoadMore) {
+      isLoadingMoreConv = true;
+      setText('inboxLoadStatus', 'جاري تحميل محادثات أقدم…');
+    }
     
-    let fetchLimit = isLoadMore ? convLimit : Math.max(convLimit, allConversations.length);
-    let fetchOffset = isLoadMore ? allConversations.length : 0;
+    const sort = document.getElementById('filterSort')?.value || 'latest';
+    const latestSort = sort === 'latest';
+    const previousCount = allConversations.length;
+    const previousHasMore = hasMoreConv;
+    const fetchLimit = isLoadMore || latestSort ? convLimit : Math.max(convLimit, allConversations.length);
+    const fetchOffset = isLoadMore && !latestSort ? allConversations.length : 0;
     
     const previousPending = new Map(allConversations.map(c => [c.sender_id, c.pending_reviews_count || 0]));
     const previousProblems = new Map(allConversations.map(c => [c.sender_id, c.problem_count || 0]));
     const params = inboxQuery();
     params.set("limit", fetchLimit);
     params.set("offset", fetchOffset);
+    if (isLoadMore && latestSort && allConversations.length) {
+      const last = allConversations[allConversations.length - 1];
+      params.set('cursor_time', last.last_time || '');
+      params.set('cursor_sender', last.sender_id);
+    }
     const res = await apiFetch(`/api/conversations?${params}`, {signal: controller.signal});
     if (!res.ok) throw new Error("فشل تحميل المحادثات");
     const data = await res.json();
     
+    let listChanged = true;
     if (isLoadMore) {
       const newConvs = data.conversations || [];
-      if (newConvs.length < convLimit) hasMoreConv = false;
-      
       const existingIds = new Set(allConversations.map(c => c.sender_id));
       for (const nc of newConvs) {
-         if (!existingIds.has(nc.sender_id)) allConversations.push(nc);
+         if (!existingIds.has(nc.sender_id)) { allConversations.push(nc); existingIds.add(nc.sender_id); }
       }
-      convOffset += convLimit;
+      convOffset = allConversations.length;
+      hasMoreConv = Boolean(data.has_more);
     } else {
-      allConversations = data.conversations || [];
-      // If we got exactly what we asked for, there might be more
-      if (allConversations.length < fetchLimit && allConversations.length > 0) hasMoreConv = false;
-      else if (allConversations.length === 0) hasMoreConv = false;
+      const fresh = data.conversations || [];
+      if (!showSpinner && latestSort && previousCount) {
+        listChanged = JSON.stringify(fresh) !== JSON.stringify(allConversations.slice(0, fresh.length));
+        const seen = new Set(fresh.map(c => c.sender_id));
+        allConversations = fresh.concat(allConversations.filter(c => !seen.has(c.sender_id)));
+        hasMoreConv = previousHasMore || Boolean(data.has_more);
+      } else {
+        allConversations = fresh;
+        hasMoreConv = Boolean(data.has_more);
+      }
     }
-    hasMoreConv = Boolean(data.has_more);
     document.getElementById("inboxConnection").textContent = "محدّث الآن";
     if (!showSpinner) {
       for (const c of allConversations) {
@@ -250,7 +273,12 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
         latestImageIdBySender[c.sender_id] = Number(c.last_image_id || 0);
       });
     }
-    renderConversations();
+    if (listChanged || isLoadMore || showSpinner) renderConversations(isLoadMore ? previousCount : 0);
+    if (isLoadMore) setText('inboxLoadStatus', hasMoreConv ? '' : 'وصلت لنهاية المحادثات');
+    if (isLoadMore && hasMoreConv) requestAnimationFrame(() => {
+      const list = document.getElementById('customerList');
+      if (list.scrollHeight <= list.clientHeight + 120) onCustomerListScroll();
+    });
     if (INITIAL_SENDER_ID && !initialSenderOpened) {
       const exists = allConversations.some(c => c.sender_id === INITIAL_SENDER_ID);
       if (exists) {
@@ -262,7 +290,10 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
     if (e.name === "AbortError") return;
     document.getElementById("inboxConnection").textContent = "تعذر التحديث";
     console.error("loadConversations error:", e);
-    if (showSpinner) {
+    if (isLoadMore) {
+      const status = document.getElementById('inboxLoadStatus');
+      if (status) status.textContent = 'تعذر تحميل المزيد. انزل لآخر القائمة للمحاولة مجدداً.';
+    } else if (showSpinner) {
       showToast('فشل تحميل المحادثات', 'danger');
       document.getElementById('customerList').innerHTML = `<div class="text-danger p-3 small text-start" dir="ltr" style="white-space:pre-wrap;">تعذر تحميل المحادثات. <button class="btn btn-sm btn-light" onclick="loadConversations()">إعادة المحاولة</button></div>`;
     }
@@ -318,12 +349,14 @@ function refreshInboxFilters() {
   if (!to.reportValidity()) return;
   const count = [...inboxQuery()].filter(([k,v]) => k !== 'sort' && v !== 'all').length;
   document.getElementById('activeFilterCount').textContent = count ? `(${count})` : '';
+  inboxRequest?.abort();
   allConversations = []; convOffset = 0; hasMoreConv = true;
+  setText('inboxLoadStatus', '');
   loadConversations();
 }
 function scheduleInboxSearch() { clearTimeout(inboxSearchTimer); inboxSearchTimer = setTimeout(refreshInboxFilters,300); }
 function filterCustomers() { scheduleInboxSearch(); }
-function setConversationStoreFilter(storeId) { currentStoreFilter = storeId || 'all'; refreshInboxFilters(); }
+function setConversationStoreFilter(storeId) { currentStoreFilter = storeId || 'all'; refreshInboxFilters(); loadStats(); }
 function resetInboxFilters() {
   currentFilter = 'all'; currentStoreFilter = 'all';
   document.getElementById('conversationStoreFilter').value = 'all';
@@ -332,7 +365,7 @@ function resetInboxFilters() {
     const el = document.getElementById(id);
     if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
   }
-  syncConversationFilterUI(); refreshInboxFilters();
+  syncConversationFilterUI(); refreshInboxFilters(); loadStats();
 }
 
 let inboxScrollAnchor = 0;
@@ -357,7 +390,7 @@ function onCustomerListScroll() {
   }
 }
 
-function renderConversations() {
+function renderConversations(appendFrom = 0) {
   syncConversationFilterUI();
   let list = allConversations;
 
@@ -376,7 +409,7 @@ function renderConversations() {
     return;
   }
 
-  const markup = list.map(c => {
+  const markup = list.slice(appendFrom).map(c => {
     const init    = (c.name || c.sender_id || '؟').slice(0, 2).toUpperCase();
     const time    = fmtTime(c.last_time);
     const active  = c.sender_id === currentSenderId ? 'active' : '';
@@ -415,7 +448,13 @@ function renderConversations() {
         </div>
       </div>`;
   }).join('');
-  if (el.innerHTML !== markup) { const top = el.scrollTop; el.innerHTML = markup; el.scrollTop = top; }
+  if (appendFrom > 0) {
+    el.insertAdjacentHTML('beforeend', markup);
+  } else if (el.innerHTML !== markup) {
+    const top = el.scrollTop;
+    el.innerHTML = markup;
+    el.scrollTop = top;
+  }
 }
 
 // ══ Select Conversation ════════════════════════════════════════════════════
@@ -1489,22 +1528,43 @@ async function saveInstructions() {
 
 // ══ Stats ══════════════════════════════════════════════════════════════════
 async function loadStats() {
+  statsRequest?.abort();
+  const controller = new AbortController();
+  statsRequest = controller;
   try {
-    const period = document.getElementById('dashboardStatsPeriod')?.value || 'all';
-    const res  = await apiFetch(`/api/dashboard_stats?period=${encodeURIComponent(period)}`);
+    const period = document.getElementById('dashboardStatsPeriod')?.value || 'today';
+    const params = new URLSearchParams({period});
+    if (currentStoreFilter !== 'all') params.set('store_id', currentStoreFilter);
+    const res  = await apiFetch(`/api/dashboard_stats?${params}`, {signal: controller.signal});
+    if (!res.ok) throw new Error('تعذر تحميل الإحصائيات');
     const data = await res.json();
+    if (statsRequest !== controller) return;
     document.getElementById('statPending').textContent  = `${data.pending_reviews  || 0} مراجعة`;
     document.getElementById('statOrders').textContent   = `${data.orders_today    || 0} طلب`;
     document.getElementById('statMessages').textContent = `${data.messages_today  || 0} رسالة`;
     setText('statTotalMessages', fmtNumber(data.people_total || data.total_conversations || 0));
     setText('statTotalOrders', fmtNumber(data.orders_total || 0));
+    setText('statBookedPeople', fmtNumber(data.booked_people || 0));
     setText('statConversion', `${Number(data.message_to_order_conversion || 0).toFixed(1)}%`);
+    setText('statIncoming', fmtNumber(data.incoming_messages || 0));
+    setText('statOutgoing', fmtNumber(data.outgoing_messages || 0));
+    setText('statPendingReviews', fmtNumber(data.pending_reviews || 0));
+    setText('statGoalGap', data.people_total ? (data.goal_gap ? `باقي ${fmtNumber(data.goal_gap)} حجز` : 'تحقق الهدف ✦') : 'بانتظار أول مراسل');
+    const progress = document.getElementById('statGoalProgress');
+    if (progress) progress.value = Math.min(30, Number(data.message_to_order_conversion || 0));
+    const storeName = currentStoreFilter === 'all' ? 'كل المتاجر' : document.getElementById('conversationStoreFilter')?.selectedOptions[0]?.textContent || currentStoreFilter;
+    const periodName = document.getElementById('dashboardStatsPeriod')?.selectedOptions[0]?.textContent || 'اليوم';
+    setText('statsScope', `${storeName} · ${periodName} · التوقيت بغداد`);
     const top = (data.top_products || [])[0];
     setText('statTopProduct', top ? `${top.product_name || top.product_id} (${top.orders})` : 'لا يوجد');
     renderTopProducts(data.top_products || []);
     globalAIEnabled = data.ai_enabled !== false;
     renderAIToggle();
-  } catch (e) {}
+  } catch (e) {
+    if (e.name !== 'AbortError') setText('statsScope', 'تعذر تحديث الإحصائيات. حاول مرة ثانية.');
+  } finally {
+    if (statsRequest === controller) statsRequest = null;
+  }
 }
 
 async function openStatsModal() {

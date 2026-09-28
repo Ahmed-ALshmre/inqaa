@@ -53,6 +53,17 @@ class InboxFilterTests(unittest.TestCase):
         self.assertEqual(self.get('sort=score')['conversations'][0]['lead_score'],24)
         self.assertEqual(self.get('q=%27%20OR%201%3D1')['conversations'],[])
 
+    def test_latest_cursor_walks_conversations_without_repeating(self):
+        first = self.get('limit=10')
+        last = first['conversations'][-1]
+        second = self.get(f"limit=10&cursor_time={last['last_time']}&cursor_sender={last['sender_id']}")
+        last = second['conversations'][-1]
+        third = self.get(f"limit=10&cursor_time={last['last_time']}&cursor_sender={last['sender_id']}")
+        ids = [row['sender_id'] for page in (first, second, third) for row in page['conversations']]
+        self.assertEqual(len(ids), 25)
+        self.assertEqual(len(set(ids)), 25)
+        self.assertFalse(third['has_more'])
+
     def test_validation_and_store_presence(self):
         self.assertEqual(self.client.get('/api/conversations?limit=abc').status_code,400)
         self.assertEqual(self.client.get('/api/conversations?date_from=bad').status_code,400)
