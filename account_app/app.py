@@ -7116,7 +7116,7 @@ def factual_customer_request(ev, products, matched_product=None):
     result = {"create_order": False, "order": {}, "requires_human": False}
     if not has_app_context():
         return None
-    if re.fullmatch(r"[\s؟?!.]*(?:(?:هلو|مرحبا|السلام عليكم)\s*)?(?:كيفية الدفع(?: والشحن| والتوصيل)?|كيف ادفع|شلون الدفع|اكو توصيل|هل يوجد توصيل[^؟?]*|(?:شكد|كم|متى|يمتى)\s+(?:توصيل|التوصيل)[^؟?]*|(?:ما هي طريقة التوصيل))[؟?!.\s]*", clean):
+    if re.fullmatch(r"[\s؟?!.]*(?:(?:هلو|مرحبا|السلام عليكم)\s*)?(?:كيفية الدفع(?: والشحن| والتوصيل)?|كيف ادفع|شلون الدفع(?: والشحن| والتوصيل)?|اكو توصيل|هل يوجد توصيل[^؟?]*|(?:شكد|كم|متى|يمتى)\s+(?:توصيل|التوصيل)[^؟?]*|(?:ما هي طريقة التوصيل))[؟?!.\s]*", clean):
         delivery = get_delivery_settings(get_db())
         fee = delivery["other_fee"]
         if matched_product:
@@ -7129,7 +7129,9 @@ def factual_customer_request(ev, products, matched_product=None):
         price_text = "التوصيل مجاني حسب عرض المنتج." if not fee else (f"التوصيل {fee:,} د.ع لكل المحافظات." if delivery["baghdad_fee"] == delivery["other_fee"] else f"التوصيل لبغداد {delivery['baghdad_fee']:,} د.ع وبقية المحافظات {delivery['other_fee']:,} د.ع.")
         if re.search(r"متى|يمتى", clean):
             return dict(result, reply="موعد الوصول الدقيق يحتاج تأكيد المتجر؛ ما عندي موعد مؤكد حالياً.")
-        return dict(result, reply="الدفع عند الاستلام مع الفحص حسب سياسة المتجر. " + price_text)
+        if not fee:
+            return dict(result, reply="الدفع يصير عند الاستلام، وتكدر تفحص القطعة ويا المندوب قبل الدفع. التوصيل مجاني حسب العرض.")
+        return dict(result, reply=f"الدفع يصير عند الاستلام، والفحص يكون ويا المندوب قبل الدفع. {price_text}")
     age = conversation_quality.child_age(text)
     if current_store_id() == baraah.STORE_ID and age is not None and age < 1:
         # Only reject when every age-described product starts at one year.

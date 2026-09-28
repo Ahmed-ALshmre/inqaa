@@ -17,6 +17,13 @@ CATALOG = [
 ]
 
 class ConversationContextTests(unittest.TestCase):
+    def test_delivery_policy_reply_is_natural_iraqi(self):
+        products = [dict(product_id='F2', product_name='فستان', price='15000', stock='متوفر', status='active')]
+        with m.app.app_context(), patch.object(m, 'current_store_id', return_value='default'):
+            result = m.factual_customer_request({'text': 'شلون الدفع والتوصيل؟'}, products, products[0])
+        self.assertIn('الدفع يصير عند الاستلام', result['reply'])
+        self.assertIn('ويا المندوب', result['reply'])
+        self.assertNotIn('حسب سياسة المتجر', result['reply'])
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
