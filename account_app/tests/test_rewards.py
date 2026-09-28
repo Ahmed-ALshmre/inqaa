@@ -115,3 +115,41 @@ class RewardTests(unittest.TestCase):
         with patch.object(m,'find_product_by_id',return_value={'product_id':'p','product_name':'فستان'}), patch.object(m,'auto_reply_after_product_link',return_value={'sent':True}):
             m.run_ai_job(job,payload)
         self.assertEqual(self.client.get('/api/rewards').json['balance'],50)
+
+    def grant(self, **changes):
+        data=dict(staff_id=self.id,amount=1000,reason='تميز في خدمة الزبائن',request_id='test-grant-request-001')
+        data.update(changes)
+        return self.client.post('/api/rewards/grants',json=data,headers=self.headers)
+
+    def test_admin_grant_is_withdrawable_without_fake_achievements(self):
+        self.assertEqual(self.grant().status_code,200)
+        self.assertTrue(self.grant().json['duplicate'])
+        self.assertEqual(self.grant(amount=2000).status_code,409)
+        self.employee()
+        result=self.client.get('/api/rewards').json
+        self.assertEqual((result['balance'],result['available'],result['manual_bonus'],result['solved'],result['bonus']),(1000,1000,1000,0,0))
+        self.assertEqual(result['today'],dict(solved=0,earned=1000))
+        self.assertEqual(result['grants'][0]['reason'],'تميز في خدمة الزبائن')
+        self.assertEqual(self.client.post('/api/rewards/withdraw',json={},headers=self.headers).json['amount'],1000)
+
+    def test_grant_requires_owner_and_csrf(self):
+        self.assertEqual(self.client.post('/api/rewards/grants',json={}).status_code,403)
+        self.employee()
+        self.assertEqual(self.grant().status_code,403)
+        self.assertEqual(self.client.get('/api/rewards').json['balance'],0)
+
+    def test_invalid_grants_do_not_change_balance(self):
+        for changes in [dict(amount=0),dict(amount=-1),dict(amount=True),dict(amount=1.5),dict(amount=10000001),dict(reason='  '),dict(reason='a'*501),dict(staff_id=99999),dict(request_id='short')]:
+            with self.subTest(changes=changes):self.assertEqual(self.grant(**changes).status_code,400)
+        m.get_db().execute('UPDATE staff_accounts SET active=0 WHERE id=?',(self.id,));m.get_db().commit()
+        self.assertEqual(self.grant().status_code,400)
+        self.assertEqual(self.client.get('/api/rewards').json['employees'][0]['balance'],0)
+
+    def test_new_grant_does_not_alter_reserved_withdrawal(self):
+        self.grant();self.employee()
+        self.client.post('/api/rewards/withdraw',json={},headers=self.headers)
+        with self.client.session_transaction() as session:
+            session.pop('staff_id',None)
+        self.assertEqual(self.grant(amount=2000,request_id='test-grant-request-002').status_code,200)
+        result=self.client.get('/api/rewards').json['employees'][0]
+        self.assertEqual((result['balance'],result['reserved'],result['available']),(3000,1000,2000))

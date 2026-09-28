@@ -1,6 +1,7 @@
 """Immutable employee credit ledger; awards share the resolution transaction."""
 from datetime import datetime, timedelta, timezone
 import secrets
+import re
 from flask import has_request_context, jsonify, redirect, render_template, request, session
 
 BAGHDAD = timezone(timedelta(hours=3))
@@ -19,6 +20,11 @@ def tables(db):
         amount INTEGER NOT NULL CHECK(amount>0), status TEXT NOT NULL DEFAULT 'pending',
         created_at TEXT NOT NULL, resolved_at TEXT)''')
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS one_pending_withdrawal ON staff_reward_withdrawals(staff_id) WHERE status='pending'")
+    db.execute('''CREATE TABLE IF NOT EXISTS staff_reward_grants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, staff_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL CHECK(amount>0), reason TEXT NOT NULL,
+        granted_by TEXT NOT NULL, request_id TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL)''')
 
 
 def award_pending(db, sender_id, person, cutoff=None, now=None):
@@ -59,12 +65,51 @@ def summary(db, staff_id):
     withdrawals = [dict(r) for r in db.execute('SELECT * FROM staff_reward_withdrawals WHERE staff_id=? ORDER BY id DESC', (staff_id,))]
     reserved = sum(r['amount'] for r in withdrawals if r['status'] == 'pending')
     paid = sum(r['amount'] for r in withdrawals if r['status'] == 'paid')
+    total = dict(total)
+    daily = dict(daily)
+    grants = [dict(r) for r in db.execute('SELECT id,amount,reason,granted_by,created_at FROM staff_reward_grants WHERE staff_id=? ORDER BY id DESC LIMIT 50', (staff_id,))]
+    manual = db.execute('SELECT COALESCE(SUM(amount),0) FROM staff_reward_grants WHERE staff_id=?', (staff_id,)).fetchone()[0]
+    daily['earned'] += db.execute('SELECT COALESCE(SUM(amount),0) FROM staff_reward_grants WHERE staff_id=? AND substr(created_at,1,10)=?', (staff_id,today)).fetchone()[0]
+    total['balance'] += manual
     return dict(total, available=max(0,total['balance']-reserved-paid), reserved=reserved, paid=paid,
+                manual_bonus=manual, grants=grants,
                 withdrawals=withdrawals, day=today, today=dict(daily), goal=DAILY_GOAL, history=history,
                 baseline_seconds=sum(durations)/len(durations) if durations else None)
 
 
 def install(app, get_db, current):
+    @app.post('/api/rewards/grants')
+    def grant_reward():
+        person = current()
+        if not person: return jsonify(error='سجل الدخول أولاً'), 401
+        if not person['owner']: return jsonify(error='إضافة المكافآت للأدمن فقط'), 403
+        if not secrets.compare_digest(request.headers.get('X-CSRF-Token',''), session.get('csrf_token') or secrets.token_hex(32)):
+            return jsonify(error='حدّث الصفحة ثم حاول مجدداً'), 403
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict): return jsonify(error='بيانات غير صحيحة'), 400
+        staff_id, amount = data.get('staff_id'), data.get('amount')
+        reason, request_id = data.get('reason'), data.get('request_id')
+        if type(staff_id) is not int or type(amount) is not int or not 1 <= amount <= 10000000:
+            return jsonify(error='اختر موظفاً ومبلغاً صحيحاً من 1 إلى 10,000,000 دينار'), 400
+        if not isinstance(reason,str) or not 1 <= len(reason.strip()) <= 500:
+            return jsonify(error='اكتب سبب المكافأة بما لا يتجاوز 500 حرف'), 400
+        if not isinstance(request_id,str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',request_id):
+            return jsonify(error='معرّف العملية غير صالح؛ حدّث الصفحة'), 400
+        reason = reason.strip()
+        db = get_db(); tables(db); db.commit()
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            previous = db.execute('SELECT * FROM staff_reward_grants WHERE request_id=?',(request_id,)).fetchone()
+            if previous:
+                if (previous['staff_id'],previous['amount'],previous['reason']) != (staff_id,amount,reason):
+                    return jsonify(error='هذا المعرّف مستخدم لمكافأة أخرى'), 409
+                return jsonify(ok=True,id=previous['id'],duplicate=True)
+            if not db.execute('SELECT id FROM staff_accounts WHERE id=? AND active=1',(staff_id,)).fetchone():
+                return jsonify(error='الموظف غير موجود أو حسابه متوقف'), 400
+            cursor = db.execute('INSERT INTO staff_reward_grants(staff_id,amount,reason,granted_by,request_id,created_at) VALUES(?,?,?,?,?,?)',
+                (staff_id,amount,reason,str(person.get('name') or 'الأدمن'),request_id,datetime.now(BAGHDAD).isoformat()))
+        return jsonify(ok=True,id=cursor.lastrowid,duplicate=False)
+
     @app.post('/api/rewards/withdraw')
     def withdraw():
         person = current()
@@ -111,6 +156,6 @@ def install(app, get_db, current):
         db = get_db()
         tables(db)
         if person['owner']:
-            people = db.execute('SELECT id,name FROM staff_accounts ORDER BY name').fetchall() if db.execute("SELECT 1 FROM sqlite_master WHERE name='staff_accounts'").fetchone() else []
-            return jsonify(owner=True, employees=[dict(id=p['id'], name=p['name'], **summary(db,p['id'])) for p in people])
+            people = db.execute('SELECT id,name,active FROM staff_accounts ORDER BY name').fetchall() if db.execute("SELECT 1 FROM sqlite_master WHERE name='staff_accounts'").fetchone() else []
+            return jsonify(owner=True, employees=[dict(id=p['id'], name=p['name'], active=bool(p['active']), **summary(db,p['id'])) for p in people])
         return jsonify(owner=False, **summary(db,person['id']))

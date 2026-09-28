@@ -6,6 +6,28 @@
   const duration = seconds => seconds == null ? 'غير متوفر' : `${number(seconds / 60)} دقيقة`;
   let balance, busy = false, submitting = false;
   const statusNames = {pending:'قيد المراجعة',paid:'تم الصرف',rejected:'أُعيد إلى الرصيد'};
+  let grantBusy=false, grantRequest=null;
+  function grantHistory(data) {
+    return `<section class="reward-history"><h3 class="h5">مكافآت الأدمن · آخر ٥٠ مكافأة</h3>${(data.grants || []).map(g=>`<div class="withdraw-row"><div><strong>${money(g.amount)}</strong><p class="reward-grant-reason">${escape(g.reason)}</p><small>${escape(g.granted_by)} · ${escape(new Date(g.created_at).toLocaleString('ar-IQ',{timeZone:'Asia/Baghdad'}))}</small></div></div>`).join('') || '<p class="reward-muted">لا توجد مكافآت إضافية بعد.</p>'}</section>`;
+  }
+  document.addEventListener('submit',async event=>{
+    if(event.target.id!=='reward-grant-form') return;
+    event.preventDefault(); if(grantBusy) return;
+    const form=event.target, button=form.querySelector('button'), status=form.querySelector('[role=status]');
+    const fields=new FormData(form);
+    const payload={staff_id:Number(fields.get('staff_id')),amount:Number(fields.get('amount')),reason:String(fields.get('reason')).trim()};
+    if(!Number.isSafeInteger(payload.amount) || payload.amount<1 || payload.amount>10000000 || !payload.reason){status.textContent='أدخل مبلغاً صحيحاً وسبب المكافأة.';return;}
+    const fingerprint=JSON.stringify(payload);
+    if(!grantRequest || grantRequest.fingerprint!==fingerprint) grantRequest={fingerprint,id:crypto.randomUUID()};
+    if(!confirm(`إضافة ${money(payload.amount)} إلى رصيد ${form.querySelector('select').selectedOptions[0].textContent}؟\nالسبب: ${payload.reason}`)) return;
+    grantBusy=true;button.disabled=true;status.textContent='جاري إضافة المكافأة…';
+    try {
+      const response=await fetch('/api/rewards/grants',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name=csrf-token]')?.content || ''},body:JSON.stringify({...payload,request_id:grantRequest.id})});
+      const result=await response.json();if(!response.ok) throw new Error(result.error || 'تعذر حفظ المكافأة');
+      grantRequest=null;form.reset();status.textContent='تمت إضافة المكافأة إلى رصيد الموظف.';await refresh();
+    } catch(error){status.textContent=error.message+' يمكنك إعادة المحاولة دون تكرار المكافأة.';}
+    finally {grantBusy=false;button.disabled=false;}
+  });
   function withdrawals(data, owner=false) {
     return `<section class="reward-withdraw"><h3>سحب الحوافز</h3>${owner ? '' : `<p>المتاح للسحب <strong>${money(data.available)}</strong> · قيد المراجعة ${money(data.reserved)} · المصروف ${money(data.paid)}</p><button class="btn btn-primary" data-withdraw ${data.available <= 0 || data.reserved > 0 ? 'disabled' : ''}>طلب سحب الحوافز</button><p class="reward-muted">يُرسل الطلب للمالك لصرفه؛ لا يحدث تحويل مالي تلقائي.</p>`}<div>${data.withdrawals.map(w=>`<div class="withdraw-row"><span>#${w.id} · ${money(w.amount)} · ${statusNames[w.status] || escape(w.status)}</span>${owner && w.status==='pending' ? `<div><button class="btn btn-success" data-settle="${w.id}" data-status="paid">تأكيد الصرف</button> <button class="btn btn-outline-secondary" data-settle="${w.id}" data-status="rejected">إعادة الرصيد</button></div>` : ''}</div>`).join('') || '<p class="reward-muted">لا توجد طلبات سحب بعد.</p>'}</div></section>`;
   }
@@ -36,17 +58,20 @@
     finally {submitting=false;button.disabled=false;}
   });
   function cards(data) {
-    return `<div class="reward-cards"><div class="reward-card"><span>الرصيد المتراكم</span><strong>${money(data.balance)}</strong></div><div class="reward-card"><span>مشاكل تم حلها</span><strong>${number(data.solved)}</strong></div><div class="reward-card"><span>علاوات السرعة</span><strong>${money(data.bonus)}</strong></div></div>`;
+    return `<div class="reward-cards"><div class="reward-card"><span>الرصيد المتراكم</span><strong>${money(data.balance)}</strong></div><div class="reward-card"><span>مشاكل تم حلها</span><strong>${number(data.solved)}</strong></div><div class="reward-card"><span>علاوات السرعة</span><strong>${money(data.bonus)}</strong></div><div class="reward-card"><span>مكافآت الأدمن</span><strong>${money(data.manual_bonus || 0)}</strong></div></div>`;
   }
   function render(data) {
     const content = document.getElementById('reward-content');
     if (!content) return;
     if (data.owner) {
+      const panel=document.getElementById('reward-grant-panel');
+      if(panel && !panel.children.length) panel.innerHTML=`<form id="reward-grant-form" class="reward-goal-panel"><h2 class="h5">إضافة مكافأة لموظف</h2><div class="reward-grant-fields"><label>الموظف<select name="staff_id" class="form-select" required><option value="">اختر الموظف</option>${data.employees.filter(p=>p.active).map(p=>`<option value="${p.id}">${escape(p.name)}</option>`).join('')}</select></label><label>المبلغ بالدينار العراقي<input name="amount" type="number" min="1" max="10000000" step="1" class="form-control" required></label><label>سبب المكافأة<textarea name="reason" maxlength="500" class="form-control" required placeholder="مثلاً: تميز في خدمة الزبائن"></textarea></label></div><button class="btn btn-primary" type="submit">إضافة المكافأة</button><p role="status" aria-live="polite"></p></form>`;
       content.innerHTML = '<h2 class="h5 mt-4">إنجازات فريق العمل</h2>' + (data.employees.length ? data.employees.map(p => `<section class="reward-employee"><h3 class="h5">${escape(p.name)}</h3>${cards(p)}${withdrawals(p,true)}<p>اليوم: ${number(p.today.solved)} / ${number(p.goal)} مشاكل · ${money(p.today.earned)}</p></section>`).join('') : '<p>أضف موظفين من الإعدادات لبدء احتساب المكافآت.</p>');
+      content.querySelectorAll('.reward-employee').forEach((element,index)=>element.insertAdjacentHTML('beforeend',grantHistory(data.employees[index])));
       return;
     }
     const target = (Math.floor(data.today.solved / data.goal) + 1) * data.goal;
-    content.innerHTML = cards(data) + withdrawals(data) + `<section class="reward-goal-panel"><strong>${data.today.solved >= data.goal ? '✦ حققت هدف اليوم!' : 'خطوة أقرب إلى هدف اليوم'}</strong><progress max="${target}" value="${data.today.solved}" aria-label="التقدم نحو هدف اليوم"></progress><div>${number(data.today.solved)} / ${number(target)} مشاكل · مكافآت اليوم ${money(data.today.earned)}</div><p class="reward-muted mt-3">${data.baseline_seconds == null ? 'حلّ أول مشكلة لتبدأ المقارنة مع سرعتك السابقة.' : `معيار سرعتك الحالي: ${duration(data.baseline_seconds)}. الحل الأسرع يمنحك ×1.2.`}</p></section><section class="reward-history"><h2 class="h5">سجل المكافآت · آخر ٥٠ حلاً</h2>${data.history.length ? `<table><thead><tr><th>المراجعة</th><th>وقت الحل</th><th>المدة</th><th>المضاعف</th><th>المكافأة</th></tr></thead><tbody>${data.history.map(r => `<tr><td>#${r.review_id}</td><td>${escape(new Date(r.created_at).toLocaleString('ar-IQ',{timeZone:'Asia/Baghdad'}))}</td><td>${duration(r.duration_seconds)}</td><td>${r.multiplier > 1 ? '<span class="reward-fast">⚡ ×1.2</span>' : '×1'}</td><td>${money(r.amount)}</td></tr>`).join('')}</tbody></table>` : '<p class="reward-muted">رصيدك يبدأ مع أول مراجعة تحلّها. إنجازك القادم سيظهر هنا.</p>'}</section>`;
+    content.innerHTML = cards(data) + withdrawals(data) + grantHistory(data) + `<section class="reward-goal-panel"><strong>${data.today.solved >= data.goal ? '✦ حققت هدف اليوم!' : 'خطوة أقرب إلى هدف اليوم'}</strong><progress max="${target}" value="${data.today.solved}" aria-label="التقدم نحو هدف اليوم"></progress><div>${number(data.today.solved)} / ${number(target)} مشاكل · مكافآت اليوم ${money(data.today.earned)}</div><p class="reward-muted mt-3">${data.baseline_seconds == null ? 'حلّ أول مشكلة لتبدأ المقارنة مع سرعتك السابقة.' : `معيار سرعتك الحالي: ${duration(data.baseline_seconds)}. الحل الأسرع يمنحك ×1.2.`}</p></section><section class="reward-history"><h2 class="h5">سجل المكافآت · آخر ٥٠ حلاً</h2>${data.history.length ? `<table><thead><tr><th>المراجعة</th><th>وقت الحل</th><th>المدة</th><th>المضاعف</th><th>المكافأة</th></tr></thead><tbody>${data.history.map(r => `<tr><td>#${r.review_id}</td><td>${escape(new Date(r.created_at).toLocaleString('ar-IQ',{timeZone:'Asia/Baghdad'}))}</td><td>${duration(r.duration_seconds)}</td><td>${r.multiplier > 1 ? '<span class="reward-fast">⚡ ×1.2</span>' : '×1'}</td><td>${money(r.amount)}</td></tr>`).join('')}</tbody></table>` : '<p class="reward-muted">رصيدك يبدأ مع أول مراجعة تحلّها. إنجازك القادم سيظهر هنا.</p>'}</section>`;
   }
   async function refresh() {
     if (busy || document.hidden) return;
