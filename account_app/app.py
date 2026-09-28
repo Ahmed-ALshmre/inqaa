@@ -28,7 +28,7 @@ try:
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
-    from . import conversation_quality, order_actions
+    from . import conversation_quality, order_actions, conversion_growth, sales_strategy
     from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
@@ -41,7 +41,7 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
-    import conversation_quality, order_actions
+    import conversation_quality, order_actions, conversion_growth, sales_strategy
     from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
@@ -552,7 +552,7 @@ SALES_RETENTION_GUIDE = """[قواعد المحافظة على الزبون وز
 - اقرأ آخر رسائل الزبون قبل الرد، ولا تعامل السكوت كرفض مباشر.
 - الهدف من كل رد هو خطوة واحدة للأمام: توضيح نقص، إزالة تردد، أو طلب بيانات الحجز.
 - اسأل سؤالاً واحداً فقط في نهاية الرد، ويجب أن يكون السؤال مرتبطاً بسياق المحادثة.
-- إذا الزبون متردد بالسعر: اطمئنه بالفحص عند الاستلام، واذكر العرض المسجل إن وجد قبل اقتراح الحجز.
+- إذا الزبون متردد بالسعر: وضح القيمة الموثقة والكلفة، ثم بديلاً مناسباً أو سقف ميزانيته. الفحص لا يحل اعتراض السعر، ولا تطلب الحجز قبل حسمه.
 - إذا الزبون توقف بعد سؤال عن المقاس أو اللون: ذكّره بالنقطة التي توقف عندها واسأله عن الاختيار الناقص فقط.
 - إذا الزبون أرسل صورة ولم يرد بعدها: قل إن الصورة وصلت وأنك تستطيع التأكد من الموديل، واسأل عن القياس أو اللون.
 - إذا الزبون طلب حجزاً ولم يكمل البيانات: اطلب فقط البيانات الناقصة: الموبايل، المحافظة، العنوان.
@@ -1745,10 +1745,18 @@ def get_followup_settings(db=None):
         ),
         "review_interval_minutes": get_smart_reviewer_settings(db)["interval_minutes"],
         "message_template": get_app_setting("followup_message_template", "", db),
+        "adaptive_timing": _setting_bool(get_app_setting("followup_adaptive_timing", "1", db)),
+        "checkout_delay_minutes": _setting_int(get_app_setting("followup_checkout_delay_minutes", "60", db), 60, 15, 1200),
+        "selection_delay_minutes": _setting_int(get_app_setting("followup_selection_delay_minutes", "120", db), 120, 15, 1200),
+        "general_delay_minutes": _setting_int(get_app_setting("followup_general_delay_minutes", "240", db), 240, 15, 1200),
+        "contact_start_hour": _setting_int(get_app_setting("followup_contact_start_hour", "9", db), 9, 0, 23),
+        "contact_end_hour": _setting_int(get_app_setting("followup_contact_end_hour", "21", db), 21, 0, 23),
+        "conversion_target": 30,
     }
 
 
 def save_followup_settings(db, data):
+    current = get_followup_settings(db)
     enabled = bool(data.get("enabled"))
     max_per_day = _setting_int(data.get("max_per_day"), 1, 1, 10)
     stop_on_order = True
@@ -1767,11 +1775,37 @@ def save_followup_settings(db, data):
         ("followup_message_template", message_template),
     ):
         set_store_setting(db, key, value)
+    set_store_setting(db, "followup_adaptive_timing", "1" if _setting_bool(data.get("adaptive_timing", current["adaptive_timing"])) else "0")
+    for key in ("checkout_delay_minutes", "selection_delay_minutes", "general_delay_minutes", "contact_start_hour", "contact_end_hour"):
+        low, high = (0, 23) if key.endswith("hour") else (15, 1200)
+        set_store_setting(db, "followup_" + key, str(_setting_int(data.get(key), current[key], low, high)))
     save_smart_reviewer_settings(db, {
         "enabled": enabled,
         "interval_minutes": review_interval_minutes,
     })
     return get_followup_settings(db)
+
+
+def activate_conversion_plan(db):
+    """One-time rollout requested by the owner; later manual settings stay intact."""
+    if get_app_setting("conversion_plan_version", "", db) == "2026-09-28":
+        return
+    now = now_baghdad_iso()
+    values = {"followup_enabled": "1", "followup_adaptive_timing": "1",
+              "followup_max_per_day": "1", "followup_min_interest_score": "30",
+              "followup_checkout_delay_minutes": "60", "followup_selection_delay_minutes": "120",
+              "followup_general_delay_minutes": "240", "followup_contact_start_hour": "9",
+              "followup_contact_end_hour": "21", "smart_reviewer_enabled": "1",
+              "smart_reviewer_interval_minutes": "15", "conversion_plan_started_at": now,
+              "ai_main_temperature": "0.35",
+              "ai_followup_max_tokens": "1200",
+              "conversion_plan_version": "2026-09-28"}
+    # Single transaction prevents a restart from partially enabling the rollout.
+    for key, value in values.items():
+        db.execute("INSERT INTO app_settings(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
+                   (_store_setting_key(key), value, now))
+    db.execute("UPDATE followups SET status='cancelled' WHERE status='pending' AND sender_id IN (SELECT sender_id FROM customers WHERE COALESCE(store_id,'default')=?)", (current_store_id(),))
+    db.commit()
 
 
 def get_delivery_settings(db=None):
@@ -1840,6 +1874,13 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
     return None
 
 
+def _followup_rejected(text):
+    text = str(text or '')
+    if conversion_growth.reminder_minutes(text) is not None:
+        text = text.replace('مو هسه', '').replace('مو هسة', '')
+    return _looks_like_customer_rejection(text)
+
+
 def _followup_block_reason(db, sender_id):
     owner = db.execute("SELECT store_id,lead_score FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
     if not owner or (owner['store_id'] or DEFAULT_STORE_ID) != current_store_id():
@@ -1849,7 +1890,10 @@ def _followup_block_reason(db, sender_id):
     if int(owner["lead_score"] or 0) < get_followup_settings(db)["min_interest_score"]:
         return "insufficient_interest"
     latest = _latest_incoming_message(db, sender_id)
-    if latest and _looks_like_customer_rejection(latest['text']):
+    activated = get_app_setting("conversion_plan_started_at", "", db)
+    if activated and latest and str(latest['created_at'] or '') < activated:
+        return "before_plan_activation"
+    if latest and _followup_rejected(latest['text']):
         return "customer_rejection"
     return sales_engagement.followup_block_reason(db, sender_id, now_baghdad_iso())
 
@@ -1880,88 +1924,48 @@ def _followup_day_bounds():
 
 def schedule_followup_if_needed(db, sender_id, stage="conversation", product=None, delay_minutes=None, meta=None):
     settings = get_followup_settings(db)
-    if not settings["enabled"]:
-        print(f"[FollowUp] Disabled; not scheduling for {sender_id}", flush=True)
+    if not settings["enabled"] or not sender_id or _followup_block_reason(db, sender_id):
         return None
-    if not sender_id or _followup_block_reason(db, sender_id):
+    plan = conversion_growth.followup_plan(db, sender_id, now_baghdad_iso(), settings, delay_minutes)
+    if not plan:
         return None
+    pending = db.execute("SELECT id,meta_json FROM followups WHERE sender_id=? AND status='pending' ORDER BY id DESC", (sender_id,)).fetchall()
+    for row in pending:
+        old = followup_metadata(row['meta_json'])
+        if old.get('incoming_id') == plan['incoming_id']:
+            return row['id']
+        db.execute("UPDATE followups SET status='cancelled',meta_json=? WHERE id=? AND status='pending'",
+                   (json.dumps(dict(old, cancel_reason='conversation_changed'), ensure_ascii=False), row['id']))
     day_start, day_end = _followup_day_bounds()
-    today_count = db.execute(
-        """SELECT COUNT(*) FROM followups
-           WHERE sender_id=? AND created_at >= ? AND created_at < ?
-             AND status IN ('pending', 'sent')""",
-        (sender_id, day_start, day_end),
-    ).fetchone()[0]
-    if today_count >= settings["max_per_day"]:
+    count = db.execute("SELECT COUNT(*) FROM followups WHERE sender_id=? AND created_at>=? AND created_at<? AND status IN ('pending','sending','sent','uncertain')",
+                       (sender_id, day_start, day_end)).fetchone()[0]
+    if count >= settings['max_per_day']:
+        db.commit()
         return None
-    pending = db.execute(
-        "SELECT id FROM followups WHERE sender_id=? AND status='pending' ORDER BY id DESC LIMIT 1",
-        (sender_id,),
-    ).fetchone()
-    if pending:
-        return pending["id"]
-    delay = delay_minutes if delay_minutes is not None else settings["default_delay_minutes"]
-    scheduled_at = (datetime.now(BAGHDAD_TZ) + timedelta(minutes=max(1, int(delay)))).isoformat()
-    now = now_baghdad_iso()
-    message = build_followup_message(db, sender_id, stage, product)
-    if not message:
-        print(f"[FollowUp] No suitable message generated for {sender_id}; not scheduling.", flush=True)
-        return None
-    cur = db.execute(
-        """INSERT INTO followups
-           (sender_id, stage, message_text, status, scheduled_at, created_at, meta_json)
-           VALUES (?, ?, ?, 'pending', ?, ?, ?)""",
-        (
-            sender_id,
-            stage,
-            message,
-            scheduled_at,
-            now,
-            json.dumps(meta or {}, ensure_ascii=False),
-        ),
-    )
+    metadata = dict(meta or {}, **plan, regenerate_at_send=True,
+                    product_id=(product or {}).get('product_id'))
+    # Generate only when due: no extra model request in the customer's reply path.
+    cur = db.execute("""INSERT INTO followups(sender_id,stage,message_text,status,scheduled_at,created_at,meta_json)
+        VALUES(?,?,'','pending',?,?,?)""",
+        (sender_id, stage, plan['scheduled_at'], now_baghdad_iso(), json.dumps(metadata, ensure_ascii=False)))
     db.commit()
     return cur.lastrowid
+
+
+def followup_metadata(value):
+    try:
+        result = json.loads(value or '{}')
+        return result if isinstance(result, dict) else {}
+    except (ValueError, TypeError):
+        return {}
 
 
 def schedule_ai_review_followup(db, sender_id, message, interest_score, delay_minutes=None):
-    """Queue the exact message approved by the AI reviewer while enforcing follow-up limits."""
-    settings = get_followup_settings(db)
-    message = str(message or "").strip()
-    if not settings["enabled"] or not sender_id or not message or _followup_block_reason(db, sender_id):
+    if not str(message or '').strip():
         return None
-    day_start, day_end = _followup_day_bounds()
-    today_count = db.execute(
-        """SELECT COUNT(*) FROM followups
-           WHERE sender_id=? AND created_at >= ? AND created_at < ?
-             AND status IN ('pending', 'sent')""",
-        (sender_id, day_start, day_end),
-    ).fetchone()[0]
-    if today_count >= settings["max_per_day"]:
-        return None
-    pending = db.execute(
-        "SELECT id FROM followups WHERE sender_id=? AND status='pending' ORDER BY id DESC LIMIT 1",
-        (sender_id,),
-    ).fetchone()
-    if pending:
-        return pending["id"]
-    delay = settings["default_delay_minutes"] if delay_minutes is None else max(1, int(delay_minutes))
-    now = now_baghdad_iso()
-    scheduled_at = (datetime.now(BAGHDAD_TZ) + timedelta(minutes=delay)).isoformat()
-    cur = db.execute(
-        """INSERT INTO followups
-           (sender_id, stage, message_text, status, scheduled_at, created_at, meta_json)
-           VALUES (?, 'ai_interest_review', ?, 'pending', ?, ?, ?)""",
-        (
-            sender_id,
-            message,
-            scheduled_at,
-            now,
-            json.dumps({"automatic_ai_review": True, "interest_score": interest_score}, ensure_ascii=False),
-        ),
-    )
-    db.commit()
-    return cur.lastrowid
+    # Review suggestions use the same timing, turn anchor and send-time checks.
+    return schedule_followup_if_needed(db, sender_id, 'ai_interest_review', delay_minutes=delay_minutes,
+        meta={'automatic_ai_review': True, 'interest_score': interest_score})
 
 
 def cancel_followups_for_sender(db, sender_id, reason="cancelled"):
@@ -2061,77 +2065,99 @@ def save_customer_followup_template(db, sender_id, message_template, update_pend
 def send_due_followups(db=None, limit=25):
     db = db or get_db()
     settings = get_followup_settings(db)
-    if not settings["enabled"]:
-        return {"sent": 0, "skipped": 0, "reason": "followup_disabled"}
+    if not settings['enabled']:
+        return {'sent': 0, 'skipped': 0, 'reason': 'followup_disabled'}
     now = now_baghdad_iso()
-    rows = db.execute(
-        """SELECT f.*, COALESCE(c.platform, 'facebook') AS platform, c.page_id
-           FROM followups f
-           LEFT JOIN customers c ON c.sender_id=f.sender_id
-           WHERE f.status='pending' AND f.scheduled_at <= ?
-             AND COALESCE(c.store_id, 'default') = ?
-           ORDER BY f.scheduled_at ASC
-           LIMIT ?""",
-        (now, current_store_id(), int(limit)),
-    ).fetchall()
-    sent = 0
-    skipped = 0
+    rows = db.execute("""SELECT f.*,COALESCE(c.platform,'facebook') AS platform,c.page_id
+        FROM followups f JOIN customers c ON c.sender_id=f.sender_id
+        WHERE f.status='pending' AND f.scheduled_at<=? AND COALESCE(c.store_id,'default')=?
+        ORDER BY f.scheduled_at,f.id LIMIT ?""", (now,current_store_id(),int(limit))).fetchall()
+    sent = skipped = 0
     for row in rows:
-        sender_id = row["sender_id"]
-        block_reason = _followup_block_reason(db, sender_id)
-        if block_reason:
-            try:
-                meta = json.loads(row["meta_json"] or "{}")
-            except (ValueError, TypeError):
-                meta = {}
-            if not isinstance(meta, dict):
-                meta = {}
-            meta["cancel_reason"] = block_reason
-            db.execute("UPDATE followups SET status='cancelled',meta_json=? WHERE id=?",
-                       (json.dumps(meta, ensure_ascii=False), row["id"]))
-            skipped += 1
+        sender_id = row['sender_id']
+        if not acquire_sender_lock(db, sender_id, wait_seconds=0):
             continue
-        latest_incoming = _latest_incoming_message(db, sender_id)
-        if latest_incoming and str(latest_incoming["created_at"] or "") > str(row["created_at"] or ""):
-            db.execute(
-                "UPDATE followups SET status='cancelled', sent_at=?, meta_json=COALESCE(meta_json, '') || ? WHERE id=?",
-                (now, "\ncustomer_replied_before_followup", row["id"]),
-            )
-            skipped += 1
-            continue
-        if settings["stop_on_rejection"] and latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
-            db.execute(
-                "UPDATE followups SET status='cancelled', sent_at=?, meta_json=COALESCE(meta_json, '') || ? WHERE id=?",
-                (now, "\ncustomer_rejection_detected", row["id"]),
-            )
-            skipped += 1
-            continue
-        if settings["stop_on_order"]:
-            order = db.execute(
-                "SELECT id FROM orders WHERE sender_id=? AND created_at >= ? ORDER BY id DESC LIMIT 1",
-                (sender_id, row["created_at"]),
-            ).fetchone()
-            if order:
-                db.execute(
-                    "UPDATE followups SET status='cancelled', order_after_id=? WHERE id=?",
-                    (order["id"], row["id"]),
-                )
-                skipped += 1
+        try:
+            metadata = followup_metadata(row['meta_json'])
+            reason = _followup_block_reason(db, sender_id)
+            latest = _latest_incoming_message(db, sender_id)
+            rolling_start = (sales_engagement.timestamp(now)-timedelta(hours=24)).isoformat()
+            sent_count = db.execute("SELECT COUNT(*) FROM followups WHERE sender_id=? AND status='sent' AND sent_at>=?", (sender_id,rolling_start)).fetchone()[0]
+            if sent_count >= settings['max_per_day']:
+                reason = 'daily_limit'
+            if latest and ((metadata.get('incoming_id') and latest['id'] != metadata['incoming_id']) or
+                           (not metadata.get('incoming_id') and str(latest['created_at'] or '') > str(row['created_at'] or ''))):
+                reason = 'conversation_changed'
+            if reason:
+                db.execute("UPDATE followups SET status='cancelled',meta_json=? WHERE id=? AND status='pending'",
+                           (json.dumps(dict(metadata,cancel_reason=reason),ensure_ascii=False),row['id']))
+                db.commit(); skipped += 1
                 continue
-        ok = send_reply_via_manychat(sender_id, row["message_text"], row["platform"] or "facebook", page_id=row["page_id"])
-        if ok:
-            save_message(
-                db, sender_id, "outgoing", "text",
-                row["message_text"], None, None, None,
-                {"followup_id": row["id"], "automatic_followup": True},
-            )
-            save_conversation_message(db, sender_id, "assistant", row["message_text"])
-            db.execute("UPDATE followups SET status='sent', sent_at=? WHERE id=?", (now, row["id"]))
-            sent += 1
-        else:
-            skipped += 1
-    db.commit()
-    return {"sent": sent, "skipped": skipped, "reason": None}
+            if metadata.get('regenerate_at_send'):
+                allowed = conversion_growth.during_contact_hours(sales_engagement.timestamp(now_baghdad_iso()), settings['contact_start_hour'], settings['contact_end_hour'])
+                if allowed > sales_engagement.timestamp(now_baghdad_iso()):
+                    db.execute("UPDATE followups SET scheduled_at=? WHERE id=? AND status='pending'", (allowed.isoformat(),row['id']))
+                    db.commit()
+                    continue
+            # An atomic DB claim protects against multiple Railway workers.
+            claimed = db.execute("""UPDATE followups SET status='sending' WHERE id=? AND status='pending'
+                AND NOT EXISTS(SELECT 1 FROM followups other WHERE other.sender_id=? AND
+                    (other.status IN ('sending','uncertain') OR (other.status='sent' AND other.sent_at>=?)))
+                AND (SELECT COUNT(*) FROM followups sent WHERE sent.sender_id=? AND sent.status='sent' AND sent.sent_at>=?)<?""",
+                (row['id'],sender_id,latest['created_at'] if latest else now,sender_id,rolling_start,settings['max_per_day'])).rowcount
+            db.commit()
+            if not claimed:
+                continue
+            try:
+                message = row['message_text']
+                if metadata.get('regenerate_at_send'):
+                    products = load_customer_products(db, sender_id, limit=20)
+                    product = next((p for p in products if p.get('product_id') == metadata.get('product_id')), None)
+                    product = product or (products[0] if len(products) == 1 else None)
+                    if metadata.get('product_id') and (not product or product.get('product_id') != metadata['product_id'] or _is_out_of_stock(product)):
+                        message = None
+                    else:
+                        message = build_followup_message(db, sender_id, row['stage'], product)
+                # Generation can take time; recheck opt-out/window/booking/turn.
+                reason = _followup_block_reason(db, sender_id)
+                latest = _latest_incoming_message(db, sender_id)
+                if metadata.get('incoming_id') and (not latest or latest['id'] != metadata['incoming_id']):
+                    reason = 'conversation_changed'
+                if not get_followup_settings(db)['enabled']:
+                    reason = 'followup_disabled'
+                if metadata.get('outgoing_id'):
+                    last_out = db.execute("SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'", (sender_id,)).fetchone()[0]
+                    if last_out != metadata['outgoing_id']:
+                        reason = 'staff_or_conversation_changed'
+                if metadata.get('regenerate_at_send'):
+                    current = sales_engagement.timestamp(now_baghdad_iso())
+                    if conversion_growth.during_contact_hours(current,settings['contact_start_hour'],settings['contact_end_hour']) > current:
+                        reason = 'contact_hours_ended'
+                if not message or not str(message).strip() or reason:
+                    db.execute("UPDATE followups SET status='cancelled',meta_json=? WHERE id=?",
+                        (json.dumps(dict(metadata,cancel_reason=reason or 'no_useful_followup'),ensure_ascii=False),row['id']))
+                    db.commit(); skipped += 1
+                    continue
+                db.execute("UPDATE followups SET message_text=? WHERE id=?", (message,row['id']))
+                db.commit()
+                ok = send_reply_via_manychat(sender_id, message, row['platform'], page_id=row['page_id'])
+                delivered_at = now_baghdad_iso()
+                if ok:
+                    save_message(db,sender_id,'outgoing','text',message,None,None,None,{'followup_id':row['id'],'automatic_followup':True})
+                    save_conversation_message(db,sender_id,'assistant',message)
+                    db.execute("UPDATE followups SET status='sent',sent_at=? WHERE id=?", (delivered_at,row['id']))
+                    sent += 1
+                else:
+                    # A timeout may have delivered: never retry automatically.
+                    db.execute("UPDATE followups SET status='uncertain',meta_json=? WHERE id=?", (json.dumps(dict(metadata,send_error='delivery_not_confirmed')),row['id']))
+                    skipped += 1
+                db.commit()
+            except Exception as exc:
+                db.execute("UPDATE followups SET status='uncertain',meta_json=? WHERE id=?", (json.dumps(dict(metadata,send_error=type(exc).__name__)),row['id']))
+                db.commit(); skipped += 1
+        finally:
+            release_sender_lock(db,sender_id)
+    return {'sent':sent,'skipped':skipped,'reason':None}
 
 
 def is_ai_enabled(db):
@@ -3229,7 +3255,7 @@ def _recent_conversation_lines(db, sender_id, limit=12):
 def _latest_incoming_message(db, sender_id):
     try:
         return db.execute(
-            """SELECT text, created_at
+            """SELECT id, text, created_at
                FROM messages
                WHERE sender_id=? AND direction='incoming'
                ORDER BY id DESC
@@ -3250,7 +3276,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
     if _followup_block_reason(db, sender_id):
         return None
     latest_incoming = _latest_incoming_message(db, sender_id)
-    if latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
+    if latest_incoming and _followup_rejected(latest_incoming["text"]):
         return None
 
     product_name = (product or {}).get("product_name") or "غير محدد"
@@ -3265,6 +3291,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
         f"{render_setting_template(db, 'prompt_followup_system', DEFAULT_FOLLOWUP_SYSTEM_PROMPT)}\n\n"
         f"{sales_engagement.guide(current_store_id())}\n\n"
         f"{sales_engagement.FOLLOWUP_GUIDE}\n\n"
+        "استثناء التأجيل: إذا طلب الزبون صراحة تذكيراً بعد مدة محددة وقد حان الموعد، صغ التذكير المطلوب فقط. الرفض أو طلب إيقاف الرسائل يمنع الإرسال دائماً.\n"
         "اكتب رسالة متابعة لا تشعر الزبون بالملاحقة. الرسالة قصيرة، مخصصة، وباللهجة العراقية.\n"
         "ممنوع ذكر اسم الزبون، وممنوع تكرار تفاصيل المنتج إلا إذا كانت مطلوبة في السياق.\n"
         "إذا ظهر رفض واضح أو عدم رغبة، اجعل reply فارغاً.\n"
@@ -3274,6 +3301,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
     missing = [key for key in ("phone", "province", "address") if not customer or not customer[key]]
     user_content = (
         f"Conversation transcript:\n{transcript}\n\n"
+        f"Current Baghdad time: {now_baghdad_iso()}\n"
         f"Follow-up stage: {stage or 'conversation'}\n"
         f"Linked product: {product_name}\n"
         f"Missing contact fields (do not re-ask known fields): {json.dumps(missing)}\n"
@@ -3292,7 +3320,8 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content},
                 ],
-                "max_tokens": get_ai_max_tokens(db, "followup", 200),
+                "max_tokens": max(1200, get_ai_max_tokens(db, "followup", 200)),
+                **({"response_format": {"type": "json_object"}} if get_ai_model(db, "main_model", MAIN_MODEL).startswith("google/gemini") else {}),
                 "temperature": get_ai_temperature(db, "followup", 0.45),
             },
             timeout=25,
@@ -6541,6 +6570,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     if staff_action and latest_incoming_message(db, sender_id).get('id') != staff_message_id:
         return {'sent': False, 'reply': '', 'reason': 'conversation_changed'}
 
+    if ai_result.get("_needs_fact_review"):
+        create_human_review(db, ev, "تفاصيل غير موثقة في الكتالوج؛ يلزم تأكيدها قبل الرد", notify_telegram=True)
+
     order_created = False
     ai_result.pop("_checkout_proposal", None)
     restore_checkout_draft(db, ev, ai_result, matched_product)
@@ -7193,6 +7225,9 @@ def call_main_ai(
     )
     # Every conversational answer is generated by AI with the linked product context.
     question = ev.get("text") or ""
+    missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') else ''
+    if missing_fact and not re.search(r'سعر|بكم|بشكد|توصيل|الوان|ألوان|خصم', question):
+        return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':True,'_suppress_product_images':True}
     if matched_product and requests_alternative_photo(question) and len(product_image_urls(matched_product)) <= 1:
         instructions_text += "\nالزبون يطلب تصويراً إضافياً، ولا يوجد لهذا المنتج سوى صورة الكتالوج. وضّح ذلك بطريقتك دون طلب صورته مجدداً أو الوعد بتصوير غير موجود."
     args = (ev, message_type, customer, history, products, matched_product,
@@ -7203,10 +7238,13 @@ def call_main_ai(
     if factual:
         return factual
     result = _call_main_ai_once(*args, **kwargs)
-    grounding = conversation_quality.grounded_error(result.get("reply"), matched_product, products)
+    grounding = (conversation_quality.grounded_error(result.get("reply"), matched_product, products)
+                 or sales_strategy.reply_error(result.get("reply"), question, matched_product)
+                 or sales_strategy.decision_error(result, question))
+    premature_close = sales_strategy.premature_close(result.get('reply'), question)
     lost_context = bool(matched_product and not is_product_objection(question)
                         and reply_reasks_known_product(result.get("reply")))
-    needs_review = (bool(grounding) or lost_context or result.get("failed") or result.get("requires_human") is True
+    needs_review = (bool(grounding) or premature_close or lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
     format_failure = result.get("failure_reason") == "invalid_ai_response"
     # The provider client already retries transient HTTP failures.
@@ -7222,12 +7260,25 @@ def call_main_ai(
         )
         if grounding:
             kwargs["fix_instruction"] += " " + grounding
+        if premature_close:
+            kwargs['fix_instruction'] += ' اعتراض السعر لم يحسم؛ لا تختم بطلب حجز أو بيانات. اذكر بديلاً موجوداً أقل سعراً ومناسباً أو اسأل عن سقف الميزانية مرة واحدة. الفحص وحده ليس جواباً عن الميزانية.'
         if lost_context:
             kwargs["fix_instruction"] += " المنتج محدد بالفعل: " + str(matched_product.get("product_name")) + ". أجب عن السؤال الحالي من بياناته؛ لا تطلب اسمه أو صورته مجدداً."
         if format_failure:
             kwargs["fix_instruction"] += ' الرد السابق تعذر قراءته. أرجع كائن JSON صالح فقط بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder. لا تؤكد حجزاً دون بيانات مكتملة وموافقة الزبون.'
         result = _call_main_ai_once(*args, **kwargs)
-    if conversation_quality.grounded_error(result.get("reply"), matched_product, products):
+    if sales_strategy.decision_error(result, question):
+        return {"reply": "براحتك، ما راح نثبت أي طلب بدون موافقتك.", "create_order": False, "order": {}}
+    if sales_strategy.premature_close(result.get('reply'), question) and not result.get('failed'):
+        # Do not escalate a style defect or deliver pressure after a price objection.
+        return {'reply': 'أفهم عليك، شنو حدود الميزانية المناسبة إلك ويا التوصيل حتى نختار على أساسها؟',
+                'create_order': False, 'order': result.get('order') or {}, 'intent': 'price'}
+    if (conversation_quality.grounded_error(result.get("reply"), matched_product, products)
+            or sales_strategy.reply_error(result.get("reply"), question, matched_product)):
+        if sales_strategy.signals(question) == ['refusal']:
+            return {"reply": "تدلل، شكراً لتواصلك ويانا.", "create_order": False, "order": {}}
+        if 'جدول يربط الوزن' in sales_strategy.reply_error(result.get('reply'),question,matched_product):
+            return {'reply': 'الوزن وحده ما يكفي لتحديد قياس مضبوط لهالموديل؛ شنو قياس الملابس المعتاد إلك؟', 'create_order': False, 'order': {}}
         return {"reply": "هذه التفاصيل تحتاج تأكيداً من المتجر حتى أنطيج معلومة صحيحة.", "create_order": False,
                 "order": {}, "_needs_fact_review": True, "_suppress_product_images": True}
     if (matched_product and (result.get('failed') or result.get('requires_human') is True
@@ -7243,6 +7294,9 @@ def call_main_ai(
         if candidate.get('order', {}).get('items') and checkout_requested(get_db(), ev, candidate) and not pending_product_choice(get_db(), ev.get('sender_id')):
             return dict(candidate, create_order=True, _recovered_checkout=True)
     if result.get('requires_human') is True or is_ai_handoff_reply(result.get('reply')):
+        missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') else ''
+        if missing_fact:
+            return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':True,'_suppress_product_images':True}
         return dict(result, reply='', create_order=False, failed=True,
                     failure_reason=result.get('handoff_reason') or 'unresolved_decision_after_context_review')
     if (has_app_context() and ev.get('sender_id') and reply_reasks_known_product(result.get('reply'))
@@ -7380,7 +7434,7 @@ def _call_main_ai_once(
         keys = (
             "product_id", "product_name", "price", "stock",
             "stock_quantity", "sizes", "colors", "fabric", "style",
-            "description", "category", "keywords", "offer", "delivery",
+            "description", "category", "keywords", "offer", "delivery", "notes",
             "image_url" if full else None,
             "image_colors" if full else None,
         )
@@ -7423,6 +7477,8 @@ def _call_main_ai_once(
         DEFAULT_MAIN_RULES_PROMPT,
         greeting_rule=greeting_rule,
     )
+    main_rules = sales_strategy.upgrade_legacy_rules(main_rules)
+    instructions_text = sales_strategy.upgrade_legacy_rules(instructions_text)
     main_output = render_setting_template(db, "prompt_main_output", DEFAULT_MAIN_OUTPUT_PROMPT)
     system_prompt = (
         f"{base_prompt}\n\n"
@@ -7438,6 +7494,7 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + CONVERSATION_SALES_GUIDE
     system_prompt += "\n\n" + GENTLE_SALES_GUIDE
     system_prompt += "\n\n" + sales_engagement.guide(current_store_id())
+    system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
     system_prompt += "\nبيانات المنتجات غير مكررة: اجمع المنتج الحالي والموديلات المحفوظة والكتالوج كمرجع واحد. وجود منتج في السياق لا يعني موافقة شراء. افهم النفي والتصحيح من المحادثة، وأجب عن كل سؤال غير مجاب قبل طلب البيانات الناقصة فقط."
     system_prompt += "\nالتحويل للبشر ليس جواباً افتراضياً: أجب من بيانات المنتج المرتبط والمتجر عن السعر والألوان والقياسات والخامة والتوصيل والفحص، قبل الحجز وبعده. وجود مراجعة قديمة لا يحول سؤالاً مستقلاً. إذا التبس الموديل أو الاختيار اسأل توضيحاً واحداً دون تخمين أو تحويل. احتفظ بالتدخل البشري للإجراءات التي لا تستطيع تنفيذها أو المعلومات الضرورية غير المتاحة فعلاً."
     system_prompt += "\nرسوم التوصيل الرقمية ومدة التوصيل في بيانات المتجر الحالي تتقدم على الأرقام القديمة في أمثلة التعليمات ووصف المنتجات. لا تنقل تفاصيل أو موديلات من متجر آخر."
@@ -7575,7 +7632,8 @@ def _call_main_ai_once(
             json={
                 "model": get_ai_model(db, "main_model", MAIN_MODEL),
                 "messages": ai_messages,
-                "max_tokens": get_ai_max_tokens(db, "main", 1500),
+                **({"response_format": {"type": "json_object"}} if get_ai_model(db, "main_model", MAIN_MODEL).startswith("google/gemini") else {}),
+                "max_tokens": max(get_ai_max_tokens(db, "main", 1500), 2400) if fix_instruction and 'الرد السابق تعذر قراءته' in fix_instruction else get_ai_max_tokens(db, "main", 1500),
                 "temperature": get_ai_temperature(db, "main", 0.7),
             },
             timeout=30,
@@ -7892,7 +7950,9 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         if matched_product:
             linked_ids.add(matched_product.get("product_id"))
         if len(items) == 1 and any(item.get("product_id") not in linked_ids for item in items):
-            return None, "قبل الحجز نحتاج نحدد الموديلات المطلوبة بالاسم أو الصورة؛ الاستفسار عن قطعة ما يضيفها للطلب."
+            # A valid catalog item without a trusted link needs explicit review,
+            # not an endless request to identify an already named product.
+            ai_result["require_cart_confirmation"] = True
         if ai_result.get("require_cart_confirmation") is True:
             proposal = dict(order_data, items=items)
             proposal["_catalog_snapshot"] = [{k: p.get(k) for k in ("product_id", "product_name", "price", "offer", "notes", "delivery", "colors", "sizes", "stock", "status")}
@@ -8033,6 +8093,8 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True):
 
 
 def checkout_requested(db, ev, result):
+    if sales_strategy.purchase_block_reason(ev.get('text')):
+        return False
     if result.get("create_order") or re.search(r"(?:تم تثبيت|تم حجز|ثبتنا|ثبتنالج|ثبتت حجز)", str(result.get("reply") or "")):
         return True
     # Sending contact details in response to a checkout question completes that
@@ -8055,15 +8117,30 @@ def restore_checkout_draft(db, ev, result, matched_product):
         return
     if not contact_fields(text) and not is_confirmation(text):
         return
-    last = db.execute("SELECT raw_payload,created_at FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' ORDER BY id DESC LIMIT 1", (ev["sender_id"],)).fetchone()
-    try:
-        draft = json.loads(last["raw_payload"] or "{}").get("checkout_draft") if last else None
-        created = datetime.fromisoformat(last["created_at"]) if last else None
-    except (ValueError, TypeError):
+    rows = db.execute("SELECT id,raw_payload,created_at FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' ORDER BY id DESC LIMIT 24", (ev["sender_id"],)).fetchall()
+    draft = None
+    for last in rows:
+        payload = followup_metadata(last['raw_payload'])
+        candidate = payload.get('checkout_draft')
+        created = sales_engagement.timestamp(last['created_at'])
+        if not created or datetime.now(BAGHDAD_TZ) - created > timedelta(hours=24):
+            break
+        if not isinstance(candidate, dict) or not (candidate.get('items') or candidate.get('product_id')):
+            continue
+        # Empty later AI payloads must not erase a cart. However intervening
+        # corrections or attachments prohibit restoring the older selection.
+        intervening = db.execute("SELECT text,message_type FROM messages WHERE sender_id=? AND direction='incoming' AND id>? ORDER BY id", (ev['sender_id'],last['id'])).fetchall()
+        if any(r['message_type'] not in {'text','emoji'} or
+               not (contact_fields(r['text']) or is_confirmation(r['text']) or
+                    re.fullmatch(r'(?:كم يوم|شكد وقت|شوكت).{0,35}(?:يوصل|التوصيل|الطلب)[؟?\s]*', r['text'] or '')) or
+               re.search(r'قياس|مقاس|وزن|كيلو|لون|بدل|مو هذا|ما اريد|لا اريد|عوفي|ضيف', r['text'] or '')
+               for r in intervening):
+            return
+        draft = candidate
+        break
+    if not draft:
         return
-    if not draft or not created or datetime.now(created.tzinfo) - created > timedelta(hours=24):
-        return
-    items = draft.get("items") or []
+    items = draft.get('items') or checkout_lines(draft)
     allowed = {p['product_id'] for p in load_customer_products(db, ev['sender_id'], limit=50)}
     if matched_product:
         allowed.add(matched_product['product_id'])
@@ -9921,6 +9998,8 @@ def health():
     return jsonify({
         "status"        : "ok",
         "code_version"  : code_version,
+        "conversion_plan": "2026-09-28",
+        "conversion_target": 30,
         "sales_ready"   : all(readiness.values()),
         "readiness"     : readiness,
         "db"            : DB_PATH,
@@ -10390,7 +10469,7 @@ def api_export_full_backup():
         bundle.writestr("backup-info.json", json.dumps({
             "store": get_store_name(), "created_at": now_baghdad_iso(),
             "format": 2,
-            "app_release": "2026.09.16-image-timeout",
+            "app_release": "2026.09.28-conversion-30",
             "code_sha256": _application_code_digest(),
             "contains_secrets": False,
             "includes": included,
@@ -13037,7 +13116,7 @@ def run_smart_reviewer_cycle(db):
             
         interval_minutes = settings.get("interval_minutes", 60)
         now = datetime.now(BAGHDAD_TZ)
-        conversation_cutoff = (now - timedelta(days=30)).isoformat()
+        conversation_cutoff = (now - timedelta(hours=23)).isoformat()
         active_cutoff_time = (now - timedelta(minutes=interval_minutes)).isoformat()
         
         min_interest_score = int(followup_settings.get("min_interest_score", 50))
@@ -13064,6 +13143,8 @@ def run_smart_reviewer_cycle(db):
         
         for sender_id in sender_ids:
             if _followup_block_reason(db, sender_id):
+                continue
+            if db.execute("SELECT 1 FROM followups WHERE sender_id=? AND status IN ('pending','sending','uncertain') LIMIT 1", (sender_id,)).fetchone():
                 continue
             last_review = reviewed_map.get(sender_id)
             if last_review and str(last_review) >= last_message_map.get(sender_id, ""):
@@ -13193,6 +13274,7 @@ def start_smart_reviewer_thread():
                         continue
                     token = _current_store_id.set(store["store_id"])
                     try:
+                        activate_conversion_plan(db)
                         send_due_followups(db)
                         run_smart_reviewer_cycle(db)
                     finally:
@@ -13629,8 +13711,14 @@ def api_smart_reviewer_settings():
 def api_followup_settings():
     db = get_db()
     if request.method == "GET":
-        pending = db.execute("SELECT COUNT(*) FROM followups WHERE status='pending'").fetchone()[0]
-        return jsonify({"ok": True, "settings": get_followup_settings(db), "pending_count": pending})
+        pending = db.execute("SELECT COUNT(*) FROM followups f JOIN customers c ON c.sender_id=f.sender_id WHERE f.status='pending' AND COALESCE(c.store_id,'default')=?", (current_store_id(),)).fetchone()[0]
+        queue = db.execute("""SELECT f.id,f.sender_id,f.status,f.stage,f.scheduled_at,f.message_text,f.meta_json,c.name
+            FROM followups f JOIN customers c ON c.sender_id=f.sender_id
+            WHERE COALESCE(c.store_id,'default')=? AND f.status IN ('pending','sending','uncertain')
+            ORDER BY f.scheduled_at LIMIT 50""", (current_store_id(),)).fetchall()
+        return jsonify({"ok": True, "settings": get_followup_settings(db), "pending_count": pending,
+                        "growth": conversion_growth.metrics(db, current_store_id(), now_baghdad_iso()),
+                        "queue": [dict(r) for r in queue]})
     settings = save_followup_settings(db, request.get_json(silent=True) or {})
     return jsonify({"ok": True, "settings": settings})
 
@@ -13691,7 +13779,7 @@ def api_send_due_followups():
 @_dash_require
 def api_cancel_pending_followups():
     db = get_db()
-    cur = db.execute("UPDATE followups SET status='cancelled', sent_at=? WHERE status='pending'", (now_baghdad_iso(),))
+    cur = db.execute("UPDATE followups SET status='cancelled' WHERE status='pending' AND sender_id IN (SELECT sender_id FROM customers WHERE COALESCE(store_id,'default')=?)", (current_store_id(),))
     db.commit()
     return jsonify({"ok": True, "cancelled": cur.rowcount})
 

@@ -4,9 +4,18 @@
 <section class="admin-page-head">
   <div>
     <p class="admin-kicker">Follow-up</p>
-    <h1>إعدادات المتابعة التلقائية</h1>
-    <p>الذكاء الاصطناعي يراجع المحادثات تلقائياً حسب نسبة الاهتمام ويرسل متابعة مناسبة دون أي توليد يدوي.</p>
+    <h1>خطة التحويل والمتابعة — هدف 30%</h1>
+    <p>حلّ أسباب التردد، أكمل الحجوزات الجاهزة، وتابع الزبون برسالة مفيدة في الوقت المناسب.</p>
   </div>
+</section>
+
+<section class="admin-panel" aria-label="قياس هدف التحويل">
+  <h2>أداء المتجر خلال آخر 24 ساعة</h2>
+  <p id="growthMetrics" aria-live="polite">جارٍ تحميل القياس…</p>
+  <progress id="growthProgress" value="0" max="30" style="width:100%" aria-label="التقدم نحو تحويل 30 بالمئة"></progress>
+  <p id="growthGap"></p>
+  <small>التحويل = أصحاب الحجوزات من نفس مجموعة المراسلين ÷ المراسلين. يشمل الاستفسارات وخدمة الطلبات؛ الحجز لا يعني التسليم. الهدف ليس ضماناً للنتيجة.</small>
+  <p id="growthFollowups"></p>
 </section>
 
 <section class="admin-panel">
@@ -45,11 +54,21 @@
     <label>
       مدة الانتظار قبل إرسال المتابعة (دقيقة)
       <input class="form-control" type="number" min="1" max="10080" id="followupDelay">
-      <small style="color:var(--text-muted)">نقطة بداية مقترحة: 120 دقيقة. الإعدادات المحفوظة سابقاً لا تتغير تلقائياً.</small>
+      <small style="color:var(--text-muted)">تُستخدم هذه المدة عند إيقاف اختيار التوقيت حسب مرحلة المحادثة.</small>
     </label>
 
+    <label class="admin-switch">
+      <input class="form-check-input" type="checkbox" id="followupAdaptive" checked>
+      <span>اختيار التوقيت حسب مرحلة المحادثة</span>
+    </label>
+    <label>إكمال الحجز — بعد (دقيقة)<input class="form-control" type="number" min="15" max="1200" id="followupCheckoutDelay" value="60"></label>
+    <label>اختيار اللون أو القياس — بعد (دقيقة)<input class="form-control" type="number" min="15" max="1200" id="followupSelectionDelay" value="120"></label>
+    <label>الاستفسارات الأخرى — بعد (دقيقة)<input class="form-control" type="number" min="15" max="1200" id="followupGeneralDelay" value="240"></label>
+    <label>بداية الإرسال بتوقيت بغداد (0–23)<input class="form-control" type="number" min="0" max="23" id="followupStartHour" value="9"></label>
+    <label>نهاية الإرسال بتوقيت بغداد (0–23)<input class="form-control" type="number" min="0" max="23" id="followupEndHour" value="21"></label>
+
     <div class="admin-note">
-      متابعة مفيدة واحدة فقط ما لم يرد الزبون. تتوقف بعد الرفض أو التأجيل أو الحجز، وعند انتظار تدخل موظف. إذا لم يجد المساعد سبباً مفيداً للمتابعة فلن يرسل شيئاً. لا تُرسل متابعة بعد مرور 23 ساعة على آخر رسالة من الزبون.
+      متابعة واحدة فقط ما لم يرد الزبون. تُحسب المدة من آخر جواب، ويُحترم طلب التذكير الصريح بمدة محددة. تتوقف بعد الرفض أو التأجيل غير المحدد أو الحجز، وعند انتظار تدخل موظف. يُعاد فحص الحوار قبل الإرسال؛ لا تُرسل متابعة بعد 23 ساعة من آخر رسالة للزبون. تساوي ساعتي البداية والنهاية يعني السماح طوال اليوم.
     </div>
 
     <div class="admin-note">
@@ -67,7 +86,18 @@
   </form>
 </section>
 
+<section class="admin-panel">
+  <h2>حالات تحتاج موظفاً</h2>
+  <p>الأولوية لمن أكمل بياناته ثم الأعلى اهتماماً. الهدف التشغيلي للحجز الجاهز: تدخل خلال 5 دقائق.</p>
+  <div id="growthUrgent" aria-live="polite"></div>
+</section>
+<section class="admin-panel">
+  <h2>المتابعات المجدولة وحالة الإرسال</h2>
+  <p>نص المتابعة يُجهّز عند حلول الموعد من أحدث معلومات المحادثة. الإرسال غير المؤكد يحتاج فحصاً يدوياً ولا يُعاد تلقائياً.</p>
+  <div id="growthQueue" aria-live="polite"></div>
+</section>
+
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/followup_settings.js?v=3"></script>
+<script src="/static/js/followup_settings.js?v=4"></script>
 {% endblock %}

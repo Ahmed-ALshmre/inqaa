@@ -61,8 +61,12 @@ class EngagementTests(unittest.TestCase):
     def test_ai_abstention_does_not_become_generic_booking_message(self):
         with patch.object(m,'generate_ai_followup_message',return_value=None):
             self.assertIsNone(m.build_followup_message(self.db,self.sender,'price'))
-            self.assertIsNone(m.schedule_followup_if_needed(self.db,self.sender,'price'))
-        self.assertEqual(self.db.execute('SELECT count(*) FROM followups').fetchone()[0],0)
+            fid=m.schedule_followup_if_needed(self.db,self.sender,'price')
+            if fid:  # A quiet-hours deadline can also make the turn ineligible.
+                row=self.db.execute('SELECT message_text FROM followups WHERE id=?',(fid,)).fetchone()
+                self.assertEqual(row['message_text'],'')
+        # Empty model output is never replaced by generic booking copy.
+        self.assertEqual(self.db.execute("SELECT count(*) FROM followups WHERE message_text!=''").fetchone()[0],0)
 
     def test_explicit_empty_model_reply_is_respected(self):
         response=Mock();response.json.return_value={'choices':[{'message':{'content':json.dumps({'reply':'','silent_reason':'unknown'})}}]}
