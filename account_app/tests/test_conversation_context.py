@@ -17,6 +17,34 @@ CATALOG = [
 ]
 
 class ConversationContextTests(unittest.TestCase):
+    def test_september29_short_photo_reply_uses_saved_staff_offer(self):
+        m.save_message(self.db, self.sender, 'outgoing', 'text', 'عدنا فستان انيقة. تحبين أدزلج صوره؟', None, None, None, {})
+        m.save_message(self.db, self.sender, 'incoming', 'text', 'دزيلي حبيبتي', None, None, None, {})
+        with patch.object(m, '_call_main_ai_once', return_value={'reply': 'دزيلي صورة الموديل'}) as model:
+            result = m.call_main_ai(dict(self.ev, text='دزيلي حبيبتي'), 'text', {}, [], CATALOG, CATALOG[0], None, '', [])
+        self.assertEqual(result['image_product_ids'], ['F2'])
+        self.assertFalse(result['create_order'])
+        self.assertIn('فستان انيقة', str(model.call_args.args[0]['_sales_context']))
+
+    def test_september29_missing_old_order_keeps_known_phone_and_no_new_sale(self):
+        self.db.execute('UPDATE customers SET phone=? WHERE sender_id=?', ('07700000000', self.sender))
+        self.db.commit()
+        result = self.event('بلا زحمه شوكت يوصلني الطلب؟')
+        self.assertTrue(result['meta']['existing_order_followup'])
+        self.assertIn('رقمج موجود', result['reply'])
+        self.assertNotIn('دزيلي رقم', result['reply'])
+        self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+
+    def test_september29_context_deleted_with_conversation(self):
+        m.save_message(self.db, self.sender, 'incoming', 'text', 'قياس 44', None, None, None, {})
+        m.sales_context.load(self.db, 'al-fatena', self.sender)
+        client = m.app.test_client()
+        with client.session_transaction() as session:
+            session['dashboard_authenticated'] = True
+        response = client.delete('/api/conversations/' + self.sender)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.db.execute('SELECT count(*) FROM sales_conversation_context WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+
     def test_delivery_policy_reply_is_natural_iraqi(self):
         products = [dict(product_id='F2', product_name='فستان', price='15000', stock='متوفر', status='active')]
         with m.app.app_context(), patch.object(m, 'current_store_id', return_value='default'):
