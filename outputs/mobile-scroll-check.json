@@ -1,0 +1,30 @@
+[
+  {
+    "page": "/settings",
+    "y": 460,
+    "bodyOverflow": "visible",
+    "bodyScroll": 0,
+    "root": "HTML"
+  },
+  {
+    "page": "/products",
+    "y": 460,
+    "bodyOverflow": "visible",
+    "bodyScroll": 0,
+    "root": "HTML"
+  },
+  {
+    "page": "/orders",
+    "y": 460,
+    "bodyOverflow": "visible",
+    "bodyScroll": 0,
+    "root": "HTML"
+  },
+  {
+    "page": "/rewards",
+    "y": 460,
+    "bodyOverflow": "visible",
+    "bodyScroll": 0,
+    "root": "HTML"
+  }
+]

@@ -1,0 +1,22 @@
+.......E...................................................................F.............................................................................................................................................................................................................................
+======================================================================
+ERROR: test_legacy_display_name_recovers_to_global_model (test_ai_configuration.AIConfigurationTests.test_legacy_display_name_recovers_to_global_model)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_ai_configuration.py", line 40, in test_legacy_display_name_recovers_to_global_model
+    self.assertEqual(post.call_count, 2 if status in (429, 503) else 1)
+                                           ^^^^^^
+NameError: name 'status' is not defined
+
+======================================================================
+FAIL: test_image_service_failure_is_silent (test_checkout_regressions.CheckoutRegressionTests.test_image_service_failure_is_silent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_checkout_regressions.py", line 500, in test_image_service_failure_is_silent
+    self.assertTrue(response["meta"]["ai_paused"])
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 297 tests in 23.589s
+
+FAILED (failures=1, errors=1)

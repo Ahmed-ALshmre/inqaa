@@ -1,0 +1,998 @@
+{
+  "model": "google/gemini-3.8-flash",
+  "variant": "improved",
+  "results": [
+    {
+      "id": "price_total",
+      "goal": "السعر والتوصيل والمجموع قبل طلب الحجز",
+      "text": "شكد السعر ويا التوصيل للموصل؟",
+      "result": {
+        "reply": "السعر 15 ألف والتوصيل للموصل 5 آلاف، يعني المجموع 20 ألف عيني.\n\nيا لون وقياس حابة؟ متوفر بالأسود والكريمي.",
+        "reply_parts": [
+          "السعر 15 ألف والتوصيل للموصل 5 آلاف، يعني المجموع 20 ألف عيني.",
+          "يا لون وقياس حابة؟",
+          "متوفر بالأسود والكريمي."
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "نينوى",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_15": true,
+        "contains_5": true,
+        "contains_20": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.0
+    },
+    {
+      "id": "price_objection",
+      "goal": "تفهم الميزانية وقيمة موثقة أو بديل بلا خصم مخترع",
+      "text": "غالي علي حبيبتي غيركم ارخص",
+      "result": {
+        "reply": "تدللين عيني، سعره 15 ألف لأن قماشه باربي ومرتب كلش باللبس.\n\nإذا تحبين شي أنسب، متوفر عندنا فستان ساده قطن بـ 13 ألف، تحبين تشوفيه؟",
+        "reply_parts": [
+          "تدللين عيني، سعره 15 ألف لأن قماشه باربي ومرتب كلش باللبس.\n\nإذا تحبين شي أنسب، متوفر عندنا فستان ساده قطن بـ 13 ألف،",
+          "تحبين تشوفيه؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.7
+    },
+    {
+      "id": "budget_cap",
+      "goal": "خيار 13 ألف مع 5 آلاف ضمن الميزانية؛ لا يعرض 15 ألف كأنه داخلها",
+      "text": "ميزانيتي 18 الف ويا التوصيل اكو شي مناسب؟",
+      "result": {
+        "reply": "أهلاً عيني، إي نعم اكو فستان ساده سعره 13 ألف والتوصيل 5 آلاف لكل المحافظات، يعني يطلع المجموع 18 ألف بالضبط.\n\nتحبين تشوفين تفاصيله أو قياساته؟",
+        "reply_parts": [
+          "أهلاً عيني، إي نعم اكو فستان ساده سعره 13 ألف والتوصيل 5 آلاف لكل المحافظات، يعني يطلع المجموع 18 ألف بالضبط.",
+          "تحبين تشوفين تفاصيله أو قياساته؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_18": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.72
+    },
+    {
+      "id": "discount",
+      "goal": "لا يمنح خصماً غير معتمد ولا يدعي أقل سعر بالسوق",
+      "text": "يصير تحسبيلي الفستان ب12؟",
+      "result": {
+        "reply": "السعر ثابت عيني 15 ألف وقماشه باربي ومرتب كلش. يناسبج هالسعر لو حابة تشوفين شي بحدود ميزانيتج؟",
+        "reply_parts": [
+          "السعر ثابت عيني 15 ألف وقماشه باربي ومرتب كلش. يناسبج هالسعر لو حابة تشوفين شي بحدود ميزانيتج؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 7.41
+    },
+    {
+      "id": "fake_image",
+      "goal": "صدق حول غياب الفيديو دون ضمان مطابقته أو طلب العنوان",
+      "text": "الصورة ذكاء اصطناعي؟ اريد فيديو حقيقي قبل لا اطلب",
+      "result": {
+        "reply": "حالياً ما عندي فيديو حقيقي موثق لهذا الموديل، فما أگدر أؤكد تفاصيله من فيديو غير موجود.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "image_guarantee",
+      "goal": "لا ضمان مطلق؛ شرح الفحص من السياسة",
+      "text": "تضمنين يوصلني نفس الصورة بالضبط؟",
+      "result": {
+        "reply": "أكيد عيني، التوصيل بي فحص عند الاستلام؛ تفتحين الطلب وتتأكدين من الموديل والقياس كدام المندوب، وإذا مو نفسه يرجع وياه بدون ما تدفعين شي.\n\nيا قياس ولون يناسبج؟",
+        "reply_parts": [
+          "أكيد عيني، التوصيل بي فحص عند الاستلام؛",
+          "تفتحين الطلب وتتأكدين من الموديل والقياس كدام المندوب، وإذا مو نفسه يرجع وياه بدون ما تدفعين شي.",
+          "يا قياس ولون يناسبج؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.02
+    },
+    {
+      "id": "known_length",
+      "goal": "استعمال ملاحظات المنتج بدل إحالة غير لازمة",
+      "text": "شكد طوله بالسانتي ومنين ينفتح؟",
+      "result": {
+        "reply": "طوله 135 سم، وينفتح بسحاب من ورا عيني.\n\nيا قياس ولون يناسبج؟",
+        "reply_parts": [
+          "طوله 135 سم، وينفتح بسحاب من ورا عيني.",
+          "يا قياس ولون يناسبج؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_135": true,
+        "contains_سحاب": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.22
+    },
+    {
+      "id": "lining",
+      "goal": "إجابة غير مبطن اعتماداً على الملاحظات",
+      "text": "مبطن لو لا؟",
+      "result": {
+        "reply": "أهلاً عيني، لا، الفستان مو مبطن وقماشه باربي ومرتب.\n\nتحبين تشوفين لون معين، الأسود لو الكريمي؟",
+        "reply_parts": [
+          "أهلاً عيني، لا، الفستان مو مبطن وقماشه باربي ومرتب.",
+          "تحبين تشوفين لون معين، الأسود لو الكريمي؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_مبطن": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.33
+    },
+    {
+      "id": "unknown_width",
+      "goal": "لا اختراع قياسات ولا استبدال الجواب بطلب حجز",
+      "text": "قياس 52 شكد عرضه من تحت الابط؟",
+      "result": {
+        "reply": "قياس العرض بالسنتيمتر مو مدوّن عندي لهالموديل؛ يحتاج قياس فعلي من المتجر حتى أنطيك رقماً صحيحاً.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.02
+    },
+    {
+      "id": "weight_fit",
+      "goal": "لا ضمان قياس من الوزن بلا جدول معتمد",
+      "text": "وزني 69 شنو قياسي؟",
+      "result": {
+        "reply": "أهلاً عيني، القياسات متوفرة بالأرقام من 38 إلى 52 وما عندي جدول يربط الوزن بالقياس مضبوط.\n\nشنو قياسج المعتاد بالملابس حتى نتأكد منه؟",
+        "reply_parts": [
+          "أهلاً عيني، القياسات متوفرة بالأرقام من 38 إلى 52 وما عندي جدول يربط الوزن بالقياس مضبوط.",
+          "شنو قياسج المعتاد بالملابس حتى نتأكد منه؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 7.72
+    },
+    {
+      "id": "size_preference",
+      "goal": "يحترم القياس الصريح ولا يصغره حسب تقديره",
+      "text": "البس 44 بس اريده اوسع قياس 46 اسود",
+      "result": {
+        "reply": "تدللين عيني، متوفر قياس 46 باللون الأسود.\n\nسعره 15 ألف والتوصيل 5 آلاف لكل المحافظات، تحبين نثبته الج؟ دزيلي الاسم والرقم والمحافظة والعنوان.",
+        "reply_parts": [
+          "تدللين عيني، متوفر قياس 46 باللون الأسود.",
+          "سعره 15 ألف والتوصيل 5 آلاف لكل المحافظات، تحبين نثبته الج؟",
+          "دزيلي الاسم والرقم والمحافظة والعنوان."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_46": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.89
+    },
+    {
+      "id": "comparison",
+      "goal": "مقارنة موثقة تساعد الاختيار بسؤال واحد",
+      "text": "شنو الفرق بين الرباط والساده؟",
+      "result": {
+        "reply": "أهلاً عيني.. فستان الرباط قماشه باربي وسعره 15 ألف، وبي ألوان أسود وكريمي.\n\nأما الساده فقماشه قطن وسعره 13 ألف ومتوفر باللون الأسود بس. يا موديل عجبج أكثر؟",
+        "reply_parts": [
+          "أهلاً عيني..\n\nفستان الرباط قماشه باربي وسعره 15 ألف، وبي ألوان أسود وكريمي.\n\nأما الساده فقماشه قطن وسعره 13 ألف ومتوفر باللون الأسود بس.",
+          "يا موديل عجبج أكثر؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_باربي": true,
+        "contains_قطن": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.5
+    },
+    {
+      "id": "ready_contact",
+      "goal": "يطلب الهاتف والعنوان فقط دون إعادة الاختيارات",
+      "text": "ثبتي الاسود قياس 42",
+      "result": {
+        "reply": "صار عيني، فستان الرباط الأسود قياس 42 سعره 15 ألف والتوصيل 5 آلاف لكل المحافظات.\n\nبس دزيلي رقم التلفون والمحافظة والعنوان حتى أثبته الج وتدللين.",
+        "reply_parts": [
+          "صار عيني، فستان الرباط الأسود قياس 42 سعره 15 ألف والتوصيل 5 آلاف لكل المحافظات.",
+          "بس دزيلي رقم التلفون والمحافظة والعنوان حتى أثبته الج وتدللين."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.97
+    },
+    {
+      "id": "complete_order",
+      "goal": "قرار حجز مع سلة صحيحة دون إعادة السؤال",
+      "text": "ثبتي فستان رباط اسود قياس 42 قطعة وحدة، بغداد حي تجريبي، 07700000000",
+      "result": {
+        "reply": "تدللين عيني، سجلت طلبج: فستان رباط أسود قياس 42.\n\nالسعر 15 ألف والتوصيل 5 آلاف، المجموع 20 ألف، ويوصلج خلال يومين إلى 3 أيام مع إمكانية الفحص عند الاستلام.",
+        "reply_parts": [
+          "تدللين عيني، سجلت طلبج: فستان رباط أسود قياس 42.",
+          "السعر 15 ألف والتوصيل 5 آلاف، المجموع 20 ألف، ويوصلج خلال يومين إلى 3 أيام مع إمكانية الفحص عند الاستلام."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.55
+    },
+    {
+      "id": "two_variants",
+      "goal": "قطعتان مستقلتان بقياسين مختلفين",
+      "text": "اريد الرباط اسود قياس 42 والكريمي قياس 46، قطعة من كل لون ثبتيهن",
+      "result": {
+        "reply": "تدللين عيني، صار قطعتين فستان رباط (الأسود قياس 42 والكريمي قياس 46).\n\nالسعر 30 ألف والتوصيل 5 آلاف، المجموع 35 ألف. نثبت الطلب على نفس العنوان ورقم التلفون المسجل يمنا؟",
+        "reply_parts": [
+          "تدللين عيني، صار قطعتين فستان رباط (الأسود قياس 42 والكريمي قياس 46).",
+          "السعر 30 ألف والتوصيل 5 آلاف، المجموع 35 ألف.",
+          "نثبت الطلب على نفس العنوان ورقم التلفون المسجل يمنا؟"
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "كريمي",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true,
+        "separate_variants": true
+      },
+      "seconds": 5.42
+    },
+    {
+      "id": "defer_salary",
+      "goal": "يحترم التأجيل بلا ضغط ولا موعد متابعة مخترع",
+      "text": "خلي استلم الراتب وبعدين اطلب",
+      "result": {
+        "reply": "تدللين عيني، بأي وقت يعجبج تنورينّا وألف عافية مقدماً. شوكت ما تحبين تطلبين إحنا بالخدمة.",
+        "reply_parts": [
+          "تدللين عيني، بأي وقت يعجبج تنورينّا وألف عافية مقدماً. شوكت ما تحبين تطلبين إحنا بالخدمة."
+        ],
+        "intent": "unknown",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.84
+    },
+    {
+      "id": "optout",
+      "goal": "إغلاق لطيف دون سؤال بيع أو متابعة",
+      "text": "ما اريد اطلب لا تراسلوني",
+      "result": {
+        "reply": "حاضر، ما راح نراسلك بعد.",
+        "reply_parts": [
+          "حاضر، ما راح نراسلك بعد."
+        ],
+        "create_order": false,
+        "order": {},
+        "intent": "unknown",
+        "_local_reply": true
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "thanks",
+      "goal": "خاتمة قصيرة بلا إعادة حجز",
+      "text": "شكرا حبيبتي",
+      "result": {
+        "reply": "تدللين عيني 🌸",
+        "reply_parts": [
+          "تدللين عيني 🌸"
+        ],
+        "create_order": false,
+        "order": {},
+        "intent": "unknown",
+        "_local_reply": true
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "delivery_deadline",
+      "goal": "لا يعد بوصول مضمون غير موثق",
+      "text": "عندي مناسبة باجر تضمنون يوصل قبل الظهر؟",
+      "result": {
+        "reply": "أهلاً عيني، التوصيل ياخذ من يومين إلى 3 أيام، فما نكدر نضمن وصوله باجر قبل الظهر حتى ما نقصر وياج.",
+        "reply_parts": [
+          "أهلاً عيني، التوصيل ياخذ من يومين إلى 3 أيام، فما نكدر نضمن وصوله باجر قبل الظهر حتى ما نقصر وياج."
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.94
+    },
+    {
+      "id": "single_from_bundle",
+      "goal": "لا يستنتج سعر مفرد من قسمة البكج",
+      "text": "اريد قطعة وحدة من السوت شكد سعرها؟",
+      "result": {
+        "reply": "هلا عيني، السوت متوفر فقط ضمن بكج 3 قطع بـ 25 ألف والتوصيل مجاني.\n\nتحبين تشوفين الألوان المتوفرة منه؟",
+        "reply_parts": [
+          "هلا عيني، السوت متوفر فقط ضمن بكج 3 قطع بـ 25 ألف والتوصيل مجاني.",
+          "تحبين تشوفين الألوان المتوفرة منه؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.91
+    },
+    {
+      "id": "bundle_order",
+      "goal": "ثلاث قطع بمجموع 25 ألف مع التوصيل المجاني",
+      "text": "ثبتي بكج 3 قطع سنة: وردي وماروني وتركوازي وحدة من كل لون",
+      "result": {
+        "reply": "تدللين عيني، تم تثبيت طلبج لبكج سوت بهاري (وردي، ماروني، تركوازي) قياس سنة.\n\nالمجموع 25 ألف والتوصيل مجاني، يوصلج خلال يومين إلى ثلاثة أيام. يرجى فحص الطلب بحضور المندوب قبل الدفع.",
+        "reply_parts": [
+          "تدللين عيني، تم تثبيت طلبج لبكج سوت بهاري (وردي، ماروني، تركوازي) قياس سنة.",
+          "المجموع 25 ألف والتوصيل مجاني، يوصلج خلال يومين إلى ثلاثة أيام.",
+          "يرجى فحص الطلب بحضور المندوب قبل الدفع."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "وردي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "ماروني",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "تركوازي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true,
+        "correct_bundle_total": true
+      },
+      "seconds": 5.34
+    },
+    {
+      "id": "reject_one_option",
+      "goal": "رفض لون لا يلغي الرغبة بالشراء",
+      "text": "الكريمي ما اريده، اريد الاسود قياس 44",
+      "result": {
+        "reply": "تدللين عيني، متوفر الأسود قياس 44 من فستان رباط، سعره 15 ألف والتوصيل 5 آلاف لكل المحافظات.\n\nإذا تحبين نثبته الج، بس دزيلي الاسم ورقم الفون والمحافظة والعنوان.",
+        "reply_parts": [
+          "تدللين عيني، متوفر الأسود قياس 44 من فستان رباط،",
+          "سعره 15 ألف والتوصيل 5 آلاف لكل المحافظات.",
+          "إذا تحبين نثبته الج، بس دزيلي الاسم ورقم الفون والمحافظة والعنوان."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "44",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_44": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.48
+    },
+    {
+      "id": "no_premature_order",
+      "goal": "يفصل سؤال القياس عن الموافقة بالحجز",
+      "text": "لا تثبتين بس اريد اتأكد من القياس",
+      "result": {
+        "reply": "تدللين عيني، ولا يهمج ما نثبت إلا وأنتي متأكدة.\n\nقياسات الفستان متوفرة من 38 لحد 52، وطوله 135 سم. شكد قياسج بالعادي؟",
+        "reply_parts": [
+          "تدللين عيني، ولا يهمج ما نثبت إلا وأنتي متأكدة.",
+          "قياسات الفستان متوفرة من 38 لحد 52، وطوله 135 سم.",
+          "شكد قياسج بالعادي؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.25
+    },
+    {
+      "id": "quantity_ambiguity",
+      "goal": "يحسم العدد بسؤال واحد ولا ينشئ سلة مختلقة",
+      "text": "اريد ثنين من الاسود واثنين كريمي لو خليها ثلاث بعدني محتارة",
+      "result": {
+        "reply": "أهلاً عيني، تدللين. تقصدين ثلاث قطع بالمجموع لو ثلاث من الكريمي؟",
+        "reply_parts": [
+          "أهلاً عيني، تدللين. تقصدين ثلاث قطع بالمجموع لو ثلاث من الكريمي؟"
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 2.75
+    },
+    {
+      "id": "remembered_options",
+      "goal": "يتذكر الأسود 42 والهاتف ويكمل الحجز عند وصول العنوان",
+      "text": "بغداد حي تجريبي",
+      "result": {
+        "reply": "تم تثبيت طلبج عيني. يوصلج خلال يومين إلى تلاثة أيام، ومجموع الحساب 20 ألف ويه التوصيل. تفحصين القطعة وتتأكدين منها يم المندوب يلا تدفعين.",
+        "reply_parts": [
+          "تم تثبيت طلبج عيني.\n\nيوصلج خلال يومين إلى تلاثة أيام، ومجموع الحساب 20 ألف ويه التوصيل.",
+          "تفحصين القطعة وتتأكدين منها يم المندوب يلا تدفعين."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.91
+    },
+    {
+      "id": "last_minute_change",
+      "goal": "يحدّث الخيار ولا يعيد اللون والقياس القديمين",
+      "text": "لا مو الاسود 42، خليها كريمي قياس 46 وثبتي",
+      "result": {
+        "reply": "صار عيني، عدلته للكريمي قياس 46.\n\nتم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+        "reply_parts": [
+          "صار عيني، عدلته للكريمي قياس 46.",
+          "تم تثبيت الطلب.\n\nيرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس.",
+          "إذا لم يطابق الطلب يرجع مع المندوب بدون دفع.\n\nأهم شي تفحصين الطلب قبل دفع المبلغ."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "كريمي",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.03
+    },
+    {
+      "id": "answered_price_then_trust",
+      "goal": "لا يكرر السعر ولا يتجاوز طلب دليل حقيقي للحجز",
+      "text": "بس اريد فيديو حقيقي قبل اثبت",
+      "result": {
+        "reply": "حالياً ما عندي فيديو حقيقي موثق لهذا الموديل، فما أگدر أؤكد تفاصيله من فيديو غير موجود.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "acknowledged_size",
+      "goal": "القياس المصرح به يتقدم على الاقتراح السابق ولا يعاد السؤال",
+      "text": "اي اعتمدي 42 اسود وثبتي",
+      "result": {
+        "reply": "تدللين عيني، صار قياس 42 لون أسود.\n\nالسعر 15 ألف والتوصيل 5 آلاف، المجموع 20 ألف، وجاي نثبت الطلب على عنوانج ورقمج المسجلين يمنا.",
+        "reply_parts": [
+          "تدللين عيني، صار قياس 42 لون أسود.",
+          "السعر 15 ألف والتوصيل 5 آلاف، المجموع 20 ألف، وجاي نثبت الطلب على عنوانج ورقمج المسجلين يمنا."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.73
+    }
+  ]
+}

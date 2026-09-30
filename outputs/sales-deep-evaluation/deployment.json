@@ -1,0 +1,96 @@
+{
+  "commit": "c8f7945f9171b9a05cef58038a56cbc38fff530e",
+  "deployment_id": 6707137245,
+  "deployment_state": "success",
+  "verified_code_version": "834b646d23cccc5b",
+  "sales_ready": true,
+  "stores": [
+    {
+      "store_id": "al-fatena",
+      "enabled": true,
+      "delays": [
+        60,
+        120,
+        240
+      ],
+      "contact_hours": [
+        9,
+        21
+      ],
+      "max_per_day": 1,
+      "people": 1,
+      "buyers": 0,
+      "conversion": 0.0
+    },
+    {
+      "store_id": "khuyoot",
+      "enabled": true,
+      "delays": [
+        60,
+        120,
+        240
+      ],
+      "contact_hours": [
+        9,
+        21
+      ],
+      "max_per_day": 1,
+      "people": 1,
+      "buyers": 0,
+      "conversion": 0.0
+    },
+    {
+      "store_id": "golden-threads",
+      "enabled": true,
+      "delays": [
+        60,
+        120,
+        240
+      ],
+      "contact_hours": [
+        9,
+        21
+      ],
+      "max_per_day": 1,
+      "people": 0,
+      "buyers": 0,
+      "conversion": 0
+    },
+    {
+      "store_id": "baraah-kids",
+      "enabled": true,
+      "delays": [
+        60,
+        120,
+        240
+      ],
+      "contact_hours": [
+        9,
+        21
+      ],
+      "max_per_day": 1,
+      "people": 2,
+      "buyers": 0,
+      "conversion": 0.0
+    },
+    {
+      "store_id": "default",
+      "enabled": true,
+      "delays": [
+        60,
+        120,
+        240
+      ],
+      "contact_hours": [
+        9,
+        21
+      ],
+      "max_per_day": 1,
+      "people": 0,
+      "buyers": 0,
+      "conversion": 0
+    }
+  ],
+  "operational_blocker": "Live database appears newly initialized; Railway storage inspection requires authenticated session",
+  "followups_paused_pending_storage_recovery": true
+}

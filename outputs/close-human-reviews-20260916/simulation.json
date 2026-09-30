@@ -1,0 +1,25 @@
+{
+  "filter_before": 120,
+  "filter_after": 0,
+  "operation": {
+    "closed_conversations": 271,
+    "closed_problems": 14,
+    "closed_reviews": 262,
+    "ok": true
+  },
+  "rows_preserved": {
+    "customers": 1600,
+    "messages": 15582,
+    "orders": 219,
+    "human_reviews": 759,
+    "problem_reports": 14
+  },
+  "ai_states_unchanged": true,
+  "second_click": {
+    "closed_conversations": 0,
+    "closed_problems": 0,
+    "closed_reviews": 0,
+    "ok": true
+  },
+  "external_requests": 0
+}

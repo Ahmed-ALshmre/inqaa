@@ -1,0 +1,22 @@
+TAP version 13
+# PASS: async proposals, explicit staff action while paused, stale conversation protection
+# Subtest: C:\\Users\\Ghost الشبح\\OneDrive\\المستندات\\ChatGPT\\لمسة ستور\\account_app\\tests\\test_dashboard_ai.cjs
+ok 1 - C:\\Users\\Ghost الشبح\\OneDrive\\المستندات\\ChatGPT\\لمسة ستور\\account_app\\tests\\test_dashboard_ai.cjs
+  ---
+  duration_ms: 126.8698
+  ...
+# PASS: images only, deduplication, conversation switch, send failure, composer draft preserved
+# Subtest: C:\\Users\\Ghost الشبح\\OneDrive\\المستندات\\ChatGPT\\لمسة ستور\\account_app\\tests\\test_dashboard_images.cjs
+ok 2 - C:\\Users\\Ghost الشبح\\OneDrive\\المستندات\\ChatGPT\\لمسة ستور\\account_app\\tests\\test_dashboard_images.cjs
+  ---
+  duration_ms: 118.7793
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 150.1895

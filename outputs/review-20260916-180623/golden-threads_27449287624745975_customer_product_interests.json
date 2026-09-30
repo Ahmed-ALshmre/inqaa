@@ -1,0 +1,16 @@
+[
+  {
+    "id": 3790,
+    "sender_id": "golden-threads::27449287624745975",
+    "product_id": "P002",
+    "product_name": "تراك بهاري",
+    "match_method": "auto_default_product",
+    "confidence": 100.0,
+    "last_seen_at": "2026-09-07T12:27:42+03:00",
+    "source": "auto_default_product",
+    "status": "active",
+    "rejected_at": null,
+    "notes": "Automatically linked from auto_product_id setting",
+    "image_sent": 0
+  }
+]

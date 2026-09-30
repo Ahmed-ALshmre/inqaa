@@ -1,0 +1,352 @@
+[
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 1,
+    "message_id": 16767,
+    "http_status": 200,
+    "reply": "وعليكم السلام حبيبتي 🌸\n\nسوت نيلي اللي بـ١٥ الف متوفر بس باللون النيلي، بس عندنا سوت رباط بنفس السعر ١٥ الف لونه أسود، والاثنين بيهن قياس ٤٢ متوفر.\n\nللمعلومة، قياس ٤٢ يناسب وزن ٦٧ لـ٧٢ كيلو تقريباً.\n\nتحبين النيلي لو الأسود؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3516,
+      "completion_tokens": 684,
+      "total_tokens": 4200,
+      "cost": 0.0063456,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0063456,
+        "upstream_inference_prompt_cost": 0.00393792,
+        "upstream_inference_completions_cost": 0.00240768
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 572,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "SiliconFlow",
+    "request_id": "gen-1789566390-ItnWwIupbj81XFEq6Zse",
+    "seconds": 17.27
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 2,
+    "message_id": 16425,
+    "http_status": 200,
+    "reply": "صباح النور والفل هلا بيچ 🌸\n\nالعرض باقي وشغال، بس حتى أدقق لچ على اللون والقياس، شنو المنتج اللي تشوفينه؟ عباءة لو فستان لو سوت؟\n\nوبخصوص القياس، أغلب موديلاتنه قياساتها من 38 إلى 52 وتناسب وزن من 55 إلى 100 كيلو، فإذا خبرتيني وزينه أرشدچ للقياس المضبوط 💕",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3517,
+      "completion_tokens": 1444,
+      "total_tokens": 4961,
+      "cost": 0.0112774,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0112774,
+        "upstream_inference_prompt_cost": 0.0049238,
+        "upstream_inference_completions_cost": 0.0063536
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1323,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Together",
+    "request_id": "gen-1789566405-GIKB5hv6EdslUpuTtFMn",
+    "seconds": 15.42
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 3,
+    "message_id": 16398,
+    "http_status": 200,
+    "reply": "وعليكم السلام عيني، والله نعتذر منج بكل صدق، التقصير بالرد ما ينرضي وحقج علينا، وميول نكون صادقين ويه زبائنا لأن هذا فعلاً باب رزقنا. عيوني التنورة متوفرة هسه، سعرها 12,000 وعليها عرض خاص بس الكمية محدودة، والتوصيل 5,000 لكل المحافظات مع فحص عند الاستلام. بس خبريني وزنج ومحافظتج حتى أعطيج القياس المضبوط ونمشي بالطلب على أصوله.",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1445,
+      "completion_tokens": 1329,
+      "total_tokens": 2774,
+      "cost": 0.0075058,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 320,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0075058,
+        "upstream_inference_prompt_cost": 0.0016582,
+        "upstream_inference_completions_cost": 0.0058476
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1185,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Together",
+    "request_id": "gen-1789566420-8PGHCw9igpLKgydYhMq2",
+    "seconds": 9.48
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 4,
+    "message_id": 15751,
+    "http_status": 200,
+    "reply": "وعليكم السلام ورحمة الله، هلا وغلا بيج حبيبتي 🌸\n\nعباية سعرها ٢٠ ألف، والتوصيل ٥ آلاف لكل المحافظات، يعني المجموع ٢٥ ألف.\n\nالقياسات تناسب من ٥٥ كيلو لحد ١٠٠ كيلو، والخامة قماش فرسان درجة أولى، ناعم وفخم ويلبس سنين ما يتغير شكله.\n\nوعليها حالياً عرض خاص بس الكمية محدودة، فإذا مالت عليها لا تتأخرين.\n\nقوليلي شقد وزنج حتى أرشحلج القياس المظبوط؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3529,
+      "completion_tokens": 921,
+      "total_tokens": 4450,
+      "cost": 0.0086282,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 320,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0086282,
+        "upstream_inference_prompt_cost": 0.0045758,
+        "upstream_inference_completions_cost": 0.0040524
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 757,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Together",
+    "request_id": "gen-1789566430-QXmIvP0EIxLkKMCTGuW0",
+    "seconds": 7.56
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 5,
+    "message_id": 14992,
+    "http_status": 200,
+    "reply": "",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1399,
+      "completion_tokens": 1600,
+      "total_tokens": 2999,
+      "cost": 0.007272612967643,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.007272612967643,
+        "upstream_inference_prompt_cost": 0.001582928428443,
+        "upstream_inference_completions_cost": 0.0056896845392
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1601,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Sail Research",
+    "request_id": "gen-1789566438-VZFOYDoXwjbEqIgsKRR9",
+    "seconds": 11.22
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 6,
+    "message_id": 14799,
+    "http_status": 200,
+    "reply": "هلا عيني 🌸 لا تشيلين هم، سوت الحوامل قياساته من ٧٠ حتى ١٣٠ كيلو، يعني بوزنج الحالي وفية متسع واضح حتى لو زاد وزنج بالشهر الثامن والتاسع. وخامه تركي درجة أولى مريح ومرتاح على البطن لأنه مخصص للحوامل.\n\nمتوفر بثلاث ألوان: أخضر، بنفسجي، وزيتوني، وسعره ١٨,٠٠٠ والعرض شغال على آخر الكمية. تحبين أثبتلج إياه",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1359,
+      "completion_tokens": 1600,
+      "total_tokens": 2959,
+      "cost": 0.007227354113363,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.007227354113363,
+        "upstream_inference_prompt_cost": 0.001537669574163,
+        "upstream_inference_completions_cost": 0.0056896845392
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1454,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Sail Research",
+    "request_id": "gen-1789566448-fjv9wajFFDXny3aRGwbR",
+    "seconds": 9.99
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 7,
+    "message_id": 14017,
+    "http_status": 200,
+    "reply": "",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1501,
+      "completion_tokens": 1600,
+      "total_tokens": 3101,
+      "cost": 0.007388023046057,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.007388023046057,
+        "upstream_inference_prompt_cost": 0.001698338506857,
+        "upstream_inference_completions_cost": 0.0056896845392
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1601,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Sail Research",
+    "request_id": "gen-1789566458-k8p7qVSzoYCcOgNOE1xR",
+    "seconds": 65.95
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 8,
+    "message_id": 13718,
+    "http_status": 200,
+    "reply": "وعليكم السلام والرحمه 🌸\nعزيزتي اسفين على التأخير، حقك علينا نتابع الموضوع فوراً.\nممكن تعطيني اسمك ورقم الموبايل اللي طلبتين بيه، حتى ارفع الطلب للمسؤول ويتواصلون ويه المندوب مباشرة ويتأكدون من موعد التوصيل؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3514,
+      "completion_tokens": 237,
+      "total_tokens": 3751,
+      "cost": 0.004818774870867,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.004818774870867,
+        "upstream_inference_prompt_cost": 0.003975990348498,
+        "upstream_inference_completions_cost": 0.000842784522369
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 142,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Sail Research",
+    "request_id": "gen-1789566524-brMStUnncPCcdXGH3U1s",
+    "seconds": 4.88
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 9,
+    "message_id": 12669,
+    "http_status": 200,
+    "reply": "",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1219,
+      "completion_tokens": 1600,
+      "total_tokens": 2819,
+      "cost": 0.007068948123383,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.007068948123383,
+        "upstream_inference_prompt_cost": 0.001379263584183,
+        "upstream_inference_completions_cost": 0.0056896845392
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1603,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "Sail Research",
+    "request_id": "gen-1789566529-WgTedR8vlCzylW691HWv",
+    "seconds": 26.03
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 10,
+    "message_id": 12303,
+    "http_status": 200,
+    "reply": "هلا عيني، التوصيل سريع لكل المحافظات بس ما أقدر أضمنلج يوم معين، يوصلج بأقرب وقت إن شاء الله. ولاتشيلين هم بهالموضوع، الفحص متاح عند الاستلام، يعني تشوفين القماش وتتأكدين مثل الصورة قبل الدفع، وإذا ما عجبج ترجعينه بدون ما تدفعين ولا دينار. بس خليني أثبتلج القياس عيني، وزنج شكد تقريباً حتى أختارلج 48 لو 50؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1431,
+      "completion_tokens": 1315,
+      "total_tokens": 2746,
+      "cost": 0.005734725,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.005734725,
+        "upstream_inference_prompt_cost": 0.001395225,
+        "upstream_inference_completions_cost": 0.0043395
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1643,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "provider": "AkashML",
+    "request_id": "gen-1789566555-1anc4ejRYWqlUXMjHRcg",
+    "seconds": 10.89
+  }
+]

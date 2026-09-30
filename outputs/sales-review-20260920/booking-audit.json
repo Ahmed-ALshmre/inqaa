@@ -1,0 +1,3481 @@
+[
+  {
+    "order_id": 343,
+    "store": "al-fatena",
+    "date": "2026-09-20T10:04:58+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "العنوان يحتوي سؤالاً عن المتجر"
+    ],
+    "messages_reviewed_automatically": 31
+  },
+  {
+    "order_id": 342,
+    "store": "khuyoot",
+    "date": "2026-09-20T09:59:52+03:00",
+    "product": "تنورة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 341,
+    "store": "al-fatena",
+    "date": "2026-09-20T09:49:01+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 29
+  },
+  {
+    "order_id": 340,
+    "store": "al-fatena",
+    "date": "2026-09-20T07:01:24+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 339,
+    "store": "khuyoot",
+    "date": "2026-09-20T06:56:43+03:00",
+    "product": "تنورة ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 338,
+    "store": "khuyoot",
+    "date": "2026-09-20T06:39:14+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 4
+  },
+  {
+    "order_id": 337,
+    "store": "al-fatena",
+    "date": "2026-09-20T05:44:32+03:00",
+    "product": "سوت ×1 (اسود) - 80",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 336,
+    "store": "khuyoot",
+    "date": "2026-09-20T04:01:27+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "شرط موعد يحتاج مراجعة الموافقة"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 335,
+    "store": "al-fatena",
+    "date": "2026-09-20T02:03:03+03:00",
+    "product": "سوت ×1 (اسود) - L",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 334,
+    "store": "al-fatena",
+    "date": "2026-09-20T00:24:42+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 46، فستان دانتيل ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 70
+  },
+  {
+    "order_id": 333,
+    "store": "al-fatena",
+    "date": "2026-09-19T21:39:09+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 46، عباء ×1 (اسود) - 38، فستان دانتيل ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 69
+  },
+  {
+    "order_id": 332,
+    "store": "al-fatena",
+    "date": "2026-09-19T21:03:16+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 331,
+    "store": "al-fatena",
+    "date": "2026-09-19T20:30:11+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 330,
+    "store": "al-fatena",
+    "date": "2026-09-19T19:27:44+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 329,
+    "store": "al-fatena",
+    "date": "2026-09-19T18:52:09+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 37
+  },
+  {
+    "order_id": 328,
+    "store": "al-fatena",
+    "date": "2026-09-19T18:40:52+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42، سوت ياخة ×1 (اسود) - 50، سوت ×1 (اسود) - 42، سوت ×1 (اسود) - 48، سوت ×1 (اسود) - 52، سوت ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 59
+  },
+  {
+    "order_id": 327,
+    "store": "al-fatena",
+    "date": "2026-09-19T17:34:11+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 12
+  },
+  {
+    "order_id": 326,
+    "store": "al-fatena",
+    "date": "2026-09-19T16:59:00+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42، سوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 325,
+    "store": "al-fatena",
+    "date": "2026-09-19T16:40:26+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 39
+  },
+  {
+    "order_id": 324,
+    "store": "al-fatena",
+    "date": "2026-09-19T16:19:31+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 323,
+    "store": "al-fatena",
+    "date": "2026-09-19T16:10:18+03:00",
+    "product": "عباء ×1 (اسود) - 90",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 322,
+    "store": "al-fatena",
+    "date": "2026-09-19T15:52:12+03:00",
+    "product": "سوت ×1 (اسود) - 77",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 321,
+    "store": "al-fatena",
+    "date": "2026-09-19T15:41:40+03:00",
+    "product": "عباء ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 46
+  },
+  {
+    "order_id": 320,
+    "store": "al-fatena",
+    "date": "2026-09-19T15:26:34+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 319,
+    "store": "al-fatena",
+    "date": "2026-09-19T15:00:50+03:00",
+    "product": "سوت ×1 (اسود) - 54",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 318,
+    "store": "al-fatena",
+    "date": "2026-09-19T14:59:40+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 38، سوت نيلي ×1 (نيلي) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 56
+  },
+  {
+    "order_id": 317,
+    "store": "al-fatena",
+    "date": "2026-09-19T14:57:52+03:00",
+    "product": "سوت ×1 (اسود) - من 60 الى 120",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 316,
+    "store": "al-fatena",
+    "date": "2026-09-19T14:49:07+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 315,
+    "store": "al-fatena",
+    "date": "2026-09-19T14:48:49+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 314,
+    "store": "al-fatena",
+    "date": "2026-09-19T14:44:00+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 313,
+    "store": "al-fatena",
+    "date": "2026-09-19T14:35:33+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 312,
+    "store": "al-fatena",
+    "date": "2026-09-19T14:00:51+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 311,
+    "store": "al-fatena",
+    "date": "2026-09-19T13:54:43+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 108
+  },
+  {
+    "order_id": 310,
+    "store": "al-fatena",
+    "date": "2026-09-19T13:46:40+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 309,
+    "store": "al-fatena",
+    "date": "2026-09-19T13:44:09+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 308,
+    "store": "al-fatena",
+    "date": "2026-09-19T13:42:45+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 307,
+    "store": "al-fatena",
+    "date": "2026-09-19T13:16:42+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 306,
+    "store": "al-fatena",
+    "date": "2026-09-19T13:14:37+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 305,
+    "store": "al-fatena",
+    "date": "2026-09-19T12:42:06+03:00",
+    "product": "عباء لون وردي ×1 (وردي) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 36
+  },
+  {
+    "order_id": 304,
+    "store": "al-fatena",
+    "date": "2026-09-19T12:35:37+03:00",
+    "product": "عباء مسطرة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 35
+  },
+  {
+    "order_id": 303,
+    "store": "al-fatena",
+    "date": "2026-09-19T12:32:53+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 60
+  },
+  {
+    "order_id": 302,
+    "store": "al-fatena",
+    "date": "2026-09-19T12:23:18+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 301,
+    "store": "al-fatena",
+    "date": "2026-09-19T12:12:32+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 52، فستان رباط ×1 (اسود) - 52، P002 ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 53
+  },
+  {
+    "order_id": 300,
+    "store": "al-fatena",
+    "date": "2026-09-19T11:53:58+03:00",
+    "product": "عباء ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 299,
+    "store": "golden-threads",
+    "date": "2026-09-19T11:46:31+03:00",
+    "product": "تراك بهاري ×1 (مشكل) - من 1 الى 3 سنوات",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 9
+  },
+  {
+    "order_id": 298,
+    "store": "al-fatena",
+    "date": "2026-09-19T11:13:39+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 297,
+    "store": "al-fatena",
+    "date": "2026-09-19T05:28:37+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 30
+  },
+  {
+    "order_id": 296,
+    "store": "al-fatena",
+    "date": "2026-09-19T05:04:07+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 38
+  },
+  {
+    "order_id": 295,
+    "store": "al-fatena",
+    "date": "2026-09-19T04:23:46+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42، سوت ×1 (اسود) - وزن 72",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 51
+  },
+  {
+    "order_id": 294,
+    "store": "al-fatena",
+    "date": "2026-09-19T02:46:58+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 30
+  },
+  {
+    "order_id": 293,
+    "store": "khuyoot",
+    "date": "2026-09-19T02:27:15+03:00",
+    "product": "تنورة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 27
+  },
+  {
+    "order_id": 292,
+    "store": "al-fatena",
+    "date": "2026-09-19T02:01:22+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 291,
+    "store": "al-fatena",
+    "date": "2026-09-19T01:29:43+03:00",
+    "product": "فستان رباط ×1 (جوزي) - 44، عباء لون وردي ×1 (ودي) - 44",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 290,
+    "store": "al-fatena",
+    "date": "2026-09-19T01:13:15+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 289,
+    "store": "al-fatena",
+    "date": "2026-09-19T00:41:03+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 12
+  },
+  {
+    "order_id": 288,
+    "store": "khuyoot",
+    "date": "2026-09-19T00:00:16+03:00",
+    "product": "تنورة ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 287,
+    "store": "al-fatena",
+    "date": "2026-09-18T23:48:02+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38، فستان دانتيل ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 286,
+    "store": "al-fatena",
+    "date": "2026-09-18T23:38:20+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 285,
+    "store": "al-fatena",
+    "date": "2026-09-18T23:33:48+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 27
+  },
+  {
+    "order_id": 284,
+    "store": "al-fatena",
+    "date": "2026-09-18T23:30:24+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 29
+  },
+  {
+    "order_id": 283,
+    "store": "al-fatena",
+    "date": "2026-09-18T23:24:20+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 42
+  },
+  {
+    "order_id": 282,
+    "store": "khuyoot",
+    "date": "2026-09-18T22:38:57+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 281,
+    "store": "khuyoot",
+    "date": "2026-09-18T22:15:15+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 29
+  },
+  {
+    "order_id": 280,
+    "store": "al-fatena",
+    "date": "2026-09-18T22:14:24+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 279,
+    "store": "default",
+    "date": "2026-09-18T22:00:35+03:00",
+    "product": "سوت حوامل ×1 (بنفسجي) - من 70 الى 130 كيلو",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 278,
+    "store": "al-fatena",
+    "date": "2026-09-18T21:54:43+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 277,
+    "store": "al-fatena",
+    "date": "2026-09-18T21:23:39+03:00",
+    "product": "سوت رصاصي ×1 (رصاصي) - 40، سوت رصاصي ×1 (رصاصي) - 42، سوت ملكي ×1 (اسود) - 40، سوت ملكي ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 47
+  },
+  {
+    "order_id": 276,
+    "store": "al-fatena",
+    "date": "2026-09-18T21:17:43+03:00",
+    "product": "سوت ياخة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 275,
+    "store": "al-fatena",
+    "date": "2026-09-18T21:14:25+03:00",
+    "product": "سوت ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 6
+  },
+  {
+    "order_id": 274,
+    "store": "al-fatena",
+    "date": "2026-09-18T21:09:57+03:00",
+    "product": "سوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 273,
+    "store": "al-fatena",
+    "date": "2026-09-18T21:03:44+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 272,
+    "store": "al-fatena",
+    "date": "2026-09-18T21:02:22+03:00",
+    "product": "فستان رباط ×1 (كريمي) - 40",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 59
+  },
+  {
+    "order_id": 271,
+    "store": "al-fatena",
+    "date": "2026-09-18T20:50:52+03:00",
+    "product": "عباء لون وردي ×1 (وردي) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 270,
+    "store": "al-fatena",
+    "date": "2026-09-18T20:23:40+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 269,
+    "store": "khuyoot",
+    "date": "2026-09-16T21:51:23+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 268,
+    "store": "al-fatena",
+    "date": "2026-09-16T21:40:06+03:00",
+    "product": "فستان رباط ×1 (جوزي) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 267,
+    "store": "khuyoot",
+    "date": "2026-09-16T21:37:40+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 266,
+    "store": "default",
+    "date": "2026-09-16T21:33:01+03:00",
+    "product": "سوت حوامل ×1 (زيتوني) - 70 كيلو",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 46
+  },
+  {
+    "order_id": 265,
+    "store": "default",
+    "date": "2026-09-16T21:32:35+03:00",
+    "product": "سوت حوامل ×1 (زيتوني) - من 70 الى 130 كيلو",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 39
+  },
+  {
+    "order_id": 264,
+    "store": "khuyoot",
+    "date": "2026-09-16T21:17:16+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 263,
+    "store": "al-fatena",
+    "date": "2026-09-16T21:11:14+03:00",
+    "product": "عباء لون وردي ×1 (وردي) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 30
+  },
+  {
+    "order_id": 262,
+    "store": "al-fatena",
+    "date": "2026-09-16T21:09:25+03:00",
+    "product": "فستان رباط ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 261,
+    "store": "al-fatena",
+    "date": "2026-09-16T21:05:08+03:00",
+    "product": "عباء لون وردي ×1 (وردي) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 27
+  },
+  {
+    "order_id": 260,
+    "store": "al-fatena",
+    "date": "2026-09-16T21:05:02+03:00",
+    "product": "عباء لمسة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 259,
+    "store": "al-fatena",
+    "date": "2026-09-16T20:58:17+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 258,
+    "store": "al-fatena",
+    "date": "2026-09-16T20:51:13+03:00",
+    "product": "فستان رباط ×1 (جوزي) - 42، قميص رباط ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 53
+  },
+  {
+    "order_id": 257,
+    "store": "default",
+    "date": "2026-09-16T20:51:12+03:00",
+    "product": "سوت حوامل ×1 (زيتوني) - وزن 85",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 256,
+    "store": "al-fatena",
+    "date": "2026-09-16T20:50:46+03:00",
+    "product": "عباء تطعيم ×1 (جوزي) - 40",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 29
+  },
+  {
+    "order_id": 255,
+    "store": "al-fatena",
+    "date": "2026-09-16T20:50:00+03:00",
+    "product": "عباء لون وردي ×1 (وردي) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 254,
+    "store": "al-fatena",
+    "date": "2026-09-16T20:46:28+03:00",
+    "product": "سوت ملكي ×1 (اسود) - xxxl",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 253,
+    "store": "al-fatena",
+    "date": "2026-09-16T20:45:55+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 252,
+    "store": "khuyoot",
+    "date": "2026-09-16T20:28:59+03:00",
+    "product": "تنورة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 251,
+    "store": "al-fatena",
+    "date": "2026-09-16T20:17:26+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 76
+  },
+  {
+    "order_id": 250,
+    "store": "khuyoot",
+    "date": "2026-09-16T20:16:16+03:00",
+    "product": "تنورة ×2 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 31
+  },
+  {
+    "order_id": 249,
+    "store": "al-fatena",
+    "date": "2026-09-16T19:42:32+03:00",
+    "product": "سوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 248,
+    "store": "al-fatena",
+    "date": "2026-09-16T19:33:50+03:00",
+    "product": "عباء لون وردي ×1 (وردي) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 52
+  },
+  {
+    "order_id": 247,
+    "store": "al-fatena",
+    "date": "2026-09-16T19:16:14+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 27
+  },
+  {
+    "order_id": 246,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:48:43+03:00",
+    "product": "فستان رباط ×2 (كريمي) - 40",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 245,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:22:40+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 244,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:14:28+03:00",
+    "product": "عباء لون وردي ×1 (وردي) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 243,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:10:14+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 39
+  },
+  {
+    "order_id": 242,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:05:41+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 241,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:04:28+03:00",
+    "product": "فستان رباط ×1 (جوزي) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 240,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:02:38+03:00",
+    "product": "فستان انيقة ×1 (جوزي) - 52، عباء لمسة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 63
+  },
+  {
+    "order_id": 239,
+    "store": "al-fatena",
+    "date": "2026-09-16T18:00:21+03:00",
+    "product": "فستان رباط ×1 (جوزي) - 38",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 66
+  },
+  {
+    "order_id": 238,
+    "store": "khuyoot",
+    "date": "2026-09-16T17:52:02+03:00",
+    "product": "تنورة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 237,
+    "store": "khuyoot",
+    "date": "2026-09-16T17:49:04+03:00",
+    "product": "تنورة ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 236,
+    "store": "al-fatena",
+    "date": "2026-09-16T17:39:57+03:00",
+    "product": "قميص رباط ×1 (اسود) - 95، سوت ملكي ×1 (اسود) - 95",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 90
+  },
+  {
+    "order_id": 235,
+    "store": "al-fatena",
+    "date": "2026-09-16T17:32:38+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 234,
+    "store": "al-fatena",
+    "date": "2026-09-16T17:17:18+03:00",
+    "product": "فستان رباط ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 46
+  },
+  {
+    "order_id": 233,
+    "store": "al-fatena",
+    "date": "2026-09-16T17:08:01+03:00",
+    "product": "عباء تطعيم ×1 (جوزي) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 232,
+    "store": "khuyoot",
+    "date": "2026-09-16T17:02:35+03:00",
+    "product": "تنورة ×1 (اسود) - 48، تنورة ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 231,
+    "store": "khuyoot",
+    "date": "2026-09-16T16:32:56+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 230,
+    "store": "al-fatena",
+    "date": "2026-09-16T16:25:08+03:00",
+    "product": "فستان رباط ×1 (اسود) - 80",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 229,
+    "store": "al-fatena",
+    "date": "2026-09-16T15:54:02+03:00",
+    "product": "سوت ×1 (اسود) - 60",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 75
+  },
+  {
+    "order_id": 228,
+    "store": "khuyoot",
+    "date": "2026-09-16T15:51:01+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 227,
+    "store": "al-fatena",
+    "date": "2026-09-16T15:46:02+03:00",
+    "product": "فستان رباط ×1 (جوزي) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 40
+  },
+  {
+    "order_id": 226,
+    "store": "default",
+    "date": "2026-09-16T15:26:02+03:00",
+    "product": "سوت حوامل ×1 (زيتوني) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 225,
+    "store": "default",
+    "date": "2026-09-16T14:56:06+03:00",
+    "product": "سوت حوامل ×1 (زيتوني) - من 70 الى 130 كيلو",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 224,
+    "store": "al-fatena",
+    "date": "2026-09-16T14:41:46+03:00",
+    "product": "عباء ×1 (اسود) - 63",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 223,
+    "store": "default",
+    "date": "2026-09-16T13:45:20+03:00",
+    "product": "سوت حوامل ×1 (أخضر) - من 70 الى 130 كيلو",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 222,
+    "store": "khuyoot",
+    "date": "2026-09-16T13:45:08+03:00",
+    "product": "تنورة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 221,
+    "store": "default",
+    "date": "2026-09-16T13:33:34+03:00",
+    "product": "سوت حوامل ×1 (زيتوني) - وزن 90",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 220,
+    "store": "default",
+    "date": "2026-09-16T13:12:05+03:00",
+    "product": "سوت حوامل ×1 (اخظر) - 85",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 10
+  },
+  {
+    "order_id": 219,
+    "store": "al-fatena",
+    "date": "2026-09-16T09:29:08+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 46",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 218,
+    "store": "khuyoot",
+    "date": "2026-09-16T08:16:33+03:00",
+    "product": "تنورة ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 14
+  },
+  {
+    "order_id": 217,
+    "store": "al-fatena",
+    "date": "2026-09-16T04:58:58+03:00",
+    "product": "عباء ×1 (اسود) - 85",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 216,
+    "store": "khuyoot",
+    "date": "2026-09-16T03:20:55+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 215,
+    "store": "al-fatena",
+    "date": "2026-09-16T01:39:04+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 43
+  },
+  {
+    "order_id": 214,
+    "store": "al-fatena",
+    "date": "2026-09-16T01:14:38+03:00",
+    "product": "فستان دانتيل ×2 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 213,
+    "store": "default",
+    "date": "2026-09-16T00:54:20+03:00",
+    "product": "سوت حوامل ×1 (زيتوني) - من 70 الى 130 كيلو",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 212,
+    "store": "default",
+    "date": "2026-09-16T00:03:14+03:00",
+    "product": "سوت حوامل ×1 (أخضر) - 95 كيلو (3XL)",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 38
+  },
+  {
+    "order_id": 211,
+    "store": "default",
+    "date": "2026-09-15T23:31:36+03:00",
+    "product": "سوت حوامل ×1 (اخظر) - 85",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 3
+  },
+  {
+    "order_id": 210,
+    "store": "al-fatena",
+    "date": "2026-09-15T23:28:33+03:00",
+    "product": "فستان انيقة ×1 (جوزي) - 52",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 57
+  },
+  {
+    "order_id": 209,
+    "store": "al-fatena",
+    "date": "2026-09-15T22:31:27+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 85",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 47
+  },
+  {
+    "order_id": 208,
+    "store": "default",
+    "date": "2026-09-15T22:18:59+03:00",
+    "product": "فستان ×2 (وردي و سماي) - 38",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 45
+  },
+  {
+    "order_id": 207,
+    "store": "default",
+    "date": "2026-09-15T22:01:03+03:00",
+    "product": "سوت حوامل ×1 (بنفسجي) - 85 كيلو",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 206,
+    "store": "khuyoot",
+    "date": "2026-09-15T21:54:39+03:00",
+    "product": "كيلوت ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 68
+  },
+  {
+    "order_id": 205,
+    "store": "al-fatena",
+    "date": "2026-09-15T17:03:24+03:00",
+    "product": "سوت نيلي ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 204,
+    "store": "default",
+    "date": "2026-09-14T16:30:30+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 4
+  },
+  {
+    "order_id": 203,
+    "store": "khuyoot",
+    "date": "2026-09-13T15:09:52+03:00",
+    "product": "تنورة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 31
+  },
+  {
+    "order_id": 202,
+    "store": "al-fatena",
+    "date": "2026-09-13T14:43:50+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 82",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 201,
+    "store": "khuyoot",
+    "date": "2026-09-13T10:37:53+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 45
+  },
+  {
+    "order_id": 200,
+    "store": "khuyoot",
+    "date": "2026-09-13T01:07:30+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 199,
+    "store": "default",
+    "date": "2026-09-13T00:07:29+03:00",
+    "product": "سوت حوامل ×1 (أخضر) - 95",
+    "status": "new",
+    "review_flags": [
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 198,
+    "store": "khuyoot",
+    "date": "2026-09-12T05:04:08+03:00",
+    "product": "تنورة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 40
+  },
+  {
+    "order_id": 197,
+    "store": "khuyoot",
+    "date": "2026-09-11T11:09:14+03:00",
+    "product": "تنورة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 196,
+    "store": "khuyoot",
+    "date": "2026-09-11T10:09:44+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 39
+  },
+  {
+    "order_id": 195,
+    "store": "khuyoot",
+    "date": "2026-09-11T09:50:26+03:00",
+    "product": "تنورة ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 36
+  },
+  {
+    "order_id": 194,
+    "store": "khuyoot",
+    "date": "2026-09-11T09:35:05+03:00",
+    "product": "تنورة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 193,
+    "store": "khuyoot",
+    "date": "2026-09-11T09:21:36+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 192,
+    "store": "khuyoot",
+    "date": "2026-09-11T03:27:51+03:00",
+    "product": "كيلوت ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 191,
+    "store": "khuyoot",
+    "date": "2026-09-11T01:41:36+03:00",
+    "product": "تنورة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 190,
+    "store": "khuyoot",
+    "date": "2026-09-11T01:39:15+03:00",
+    "product": "تنورة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 189,
+    "store": "khuyoot",
+    "date": "2026-09-10T23:59:33+03:00",
+    "product": "تنورة ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 188,
+    "store": "khuyoot",
+    "date": "2026-09-10T23:40:59+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 187,
+    "store": "khuyoot",
+    "date": "2026-09-10T23:19:43+03:00",
+    "product": "تنورة ×2 (اسود) - 52",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 186,
+    "store": "khuyoot",
+    "date": "2026-09-10T23:05:04+03:00",
+    "product": "تنورة ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 185,
+    "store": "khuyoot",
+    "date": "2026-09-10T19:50:58+03:00",
+    "product": "تنورة ×1 (اسود) - 85",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 184,
+    "store": "al-fatena",
+    "date": "2026-09-10T19:24:11+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 14
+  },
+  {
+    "order_id": 183,
+    "store": "al-fatena",
+    "date": "2026-09-10T18:28:25+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 60",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 182,
+    "store": "khuyoot",
+    "date": "2026-09-10T16:32:52+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 56
+  },
+  {
+    "order_id": 181,
+    "store": "khuyoot",
+    "date": "2026-09-10T13:39:39+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 10
+  },
+  {
+    "order_id": 180,
+    "store": "khuyoot",
+    "date": "2026-09-10T12:37:28+03:00",
+    "product": "تنورة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 179,
+    "store": "khuyoot",
+    "date": "2026-09-10T11:55:42+03:00",
+    "product": "كيلوت ×1 (اسود) - 54",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 178,
+    "store": "khuyoot",
+    "date": "2026-09-10T11:54:02+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [],
+    "messages_reviewed_automatically": 92
+  },
+  {
+    "order_id": 177,
+    "store": "khuyoot",
+    "date": "2026-09-10T11:45:33+03:00",
+    "product": "كيلوت ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 39
+  },
+  {
+    "order_id": 176,
+    "store": "khuyoot",
+    "date": "2026-09-10T11:36:16+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 175,
+    "store": "khuyoot",
+    "date": "2026-09-10T11:33:12+03:00",
+    "product": "تنورة ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 174,
+    "store": "default",
+    "date": "2026-09-10T10:57:49+03:00",
+    "product": "دشداشة حوامل ×1 (وردي) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 173,
+    "store": "khuyoot",
+    "date": "2026-09-10T10:31:07+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 41
+  },
+  {
+    "order_id": 172,
+    "store": "al-fatena",
+    "date": "2026-09-10T09:55:40+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 14
+  },
+  {
+    "order_id": 171,
+    "store": "khuyoot",
+    "date": "2026-09-10T08:55:22+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 170,
+    "store": "khuyoot",
+    "date": "2026-09-10T08:39:31+03:00",
+    "product": "كيلوت ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 169,
+    "store": "khuyoot",
+    "date": "2026-09-10T08:30:11+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 168,
+    "store": "khuyoot",
+    "date": "2026-09-10T06:18:04+03:00",
+    "product": "تنورة ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 167,
+    "store": "al-fatena",
+    "date": "2026-09-10T05:49:57+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 14
+  },
+  {
+    "order_id": 166,
+    "store": "al-fatena",
+    "date": "2026-09-10T01:21:24+03:00",
+    "product": "عباء مسطرة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 165,
+    "store": "khuyoot",
+    "date": "2026-09-10T01:05:59+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 164,
+    "store": "khuyoot",
+    "date": "2026-09-10T00:57:19+03:00",
+    "product": "تنورة ×1 (اسود) - 95",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 163,
+    "store": "khuyoot",
+    "date": "2026-09-10T00:04:15+03:00",
+    "product": "كيلوت ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 162,
+    "store": "khuyoot",
+    "date": "2026-09-09T23:52:19+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 161,
+    "store": "khuyoot",
+    "date": "2026-09-09T23:09:23+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 160,
+    "store": "khuyoot",
+    "date": "2026-09-09T22:35:11+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 11
+  },
+  {
+    "order_id": 159,
+    "store": "khuyoot",
+    "date": "2026-09-09T21:42:18+03:00",
+    "product": "كيلوت ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 158,
+    "store": "khuyoot",
+    "date": "2026-09-09T21:41:28+03:00",
+    "product": "تنورة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 27
+  },
+  {
+    "order_id": 157,
+    "store": "khuyoot",
+    "date": "2026-09-09T21:38:53+03:00",
+    "product": "تنورة ×2 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 9
+  },
+  {
+    "order_id": 156,
+    "store": "khuyoot",
+    "date": "2026-09-09T21:29:10+03:00",
+    "product": "كيلوت ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 155,
+    "store": "khuyoot",
+    "date": "2026-09-09T21:25:52+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 154,
+    "store": "khuyoot",
+    "date": "2026-09-09T21:25:25+03:00",
+    "product": "تنورة ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 153,
+    "store": "khuyoot",
+    "date": "2026-09-09T20:42:48+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 11
+  },
+  {
+    "order_id": 152,
+    "store": "khuyoot",
+    "date": "2026-09-09T20:35:04+03:00",
+    "product": "كيلوت ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 151,
+    "store": "khuyoot",
+    "date": "2026-09-09T20:08:09+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 46
+  },
+  {
+    "order_id": 150,
+    "store": "khuyoot",
+    "date": "2026-09-09T19:47:20+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 149,
+    "store": "al-fatena",
+    "date": "2026-09-09T19:46:58+03:00",
+    "product": "فستان دانتيل ×2 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 36
+  },
+  {
+    "order_id": 148,
+    "store": "khuyoot",
+    "date": "2026-09-09T18:39:41+03:00",
+    "product": "تنورة ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 12
+  },
+  {
+    "order_id": 147,
+    "store": "khuyoot",
+    "date": "2026-09-09T18:33:00+03:00",
+    "product": "تنورة ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 146,
+    "store": "khuyoot",
+    "date": "2026-09-09T18:28:39+03:00",
+    "product": "تنورة ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 145,
+    "store": "al-fatena",
+    "date": "2026-09-09T17:57:52+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 40
+  },
+  {
+    "order_id": 144,
+    "store": "al-fatena",
+    "date": "2026-09-09T17:45:36+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 40، فستان دانتيل ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 143,
+    "store": "al-fatena",
+    "date": "2026-09-09T17:15:30+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 142,
+    "store": "al-fatena",
+    "date": "2026-09-09T12:31:22+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 141,
+    "store": "al-fatena",
+    "date": "2026-09-09T11:44:07+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "شرط موعد يحتاج مراجعة الموافقة",
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 60
+  },
+  {
+    "order_id": 140,
+    "store": "al-fatena",
+    "date": "2026-09-09T11:30:43+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 139,
+    "store": "al-fatena",
+    "date": "2026-09-09T00:06:50+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 138,
+    "store": "al-fatena",
+    "date": "2026-09-08T23:13:06+03:00",
+    "product": "P002 ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 137,
+    "store": "default",
+    "date": "2026-09-08T22:14:18+03:00",
+    "product": "دشداشة حوامل ×1 (وردي) - وزن 79",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 48
+  },
+  {
+    "order_id": 136,
+    "store": "al-fatena",
+    "date": "2026-09-08T21:16:19+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 135,
+    "store": "al-fatena",
+    "date": "2026-09-08T17:27:52+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 6
+  },
+  {
+    "order_id": 134,
+    "store": "al-fatena",
+    "date": "2026-09-08T09:01:32+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 133,
+    "store": "al-fatena",
+    "date": "2026-09-08T01:02:05+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 132,
+    "store": "al-fatena",
+    "date": "2026-09-08T00:35:12+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 131,
+    "store": "al-fatena",
+    "date": "2026-09-08T00:21:01+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 40
+  },
+  {
+    "order_id": 130,
+    "store": "al-fatena",
+    "date": "2026-09-07T22:47:08+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 58
+  },
+  {
+    "order_id": 129,
+    "store": "al-fatena",
+    "date": "2026-09-07T22:36:39+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 70",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 128,
+    "store": "al-fatena",
+    "date": "2026-09-07T22:26:43+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 38
+  },
+  {
+    "order_id": 127,
+    "store": "al-fatena",
+    "date": "2026-09-07T22:23:18+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 50
+  },
+  {
+    "order_id": 126,
+    "store": "al-fatena",
+    "date": "2026-09-07T20:02:42+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 125,
+    "store": "al-fatena",
+    "date": "2026-09-07T19:24:43+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 70",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 124,
+    "store": "khuyoot",
+    "date": "2026-09-07T18:20:37+03:00",
+    "product": "كيلوت ×1 (اسود) - لارج",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 123,
+    "store": "khuyoot",
+    "date": "2026-09-07T17:40:15+03:00",
+    "product": "كيلوت ×1 (اسود) - L",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 14
+  },
+  {
+    "order_id": 122,
+    "store": "default",
+    "date": "2026-09-07T17:14:21+03:00",
+    "product": "دشداشة حوامل ×1 (سماي) - 80 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 64
+  },
+  {
+    "order_id": 121,
+    "store": "al-fatena",
+    "date": "2026-09-07T16:51:42+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 120,
+    "store": "al-fatena",
+    "date": "2026-09-07T15:22:41+03:00",
+    "product": "P002 ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 38
+  },
+  {
+    "order_id": 119,
+    "store": "golden-threads",
+    "date": "2026-09-07T15:17:13+03:00",
+    "product": "تراك بهاري ×3 (ألوان مشكلة) - من 1 الى 3 سنوات",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 51
+  },
+  {
+    "order_id": 118,
+    "store": "khuyoot",
+    "date": "2026-09-07T14:49:38+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 29
+  },
+  {
+    "order_id": 117,
+    "store": "al-fatena",
+    "date": "2026-09-07T14:23:06+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 42، سوت ياخة ×1 (اسود) - 46، قميص رباط ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 116,
+    "store": "al-fatena",
+    "date": "2026-09-07T13:35:55+03:00",
+    "product": "سوت رصاصي ×1",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل",
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 67
+  },
+  {
+    "order_id": 115,
+    "store": "al-fatena",
+    "date": "2026-09-07T13:31:52+03:00",
+    "product": "سوت ملكي ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 114,
+    "store": "al-fatena",
+    "date": "2026-09-07T12:49:20+03:00",
+    "product": "فستان دانتيل ×1 - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل",
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 45
+  },
+  {
+    "order_id": 113,
+    "store": "al-fatena",
+    "date": "2026-09-07T12:35:26+03:00",
+    "product": "فستان دانتيل ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 112,
+    "store": "khuyoot",
+    "date": "2026-09-07T12:08:29+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 12
+  },
+  {
+    "order_id": 111,
+    "store": "khuyoot",
+    "date": "2026-09-07T12:02:41+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 110,
+    "store": "khuyoot",
+    "date": "2026-09-07T11:08:06+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 109,
+    "store": "khuyoot",
+    "date": "2026-09-07T11:01:07+03:00",
+    "product": "كيلوت ×1 (اسود) - 85",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 10
+  },
+  {
+    "order_id": 108,
+    "store": "khuyoot",
+    "date": "2026-09-07T10:31:15+03:00",
+    "product": "كيلوت ×1 (اسود) - 75",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 107,
+    "store": "khuyoot",
+    "date": "2026-09-07T10:19:13+03:00",
+    "product": "كيلوت ×1 (اسود) - 100",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 106,
+    "store": "golden-threads",
+    "date": "2026-09-07T08:13:41+03:00",
+    "product": "صدرية ×2 (اسود) - 6/7",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 105,
+    "store": "golden-threads",
+    "date": "2026-09-07T07:49:45+03:00",
+    "product": "تراك بهاري ×2 (مشكل) - من 1 الى 3 سنوات",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 6
+  },
+  {
+    "order_id": 104,
+    "store": "khuyoot",
+    "date": "2026-09-06T23:46:04+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 103,
+    "store": "golden-threads",
+    "date": "2026-09-06T22:59:49+03:00",
+    "product": "تراك بهاري ×1 (مشكل ألوان الدرزن) - من 1 الى سنوات",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 102,
+    "store": "golden-threads",
+    "date": "2026-09-06T22:13:34+03:00",
+    "product": "تراك بهاري ×1 (مشكل 4 ألوان) - من 1 الى سنوات",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 101,
+    "store": "khuyoot",
+    "date": "2026-09-06T19:32:59+03:00",
+    "product": "كيلوت ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 100,
+    "store": "khuyoot",
+    "date": "2026-09-06T19:28:07+03:00",
+    "product": "كيلوت ×1 (اسود) - 42، كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 99,
+    "store": "khuyoot",
+    "date": "2026-09-06T19:00:05+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 98,
+    "store": "khuyoot",
+    "date": "2026-09-06T18:26:30+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 97,
+    "store": "khuyoot",
+    "date": "2026-09-06T13:06:15+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 9
+  },
+  {
+    "order_id": 96,
+    "store": "khuyoot",
+    "date": "2026-09-06T12:34:26+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 15
+  },
+  {
+    "order_id": 95,
+    "store": "khuyoot",
+    "date": "2026-09-05T16:06:47+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 38
+  },
+  {
+    "order_id": 94,
+    "store": "khuyoot",
+    "date": "2026-09-05T15:51:25+03:00",
+    "product": "كيلوت ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 45
+  },
+  {
+    "order_id": 93,
+    "store": "khuyoot",
+    "date": "2026-09-05T15:28:05+03:00",
+    "product": "كيلوت ×1 (اسود) - 60",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 92,
+    "store": "default",
+    "date": "2026-09-05T15:11:58+03:00",
+    "product": "دشداشة حوامل ×1 (سماي) - من 60 الى 120",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 91,
+    "store": "khuyoot",
+    "date": "2026-09-05T14:49:36+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 90,
+    "store": "khuyoot",
+    "date": "2026-09-05T14:44:25+03:00",
+    "product": "كيلوت ×1 (اسود) - 85",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 89,
+    "store": "khuyoot",
+    "date": "2026-09-05T13:21:37+03:00",
+    "product": "كيلوت ×1 (اسود) - 74",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 88,
+    "store": "khuyoot",
+    "date": "2026-09-05T13:10:25+03:00",
+    "product": "كيلوت ×1 (اسود) - 46، كيلوت ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 87,
+    "store": "default",
+    "date": "2026-09-05T13:01:10+03:00",
+    "product": "سوت قياس خاص ×1 (اسود) - وزن 100",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 37
+  },
+  {
+    "order_id": 86,
+    "store": "khuyoot",
+    "date": "2026-09-05T12:10:08+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 85,
+    "store": "default",
+    "date": "2026-09-05T11:51:20+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 84,
+    "store": "golden-threads",
+    "date": "2026-09-05T10:49:39+03:00",
+    "product": "صدرية ×1 (نيلي) - من 3 الى 7 سنوات، صدرية ×1 (رصاصي) - من 3 الى 7 سنوات",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 83,
+    "store": "khuyoot",
+    "date": "2026-09-05T04:39:05+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 82,
+    "store": "khuyoot",
+    "date": "2026-09-05T03:03:17+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 19
+  },
+  {
+    "order_id": 81,
+    "store": "khuyoot",
+    "date": "2026-09-05T02:39:40+03:00",
+    "product": "كيلوت ×1 (اسود) - 44، كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 80,
+    "store": "khuyoot",
+    "date": "2026-09-05T01:13:49+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 13
+  },
+  {
+    "order_id": 79,
+    "store": "default",
+    "date": "2026-09-05T00:43:03+03:00",
+    "product": "دشداشة حوامل ×1 (وردي) - 90",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 46
+  },
+  {
+    "order_id": 78,
+    "store": "golden-threads",
+    "date": "2026-09-05T00:31:09+03:00",
+    "product": "صدرية ×12 (رصاصي) - من 3 الى 7 سنوات",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 10
+  },
+  {
+    "order_id": 77,
+    "store": "khuyoot",
+    "date": "2026-09-05T00:30:29+03:00",
+    "product": "كيلوت ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 76,
+    "store": "khuyoot",
+    "date": "2026-09-05T00:27:41+03:00",
+    "product": "كيلوت ×1 (اسود) - 73 كغم",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 75,
+    "store": "khuyoot",
+    "date": "2026-09-05T00:14:52+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 10
+  },
+  {
+    "order_id": 74,
+    "store": "khuyoot",
+    "date": "2026-09-04T23:50:16+03:00",
+    "product": "كيلوت ×2 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 48
+  },
+  {
+    "order_id": 73,
+    "store": "khuyoot",
+    "date": "2026-09-04T23:31:30+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 72,
+    "store": "khuyoot",
+    "date": "2026-09-04T21:24:08+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 71,
+    "store": "khuyoot",
+    "date": "2026-09-04T20:14:10+03:00",
+    "product": "كيلوت ×1 - قياس 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل",
+      "لون أو قياس غير مسجل في الحقول الرئيسية"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 70,
+    "store": "khuyoot",
+    "date": "2026-09-04T20:11:56+03:00",
+    "product": "كيلوت ×1 (اسود) - 90",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 69,
+    "store": "khuyoot",
+    "date": "2026-09-04T19:41:57+03:00",
+    "product": "كيلوت ×1 (اسود) - 94",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 44
+  },
+  {
+    "order_id": 68,
+    "store": "khuyoot",
+    "date": "2026-09-04T19:34:07+03:00",
+    "product": "كيلوت ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 14
+  },
+  {
+    "order_id": 67,
+    "store": "khuyoot",
+    "date": "2026-09-04T19:25:42+03:00",
+    "product": "كيلوت ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 66,
+    "store": "khuyoot",
+    "date": "2026-09-04T19:16:52+03:00",
+    "product": "كيلوت ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 65,
+    "store": "default",
+    "date": "2026-09-03T10:20:24+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - من 55 كيلو الى 85 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 17
+  },
+  {
+    "order_id": 64,
+    "store": "khuyoot",
+    "date": "2026-09-01T17:19:37+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 27
+  },
+  {
+    "order_id": 63,
+    "store": "khuyoot",
+    "date": "2026-09-01T14:08:23+03:00",
+    "product": "كيلوت ×1 (اسود) - 48، كيلوت ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 62,
+    "store": "khuyoot",
+    "date": "2026-09-01T13:45:25+03:00",
+    "product": "كيلوت ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 61,
+    "store": "khuyoot",
+    "date": "2026-09-01T13:22:05+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 60,
+    "store": "default",
+    "date": "2026-09-01T12:13:26+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - وزن 55",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 50
+  },
+  {
+    "order_id": 59,
+    "store": "khuyoot",
+    "date": "2026-09-01T11:40:27+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 58,
+    "store": "khuyoot",
+    "date": "2026-09-01T02:15:04+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 12
+  },
+  {
+    "order_id": 57,
+    "store": "khuyoot",
+    "date": "2026-09-01T01:58:07+03:00",
+    "product": "كيلوت ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 30
+  },
+  {
+    "order_id": 56,
+    "store": "khuyoot",
+    "date": "2026-09-01T01:38:09+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 30
+  },
+  {
+    "order_id": 55,
+    "store": "khuyoot",
+    "date": "2026-09-01T00:47:09+03:00",
+    "product": "كيلوت ×2 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 54,
+    "store": "khuyoot",
+    "date": "2026-08-31T23:52:27+03:00",
+    "product": "كيلوت ×1 (اسود) - 40، كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 53,
+    "store": "default",
+    "date": "2026-08-31T23:33:30+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 48-50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 52,
+    "store": "khuyoot",
+    "date": "2026-08-31T23:31:29+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 51,
+    "store": "default",
+    "date": "2026-08-31T23:09:17+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 45",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 50,
+    "store": "khuyoot",
+    "date": "2026-08-31T22:59:34+03:00",
+    "product": "كيلوت ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 49,
+    "store": "default",
+    "date": "2026-08-31T21:45:50+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - وزن 75 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 48,
+    "store": "khuyoot",
+    "date": "2026-08-31T21:31:25+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 47,
+    "store": "khuyoot",
+    "date": "2026-08-31T20:39:19+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 24
+  },
+  {
+    "order_id": 46,
+    "store": "default",
+    "date": "2026-08-31T20:37:13+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 45,
+    "store": "default",
+    "date": "2026-08-31T20:25:51+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - من 55 كيلو الى 85 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 44,
+    "store": "khuyoot",
+    "date": "2026-08-31T20:24:28+03:00",
+    "product": "كيلوت ×1 (اسود) - 80",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 21
+  },
+  {
+    "order_id": 43,
+    "store": "khuyoot",
+    "date": "2026-08-31T18:49:33+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 42,
+    "store": "khuyoot",
+    "date": "2026-08-31T15:57:32+03:00",
+    "product": "كيلوت ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 43
+  },
+  {
+    "order_id": 41,
+    "store": "khuyoot",
+    "date": "2026-08-31T15:32:53+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 38
+  },
+  {
+    "order_id": 40,
+    "store": "default",
+    "date": "2026-08-31T15:30:15+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 39,
+    "store": "khuyoot",
+    "date": "2026-08-31T12:40:11+03:00",
+    "product": "كيلوت ×1 (اسود) - 50",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 35
+  },
+  {
+    "order_id": 38,
+    "store": "khuyoot",
+    "date": "2026-08-31T12:07:54+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 100، كيلوت ×1 (اسود) - 100",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 36
+  },
+  {
+    "order_id": 37,
+    "store": "khuyoot",
+    "date": "2026-08-31T11:44:39+03:00",
+    "product": "كيلوت ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 25
+  },
+  {
+    "order_id": 36,
+    "store": "khuyoot",
+    "date": "2026-08-31T11:43:39+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 35,
+    "store": "default",
+    "date": "2026-08-31T11:39:44+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - من 55 كيلو الى 85 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 34,
+    "store": "khuyoot",
+    "date": "2026-08-31T11:03:26+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 33,
+    "store": "default",
+    "date": "2026-08-31T10:44:40+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - اكس لارج",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 14
+  },
+  {
+    "order_id": 32,
+    "store": "default",
+    "date": "2026-08-31T10:42:54+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - وزن 60",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 46
+  },
+  {
+    "order_id": 31,
+    "store": "default",
+    "date": "2026-08-31T09:12:16+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 18
+  },
+  {
+    "order_id": 30,
+    "store": "khuyoot",
+    "date": "2026-08-31T03:56:43+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 27
+  },
+  {
+    "order_id": 29,
+    "store": "khuyoot",
+    "date": "2026-08-31T01:01:37+03:00",
+    "product": "كيلوت ×1 (اسود) - لارج",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 41
+  },
+  {
+    "order_id": 28,
+    "store": "default",
+    "date": "2026-08-30T22:56:51+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - وزن 55، سوت ابو الورد ×1 (اسود) - وزن 74، سوت ابو الورد ×1 (اسود) - وزن 85",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 27,
+    "store": "default",
+    "date": "2026-08-30T21:42:29+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - من 55 الى 85 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 77
+  },
+  {
+    "order_id": 26,
+    "store": "default",
+    "date": "2026-08-30T21:29:14+03:00",
+    "product": "سوت قياس خاص ×1 (اسود) - قياس خاص (وزن 90)",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 77
+  },
+  {
+    "order_id": 25,
+    "store": "khuyoot",
+    "date": "2026-08-30T20:27:05+03:00",
+    "product": "كيلوت ×1 (اسود) - L",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 11
+  },
+  {
+    "order_id": 24,
+    "store": "default",
+    "date": "2026-08-30T20:20:19+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 48",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 49
+  },
+  {
+    "order_id": 23,
+    "store": "default",
+    "date": "2026-08-30T19:59:19+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 75 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 22,
+    "store": "default",
+    "date": "2026-08-30T19:58:22+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 80 كيلو",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 0
+  },
+  {
+    "order_id": 21,
+    "store": "khuyoot",
+    "date": "2026-08-30T18:29:01+03:00",
+    "product": "كيلوت ×3 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 60
+  },
+  {
+    "order_id": 20,
+    "store": "khuyoot",
+    "date": "2026-08-30T18:22:57+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 23
+  },
+  {
+    "order_id": 19,
+    "store": "khuyoot",
+    "date": "2026-08-30T16:37:27+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 18,
+    "store": "default",
+    "date": "2026-08-30T16:06:43+03:00",
+    "product": "سوت قياس خاص ×1 (اسود) - قياس خاص",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 34
+  },
+  {
+    "order_id": 17,
+    "store": "khuyoot",
+    "date": "2026-08-30T16:01:49+03:00",
+    "product": "كيلوت ×1 (اسود) - 38، كيلوت ×1 (اسود) - 40",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 56
+  },
+  {
+    "order_id": 16,
+    "store": "khuyoot",
+    "date": "2026-08-30T13:56:24+03:00",
+    "product": "سوت نيلي ×1 (نيلي) - 38، كيلوت ×1 (اسود) - 38",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 20
+  },
+  {
+    "order_id": 15,
+    "store": "default",
+    "date": "2026-08-30T13:55:34+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 32
+  },
+  {
+    "order_id": 14,
+    "store": "default",
+    "date": "2026-08-30T13:46:22+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - وزن 70 (قياس 46)",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 33
+  },
+  {
+    "order_id": 13,
+    "store": "default",
+    "date": "2026-08-30T12:48:36+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 30
+  },
+  {
+    "order_id": 12,
+    "store": "default",
+    "date": "2026-08-30T12:36:01+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - XXl",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 28
+  },
+  {
+    "order_id": 11,
+    "store": "khuyoot",
+    "date": "2026-08-30T10:58:37+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 36
+  },
+  {
+    "order_id": 10,
+    "store": "khuyoot",
+    "date": "2026-08-30T08:58:31+03:00",
+    "product": "كيلوت ×1 (اسود) - 42",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 9,
+    "store": "khuyoot",
+    "date": "2026-08-30T03:34:55+03:00",
+    "product": "كيلوت ×1 (اسود) - 44",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 29
+  },
+  {
+    "order_id": 8,
+    "store": "khuyoot",
+    "date": "2026-08-30T01:01:13+03:00",
+    "product": "كيلوت ×1 (اسود) - 52",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 12
+  },
+  {
+    "order_id": 7,
+    "store": "khuyoot",
+    "date": "2026-08-30T00:30:24+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 22
+  },
+  {
+    "order_id": 6,
+    "store": "khuyoot",
+    "date": "2026-08-30T00:26:06+03:00",
+    "product": "كيلوت ×1 (اسود) - 80",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 35
+  },
+  {
+    "order_id": 5,
+    "store": "khuyoot",
+    "date": "2026-08-30T00:18:19+03:00",
+    "product": "كيلوت ×1 (اسود) - 85",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 45
+  },
+  {
+    "order_id": 4,
+    "store": "khuyoot",
+    "date": "2026-08-30T00:17:58+03:00",
+    "product": "كيلوت ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 26
+  },
+  {
+    "order_id": 3,
+    "store": "default",
+    "date": "2026-08-29T23:23:18+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 42، سوت ابو الورد ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 38
+  },
+  {
+    "order_id": 2,
+    "store": "khuyoot",
+    "date": "2026-08-29T22:31:50+03:00",
+    "product": "كيلوت ×1 (اسود) - 100",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 16
+  },
+  {
+    "order_id": 1,
+    "store": "default",
+    "date": "2026-08-29T20:13:09+03:00",
+    "product": "سوت ابو الورد ×1 (اسود) - 46",
+    "status": "new",
+    "review_flags": [
+      "قيم مالية غير مكتملة بالسجل"
+    ],
+    "messages_reviewed_automatically": 32
+  }
+]

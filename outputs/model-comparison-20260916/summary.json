@@ -1,0 +1,52 @@
+[
+  {
+    "model": "google/gemini-3.8-flash",
+    "sales": 5.9,
+    "understanding": 6.7,
+    "dialect": 8.7,
+    "total": 68.8,
+    "seconds": 9.85,
+    "complete": 9,
+    "cost": 0.04583475
+  },
+  {
+    "model": "google/gemini-2.5-flash-lite",
+    "sales": 4.1,
+    "understanding": 4.6,
+    "dialect": 7.9,
+    "total": 52.2,
+    "seconds": 2.51,
+    "complete": 10,
+    "cost": 0.0024247
+  },
+  {
+    "model": "google/gemini-2.5-flash",
+    "sales": 3.6,
+    "understanding": 4.1,
+    "dialect": 8.9,
+    "total": 51.0,
+    "seconds": 2.75,
+    "complete": 10,
+    "cost": 0.0082289
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "sales": 3,
+    "understanding": 3.7,
+    "dialect": 5.5,
+    "total": 38.7,
+    "seconds": 17.87,
+    "complete": 6,
+    "cost": 0.073267438121313
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "sales": 3.6,
+    "understanding": 4.5,
+    "dialect": 3.3,
+    "total": 38.4,
+    "seconds": 5.53,
+    "complete": 10,
+    "cost": 0.040533
+  }
+]

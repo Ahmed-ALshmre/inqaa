@@ -1,0 +1,24 @@
+{"id": "price_total", "checks": {"contains_15": true, "contains_5": true, "contains_20": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.56, "failure_reason": null}
+{"id": "price_objection", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 10.64, "failure_reason": null}
+{"id": "budget_cap", "checks": {"contains_18": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.84, "failure_reason": null}
+{"id": "discount", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.45, "failure_reason": null}
+{"id": "fake_image", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 12.75, "failure_reason": null}
+{"id": "image_guarantee", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.48, "failure_reason": null}
+{"id": "known_length", "checks": {"contains_135": true, "contains_سحاب": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 5.97, "failure_reason": null}
+{"id": "lining", "checks": {"contains_مبطن": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.23, "failure_reason": null}
+{"id": "unknown_width", "checks": {"not_failed": false, "grounded_reply": true, "no_premature_close": true}, "seconds": 23.77, "failure_reason": "invalid_ai_response"}
+{"id": "weight_fit", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 16.75, "failure_reason": null}
+{"id": "size_preference", "checks": {"contains_46": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 9.17, "failure_reason": null}
+{"id": "comparison", "checks": {"contains_باربي": false, "contains_قطن": false, "not_failed": false, "grounded_reply": true, "no_premature_close": true}, "seconds": 18.67, "failure_reason": "known_product_context_repeatedly_ignored"}
+{"id": "ready_contact", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 10.55, "failure_reason": null}
+{"id": "complete_order", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.52, "failure_reason": null}
+{"id": "two_variants", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true, "separate_variants": true}, "seconds": 10.75, "failure_reason": null}
+{"id": "defer_salary", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 6.44, "failure_reason": null}
+{"id": "optout", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 5.11, "failure_reason": null}
+{"id": "thanks", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 10.25, "failure_reason": null}
+{"id": "delivery_deadline", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.27, "failure_reason": null}
+{"id": "single_from_bundle", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.23, "failure_reason": null}
+{"id": "bundle_order", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true, "correct_bundle_total": true}, "seconds": 25.86, "failure_reason": null}
+{"id": "reject_one_option", "checks": {"contains_44": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.52, "failure_reason": null}
+{"id": "no_premature_order", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.77, "failure_reason": null}
+{"id": "quantity_ambiguity", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 15.53, "failure_reason": null}

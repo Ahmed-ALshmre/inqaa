@@ -1,0 +1,233 @@
+{
+  "model": "google/gemini-3.8-flash",
+  "variant": "improved",
+  "results": [
+    {
+      "id": "price_total",
+      "goal": "السعر والتوصيل والمجموع قبل طلب الحجز",
+      "text": "شكد السعر ويا التوصيل للموصل؟",
+      "result": {
+        "reply": "هلا عيني، سعره 15 ألف والتوصيل للموصل 5 آلاف، المجموع 20 ألف.\n\nمتوفر بالأسود والكريمي، يا لون وقياس تحبين؟",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 50,
+        "requires_human": false,
+        "_truncated_reply_recovered": true
+      },
+      "checks": {
+        "contains_15": true,
+        "contains_5": true,
+        "contains_20": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 7.61
+    },
+    {
+      "id": "price_objection",
+      "goal": "تفهم الميزانية وقيمة موثقة أو بديل بلا خصم مخترع",
+      "text": "غالي علي حبيبتي غيركم ارخص",
+      "result": {
+        "reply": "تدللين عيني، سعره 15 ألف لأن قماشه باربي ومرتب، وإذا حابة خيار أنسب متوفر عندنا فستان ساده قطن سعره 13 ألف، يعجبج تشوفيه؟",
+        "reply_parts": [
+          "تدللين عيني، سعره 15 ألف لأن قماشه باربي ومرتب، وإذا حابة خيار أنسب متوفر عندنا فستان ساده قطن سعره 13 ألف، يعجبج تشوفيه؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 6.47
+    },
+    {
+      "id": "bundle_order",
+      "goal": "ثلاث قطع بمجموع 25 ألف مع التوصيل المجاني",
+      "text": "ثبتي بكج 3 قطع سنة: وردي وماروني وتركوازي وحدة من كل لون",
+      "result": {
+        "reply": "تدللين عيني، سجلت يمي طلبج بكج 3 قطع قياس سنة (وردي، ماروني، تركوازي) بـ25 ألف والتوصيل مجاني لبغداد.\n\nيوصلج خلال يومين إلى 3 أيام، وأهم شي تفحصين الطلب وتتأكدين من القياس والألوان قبل الاستلام.",
+        "reply_parts": [
+          "تدللين عيني، سجلت يمي طلبج بكج 3 قطع قياس سنة (وردي، ماروني، تركوازي) بـ25 ألف والتوصيل مجاني لبغداد.\n\nيوصلج خلال يومين إلى 3 أيام، وأهم شي تفحصين الطلب وتتأكدين من القياس والألوان قبل الاستلام."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "وردي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "ماروني",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "تركوازي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true,
+        "correct_bundle_total": true
+      },
+      "seconds": 19.33
+    },
+    {
+      "id": "remembered_options",
+      "goal": "يتذكر الأسود 42 والهاتف ويكمل الحجز عند وصول العنوان",
+      "text": "بغداد حي تجريبي",
+      "result": {
+        "reply": "تدللين عيني، تم تثبيت طلبج. يوصلج خلال يومين إلى ثلاثة أيام، وأهم شي تفحصين القطعة بحضور المندوب وتتأكدين من الموديل والقياس قبل الدفع.",
+        "reply_parts": [
+          "تدللين عيني، تم تثبيت طلبج.\n\nيوصلج خلال يومين إلى ثلاثة أيام، وأهم شي تفحصين القطعة بحضور المندوب وتتأكدين من الموديل والقياس قبل الدفع."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.58
+    },
+    {
+      "id": "last_minute_change",
+      "goal": "يحدّث الخيار ولا يعيد اللون والقياس القديمين",
+      "text": "لا مو الاسود 42، خليها كريمي قياس 46 وثبتي",
+      "result": {
+        "reply": "تدللين عيني، سجلت فستان الرباط كريمي قياس 46. يوصلج لبغداد خلال يومين إلى تلاثة أيام، وأهم شي تفحصين القطعة والتأكد من الموديل والقياس قبل الدفع.",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 50,
+        "requires_human": false,
+        "_truncated_reply_recovered": true
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 7.16
+    },
+    {
+      "id": "acknowledged_size",
+      "goal": "القياس المصرح به يتقدم على الاقتراح السابق ولا يعاد السؤال",
+      "text": "اي اعتمدي 42 اسود وثبتي",
+      "result": {
+        "reply": "تدللين عيني، تم تثبيت طلبج لفستان الرباط قياس 42 لون أسود.\n\nالسعر 15 ألف والتوصيل 5 آلاف، المجموع 20 ألف دينار، ويوصلج خلال يومين إلى 3 أيام. أهم شي تفحصين القطعة وتتأكدين من القياس بحضور المندوب قبل الدفع.",
+        "reply_parts": [
+          "تدللين عيني، تم تثبيت طلبج لفستان الرباط قياس 42 لون أسود.",
+          "السعر 15 ألف والتوصيل 5 آلاف، المجموع 20 ألف دينار، ويوصلج خلال يومين إلى 3 أيام.",
+          "أهم شي تفحصين القطعة وتتأكدين من القياس بحضور المندوب قبل الدفع."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 6.69
+    }
+  ]
+}

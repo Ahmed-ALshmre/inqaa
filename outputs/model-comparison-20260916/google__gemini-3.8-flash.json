@@ -1,0 +1,352 @@
+[
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 1,
+    "message_id": 16767,
+    "http_status": 200,
+    "reply": "وعليكم السلام عيني، أهلاً وسهلاً بيج.\n\nبسعر 15 ألف متوفر عندنا السوت النيلي (خامة باربي درجة أولى)، وهم متوفر سوت بلون أسود (موديل سوت رباط بخامة قماش فرسان درجة أولى).\n\nوقياس 42 متوفر بالاثنين ويناسب تقريباً وزن 67 إلى 72 كيلو.\n\nيا لون يعجبج تحجزين منه، الأسود لو النيلي؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3404,
+      "completion_tokens": 529,
+      "total_tokens": 3933,
+      "cost": 0.00453675,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00453675,
+        "upstream_inference_prompt_cost": 0.002553,
+        "upstream_inference_completions_cost": 0.00198375
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 421,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566390-byMkmhvjxv8kZQIWIQvR",
+    "seconds": 10.73
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 2,
+    "message_id": 16425,
+    "http_status": 200,
+    "reply": "صباح الورد والسرور عيوني، يا هلا بيج.\n\nالعروض بعدها مستمرة على عدة موديلات، بس يا ريت توضحيلي يا موديل تقصدين أو تدزيلي صورته حتى أجاوبج بدقة؟ \n\nعلماً إن القياسات بالترقيم توصل يمنا لحد قياس 52، أما إذا كان قصدج الوزن 54 كيلو فمتوفر لمعظم الموديلات. يا ريت تدزيلي الموديل حتى أشوفلج ألوانه وتفاصيله؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3406,
+      "completion_tokens": 931,
+      "total_tokens": 4337,
+      "cost": 0.00604575,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00604575,
+        "upstream_inference_prompt_cost": 0.0025545,
+        "upstream_inference_completions_cost": 0.00349125
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 814,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566398-iyg32xSndZX9q6y2Wa5s",
+    "seconds": 14.01
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 3,
+    "message_id": 16398,
+    "http_status": 200,
+    "reply": "وعليكم السلام عيني، حقج على راسنا ونعتذر من كل كلبنا على أي تأخير أو تقصير صار وياج، ومصداقيتنا ورضاكم والله أهم شي عدنا وباب رزقنا مثل ما تفضلتي. بس فدوة لعينج دزيلي رقم التلفون أو الاسم اللي مثبتة بيه الطلب حتى أعرف تفاصيل طلبيّة التنورة وأتابعها الج فوراً.",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1349,
+      "completion_tokens": 890,
+      "total_tokens": 2239,
+      "cost": 0.00434925,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00434925,
+        "upstream_inference_prompt_cost": 0.00101175,
+        "upstream_inference_completions_cost": 0.0033375
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 795,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566413-PtopV1jZIy9eN9S236D9",
+    "seconds": 10.7
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 4,
+    "message_id": 15751,
+    "http_status": 200,
+    "reply": "وعليكم السلام عيني، أهلاً بيج. \n\nسعر العباية 20 ألف والتوصيل 5 آلاف لكل المحافظات (يعني السعر غير شامل التوصيل، وتكدرين تفحصين عند الاستلام). \n\nقياساتها تناسب الأوزان من 55 إلى 100 كيلو، وقماشها فرسان درجة أولى راقي جداً. \n\nشكد وزنج عيني حتى نتأكدلج من القياس المناسب؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3417,
+      "completion_tokens": 586,
+      "total_tokens": 4003,
+      "cost": 0.00476025,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00476025,
+        "upstream_inference_prompt_cost": 0.00256275,
+        "upstream_inference_completions_cost": 0.0021975
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 475,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566423-hl4f3vE4z5av2VDwuI2Q",
+    "seconds": 7.59
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 5,
+    "message_id": 14992,
+    "http_status": 200,
+    "reply": "حقج عيني وأتفهم قلقج، عدنا الفحص متاح عند الاستلام تكدرين تشوفين الفستان وتفحصيه بوجود المندوب، وإذا طلع مو نفس الصورة يرجع وياه مباشرة وتتدللين.\n\nوحتى يوصلج القياس مضبوط تماماً، لوزن 65 كيلو قياس 40 هو الأنسب مو 44. تحبين نثبتلج منه الوردي لو السماوي؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1307,
+      "completion_tokens": 1349,
+      "total_tokens": 2656,
+      "cost": 0.006039,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.006039,
+        "upstream_inference_prompt_cost": 0.00098025,
+        "upstream_inference_completions_cost": 0.00505875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1249,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566430-KcpE8Osu3KCjKx3hYwZo",
+    "seconds": 11.94
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 6,
+    "message_id": 14799,
+    "http_status": 200,
+    "reply": "تمام عيني والله يگومج بالسلامة 🌸\n\nإي يلبسج وبكل راحة ويخدمج للشهر التاسع، لأن قياسه خاص وراهي يلبس من 70 لحد 130 كيلو، فحتّى لو زاد وزنج راح يبقى مريح عليج.\n\nمتوفر بي ألوان (أخضر، بنفسجي، زيتوني) وسعره 18 ألف، يا لون يعجبج تحجزين منه؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1268,
+      "completion_tokens": 514,
+      "total_tokens": 1782,
+      "cost": 0.0028785,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0028785,
+        "upstream_inference_prompt_cost": 0.000951,
+        "upstream_inference_completions_cost": 0.0019275
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 410,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566443-kYuCPPkyByxkf7KhP36q",
+    "seconds": 6.73
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 7,
+    "message_id": 14017,
+    "http_status": 200,
+    "reply": "يا عيني فدوة لعينج ماكو أي زحمة، بس قياس 48 مخصص لوزن 85 إلى 90 كيلو، وراح يطلع كلش جبير وطويل عليج ويه طولج 153. قياس 46 أصلاً محس",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1412,
+      "completion_tokens": 1596,
+      "total_tokens": 3008,
+      "cost": 0.007044,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.007044,
+        "upstream_inference_prompt_cost": 0.001059,
+        "upstream_inference_completions_cost": 0.005985
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 1532,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566450-B2aRViSqh7xL2n1m34UO",
+    "seconds": 15.3
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 8,
+    "message_id": 13718,
+    "http_status": 200,
+    "reply": "وعليكم السلام عيوني، نعتذر منج جداً على التأخير. \n\nيا ريت تدزيلي رقم التلفون أو اسم المستلم اللي ثبتي بيه الطلب حتى أتابع الموضوع وأشوف وين صار؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 3408,
+      "completion_tokens": 269,
+      "total_tokens": 3677,
+      "cost": 0.00356475,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00356475,
+        "upstream_inference_prompt_cost": 0.002556,
+        "upstream_inference_completions_cost": 0.00100875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 219,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566464-Pyt2FiSsrWCrkg7JsWFZ",
+    "seconds": 6.17
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 9,
+    "message_id": 12669,
+    "http_status": 200,
+    "reply": "هلا بيك عيني، حتى نتأكد من تفاصيل الطلب وننطيك التوجيه الصحيح بالضبط، يا ريت تدزلنا رقم الوصل أو رقم تليفون الزبونة؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1142,
+      "completion_tokens": 562,
+      "total_tokens": 1704,
+      "cost": 0.002964,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.002964,
+        "upstream_inference_prompt_cost": 0.0008565,
+        "upstream_inference_completions_cost": 0.0021075
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 518,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566470-InjpfRIA0Ii9bxSruWj6",
+    "seconds": 7.75
+  },
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 10,
+    "message_id": 12303,
+    "http_status": 200,
+    "reply": "تدللين عيني، ما أكدر أضمنلج يوصل باجر تحديداً حتى أكون صادقة وياج، بس يطلع بأسرع وقت. وبالنسبة للمعاينة، من حقج تماماً تفحصين القطعة وتتأكدين من القماش والشكل عند الاستلام قبل ما تستلميها. \n\nإذا يناسبج، يا قياس نثبتلج 48 لو 50؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1350,
+      "completion_tokens": 704,
+      "total_tokens": 2054,
+      "cost": 0.0036525,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0036525,
+        "upstream_inference_prompt_cost": 0.0010125,
+        "upstream_inference_completions_cost": 0.00264
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 611,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "provider": "Google",
+    "request_id": "gen-1789566478-27NAmLz9cvwaQgpdO5fT",
+    "seconds": 7.53
+  }
+]

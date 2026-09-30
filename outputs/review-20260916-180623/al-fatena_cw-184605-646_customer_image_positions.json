@@ -1,0 +1,7 @@
+[
+  {
+    "store_id": "al-fatena",
+    "sender_id": "al-fatena::cw-184605-646",
+    "images": "[{\"product_found\": true, \"product_id\": \"P017\", \"confidence\": 100, \"reason\": \"Catalog visual match\", \"raw\": \"P017\", \"reference_source\": \"labelled_product_images\", \"attempts\": [{\"attempt\": 1, \"product_found\": true, \"reason\": \"Catalog visual match\", \"error_code\": null}], \"available\": true, \"stock\": \"متوفر\", \"price\": \"15000\", \"image_url\": \"https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=2523561458121360&signature=Ab0rPfNaR7tP-FVWC2VdijMZcJW8bBIAIW3MTlD38vJ_Sl4QlNGeGxcDEhZlYRF9f7snITK3ZbY-O6EHQI2kASeMuiVVhhqNCVGLHza2W8KkkaXqLe7cVFXOhyPixZnnSaTHDBbfhKxYx9nGhZoX5mK6AJtWHMe6K-ezIknjTm5OwsQHbEoJ3lVfpNJkG1yJ3hwlnswu_dmZKPxG-7k3zWgvzVvDCw\", \"image_index\": 1, \"product_name\": \"فستان رباط\"}]"
+  }
+]

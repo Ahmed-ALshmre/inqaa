@@ -1,0 +1,14 @@
+.....................................................................................................................................................................................E.................................................................................................................................................................................................................................................................................
+======================================================================
+ERROR: test_delivery_policy_reply_is_natural_iraqi (test_conversation_context.ConversationContextTests.test_delivery_policy_reply_is_natural_iraqi)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 24, in test_delivery_policy_reply_is_natural_iraqi
+    self.assertIn('الدفع يصير عند الاستلام', result['reply'])
+                                             ~~~~~~^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+----------------------------------------------------------------------
+Ran 455 tests in 40.255s
+
+FAILED (errors=1)

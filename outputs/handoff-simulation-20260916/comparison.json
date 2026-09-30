@@ -1,0 +1,89 @@
+{
+  "before": {
+    "snapshot": {
+      "image_download_required": 11,
+      "ai_disabled_for_conversation": 51,
+      "_call_main_ai_once": 27,
+      "ai_globally_disabled": 11
+    },
+    "enabled_counterfactual": {
+      "image_download_required": 64,
+      "_call_main_ai_once": 35,
+      "classify_contextual_selection": 1
+    }
+  },
+  "after": {
+    "snapshot": {
+      "_call_main_ai_once": 32,
+      "ai_disabled_for_conversation": 51,
+      "local_reply": 1,
+      "image_download_required": 4,
+      "ai_globally_disabled": 11,
+      "classify_contextual_selection": 1
+    },
+    "enabled_counterfactual": {
+      "_call_main_ai_once": 41,
+      "image_download_required": 56,
+      "local_reply": 1,
+      "classify_contextual_selection": 2
+    }
+  },
+  "changed_cases": [
+    {
+      "review_id": 856,
+      "question": "السلام عليكم\nشنو القياسات الي بي\nشنو نوع القماش\nبلازحمة",
+      "before": "image_download_required",
+      "after": "_call_main_ai_once",
+      "reply": null
+    },
+    {
+      "review_id": 854,
+      "question": "السعر\nتوصيل اشكد",
+      "before": "_call_main_ai_once",
+      "after": "local_reply",
+      "reply": "السعر: 12,000 د.ع 🌸\nالتوصيل: 5,000 د.ع"
+    },
+    {
+      "review_id": 853,
+      "question": "شنو نوع القماش",
+      "before": "image_download_required",
+      "after": "_call_main_ai_once",
+      "reply": null
+    },
+    {
+      "review_id": 850,
+      "question": "شنو نوع القماش",
+      "before": "image_download_required",
+      "after": "_call_main_ai_once",
+      "reply": null
+    },
+    {
+      "review_id": 846,
+      "question": "سعر",
+      "before": "image_download_required",
+      "after": "_call_main_ai_once",
+      "reply": null
+    },
+    {
+      "review_id": 829,
+      "question": "صباح الخير\nقياس 52 موجود\nواشكد السعر مع التوصيل",
+      "before": "image_download_required",
+      "after": "_call_main_ai_once",
+      "reply": null
+    },
+    {
+      "review_id": 807,
+      "question": "السلام عليكم السعر مع التوصيل",
+      "before": "image_download_required",
+      "after": "_call_main_ai_once",
+      "reply": null
+    },
+    {
+      "review_id": 679,
+      "question": "الوزن ٧٠\nاريد هذا الموديل شنو الالوان لي بي",
+      "before": "image_download_required",
+      "after": "classify_contextual_selection",
+      "reply": null
+    }
+  ]
+}

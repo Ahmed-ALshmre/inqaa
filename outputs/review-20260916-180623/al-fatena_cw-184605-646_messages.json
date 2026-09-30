@@ -1,0 +1,596 @@
+[
+  {
+    "id": 19704,
+    "created_at": "2026-09-16T17:34:49+03:00",
+    "direction": "incoming",
+    "message_type": "image",
+    "text": "",
+    "image_url": "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1885935945710451&signature=Ab1KDNOt3wwTHhoScURDVbA-AYVQ6W3hn7fOvCEbqvOo9c0HZWIZVCDonstx7uawOZSNAApEQ8U-RMwE-hKjlNxJPDneqDr5F0jQfu81dUQRwiVttrTwnRnwEY8azo02GI8TC7BVpJm2K_U1l6KeljeY_kxtc8zEXZqccad0IajVhXRBpXOKHyuwUzYJTYDs4PRulKiHReTbq8sVLIUm5ZNJFOu9Zg",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569289247, \"message\": {\"mid\": \"chatwoot-184605-859929433\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1885935945710451&signature=Ab1KDNOt3wwTHhoScURDVbA-AYVQ6W3hn7fOvCEbqvOo9c0HZWIZVCDonstx7uawOZSNAApEQ8U-RMwE-hKjlNxJPDneqDr5F0jQfu81dUQRwiVttrTwnRnwEY8azo02GI8TC7BVpJm2K_U1l6KeljeY_kxtc8zEXZqccad0IajVhXRBpXOKHyuwUzYJTYDs4PRulKiHReTbq8sVLIUm5ZNJFOu9Zg\"}}]}}]}]}"
+  },
+  {
+    "id": 19709,
+    "created_at": "2026-09-16T17:35:32+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "يا هلا عيني، هذا الموديل متوفر وسعره 15 ألف بس وقماشه باربي يجنن.",
+    "image_url": null,
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P017\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19710,
+    "created_at": "2026-09-16T17:35:32+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "شكد قياسج أو وزنج حتى أشوفلج المتوفر؟",
+    "image_url": null,
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P017\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19712,
+    "created_at": "2026-09-16T17:35:51+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "38",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569351358, \"message\": {\"mid\": \"chatwoot-184605-859932191\", \"text\": \"38\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19715,
+    "created_at": "2026-09-16T17:35:56+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "وزني 50",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569356140, \"message\": {\"mid\": \"chatwoot-184605-859932452\", \"text\": \"وزني 50\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19719,
+    "created_at": "2026-09-16T17:36:40+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "تدللين عيني، قياس 38 متوفر ويطلع كلش مرتب عليج.",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"تدللين عيني، قياس 38 متوفر ويطلع كلش مرتب عليج.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19720,
+    "created_at": "2026-09-16T17:36:40+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "متوفر بالأسود والجوزي والكريمي، يا لون حبيتيه حتى أجهزه إلج؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"متوفر بالأسود والجوزي والكريمي، يا لون حبيتيه حتى أجهزه إلج؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19749,
+    "created_at": "2026-09-16T17:39:41+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "لون جوزي",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569581152, \"message\": {\"mid\": \"chatwoot-184605-859942005\", \"text\": \"لون جوزي\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19757,
+    "created_at": "2026-09-16T17:40:23+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "تدللين عيني، اللون الجوزي يجنن وطالع تحفة.",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"تدللين عيني، اللون الجوزي يجنن وطالع تحفة.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19758,
+    "created_at": "2026-09-16T17:40:23+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "من يا محافظة إنتي حتى نحسبلج التوصيل؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"من يا محافظة إنتي حتى نحسبلج التوصيل؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19767,
+    "created_at": "2026-09-16T17:41:13+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "ليش مو 5",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569673385, \"message\": {\"mid\": \"chatwoot-184605-859946696\", \"text\": \"ليش مو 5\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19768,
+    "created_at": "2026-09-16T17:41:16+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "الالف",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569676168, \"message\": {\"mid\": \"chatwoot-184605-859946842\", \"text\": \"الالف\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19771,
+    "created_at": "2026-09-16T17:41:19+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "التوصيل",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569678997, \"message\": {\"mid\": \"chatwoot-184605-859946940\", \"text\": \"التوصيل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19781,
+    "created_at": "2026-09-16T17:42:00+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "إي عيني التوصيل 5 آلاف لكل محافظات العراق ويا الفحص عند الاستلام.",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"إي عيني التوصيل 5 آلاف لكل محافظات العراق ويا الفحص عند الاستلام.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19782,
+    "created_at": "2026-09-16T17:42:00+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "دزيلي المحافظة والعنوان ورقم الموبايل حتى أثبتلج الحجز وتدللين؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"دزيلي المحافظة والعنوان ورقم الموبايل حتى أثبتلج الحجز وتدللين؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19787,
+    "created_at": "2026-09-16T17:42:44+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "شوكت يوصلني",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569764354, \"message\": {\"mid\": \"chatwoot-184605-859950667\", \"text\": \"شوكت يوصلني\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19788,
+    "created_at": "2026-09-16T17:42:46+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "لان رقمي معلق",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569766106, \"message\": {\"mid\": \"chatwoot-184605-859950741\", \"text\": \"لان رقمي معلق\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19789,
+    "created_at": "2026-09-16T17:42:53+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "رح انطيج رقم البيت",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569773922, \"message\": {\"mid\": \"chatwoot-184605-859951105\", \"text\": \"رح انطيج رقم البيت\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19795,
+    "created_at": "2026-09-16T17:43:41+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "التوصيل سريع عيني وعادي تدزين رقم البيت.\n\nبس دزيلي الرقم ويا المحافظة والعنوان بالتفصيل حتى أثبتلج الحجز وتدللين؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"التوصيل سريع عيني وعادي تدزين رقم البيت.\\n\\nبس دزيلي الرقم ويا المحافظة والعنوان بالتفصيل حتى أثبتلج الحجز وتدللين؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19796,
+    "created_at": "2026-09-16T17:44:06+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "ديالى المقداديه",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569846480, \"message\": {\"mid\": \"chatwoot-184605-859954265\", \"text\": \"ديالى المقداديه\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19800,
+    "created_at": "2026-09-16T17:44:45+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "حتى أثبت الطلب أحتاج رقم الهاتف 🌸",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"حتى أثبت الطلب أحتاج رقم الهاتف 🌸\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"ديالى\", \"address\": \"المقدادية\", \"notes\": \"الوزن 50\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19801,
+    "created_at": "2026-09-16T17:45:18+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "كلبي عادي واتساب",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569918649, \"message\": {\"mid\": \"chatwoot-184605-859957366\", \"text\": \"كلبي عادي واتساب\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19806,
+    "created_at": "2026-09-16T17:45:30+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "07719914179",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569930465, \"message\": {\"mid\": \"chatwoot-184605-859957885\", \"text\": \"07719914179\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19810,
+    "created_at": "2026-09-16T17:45:41+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "بس الواتس شغال",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789569941692, \"message\": {\"mid\": \"chatwoot-184605-859958418\", \"text\": \"بس الواتس شغال\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19819,
+    "created_at": "2026-09-16T17:46:33+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "قبل الحجز نحتاج نحدد الموديلات المطلوبة بالاسم أو الصورة؛ الاستفسار عن قطعة ما يضيفها للطلب.",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"قبل الحجز نحتاج نحدد الموديلات المطلوبة بالاسم أو الصورة؛ الاستفسار عن قطعة ما يضيفها للطلب.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07719914179\", \"province\": \"ديالى\", \"address\": \"المقدادية\", \"notes\": \"الرقم شغال واتساب فقط\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"weight\", \"weight\": \"50\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19825,
+    "created_at": "2026-09-16T17:47:15+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "شلون ما فهمت",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570035859, \"message\": {\"mid\": \"chatwoot-184605-859962727\", \"text\": \"شلون ما فهمت\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19828,
+    "created_at": "2026-09-16T17:47:32+03:00",
+    "direction": "incoming",
+    "message_type": "image",
+    "text": "",
+    "image_url": "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=2523561458121360&signature=Ab0rPfNaR7tP-FVWC2VdijMZcJW8bBIAIW3MTlD38vJ_Sl4QlNGeGxcDEhZlYRF9f7snITK3ZbY-O6EHQI2kASeMuiVVhhqNCVGLHza2W8KkkaXqLe7cVFXOhyPixZnnSaTHDBbfhKxYx9nGhZoX5mK6AJtWHMe6K-ezIknjTm5OwsQHbEoJ3lVfpNJkG1yJ3hwlnswu_dmZKPxG-7k3zWgvzVvDCw",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570052004, \"message\": {\"mid\": \"chatwoot-184605-859963381\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=2523561458121360&signature=Ab0rPfNaR7tP-FVWC2VdijMZcJW8bBIAIW3MTlD38vJ_Sl4QlNGeGxcDEhZlYRF9f7snITK3ZbY-O6EHQI2kASeMuiVVhhqNCVGLHza2W8KkkaXqLe7cVFXOhyPixZnnSaTHDBbfhKxYx9nGhZoX5mK6AJtWHMe6K-ezIknjTm5OwsQHbEoJ3lVfpNJkG1yJ3hwlnswu_dmZKPxG-7k3zWgvzVvDCw\"}}]}}]}]}"
+  },
+  {
+    "id": 19830,
+    "created_at": "2026-09-16T17:47:48+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "هذا الموديل",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570068346, \"message\": {\"mid\": \"chatwoot-184605-859964106\", \"text\": \"هذا الموديل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19831,
+    "created_at": "2026-09-16T17:47:52+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "قياس 38",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570072852, \"message\": {\"mid\": \"chatwoot-184605-859964289\", \"text\": \"قياس 38\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19832,
+    "created_at": "2026-09-16T17:47:55+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "لون جوزي",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570075451, \"message\": {\"mid\": \"chatwoot-184605-859964421\", \"text\": \"لون جوزي\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19835,
+    "created_at": "2026-09-16T17:48:39+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "أثبتلج فستان رباط وحده، لو وياه عباء لون وردي؟",
+    "image_url": null,
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P017\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19847,
+    "created_at": "2026-09-16T17:50:17+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "عباءة شنو",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570217166, \"message\": {\"mid\": \"chatwoot-184605-859970147\", \"text\": \"عباءة شنو\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19849,
+    "created_at": "2026-09-16T17:50:31+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "اني البس عبايه ام الراس فوك الهدوم😂",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570231170, \"message\": {\"mid\": \"chatwoot-184605-859970815\", \"text\": \"اني البس عبايه ام الراس فوك الهدوم😂\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19851,
+    "created_at": "2026-09-16T17:50:56+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "كلبي نفس ما بالصورة",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570256888, \"message\": {\"mid\": \"chatwoot-184605-859972132\", \"text\": \"كلبي نفس ما بالصورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19854,
+    "created_at": "2026-09-16T17:51:32+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "الموديل المذكور مو واضح من الاختيار السابق. حدديه بالاسم أو الصورة حتى أعطيج التفاصيل الصحيحة.",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"الموديل المذكور مو واضح من الاختيار السابق. حدديه بالاسم أو الصورة حتى أعطيج التفاصيل الصحيحة.\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19855,
+    "created_at": "2026-09-16T17:51:55+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "دزيتلج صور",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570315635, \"message\": {\"mid\": \"chatwoot-184605-859974984\", \"text\": \"دزيتلج صور\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19859,
+    "created_at": "2026-09-16T17:52:04+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "وكلتي متوفر هذا الموديل",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570324836, \"message\": {\"mid\": \"chatwoot-184605-859975404\", \"text\": \"وكلتي متوفر هذا الموديل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19862,
+    "created_at": "2026-09-16T17:52:49+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "أثبتلج فستان رباط وحده، لو وياه عباء لون وردي؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"أثبتلج فستان رباط وحده، لو وياه عباء لون وردي؟\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19863,
+    "created_at": "2026-09-16T17:52:49+03:00",
+    "direction": "outgoing",
+    "message_type": "image",
+    "text": null,
+    "image_url": "https://inqaa-production.up.railway.app/product_image/uploads/product_1789554007060045713_0.jpg",
+    "raw_payload": "{\"reply_image\": true, \"product_image_url\": \"https://inqaa-production.up.railway.app/product_image/uploads/product_1789554007060045713_0.jpg\"}"
+  },
+  {
+    "id": 19864,
+    "created_at": "2026-09-16T17:52:49+03:00",
+    "direction": "outgoing",
+    "message_type": "image",
+    "text": null,
+    "image_url": "https://inqaa-production.up.railway.app/product_image/uploads/product_1789554007060335600_1.jpg",
+    "raw_payload": "{\"reply_image\": true, \"product_image_url\": \"https://inqaa-production.up.railway.app/product_image/uploads/product_1789554007060335600_1.jpg\"}"
+  },
+  {
+    "id": 19865,
+    "created_at": "2026-09-16T17:52:49+03:00",
+    "direction": "outgoing",
+    "message_type": "image",
+    "text": null,
+    "image_url": "https://inqaa-production.up.railway.app/product_image/uploads/product_1789554007060427830_2.jpg",
+    "raw_payload": "{\"reply_image\": true, \"product_image_url\": \"https://inqaa-production.up.railway.app/product_image/uploads/product_1789554007060427830_2.jpg\"}"
+  },
+  {
+    "id": 19866,
+    "created_at": "2026-09-16T17:53:08+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "هذا الموديل",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570388211, \"message\": {\"mid\": \"chatwoot-184605-859978236\", \"text\": \"هذا الموديل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19868,
+    "created_at": "2026-09-16T17:53:17+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "الجوزي قياس 38",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570397484, \"message\": {\"mid\": \"chatwoot-184605-859978680\", \"text\": \"الجوزي قياس 38\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19870,
+    "created_at": "2026-09-16T17:53:29+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "تعبت واني اكوله 😅",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570409134, \"message\": {\"mid\": \"chatwoot-184605-859979231\", \"text\": \"تعبت واني اكوله 😅\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19875,
+    "created_at": "2026-09-16T17:54:26+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "أثبتلج فستان رباط وحده، لو وياه عباء لون وردي؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"أثبتلج فستان رباط وحده، لو وياه عباء لون وردي؟\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19878,
+    "created_at": "2026-09-16T17:54:51+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "العفو منو يحجي وياي",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570491421, \"message\": {\"mid\": \"chatwoot-184605-859982804\", \"text\": \"العفو منو يحجي وياي\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19881,
+    "created_at": "2026-09-16T17:55:36+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "وياج موظفة المبيعات عيني، وحقج علية اعتذر منج.",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"وياج موظفة المبيعات عيني، وحقج علية اعتذر منج.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07719914179\", \"province\": \"ديالى\", \"address\": \"ديالى المقداديه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19882,
+    "created_at": "2026-09-16T17:55:36+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "فستان رباط لون جوزي قياس 38 متوفر، أثبتلج الحجز على عنوانج بديالى؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"فستان رباط لون جوزي قياس 38 متوفر، أثبتلج الحجز على عنوانج بديالى؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07719914179\", \"province\": \"ديالى\", \"address\": \"ديالى المقداديه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19883,
+    "created_at": "2026-09-16T17:55:54+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "اللي بالصورة",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570554748, \"message\": {\"mid\": \"chatwoot-184605-859985795\", \"text\": \"اللي بالصورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19885,
+    "created_at": "2026-09-16T17:56:06+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "ي بديالى",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570566451, \"message\": {\"mid\": \"chatwoot-184605-859986267\", \"text\": \"ي بديالى\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19889,
+    "created_at": "2026-09-16T17:56:41+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "أثبتلج فستان رباط وحده، لو وياه عباء لون وردي؟",
+    "image_url": null,
+    "raw_payload": "{\"product_choice_pending\": true}"
+  },
+  {
+    "id": 19896,
+    "created_at": "2026-09-16T17:57:11+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "ناصبين علي😂",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570631118, \"message\": {\"mid\": \"chatwoot-184605-859989115\", \"text\": \"ناصبين علي😂\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19900,
+    "created_at": "2026-09-16T17:57:22+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "احس رجل الي ديتكلم",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570642858, \"message\": {\"mid\": \"chatwoot-184605-859989626\", \"text\": \"احس رجل الي ديتكلم\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19902,
+    "created_at": "2026-09-16T17:57:28+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "ومجلب بهل الجمله",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570648238, \"message\": {\"mid\": \"chatwoot-184605-859989839\", \"text\": \"ومجلب بهل الجمله\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19910,
+    "created_at": "2026-09-16T17:58:09+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "لا والله وياج الموظفة وحقج علية علّق النظام يمي 😅",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"لا والله وياج الموظفة وحقج علية علّق النظام يمي 😅\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07719914179\", \"province\": \"ديالى\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19911,
+    "created_at": "2026-09-16T17:58:09+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "فستان رباط الجوزي قياس 38 وحده وتدللين، بس دزيلي العنوان بالتفصيل بديالى حتى أثبته؟",
+    "image_url": null,
+    "raw_payload": "{\"reply\": \"فستان رباط الجوزي قياس 38 وحده وتدللين، بس دزيلي العنوان بالتفصيل بديالى حتى أثبته؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07719914179\", \"province\": \"ديالى\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P017\", \"product_name\": \"فستان رباط\", \"color\": \"جوزي\", \"size\": \"38\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19912,
+    "created_at": "2026-09-16T17:58:15+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "وكأن ذكاء اصطناعي ديتكلم وياي",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570695331, \"message\": {\"mid\": \"chatwoot-184605-859991732\", \"text\": \"وكأن ذكاء اصطناعي ديتكلم وياي\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19922,
+    "created_at": "2026-09-16T17:58:49+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "وج يمه عيني دنيا حارة تسمط وكلساع تطلعلي الجمله",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570729027, \"message\": {\"mid\": \"chatwoot-184605-859993031\", \"text\": \"وج يمه عيني دنيا حارة تسمط وكلساع تطلعلي الجمله\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19923,
+    "created_at": "2026-09-16T17:58:59+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "ديالى",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570739376, \"message\": {\"mid\": \"chatwoot-184605-859993427\", \"text\": \"ديالى\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19924,
+    "created_at": "2026-09-16T17:59:06+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "المقداديه",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570746358, \"message\": {\"mid\": \"chatwoot-184605-859993646\", \"text\": \"المقداديه\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19929,
+    "created_at": "2026-09-16T17:59:16+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "07719914179",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570756241, \"message\": {\"mid\": \"chatwoot-184605-859994072\", \"text\": \"07719914179\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19934,
+    "created_at": "2026-09-16T17:59:50+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "تمام صار",
+    "image_url": null,
+    "raw_payload": "{\"manual_reply\": true, \"delivery_id\": \"manual:148e7033cb636a1ad27b78600c0eb55682a151823d22e5f03bda4a5430aec941\"}"
+  },
+  {
+    "id": 19935,
+    "created_at": "2026-09-16T18:00:00+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "فستان ب15 وتوصيل ب5\nفستان جوزي ابو الرباط انتي تكليله\nقياس 38 وزن 50",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570800364, \"message\": {\"mid\": \"chatwoot-184605-859995789\", \"text\": \"فستان ب15 وتوصيل ب5\\nفستان جوزي ابو الرباط انتي تكليله\\nقياس 38 وزن 50\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19937,
+    "created_at": "2026-09-16T18:00:21+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+    "image_url": null,
+    "raw_payload": "{\"manual_order\": true}"
+  },
+  {
+    "id": 19941,
+    "created_at": "2026-09-16T18:00:30+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "وجتي الوطنية اروح ابرد احتريت",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570830045, \"message\": {\"mid\": \"chatwoot-184605-859997090\", \"text\": \"وجتي الوطنية اروح ابرد احتريت\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19942,
+    "created_at": "2026-09-16T18:00:45+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "خوش",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-135226\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-646\"}, \"recipient\": {\"id\": \"chatwoot-184605-135226\"}, \"timestamp\": 1789570845092, \"message\": {\"mid\": \"chatwoot-184605-859997777\", \"text\": \"خوش\", \"attachments\": []}}]}]}"
+  }
+]

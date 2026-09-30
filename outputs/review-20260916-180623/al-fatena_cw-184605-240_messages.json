@@ -1,0 +1,38 @@
+[
+  {
+    "id": 19949,
+    "created_at": "2026-09-16T18:01:26+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "سلام عليكم",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-135225\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-240\"}, \"recipient\": {\"id\": \"chatwoot-184605-135225\"}, \"timestamp\": 1789570886148, \"message\": {\"mid\": \"chatwoot-184605-859999794\", \"text\": \"سلام عليكم\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19957,
+    "created_at": "2026-09-16T18:02:09+03:00",
+    "direction": "outgoing",
+    "message_type": "text",
+    "text": "يا هلا بيج عيني 🌸 دزيلي صورة الموديل أو القياس حتى أتأكدلج.",
+    "image_url": null,
+    "raw_payload": "{\"first_message_reply\": true, \"detected_gender\": \"unknown\"}"
+  },
+  {
+    "id": 20008,
+    "created_at": "2026-09-16T18:05:11+03:00",
+    "direction": "incoming",
+    "message_type": "image",
+    "text": "",
+    "image_url": "https://app.chatwoot.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCR3NRcHdZPSIsImV4cCI6bnVsbCwicHVyIjoiYmxvYl9pZCJ9fQ==--9f036f04467bdfecae3f8185e60a75837b8093c4/809314337_1585471466646718_8504766647519250900_n.jpg",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-135225\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-240\"}, \"recipient\": {\"id\": \"chatwoot-184605-135225\"}, \"timestamp\": 1789571111126, \"message\": {\"mid\": \"chatwoot-184605-860009673\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://app.chatwoot.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCR3NRcHdZPSIsImV4cCI6bnVsbCwicHVyIjoiYmxvYl9pZCJ9fQ==--9f036f04467bdfecae3f8185e60a75837b8093c4/809314337_1585471466646718_8504766647519250900_n.jpg\"}}]}}]}]}"
+  },
+  {
+    "id": 20009,
+    "created_at": "2026-09-16T18:05:14+03:00",
+    "direction": "incoming",
+    "message_type": "text",
+    "text": "متوفر",
+    "image_url": null,
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-135225\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-240\"}, \"recipient\": {\"id\": \"chatwoot-184605-135225\"}, \"timestamp\": 1789571114364, \"message\": {\"mid\": \"chatwoot-184605-860009795\", \"text\": \"متوفر\", \"attachments\": []}}]}]}"
+  }
+]

@@ -1,0 +1,352 @@
+[
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 1,
+    "message_id": 16767,
+    "http_status": 200,
+    "reply": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحبيبتي، السوت ب١٥ الف اللي بالأسود متوفر (السوت رباط P014)، بس للأسف ما فيه نيلي بهاي السعرة. \n\nعندنا سوت نيلي بنفس السعر ١٥ الف (P008) وخامته باربي درجة أولى، وبخصوص القياس ٤٢ متوفر لأنه يناسب الأوزان من ٦٧ لـ ٧٢ كيلو.\n\nإذا بدك الأسود بالسعر هاي أو النيلي، أنا هسع أساعدك بأي واحد فيهم؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 4539,
+      "completion_tokens": 240,
+      "total_tokens": 4779,
+      "cost": 0.005739,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.005739,
+        "upstream_inference_prompt_cost": 0.004539,
+        "upstream_inference_completions_cost": 0.0012
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566389-dT5YBJ0MHfkQWhkQ9PuG",
+    "seconds": 7.11
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 2,
+    "message_id": 16425,
+    "http_status": 200,
+    "reply": "صباح النور حبيبتي ☀️\n\nالعرض الخاص باقي بحمد الله والكمية متوفرة. بس أنا ما أقدر أؤكد لك قياس 54 لأنه ما موجود بالكتالوج عندنا - أغلب المنتجات عندنا تبدأ من قياس 38 لحد 52، أو من 55 كيلو لحد 100 كيلو.\n\nشنو الوزن تقريباً حبيبتي؟ عشان أساعدك أحصل على القياس الصح اللي يناسبك بالظبط 💕",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 4540,
+      "completion_tokens": 199,
+      "total_tokens": 4739,
+      "cost": 0.005535,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.005535,
+        "upstream_inference_prompt_cost": 0.00454,
+        "upstream_inference_completions_cost": 0.000995
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566395-0VANzpM40ZMdVuFR0Xcr",
+    "seconds": 5.64
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 3,
+    "message_id": 16398,
+    "http_status": 200,
+    "reply": "وعليكم السلام ورحمة الله وبركاته ❤️\n\nأختي الكريمة، أنا أفهم إحساسج وأعتذر عن أي تقصير صار. صدقي إن ثقتج غالية عندنا وما نبي نخسرها.\n\nالتنورة اللي طلبتيها متوفرة الحين والمخزون موجود، والتوصيل لكل المحافظات ب 5000 دينار مع إمكانية الفحص عند الاستلام حتى تتأكدي من الجودة قبل ما تدفعي.\n\nإذا بتطلبيها هسه، شنو المحافظة حقتج عشان نتأكد من التفاصيل؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1947,
+      "completion_tokens": 236,
+      "total_tokens": 2183,
+      "cost": 0.003127,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.003127,
+        "upstream_inference_prompt_cost": 0.001947,
+        "upstream_inference_completions_cost": 0.00118
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566401-WnzrzvyxInwqVZK8Gydm",
+    "seconds": 5.42
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 4,
+    "message_id": 15751,
+    "http_status": 200,
+    "reply": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nحبيبتي، العباية السعر **20 ألف** والتوصيل **5 آلاف** لكل المحافظات، مو 20 ألف التوصيل.\n\nالقياسات متوفرة **من 55 كيلو لـ 100 كيلو**، والقماش **فرسان درجة أولى** - خامة ممتازة وتمام التمام 👌\n\nإذا بتبغين تطلبينها، شنو وزنك عشان أتأكد من القياس المناسب لك؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 4554,
+      "completion_tokens": 194,
+      "total_tokens": 4748,
+      "cost": 0.005524,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.005524,
+        "upstream_inference_prompt_cost": 0.004554,
+        "upstream_inference_completions_cost": 0.00097
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566407-tg4EsVtclboWb5Tc1ASo",
+    "seconds": 5.09
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 5,
+    "message_id": 14992,
+    "http_status": 200,
+    "reply": "عيني حبيبتي، أنتِ محقة تماماً. إذا وصلج الفستان ومو مطابق للصورة أو ما عجبج، تقدرين ترجعينه مع المندوب بلا مشاكل. الفحص كامل عند الاستلام وإذا في أي مشكلة الرجوع مجاني.\n\nبس قبل ما نثبت الطلب، أي لون تفضلين - الوردي ولا السماوي؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1873,
+      "completion_tokens": 159,
+      "total_tokens": 2032,
+      "cost": 0.002668,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.002668,
+        "upstream_inference_prompt_cost": 0.001873,
+        "upstream_inference_completions_cost": 0.000795
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566412-2xlBNcimkTHLaRjL6Usb",
+    "seconds": 5.16
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 6,
+    "message_id": 14799,
+    "http_status": 200,
+    "reply": "حبيبتي، تمام تمام 🌸 \n\nانتِ الحين بـ 100 كيلو والوزن راح يزيد لحد الشهر التاسع، صح؟ \n\nأنصحج بـ **سوت الحوامل** (P005) لأنه يتسع من 70 لحد 130 كيلو، يعني يكفيج طول فترة الحمل بلا قلق. القماش خام تركي درجة أولى مريح كلش والسعر 18,000 فيه عرض خاص حالياً. متوفر بألوان أخضر وبنفسجي وزيتوني.\n\nأو إذا بتبين خيار ثاني، في **سوت القياس الخاص** (P003) من 70 لحد 130 كيلو كمان، قماشه لينن مريح وعملي بـ 17,000.\n\nشنو اللون اللي تفضلين؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1814,
+      "completion_tokens": 298,
+      "total_tokens": 2112,
+      "cost": 0.003304,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.003304,
+        "upstream_inference_prompt_cost": 0.001814,
+        "upstream_inference_completions_cost": 0.00149
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566416-XEF7eEdcAwwlBAmEFqTn",
+    "seconds": 5.92
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 7,
+    "message_id": 14017,
+    "http_status": 200,
+    "reply": "حبيبتي، أنتِ وزنج ٧٧ كيلو يعني القياس المناسب لج حسب جدول المنتج هو **قياس ٤٤** وليس ٤٦ ولا ٤٨. القياس ٤٤ راح يكون مريح عليج ويطابق وزنج وتكويتج بالضبط.\n\nلو تبين تاخذين أكثر من منتج بطلبة واحد، توصيل واحد ٥ آلاف بس يكفي لكل المحافظات. وعند الاستلام تفحصين كل شي قبل ما تدفعين، والمندوب ما يأخذ منج شي إذا ما عجبج.\n\nشنو المنتج الثاني اللي تبين تاخذينه معاه؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 2049,
+      "completion_tokens": 263,
+      "total_tokens": 2312,
+      "cost": 0.003364,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.003364,
+        "upstream_inference_prompt_cost": 0.002049,
+        "upstream_inference_completions_cost": 0.001315
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566423-yaCUlTY0B5DuJz6CRoLr",
+    "seconds": 6.92
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 8,
+    "message_id": 13718,
+    "http_status": 200,
+    "reply": "وعليكم السلام ورحمة الله وبركاته 🌹\n\nحبيبتي، أعتذر من التأخير. للأسف ما عندي معلومات عن الطلب اللي طلبتيه يوم الأربعاء، بس أكيد المندوب بيتصل فيك قريب جداً.\n\nإذا بتحتاجين تتأكدين من حالة الطلب أو تحتاجين أي مساعدة، أنا هسع هنا لو أقدر أساعدك بشي؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 4540,
+      "completion_tokens": 175,
+      "total_tokens": 4715,
+      "cost": 0.005415,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.005415,
+        "upstream_inference_prompt_cost": 0.00454,
+        "upstream_inference_completions_cost": 0.000875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566429-VkOubay5L9SnHFE4abUd",
+    "seconds": 4.03
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 9,
+    "message_id": 12669,
+    "http_status": 200,
+    "reply": "وعليكم السلام ورحمة الله وبركاته 🌸\n\nأخي الكريم، أنا موظفة المبيعات في المتجر وما عندي صلاحية أتعامل مع موضوع الاستبدالات والمرجعات. هذي الأمور تحتاج تنسيق مع إدارة الطلبات والتوصيل مباشرة.\n\nالأفضل تتواصل مع مسؤول الطلبات أو تتركي رقم الزبونة وتفاصيل الطلب القديم عشان يتولون الموضوع من البداية ويوضحون لها الإجراء الصحيح.\n\nشنو أسم الزبونة ورقم الطلب عشان نسجل المعلومة؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1629,
+      "completion_tokens": 248,
+      "total_tokens": 1877,
+      "cost": 0.002869,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.002869,
+        "upstream_inference_prompt_cost": 0.001629,
+        "upstream_inference_completions_cost": 0.00124
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566433-iubpD5RVLuZjrpsCQy9f",
+    "seconds": 4.52
+  },
+  {
+    "model": "anthropic/claude-haiku-4.5",
+    "case": 10,
+    "message_id": 12303,
+    "http_status": 200,
+    "reply": "عيني، التوصيل سريع بس ما أقدر أضمن باجر لأنه يعتمد على المحافظة وحالة الطلبات. \n\nبخصوص الرجوع: إذا ما عجبج القماش أو الصورة، تقدرين ترجعينه بس لازم تتواصلين معنا عشان نعرف شروط الرجوع الدقيقة - ما أقدر أضمن رجوع بدون دفع من غير ما أتأكد من السياسة.\n\nخلينا نثبت القياس الأول: شنو وزنج عشان أختار لج القياس الصح؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1943,
+      "completion_tokens": 209,
+      "total_tokens": 2152,
+      "cost": 0.002988,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.002988,
+        "upstream_inference_prompt_cost": 0.001943,
+        "upstream_inference_completions_cost": 0.001045
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "anthropic/claude-haiku-4.5",
+    "provider": "Amazon Bedrock",
+    "request_id": "gen-1789566438-0XVdFogXyfNVGsDo0rNj",
+    "seconds": 5.45
+  }
+]

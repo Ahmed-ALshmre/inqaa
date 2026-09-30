@@ -1,0 +1,7 @@
+[
+  {
+    "store_id": "al-fatena",
+    "sender_id": "al-fatena::cw-184605-240",
+    "images": "[{\"product_found\": false, \"product_id\": null, \"confidence\": 0, \"reason\": \"No clear visual match\", \"raw\": \"NONE\", \"reference_source\": \"labelled_product_images\", \"attempts\": [{\"attempt\": 1, \"product_found\": false, \"reason\": \"No clear visual match\", \"error_code\": null}], \"image_url\": \"https://app.chatwoot.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCR3NRcHdZPSIsImV4cCI6bnVsbCwicHVyIjoiYmxvYl9pZCJ9fQ==--9f036f04467bdfecae3f8185e60a75837b8093c4/809314337_1585471466646718_8504766647519250900_n.jpg\", \"image_index\": 1, \"product_name\": null}]"
+  }
+]

@@ -72,5 +72,32 @@ class InboxFilterTests(unittest.TestCase):
         for route in ('/dashboard','/products','/settings/store','/settings/ai','/settings/stores'):
             self.assertEqual(self.client.get(route+'?store_id=al-fatena').status_code,200)
 
+    def test_human_filter_includes_all_pending_reasons_across_pages(self):
+        reasons = ['exception:ValueError', 'provider_http_500',
+                   'Image analysis service failure: timeout', 'empty_reply',
+                   'could not produce a reply', 'تحتاج تأكيد القياس', None]
+        with self.module.app.app_context():
+            db = self.module.get_db()
+            try:
+                for i in range(25):
+                    db.execute("INSERT INTO human_reviews(sender_id,status,reason) VALUES(?,'pending',?)",
+                               (f'inbox-{i}', reasons[i % len(reasons)]))
+                db.commit()
+                first = self.get('status=problems')
+                self.assertTrue(first['has_more'])
+                last = first['conversations'][-1]
+                second = self.get(f"status=problems&cursor_time={last['last_time']}&cursor_sender={last['sender_id']}")
+                ids = [c['sender_id'] for page in (first, second) for c in page['conversations']]
+                self.assertEqual(len(ids), 25)
+                self.assertEqual(len(set(ids)), 25)
+                self.assertFalse(second['has_more'])
+                self.assertEqual([c['sender_id'] for c in self.get('status=problems&store_id=al-fatena')['conversations']], ['inbox-0'])
+                db.execute("UPDATE human_reviews SET status='reviewed' WHERE sender_id='inbox-0'")
+                db.commit()
+                self.assertEqual(self.get('status=problems&store_id=al-fatena')['conversations'], [])
+            finally:
+                db.execute('DELETE FROM human_reviews')
+                db.commit()
+
 if __name__ == '__main__':
     unittest.main()

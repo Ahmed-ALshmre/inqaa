@@ -1,0 +1,12 @@
+{
+  "backend_tests": 315,
+  "frontend_suites": 2,
+  "replayed_incoming_events": 2105,
+  "live_provider_tested": false,
+  "deployed": false,
+  "source_backup_unchanged": true,
+  "archive": "lamsa-image-timeout-fix-20260916.zip",
+  "archive_sha256": "c064d92b01974ad3c5769d2a597b7ea8ba0196d96e7dea9f0a63a46a7a1287ef",
+  "code_files": 91,
+  "archive_bytes": 2374038
+}

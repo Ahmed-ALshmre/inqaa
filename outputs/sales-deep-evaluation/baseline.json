@@ -1,0 +1,476 @@
+{
+  "model": "google/gemini-3.8-flash",
+  "variant": "baseline",
+  "results": [
+    {
+      "id": "price_total",
+      "goal": "السعر والتوصيل والمجموع قبل طلب الحجز",
+      "text": "شكد السعر ويا التوصيل للموصل؟",
+      "result": {
+        "reply": "هلا عيني 🌸، سعر الفستان 15 ألف والتوصيل للموصل 5 آلاف، يعني المجموع 20 ألف.\n\nشنو القياس أو اللون اللي يناسبك؟",
+        "reply_parts": [
+          "هلا عيني 🌸، سعر الفستان 15 ألف والتوصيل للموصل 5 آلاف، يعني المجموع 20 ألف.",
+          "شنو القياس أو اللون اللي يناسبك؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "نينوى",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "sales_state": {
+          "intent": "price_inquiry",
+          "stage": "inquiry",
+          "objection": "none",
+          "missing_fields": [
+            "size",
+            "color",
+            "phone",
+            "address"
+          ],
+          "next_step": "ask_size_or_color"
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_15": true,
+        "contains_5": true,
+        "contains_20": true,
+        "not_failed": true
+      },
+      "seconds": 12.23
+    },
+    {
+      "id": "price_objection",
+      "goal": "تفهم الميزانية وقيمة موثقة أو بديل بلا خصم مخترع",
+      "text": "غالي علي حبيبتي غيركم ارخص",
+      "result": {
+        "reply": "يا هلا عيني، هالموديل قماشه باربي وتفحصينه عند الاستلام.\n\nوعندنا فستان ساده بـ 13 ألف، تحبين تشوفيه؟",
+        "reply_parts": [
+          "يا هلا عيني، هالموديل قماشه باربي وتفحصينه عند الاستلام.",
+          "وعندنا فستان ساده بـ 13 ألف، تحبين تشوفيه؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true
+      },
+      "seconds": 8.62
+    },
+    {
+      "id": "budget_cap",
+      "goal": "خيار 13 ألف مع 5 آلاف ضمن الميزانية؛ لا يعرض 15 ألف كأنه داخلها",
+      "text": "ميزانيتي 18 الف ويا التوصيل اكو شي مناسب؟",
+      "result": {
+        "reply": "يا هلا عيني، عدنا فستان ساده سعره 13 ألف، ويا التوصيل 5 آلاف يصير 18 ألف بالضبط.\n\nشنو القياس المطلوب حتى أشوفه الج؟",
+        "reply_parts": [
+          "يا هلا عيني، عدنا فستان ساده سعره 13 ألف، ويا التوصيل 5 آلاف يصير 18 ألف بالضبط.",
+          "شنو القياس المطلوب حتى أشوفه الج؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_18": true,
+        "not_failed": true
+      },
+      "seconds": 7.27
+    },
+    {
+      "id": "fake_image",
+      "goal": "صدق حول غياب الفيديو دون ضمان مطابقته أو طلب العنوان",
+      "text": "الصورة ذكاء اصطناعي؟ اريد فيديو حقيقي قبل لا اطلب",
+      "result": {
+        "reply": "",
+        "reply_parts": [
+          "يا هلا، تصوير الموديل حقيقي، وعدنا فحص عند الاستلام تكدر تفحص القطعة وإذا مو مطابقة ترجع مجاناً بدون أي دفع."
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "sales_state": {
+          "intent": "question",
+          "stage": "objection",
+          "objection": "trust_real_photo_video",
+          "missing_fields": [],
+          "next_step": "human_video_assistance"
+        },
+        "requires_human": true,
+        "handoff_reason": "طلب الزبون فيديو حقيقي للمنتج قبل الطلب وهو غير متوفر في البيانات الموثقة",
+        "confidence": 0.95,
+        "failed": true,
+        "failure_reason": "طلب الزبون فيديو حقيقي للمنتج قبل الطلب وهو غير متوفر في البيانات الموثقة"
+      },
+      "checks": {
+        "not_failed": false
+      },
+      "seconds": 19.59
+    },
+    {
+      "id": "known_length",
+      "goal": "استعمال ملاحظات المنتج بدل إحالة غير لازمة",
+      "text": "شكد طوله بالسانتي ومنين ينفتح؟",
+      "result": {
+        "reply": "",
+        "reply_parts": [
+          "هلا عيني، الطول بالسانتي وتفاصيل الفتحة راح يتأكدلك منها الموظف ويجاوبك بأقرب وقت."
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": true,
+        "handoff_reason": "استفسار عن الطول بالسنتيمتر وتفاصيل فتحة الفستان غير متوفرة في بيانات المنتج",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95,
+        "failed": true,
+        "failure_reason": "استفسار عن الطول بالسنتيمتر وتفاصيل فتحة الفستان غير متوفرة في بيانات المنتج"
+      },
+      "checks": {
+        "contains_135": false,
+        "contains_سحاب": false,
+        "not_failed": false
+      },
+      "seconds": 18.12
+    },
+    {
+      "id": "weight_fit",
+      "goal": "لا ضمان قياس من الوزن بلا جدول معتمد",
+      "text": "وزني 69 شنو قياسي؟",
+      "result": {
+        "reply": "هلا عيني 🌸 لوزن 69 يناسبج قياس 42 إلى 44، يا لون تحبين الأسود لو الكريمي؟",
+        "reply_parts": [
+          "هلا عيني 🌸 لوزن 69 يناسبج قياس 42 إلى 44، يا لون تحبين الأسود لو الكريمي؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "sales_state": {
+          "intent": "question",
+          "stage": "sizing",
+          "objection": "none",
+          "missing_fields": [
+            "size",
+            "color",
+            "phone",
+            "province",
+            "address"
+          ],
+          "next_step": "determine_size_and_color"
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true
+      },
+      "seconds": 6.11
+    },
+    {
+      "id": "complete_order",
+      "goal": "قرار حجز مع سلة صحيحة دون إعادة السؤال",
+      "text": "ثبتي فستان رباط اسود قياس 42 قطعة وحدة، بغداد حي تجريبي، 07700000000",
+      "result": {
+        "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+        "reply_parts": [
+          "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true
+      },
+      "seconds": 16.67
+    },
+    {
+      "id": "two_variants",
+      "goal": "قطعتان مستقلتان بقياسين مختلفين",
+      "text": "اريد الرباط اسود قياس 42 والكريمي قياس 46، قطعة من كل لون ثبتيهن",
+      "result": {
+        "reply": "تم تثبيت طلبج عيني. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس، وإذا ما طابق يرجع ويا المندوب بدون دفع.",
+        "reply_parts": [
+          "تم تثبيت طلبج عيني. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس، وإذا ما طابق يرجع ويا المندوب بدون دفع."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "كريمي",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "sales_state": {
+          "intent": "order",
+          "stage": "closing",
+          "objection": "none",
+          "missing_fields": [],
+          "next_step": "order_created"
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true
+      },
+      "seconds": 21.5
+    },
+    {
+      "id": "delivery_deadline",
+      "goal": "لا يعد بوصول مضمون غير موثق",
+      "text": "عندي مناسبة باجر تضمنون يوصل قبل الظهر؟",
+      "result": {
+        "reply": "يا هلا بيك 🌸 التوصيل ياخذ من يومين إلى ثلاثة أيام، فما نكدر نضمن يوصل باجر قبل الظهر.",
+        "reply_parts": [
+          "يا هلا بيك 🌸 التوصيل ياخذ من يومين إلى ثلاثة أيام، فما نكدر نضمن يوصل باجر قبل الظهر."
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true
+      },
+      "seconds": 5.84
+    },
+    {
+      "id": "single_from_bundle",
+      "goal": "لا يستنتج سعر مفرد من قسمة البكج",
+      "text": "اريد قطعة وحدة من السوت شكد سعرها؟",
+      "result": {
+        "reply": "هلا عيني 🌸 الموديل يجي بكج 3 قطع بـ 25 ألف مع توصيل مجاني.\n\nسعر القطعة المفردة مو موثق حالياً وأحتاج أتأكد منه، تحب البكج الكامل؟",
+        "reply_parts": [
+          "هلا عيني 🌸 الموديل يجي بكج 3 قطع بـ 25 ألف مع توصيل مجاني.",
+          "سعر القطعة المفردة مو موثق حالياً وأحتاج أتأكد منه، تحب البكج الكامل؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95,
+        "sales_state": {
+          "intent": "price",
+          "stage": "inquiry",
+          "objection": "wants_single_piece",
+          "missing_fields": [],
+          "next_step": "clarify_bundle_option"
+        }
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true
+      },
+      "seconds": 8.25
+    },
+    {
+      "id": "bundle_order",
+      "goal": "ثلاث قطع بمجموع 25 ألف مع التوصيل المجاني",
+      "text": "ثبتي بكج 3 قطع سنة: وردي وماروني وتركوازي وحدة من كل لون",
+      "result": {
+        "reply": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+        "reply_parts": [
+          "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "بكج 3 قطع",
+          "items": [
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "وردي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "ماروني",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "تركوازي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true
+      },
+      "seconds": 12.48
+    },
+    {
+      "id": "quantity_ambiguity",
+      "goal": "يحسم العدد بسؤال واحد ولا ينشئ سلة مختلقة",
+      "text": "اريد ثنين من الاسود واثنين كريمي لو خليها ثلاث بعدني محتارة",
+      "result": {
+        "reply": "يا هلا عيني تدللين 🌸 تحبين نعتمد ثنين لو ثلاثة من الكريمي؟ ويا قياس تردين للقطع حتى أجهزهن الج؟",
+        "reply_parts": [
+          "يا هلا عيني تدللين 🌸 تحبين نعتمد ثنين لو ثلاثة من الكريمي؟ ويا قياس تردين للقطع حتى أجهزهن الج؟"
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "sales_state": {
+          "intent": "order",
+          "stage": "clarifying_selection",
+          "objection": "none",
+          "missing_fields": [
+            "quantity",
+            "size",
+            "phone",
+            "province",
+            "address"
+          ],
+          "next_step": "confirm_quantity_and_size"
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true
+      },
+      "seconds": 6.47
+    }
+  ]
+}

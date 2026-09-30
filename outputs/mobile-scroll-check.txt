@@ -1,0 +1,1 @@
+PASS: single-finger touch scroll on 4 mobile pages; chat layout preserved

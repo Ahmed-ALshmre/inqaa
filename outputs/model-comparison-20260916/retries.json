@@ -1,0 +1,167 @@
+[
+  {
+    "model": "google/gemini-3.8-flash",
+    "case": 7,
+    "max_tokens": 4096,
+    "http_status": 200,
+    "reply": "تدللين حبيبتي، بس نظام التوصيل يوصل الطلب المحدد بالقياس، وما يحتاج تقلقين من موضوع التوصيل مرتين لأن تگدرين تفحصين القطعة بحضور المندوب قبل ما تدفعين، وإذا ما ناسبتج ترجع ويا المندوب مباشرة وبدون أي دفع.\n\nوبالنسبة لقياس 46 فهو أصلاً يلبس لوزن 84 كيلو يعني حاسبين حساب الامتلاء وراح يجيج مريح ومضبوط، والـ 48 مخصص لوزن 85-90 كيلو فراح يطلع كلش عريض وطويل عليج لأن طولج 153. \n\nتحبين نعتمدلج قياس 46؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1412,
+      "completion_tokens": 918,
+      "total_tokens": 2330,
+      "cost": 0.0045015,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0045015,
+        "upstream_inference_prompt_cost": 0.001059,
+        "upstream_inference_completions_cost": 0.0034425
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 750,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "google/gemini-3.8-flash",
+    "seconds": 9.98
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 5,
+    "max_tokens": 4096,
+    "http_status": 200,
+    "reply": "",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1399,
+      "completion_tokens": 4096,
+      "total_tokens": 5495,
+      "cost": 0.0196162,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 320,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0196162,
+        "upstream_inference_prompt_cost": 0.0015938,
+        "upstream_inference_completions_cost": 0.0180224
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 4092,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "seconds": 42.34
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 6,
+    "max_tokens": 4096,
+    "http_status": 200,
+    "reply": "لا تشيلين هم عيني 🌸 سوت الحوامل قياساته من ٧٠ لحد ١٣٠ كيلو، يعني بوزنج ١٠٠ بيكون عليج وسيع ومريح، وحتى لو زاد وزنج بالشهرين الجايين بيظل يلبيسج لأنه متخصص للحوامل. متوفر بثلاث ألوان: أخضر، بنفسجي وزيتوني، وعليه عرض خاص هذي الفترة على آخر كمية — أنهي لون يعجبج؟",
+    "finish_reason": "stop",
+    "usage": {
+      "prompt_tokens": 1359,
+      "completion_tokens": 1108,
+      "total_tokens": 2467,
+      "cost": 0.006413,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 320,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.006413,
+        "upstream_inference_prompt_cost": 0.0015378,
+        "upstream_inference_completions_cost": 0.0048752
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 978,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "seconds": 8.76
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 7,
+    "max_tokens": 4096,
+    "http_status": 200,
+    "reply": "",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1501,
+      "completion_tokens": 4096,
+      "total_tokens": 5597,
+      "cost": 0.019759,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 320,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.019759,
+        "upstream_inference_prompt_cost": 0.0017366,
+        "upstream_inference_completions_cost": 0.0180224
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 4096,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "seconds": 42.31
+  },
+  {
+    "model": "z-ai/glm-5.3",
+    "case": 9,
+    "max_tokens": 4096,
+    "http_status": 200,
+    "reply": "هلا بيك اخوية، تسلم 🌸 وعذراً منكم على الغلط.\n\nاي، الزبونة ترجع كل شي استلمته من الطلب الغلط — يعني ترجعهن ثنينهن مو وحدة، لان الاستبدال يكون على الطلب كامل.\n\nبس لان سعر الطلب القديم طالع صفر",
+    "finish_reason": "length",
+    "usage": {
+      "prompt_tokens": 1219,
+      "completion_tokens": 4096,
+      "total_tokens": 5315,
+      "cost": 0.0193642,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 320,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0193642,
+        "upstream_inference_prompt_cost": 0.0013418,
+        "upstream_inference_completions_cost": 0.0180224
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 4011,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "actual_model": "z-ai/glm-5.3",
+    "seconds": 42.55
+  }
+]

@@ -1,0 +1,675 @@
+..................E.EFF.........FFFFF...E..F.......F.F.FEF.....F.....FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF.................
+======================================================================
+ERROR: test_adding_photo_keeps_both_products_after_next_message (account_app.tests.test_conversation_context.ConversationContextTests.test_adding_photo_keeps_both_products_after_next_message)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 290, in test_adding_photo_keeps_both_products_after_next_message
+    self.assertEqual(result["meta"]["product_choice_resolved"],"add")
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'product_choice_resolved'
+
+======================================================================
+ERROR: test_ambiguous_or_invalid_selection_keeps_context (account_app.tests.test_conversation_context.ConversationContextTests.test_ambiguous_or_invalid_selection_keeps_context)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 163, in test_ambiguous_or_invalid_selection_keeps_context
+    self.assertIn('دانتيل', result['reply'])
+                            ~~~~~~^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+
+======================================================================
+ERROR: test_different_photo_asks_add_or_replace_without_changing_old_choice (account_app.tests.test_conversation_context.ConversationContextTests.test_different_photo_asks_add_or_replace_without_changing_old_choice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 277, in test_different_photo_asks_add_or_replace_without_changing_old_choice
+    self.assertTrue(result["meta"]["product_choice_pending"])
+                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'product_choice_pending'
+
+======================================================================
+ERROR: test_new_image_matches_default_without_asking_choice (account_app.tests.test_conversation_context.ConversationContextTests.test_new_image_matches_default_without_asking_choice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 313, in test_new_image_matches_default_without_asking_choice
+    self.assertEqual(m.load_customer_products(self.db,self.sender)[0]["product_id"],"F1")
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range
+
+======================================================================
+FAIL: test_ambiguous_yes_does_not_choose_add_or_replace (account_app.tests.test_conversation_context.ConversationContextTests.test_ambiguous_yes_does_not_choose_add_or_replace)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 298, in test_ambiguous_yes_does_not_choose_add_or_replace
+    self.assertTrue(first["meta"].get("product_choice_pending"), first)
+AssertionError: None is not true : {'sender_id': 'al-fatena::context-0ac463f06b864de380e12b37ab1fd387', 'reply': '', 'send_image': False, 'meta': {'service_error': True, 'human_review_id': 3, 'reason': 'image_service_unavailable', 'ai_paused': False}}
+
+======================================================================
+FAIL: test_async_worker_does_not_drop_photo_before_latest_text (account_app.tests.test_conversation_context.ConversationContextTests.test_async_worker_does_not_drop_photo_before_latest_text)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 373, in test_async_worker_does_not_drop_photo_before_latest_text
+    self.assertEqual(vision.call_count,1, {"waits":len(calls), "messages":[dict(r) for r in self.db.execute("SELECT sender_id,direction,message_type,text FROM messages WHERE sender_id LIKE ?",("%"+self.sender.split("::",1)[-1],))], "event":m.extract_facebook_event(photo)})
+AssertionError: 0 != 1 : {'waits': 2, 'messages': [{'sender_id': 'al-fatena::context-f22e923f848e4794bbe3d7ce20b875a0', 'direction': 'incoming', 'message_type': 'image', 'text': ''}, {'sender_id': 'al-fatena::context-f22e923f848e4794bbe3d7ce20b875a0', 'direction': 'incoming', 'message_type': 'text', 'text': 'هذة الون والقياس 44'}], 'event': {'sender_id': 'al-fatena::context-f22e923f848e4794bbe3d7ce20b875a0', 'page_id': 'page', 'store_id': 'al-fatena', 'platform': 'facebook', 'timestamp': None, 'text': '', 'attachments': [{'type': 'image', 'payload': {'url': 'https://images.test/async.jpg'}}], 'image_url': 'https://images.test/async.jpg', 'quick_reply': {}, 'postback': {}, 'ref': None, 'ad_id': None, 'referral_source': None, 'referral_type': None}}
+
+======================================================================
+FAIL: test_contextual_rejection_keeps_other_product_and_answers_next_question (account_app.tests.test_conversation_context.ConversationContextTests.test_contextual_rejection_keeps_other_product_and_answers_next_question) (phrase='لا فستان دانتيل ماريده')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 137, in test_contextual_rejection_keeps_other_product_and_answers_next_question
+    self.assertIn('انيقة', result['reply'])
+AssertionError: 'انيقة' not found in ''
+
+======================================================================
+FAIL: test_contextual_rejection_keeps_other_product_and_answers_next_question (account_app.tests.test_conversation_context.ConversationContextTests.test_contextual_rejection_keeps_other_product_and_answers_next_question) (phrase='دانتيل ماعجبني')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 137, in test_contextual_rejection_keeps_other_product_and_answers_next_question
+    self.assertIn('انيقة', result['reply'])
+AssertionError: 'انيقة' not found in ''
+
+======================================================================
+FAIL: test_contextual_rejection_keeps_other_product_and_answers_next_question (account_app.tests.test_conversation_context.ConversationContextTests.test_contextual_rejection_keeps_other_product_and_answers_next_question) (phrase='هذا مو ذوقي')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 137, in test_contextual_rejection_keeps_other_product_and_answers_next_question
+    self.assertIn('انيقة', result['reply'])
+AssertionError: 'انيقة' not found in ''
+
+======================================================================
+FAIL: test_contextual_reverse_selection_restores_only_explicit_choice (account_app.tests.test_conversation_context.ConversationContextTests.test_contextual_reverse_selection_restores_only_explicit_choice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 150, in test_contextual_reverse_selection_restores_only_explicit_choice
+    self.assertIn('دانتيل', result['reply'])
+AssertionError: 'دانتيل' not found in ''
+
+======================================================================
+FAIL: test_dashboard_collects_image_before_caption_and_offers_choice (account_app.tests.test_conversation_context.ConversationContextTests.test_dashboard_collects_image_before_caption_and_offers_choice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 482, in test_dashboard_collects_image_before_caption_and_offers_choice
+    self.assertEqual(response.status_code,200)
+AssertionError: 503 != 200
+
+======================================================================
+FAIL: test_explicit_addition_in_caption_needs_no_extra_choice (account_app.tests.test_conversation_context.ConversationContextTests.test_explicit_addition_in_caption_needs_no_extra_choice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 308, in test_explicit_addition_in_caption_needs_no_extra_choice
+    self.assertEqual({p["product_id"] for p in m.load_customer_products(self.db,self.sender)},{"F1","F2"})
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_manual_link_resolves_pending_selection (account_app.tests.test_conversation_context.ConversationContextTests.test_manual_link_resolves_pending_selection)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 380, in test_manual_link_resolves_pending_selection
+    self.assertIsNotNone(m.pending_product_choice(self.db,self.sender))
+AssertionError: unexpectedly None
+
+======================================================================
+FAIL: test_model_cannot_confirm_ambiguous_cart_during_discussion (account_app.tests.test_conversation_context.ConversationContextTests.test_model_cannot_confirm_ambiguous_cart_during_discussion)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 528, in test_model_cannot_confirm_ambiguous_cart_during_discussion
+    self.assertFalse(result["create_order"])
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_negated_dislike_does_not_remove_a_product (account_app.tests.test_conversation_context.ConversationContextTests.test_negated_dislike_does_not_remove_a_product)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 177, in test_negated_dislike_does_not_remove_a_product
+    self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['F2'])
+AssertionError: Lists differ: [] != ['F2']
+
+Second list contains 1 additional elements.
+First extra element 0:
+'F2'
+
+- []
++ ['F2']
+
+======================================================================
+FAIL: test_new_photo_discussion_defers_choice_until_booking (account_app.tests.test_conversation_context.ConversationContextTests.test_new_photo_discussion_defers_choice_until_booking)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 513, in test_new_photo_discussion_defers_choice_until_booking
+    self.assertIn("15,000",price)
+AssertionError: '15,000' not found in ''
+
+======================================================================
+FAIL: test_photo_followed_by_text_in_same_burst_is_matched (account_app.tests.test_conversation_context.ConversationContextTests.test_photo_followed_by_text_in_same_burst_is_matched)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 264, in test_photo_followed_by_text_in_same_burst_is_matched
+    vision.assert_called_once()
+  File "C:\Users\Ghost الشبح\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py", line 923, in assert_called_once
+    raise AssertionError(msg)
+AssertionError: Expected 'match_customer_image_with_catalog' to have been called once. Called 0 times.
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=False, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=False, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=False, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=False, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=False, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=False, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=False, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=True, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=True, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=True, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=True, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=True, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=True, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='default', auto=True, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=False, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=False, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=False, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=False, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=False, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=False, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=False, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=True, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=True, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=True, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=True, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=True, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=True, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='al-fatena', auto=True, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=False, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=False, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=False, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=False, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=False, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=False, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=False, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=True, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=True, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=True, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=True, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=True, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=True, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='khuyoot', auto=True, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=False, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=False, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=False, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=False, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=False, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=False, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=False, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=True, linked=False, mode='same')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=True, linked=False, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=True, linked=False, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F1'
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=True, linked=False, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=True, linked=True, mode='replace')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the first set but not the second:
+'F1'
+Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=True, linked=True, mode='add')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 467, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(ids,expected)
+AssertionError: Items in the second set but not the first:
+'F2'
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix) (store='golden-threads', auto=True, linked=True, mode='ask')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 463, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(bool(result["meta"].get("product_choice_pending")),pending)
+AssertionError: False != True
+
+======================================================================
+FAIL: test_store_configuration_and_image_choice_matrix (account_app.tests.test_conversation_context.ConversationContextTests.test_store_configuration_and_image_choice_matrix)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_conversation_context.py", line 473, in test_store_configuration_and_image_choice_matrix
+    self.assertEqual(cases,96)
+AssertionError: 40 != 96
+
+----------------------------------------------------------------------
+Ran 85 tests in 6.471s
+
+FAILED (failures=70, errors=4)

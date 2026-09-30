@@ -1,0 +1,174 @@
+{
+  "results": [
+    {
+      "id": "long_price",
+      "result": {
+        "reply": "سعره 15 ألف والتوصيل 5 آلاف، يعني المجموع 20 ألف واصل للموصل.\n\nتحبين نثبتلج الحجز هسه؟",
+        "reply_parts": [
+          "سعره 15 ألف والتوصيل 5 آلاف، يعني المجموع 20 ألف واصل للموصل.",
+          "تحبين نثبتلج الحجز هسه؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "الموصل",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "seconds": 21.76
+    },
+    {
+      "id": "long_checkout",
+      "result": {
+        "reply": "تدللين عيني، جاري تثبيت طلبج لفستان الرباط الأسود قياس 42. التوصيل متوفر مع إمكانية الفحص عند الاستلام.",
+        "reply_parts": [
+          "تدللين عيني، جاري تثبيت طلبج لفستان الرباط الأسود قياس 42. التوصيل متوفر مع إمكانية الفحص عند الاستلام."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95,
+        "_explicit_checkout_recovered": true
+      },
+      "seconds": 4.03
+    },
+    {
+      "id": "long_correction",
+      "result": {
+        "reply": "صار عيني، تم تثبيت طلبج لفستان الرباط الكريمي قياس 46.\n\nيرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس، إذا لم يطابق يرجع مع المندوب بدون دفع.",
+        "reply_parts": [
+          "صار عيني، تم تثبيت طلبج لفستان الرباط الكريمي قياس 46.\n\nيرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس، إذا لم يطابق يرجع مع المندوب بدون دفع."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "كريمي",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1,
+        "_explicit_checkout_recovered": true
+      },
+      "seconds": 9.66
+    },
+    {
+      "id": "warm_objection",
+      "result": {
+        "reply": "لا تقلقين عيني، قماش الباربي يجي قالب مرتب ونازل بالجسم، وتكدرين تفحصينه وتشوفين خامته كدام المندوب قبل لا تدفعين.\n\nتحبين نثبتلج قياس 46 الكريمي؟",
+        "reply_parts": [
+          "لا تقلقين عيني، قماش الباربي يجي قالب مرتب ونازل بالجسم، وتكدرين تفحصينه وتشوفين خامته كدام المندوب قبل لا تدفعين.",
+          "تحبين نثبتلج قياس 46 الكريمي؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "كريمي",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "seconds": 6.11
+    }
+  ],
+  "usage": [
+    {
+      "purpose": "main",
+      "prompt_tokens": 2620,
+      "completion_tokens": 288,
+      "elapsed_ms": 21750
+    },
+    {
+      "purpose": "main",
+      "prompt_tokens": 2537,
+      "completion_tokens": 197,
+      "elapsed_ms": 4015
+    },
+    {
+      "purpose": "main",
+      "prompt_tokens": 2604,
+      "completion_tokens": 342,
+      "elapsed_ms": 9657
+    },
+    {
+      "purpose": "main",
+      "prompt_tokens": 2503,
+      "completion_tokens": 334,
+      "elapsed_ms": 6110
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "window_start": "2026-09-27T17:12:04+03:00",
+  "window_end": "2026-09-29T17:12:04+03:00",
+  "conversations_checked": 1150,
+  "historical_messages_checked": 14200,
+  "incremental_mismatches": [],
+  "memory_size_max_chars": 4516,
+  "real_short_reply_cases": [
+    {
+      "message_id": 42569,
+      "intent": "browse"
+    },
+    {
+      "message_id": 46609,
+      "intent": "browse"
+    },
+    {
+      "message_id": 51334,
+      "intent": "browse"
+    }
+  ],
+  "elapsed_seconds": 1.865,
+  "read_only": true,
+  "model_calls": 0,
+  "customer_messages_sent": 0
+}

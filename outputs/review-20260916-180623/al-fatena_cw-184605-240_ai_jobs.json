@@ -1,0 +1,47 @@
+[
+  {
+    "id": "2ea8a6f5345e4a26b0ded53a96c72c67",
+    "store_id": "al-fatena",
+    "sender_id": "al-fatena::cw-184605-240",
+    "kind": "webhook",
+    "dedupe_key": "46ddc2f688cfca636190743293aab431bcb99d926f6d961455d9ce9d819ed23b",
+    "payload": "{\"fake_body\": {\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-135225\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-240\"}, \"recipient\": {\"id\": \"chatwoot-184605-135225\"}, \"timestamp\": 1789570886148, \"message\": {\"mid\": \"chatwoot-184605-859999794\", \"text\": \"سلام عليكم\", \"attachments\": []}}]}]}, \"subscriber_id\": \"al-fatena::cw-184605-240\", \"platform\": \"facebook\", \"outbound_subscriber_id\": \"al-fatena::cw-184605-240\", \"saved_id\": 19949}",
+    "status": "done",
+    "result": "{\"ok\": true, \"meta\": {\"skipped\": true, \"reason\": \"smart_first_message\", \"detected_gender\": \"unknown\"}}",
+    "created_at": 1789570886.1524413,
+    "available_at": 1789570921.1524413,
+    "started_at": 1789570921.2452815,
+    "finished_at": 1789570930.0857844,
+    "owner": "0b7d8a573f33417491a1f5e3bd2b8752"
+  },
+  {
+    "id": "525a2f0e2e3f4fcfa68fce50aa422f36",
+    "store_id": "al-fatena",
+    "sender_id": "al-fatena::cw-184605-240",
+    "kind": "webhook",
+    "dedupe_key": "1ed179192ae72fa7b1adca93dc702b26981c0d0254c99412a863d4e654fc127f",
+    "payload": "{\"fake_body\": {\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-135225\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-240\"}, \"recipient\": {\"id\": \"chatwoot-184605-135225\"}, \"timestamp\": 1789571111126, \"message\": {\"mid\": \"chatwoot-184605-860009673\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://app.chatwoot.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCR3NRcHdZPSIsImV4cCI6bnVsbCwicHVyIjoiYmxvYl9pZCJ9fQ==--9f036f04467bdfecae3f8185e60a75837b8093c4/809314337_1585471466646718_8504766647519250900_n.jpg\"}}]}}]}]}, \"subscriber_id\": \"al-fatena::cw-184605-240\", \"platform\": \"facebook\", \"outbound_subscriber_id\": \"al-fatena::cw-184605-240\", \"saved_id\": 20008}",
+    "status": "done",
+    "result": "{\"ok\": true}",
+    "created_at": 1789571111.1316242,
+    "available_at": 1789571146.1316242,
+    "started_at": 1789571146.4057229,
+    "finished_at": 1789571146.4076471,
+    "owner": "8c31a3f7a0254c56b88740c9ac3b5e09"
+  },
+  {
+    "id": "db132587f3e14f8f909590788b0f21a3",
+    "store_id": "al-fatena",
+    "sender_id": "al-fatena::cw-184605-240",
+    "kind": "webhook",
+    "dedupe_key": "8f77ac5c8473d32330ff1b9d36b8e96942c4ee4fd0dd86613a2c6be342611d30",
+    "payload": "{\"fake_body\": {\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-135225\", \"_store_id\": \"al-fatena\", \"messaging\": [{\"sender\": {\"id\": \"al-fatena::cw-184605-240\"}, \"recipient\": {\"id\": \"chatwoot-184605-135225\"}, \"timestamp\": 1789571114364, \"message\": {\"mid\": \"chatwoot-184605-860009795\", \"text\": \"متوفر\", \"attachments\": []}}]}]}, \"subscriber_id\": \"al-fatena::cw-184605-240\", \"platform\": \"facebook\", \"outbound_subscriber_id\": \"al-fatena::cw-184605-240\", \"saved_id\": 20009}",
+    "status": "done",
+    "result": "{\"ok\": true, \"meta\": {\"human_review_id\": 1128, \"image_unresolved\": true, \"ai_paused\": true, \"waiting_for_human_action\": true, \"image_attempts\": [{\"product_found\": false, \"product_id\": null, \"confidence\": 0, \"reason\": \"No clear visual match\", \"raw\": \"NONE\", \"reference_source\": \"labelled_product_images\", \"attempts\": [{\"attempt\": 1, \"product_found\": false, \"reason\": \"No clear visual match\", \"error_code\": null}], \"image_url\": \"https://app.chatwoot.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCR3NRcHdZPSIsImV4cCI6bnVsbCwicHVyIjoiYmxvYl9pZCJ9fQ==--9f036f04467bdfecae3f8185e60a75837b8093c4/809314337_1585471466646718_8504766647519250900_n.jpg\", \"image_index\": 1, \"product_name\": null}]}}",
+    "created_at": 1789571114.368433,
+    "available_at": 1789571149.368433,
+    "started_at": 1789571149.415788,
+    "finished_at": 1789571153.2264946,
+    "owner": "8c31a3f7a0254c56b88740c9ac3b5e09"
+  }
+]

@@ -1,0 +1,373 @@
+{
+  "window": [
+    "2026-09-09T10:52:06+03:00",
+    "2026-09-10T10:52:06+03:00"
+  ],
+  "integrity": "ok",
+  "messages": 1961,
+  "conversations": 210,
+  "stores": {
+    "golden-threads": {
+      "conversations": 3,
+      "incoming": 7,
+      "outgoing": 1,
+      "orders": 0
+    },
+    "al-fatena": {
+      "conversations": 42,
+      "incoming": 271,
+      "outgoing": 191,
+      "orders": 10
+    },
+    "default": {
+      "conversations": 3,
+      "incoming": 45,
+      "outgoing": 13,
+      "orders": 0
+    },
+    "khuyoot": {
+      "conversations": 162,
+      "incoming": 827,
+      "outgoing": 606,
+      "orders": 24
+    }
+  },
+  "orders": 34,
+  "ordering_customers": 34,
+  "order_statuses": {
+    "new": 34
+  },
+  "reviews": 62,
+  "review_statuses": {
+    "reviewed": 31,
+    "linked": 24,
+    "pending": 7
+  },
+  "review_reasons": {
+    "مرفق يحتاج استماعاً أو قراءة بشرية: audio": 4,
+    "تعذر الرد بعد الحجز: exception:ValueError": 2,
+    "AI متوقف (ai_disabled_for_conversation); رسالة جديدة من الزبون تحتاج تدخل بشري": 8,
+    "استفسار بعد الحجز يحتاج معلومات غير متاحة للمساعد": 1,
+    "AI could not produce a reply (exception:HTTPError); human action required": 7,
+    "AI could not produce a reply (exception:ValueError); human action required": 6,
+    "AI could not confidently match customer image; routed to human review": 13,
+    "AI could not produce a reply after product link (exception:HTTPError)": 4,
+    "تعذر تحديد الموديل بعد محاولتين؛ مراجعة الصورة مطلوبة": 3,
+    "AI produced a handoff/apology reply; suppressed customer message": 3,
+    "تعذر الرد بعد الحجز: empty_reply": 6,
+    "طلب تعديل أو متابعة تنفيذية يحتاج تأكيداً من الموظف": 2,
+    "مرفق يحتاج استماعاً أو قراءة بشرية: video": 2,
+    "متابعة طلب سابق غير موجود في قاعدة الطلبات الحالية": 1
+  },
+  "no_outgoing": [
+    "C001",
+    "C010",
+    "C022",
+    "C030",
+    "C046",
+    "C060",
+    "C081",
+    "C109",
+    "C113",
+    "C117",
+    "C126",
+    "C149",
+    "C181",
+    "C200"
+  ],
+  "unanswered_tails": [
+    {
+      "conversation": "C001",
+      "messages": 2,
+      "last_message": 9176,
+      "age_minutes": 1432.0
+    },
+    {
+      "conversation": "C010",
+      "messages": 8,
+      "last_message": 10179,
+      "age_minutes": 751.3
+    },
+    {
+      "conversation": "C017",
+      "messages": 3,
+      "last_message": 9412,
+      "age_minutes": 1107.6
+    },
+    {
+      "conversation": "C022",
+      "messages": 1,
+      "last_message": 9388,
+      "age_minutes": 1194.0
+    },
+    {
+      "conversation": "C030",
+      "messages": 6,
+      "last_message": 9471,
+      "age_minutes": 1031.3
+    },
+    {
+      "conversation": "C046",
+      "messages": 1,
+      "last_message": 9608,
+      "age_minutes": 943.3
+    },
+    {
+      "conversation": "C047",
+      "messages": 3,
+      "last_message": 11070,
+      "age_minutes": 60.4
+    },
+    {
+      "conversation": "C060",
+      "messages": 4,
+      "last_message": 9765,
+      "age_minutes": 880.6
+    },
+    {
+      "conversation": "C081",
+      "messages": 3,
+      "last_message": 9934,
+      "age_minutes": 830.2
+    },
+    {
+      "conversation": "C107",
+      "messages": 3,
+      "last_message": 10368,
+      "age_minutes": 677.1
+    },
+    {
+      "conversation": "C109",
+      "messages": 2,
+      "last_message": 10184,
+      "age_minutes": 749.5
+    },
+    {
+      "conversation": "C113",
+      "messages": 3,
+      "last_message": 10218,
+      "age_minutes": 738.0
+    },
+    {
+      "conversation": "C117",
+      "messages": 1,
+      "last_message": 10235,
+      "age_minutes": 729.4
+    },
+    {
+      "conversation": "C126",
+      "messages": 2,
+      "last_message": 10292,
+      "age_minutes": 706.1
+    },
+    {
+      "conversation": "C149",
+      "messages": 1,
+      "last_message": 10475,
+      "age_minutes": 611.7
+    },
+    {
+      "conversation": "C178",
+      "messages": 2,
+      "last_message": 10783,
+      "age_minutes": 453.1
+    },
+    {
+      "conversation": "C181",
+      "messages": 2,
+      "last_message": 10811,
+      "age_minutes": 392.7
+    },
+    {
+      "conversation": "C185",
+      "messages": 1,
+      "last_message": 10853,
+      "age_minutes": 300.2
+    },
+    {
+      "conversation": "C187",
+      "messages": 3,
+      "last_message": 10893,
+      "age_minutes": 206.6
+    },
+    {
+      "conversation": "C200",
+      "messages": 3,
+      "last_message": 11051,
+      "age_minutes": 95.2
+    },
+    {
+      "conversation": "C204",
+      "messages": 5,
+      "last_message": 11084,
+      "age_minutes": 55.0
+    }
+  ],
+  "response_bursts": 604,
+  "median_response_seconds": 42.0,
+  "p90_response_seconds": 50.0,
+  "delays_over_5min": [
+    {
+      "conversation": "C012",
+      "seconds": 2711.0,
+      "incoming": 9299,
+      "outgoing": 9327
+    },
+    {
+      "conversation": "C012",
+      "seconds": 14836.0,
+      "incoming": 9330,
+      "outgoing": 9447
+    },
+    {
+      "conversation": "C017",
+      "seconds": 2589.0,
+      "incoming": 9375,
+      "outgoing": 9389
+    },
+    {
+      "conversation": "C018",
+      "seconds": 14529.0,
+      "incoming": 9346,
+      "outgoing": 9450
+    },
+    {
+      "conversation": "C024",
+      "seconds": 801.0,
+      "incoming": 9416,
+      "outgoing": 9454
+    },
+    {
+      "conversation": "C024",
+      "seconds": 1059.0,
+      "incoming": 9980,
+      "outgoing": 10058
+    },
+    {
+      "conversation": "C033",
+      "seconds": 2331.0,
+      "incoming": 9493,
+      "outgoing": 9559
+    },
+    {
+      "conversation": "C035",
+      "seconds": 1931.0,
+      "incoming": 9507,
+      "outgoing": 9553
+    },
+    {
+      "conversation": "C036",
+      "seconds": 1695.0,
+      "incoming": 9527,
+      "outgoing": 9557
+    },
+    {
+      "conversation": "C037",
+      "seconds": 1407.0,
+      "incoming": 9532,
+      "outgoing": 9547
+    },
+    {
+      "conversation": "C038",
+      "seconds": 943.0,
+      "incoming": 9538,
+      "outgoing": 9549
+    },
+    {
+      "conversation": "C039",
+      "seconds": 650.0,
+      "incoming": 9540,
+      "outgoing": 9548
+    },
+    {
+      "conversation": "C072",
+      "seconds": 3846.0,
+      "incoming": 9848,
+      "outgoing": 10061
+    },
+    {
+      "conversation": "C122",
+      "seconds": 4756.0,
+      "incoming": 10251,
+      "outgoing": 10435
+    },
+    {
+      "conversation": "C131",
+      "seconds": 2757.0,
+      "incoming": 10356,
+      "outgoing": 10432
+    },
+    {
+      "conversation": "C134",
+      "seconds": 1589.0,
+      "incoming": 10383,
+      "outgoing": 10427
+    },
+    {
+      "conversation": "C137",
+      "seconds": 657.0,
+      "incoming": 10412,
+      "outgoing": 10425
+    },
+    {
+      "conversation": "C137",
+      "seconds": 1069.0,
+      "incoming": 11095,
+      "outgoing": 11115
+    },
+    {
+      "conversation": "C168",
+      "seconds": 31295.0,
+      "incoming": 10730,
+      "outgoing": 11131
+    },
+    {
+      "conversation": "C180",
+      "seconds": 21084.0,
+      "incoming": 10813,
+      "outgoing": 11126
+    },
+    {
+      "conversation": "C196",
+      "seconds": 5835.0,
+      "incoming": 11043,
+      "outgoing": 11125
+    },
+    {
+      "conversation": "C198",
+      "seconds": 3102.0,
+      "incoming": 11074,
+      "outgoing": 11121
+    },
+    {
+      "conversation": "C205",
+      "seconds": 1389.0,
+      "incoming": 11088,
+      "outgoing": 11116
+    },
+    {
+      "conversation": "C206",
+      "seconds": 865.0,
+      "incoming": 11105,
+      "outgoing": 11114
+    }
+  ],
+  "flags": {
+    "unclear_model": {
+      "messages": 8,
+      "conversations": 8
+    },
+    "generic_request": {
+      "messages": 40,
+      "conversations": 40
+    },
+    "proposal": {
+      "messages": 8,
+      "conversations": 3
+    },
+    "confirmation": {
+      "messages": 34,
+      "conversations": 34
+    }
+  }
+}

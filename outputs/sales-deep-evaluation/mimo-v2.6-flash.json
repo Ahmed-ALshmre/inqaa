@@ -1,0 +1,336 @@
+{
+  "model": "xiaomi/mimo-v2.6-flash",
+  "variant": "improved",
+  "results": [
+    {
+      "id": "price_total",
+      "goal": "السعر والتوصيل والمجموع قبل طلب الحجز",
+      "text": "شكد السعر ويا التوصيل للموصل؟",
+      "result": {
+        "reply": "هلا بيك 🌸\nفستان الرباط سعره 15 ألف، والتوصيل للموصل 5 آلاف، يعني المجموع 20 ألف.\n\nتحبين أحجزه إلج؟ شنو قياسج واللون اللي يعجبج؟",
+        "reply_parts": [
+          "هلا بيك 🌸\n\nفستان الرباط سعره 15 ألف، والتوصيل للموصل 5 آلاف، يعني المجموع 20 ألف.",
+          "تحبين أحجزه إلج؟",
+          "شنو قياسج واللون اللي يعجبج؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "sales_state": {
+          "intent": "price",
+          "stage": "inquiry",
+          "objection": "",
+          "missing_fields": [
+            "size",
+            "color"
+          ],
+          "next_step": "ask size and color"
+        },
+        "confidence": 0.9
+      },
+      "checks": {
+        "contains_15": true,
+        "contains_5": true,
+        "contains_20": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 9.74
+    },
+    {
+      "id": "price_objection",
+      "goal": "تفهم الميزانية وقيمة موثقة أو بديل بلا خصم مخترع",
+      "text": "غالي علي حبيبتي غيركم ارخص",
+      "result": {
+        "reply": "أفهمج عيني، فستان الرباط بـ15 ألف.\n\nعندنا فستان ساده قطن بـ13 ألف، أكو توصيل 5 آلاف لجميع المحافظات.\n\nتفضّلي أوريج صورته؟",
+        "reply_parts": [
+          "أفهمج عيني، فستان الرباط بـ15 ألف.",
+          "عندنا فستان ساده قطن بـ13 ألف، أكو توصيل 5 آلاف لجميع المحافظات.",
+          "تفضّلي أوريج صورته؟"
+        ],
+        "intent": "price",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "sales_state": {
+          "intent": "price",
+          "stage": "objection_handling",
+          "objection": "price_too_high",
+          "missing_fields": [
+            "alternative_choice"
+          ],
+          "next_step": "offer_cheaper_alternative_D2"
+        },
+        "confidence": 0.8
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 7.3
+    },
+    {
+      "id": "budget_cap",
+      "goal": "خيار 13 ألف مع 5 آلاف ضمن الميزانية؛ لا يعرض 15 ألف كأنه داخلها",
+      "text": "ميزانيتي 18 الف ويا التوصيل اكو شي مناسب؟",
+      "result": {
+        "reply": "هلا حبيبتي 🌸 ميزانيتج 18 الف ويا التوصيل — يناسبج فستان ساده بـ13 ألف، ويا التوصيل 5 آلاف يطلع 18 ألف بالضبط.\n\nشنو قياسج؟",
+        "reply_parts": [
+          "هلا حبيبتي 🌸 ميزانيتج 18 الف ويا التوصيل — يناسبج فستان ساده بـ13 ألف، ويا التوصيل 5 آلاف يطلع 18 ألف بالضبط.",
+          "شنو قياسج؟"
+        ],
+        "intent": "price",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.9
+      },
+      "checks": {
+        "contains_18": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 26.91
+    },
+    {
+      "id": "discount",
+      "goal": "لا يمنح خصماً غير معتمد ولا يدعي أقل سعر بالسوق",
+      "text": "يصير تحسبيلي الفستان ب12؟",
+      "result": {
+        "reply": "عيني سعر فستان الرباط 15 ألف، ما نكدر نحسبه بـ12 لأن هاي آخر سعر متاح.\n\nعندنا فستان ساده بـ13 ألف لو يناسبج خيار أرخص — تحبين أوريك إياه؟",
+        "reply_parts": [
+          "عيني سعر فستان الرباط 15 ألف، ما نكدر نحسبه بـ12 لأن هاي آخر سعر متاح.\n\nعندنا فستان ساده بـ13 ألف لو يناسبج خيار أرخص —",
+          "تحبين أوريك إياه؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 80,
+        "sales_state": {
+          "intent": "price",
+          "stage": "objection",
+          "objection": "السعر: طلب تخفيض من 15000 إلى 12000",
+          "missing_fields": [
+            "اللون",
+            "القياس",
+            "رقم الهاتف",
+            "المحافظة",
+            "العنوان"
+          ],
+          "next_step": "تأكيد رفض التخفيض وعرض البديل 13000 ثم سؤال عن الاختيار"
+        }
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 60.49
+    },
+    {
+      "id": "fake_image",
+      "goal": "صدق حول غياب الفيديو دون ضمان مطابقته أو طلب العنوان",
+      "text": "الصورة ذكاء اصطناعي؟ اريد فيديو حقيقي قبل لا اطلب",
+      "result": {
+        "reply": "حالياً ما عندي فيديو حقيقي موثق لهذا الموديل، فما أگدر أؤكد تفاصيله من فيديو غير موجود.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "image_guarantee",
+      "goal": "لا ضمان مطلق؛ شرح الفحص من السياسة",
+      "text": "تضمنين يوصلني نفس الصورة بالضبط؟",
+      "result": {
+        "reply": "هلا 🌸 نفس الموديل بالصورة هو اللي يوصلك، وتشوفينه بعينج قبل الدفع.\nللأمانة ما نكدر نضمن تطابق 100% بالتصوير، بس عندج الفحص عند الاستلام: إذا ما طابق يرجع مع المندوب بدون دفع.\n\nتحبين أنهي لون من المتوفر — أسود ولا كريمي؟",
+        "reply_parts": [
+          "هلا 🌸 نفس الموديل بالصورة هو اللي يوصلك، وتشوفينه بعينج قبل الدفع.",
+          "للأمانة ما نكدر نضمن تطابق 100% بالتصوير، بس عندج الفحص عند الاستلام: إذا ما طابق يرجع مع المندوب بدون دفع.",
+          "تحبين أنهي لون من المتوفر — أسود ولا كريمي؟"
+        ],
+        "intent": "image_check",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "sales_state": {
+          "intent": "trust_check",
+          "stage": "consideration",
+          "objection": "担心与图片不符",
+          "missing_fields": [
+            "color",
+            "size"
+          ],
+          "next_step": "确认颜色选择"
+        },
+        "confidence": 0
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 56.81
+    },
+    {
+      "id": "known_length",
+      "goal": "استعمال ملاحظات المنتج بدل إحالة غير لازمة",
+      "text": "شكد طوله بالسانتي ومنين ينفتح؟",
+      "result": {
+        "reply": "طول القطعة 135 سم، والفتح من وراء بسحاب خلفي.\n\nتحبين أحجزه؟ قولي اللون والقياس وبس.",
+        "reply_parts": [
+          "طول القطعة 135 سم، والفتح من وراء بسحاب خلفي.",
+          "تحبين أحجزه؟",
+          "قولي اللون والقياس وبس."
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 1
+      },
+      "checks": {
+        "contains_135": true,
+        "contains_سحاب": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 11.78
+    },
+    {
+      "id": "lining",
+      "goal": "إجابة غير مبطن اعتماداً على الملاحظات",
+      "text": "مبطن لو لا؟",
+      "result": {
+        "reply": "هلا بيك 🌸 غير مبطن، قماشه باربي خفيف.\n\nشنو قياسج حتى أثبتج؟",
+        "reply_parts": [
+          "هلا بيك 🌸 غير مبطن، قماشه باربي خفيف.",
+          "شنو قياسج حتى أثبتج؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.9
+      },
+      "checks": {
+        "contains_مبطن": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.36
+    },
+    {
+      "id": "unknown_width",
+      "goal": "لا اختراع قياسات ولا استبدال الجواب بطلب حجز",
+      "text": "قياس 52 شكد عرضه من تحت الابط؟",
+      "result": {
+        "reply": "قياس العرض بالسنتيمتر مو مدوّن عندي لهالموديل؛ يحتاج قياس فعلي من المتجر حتى أنطيك رقماً صحيحاً.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    }
+  ]
+}

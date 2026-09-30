@@ -125,7 +125,7 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(send.call_args.args[0]['total_amount'],16000)
             self.assertEqual(self.client.patch('/api/orders/1',json={'product_total':-5,'delivery_fee':0}).status_code,400)
 
-    def test_system_issues_separate_human_handoff_and_detect_checkout_loop(self):
+    def test_system_issues_overlap_pending_human_reviews_and_detect_checkout_loop(self):
         for sender in ['technical','human','loop','resolved']:
             self.customer(sender)
         for sender,reason in [('technical','exception:ValueError'),('human','AI متوقف (ai_disabled_for_conversation)')]:
@@ -137,4 +137,4 @@ class AuditFixTests(unittest.TestCase):
         self.db.commit()
         ids=lambda status:{r['sender_id'] for r in self.client.get('/api/conversations?status='+status).get_json()['conversations']}
         self.assertEqual(ids('system_issues'),{'technical','loop'})
-        self.assertEqual(ids('problems'),{'human'})
+        self.assertEqual(ids('problems'),{'human','technical'})

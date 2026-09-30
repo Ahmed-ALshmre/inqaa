@@ -1,0 +1,12 @@
+{"id": "price_total", "checks": {"contains_15": true, "contains_5": true, "contains_20": true, "not_failed": true}, "seconds": 12.23, "failure_reason": null}
+{"id": "price_objection", "checks": {"not_failed": true}, "seconds": 8.62, "failure_reason": null}
+{"id": "budget_cap", "checks": {"contains_18": true, "not_failed": true}, "seconds": 7.27, "failure_reason": null}
+{"id": "fake_image", "checks": {"not_failed": false}, "seconds": 19.59, "failure_reason": "طلب الزبون فيديو حقيقي للمنتج قبل الطلب وهو غير متوفر في البيانات الموثقة"}
+{"id": "known_length", "checks": {"contains_135": false, "contains_سحاب": false, "not_failed": false}, "seconds": 18.12, "failure_reason": "استفسار عن الطول بالسنتيمتر وتفاصيل فتحة الفستان غير متوفرة في بيانات المنتج"}
+{"id": "weight_fit", "checks": {"not_failed": true}, "seconds": 6.11, "failure_reason": null}
+{"id": "complete_order", "checks": {"order_decision": true, "not_failed": true}, "seconds": 16.67, "failure_reason": null}
+{"id": "two_variants", "checks": {"order_decision": true, "not_failed": true}, "seconds": 21.5, "failure_reason": null}
+{"id": "delivery_deadline", "checks": {"order_decision": true, "not_failed": true}, "seconds": 5.84, "failure_reason": null}
+{"id": "single_from_bundle", "checks": {"order_decision": true, "not_failed": true}, "seconds": 8.25, "failure_reason": null}
+{"id": "bundle_order", "checks": {"order_decision": true, "not_failed": true}, "seconds": 12.48, "failure_reason": null}
+{"id": "quantity_ambiguity", "checks": {"order_decision": true, "not_failed": true}, "seconds": 6.47, "failure_reason": null}

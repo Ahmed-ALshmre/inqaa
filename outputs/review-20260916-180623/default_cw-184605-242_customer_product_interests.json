@@ -1,0 +1,16 @@
+[
+  {
+    "id": 7608,
+    "sender_id": "default::cw-184605-242",
+    "product_id": "P005",
+    "product_name": "سوت حوامل",
+    "match_method": "first_message_name",
+    "confidence": 100.0,
+    "last_seen_at": "2026-09-16T01:10:57+03:00",
+    "source": "unknown",
+    "status": "active",
+    "rejected_at": null,
+    "notes": null,
+    "image_sent": 0
+  }
+]

@@ -1,0 +1,26 @@
+test_async_link_attributes_credit_to_authenticated_actor (account_app.tests.test_rewards.RewardTests.test_async_link_attributes_credit_to_authenticated_actor) ... ok
+test_credit_speed_repeat_and_privacy (account_app.tests.test_rewards.RewardTests.test_credit_speed_repeat_and_privacy) ... ok
+test_five_problems_rate_missing_time_and_rollback (account_app.tests.test_rewards.RewardTests.test_five_problems_rate_missing_time_and_rollback) ... ok
+test_link_earns_once_and_invalid_link_does_not (account_app.tests.test_rewards.RewardTests.test_link_earns_once_and_invalid_link_does_not) ... ok
+test_owner_bulk_and_unauthenticated_do_not_earn (account_app.tests.test_rewards.RewardTests.test_owner_bulk_and_unauthenticated_do_not_earn) ... ok
+test_orders_permission_separate_from_reply (account_app.tests.test_staff_access.StaffAccessTests.test_orders_permission_separate_from_reply) ... ok
+test_owner_csrf_duplicate_and_invalid_permissions (account_app.tests.test_staff_access.StaffAccessTests.test_owner_csrf_duplicate_and_invalid_permissions) ... ok
+test_password_hash_and_owner_only_management (account_app.tests.test_staff_access.StaffAccessTests.test_password_hash_and_owner_only_management) ... ok
+test_permission_update_revokes_session_and_keeps_password (account_app.tests.test_staff_access.StaffAccessTests.test_permission_update_revokes_session_and_keeps_password) ... ok
+test_permitted_customer_edit_is_audited (account_app.tests.test_staff_access.StaffAccessTests.test_permitted_customer_edit_is_audited) ... ok
+test_reply_permission_cannot_create_order_through_ai_draft (account_app.tests.test_staff_access.StaffAccessTests.test_reply_permission_cannot_create_order_through_ai_draft) ... ok
+test_revocation_invalidates_existing_session (account_app.tests.test_staff_access.StaffAccessTests.test_revocation_invalidates_existing_session) ... ok
+test_settings_and_advisor_templates_render (account_app.tests.test_staff_access.StaffAccessTests.test_settings_and_advisor_templates_render) ... ok
+test_staff_csrf_and_server_permission_enforcement (account_app.tests.test_staff_access.StaffAccessTests.test_staff_csrf_and_server_permission_enforcement) ... ok
+test_unknown_endpoints_deny_and_login_lockout (account_app.tests.test_staff_access.StaffAccessTests.test_unknown_endpoints_deny_and_login_lockout) ... ok
+test_bulk_requires_owner_and_authentication (account_app.tests.test_close_human_attention.CloseHumanAttentionTests.test_bulk_requires_owner_and_authentication) ... ok
+test_bulk_zeroes_filter_without_deleting_records_and_new_issues_reappear (account_app.tests.test_close_human_attention.CloseHumanAttentionTests.test_bulk_zeroes_filter_without_deleting_records_and_new_issues_reappear) ... ok
+test_human_product_selection_resumes_conversation (account_app.tests.test_close_human_attention.CloseHumanAttentionTests.test_human_product_selection_resumes_conversation) ... ok
+test_link_resumes_even_if_first_reply_cannot_be_sent (account_app.tests.test_close_human_attention.CloseHumanAttentionTests.test_link_resumes_even_if_first_reply_cannot_be_sent) ... ok
+test_silent_link_resumes_immediately_without_sending (account_app.tests.test_close_human_attention.CloseHumanAttentionTests.test_silent_link_resumes_immediately_without_sending) ... ok
+test_single_close_removes_all_sources_for_only_that_customer (account_app.tests.test_close_human_attention.CloseHumanAttentionTests.test_single_close_removes_all_sources_for_only_that_customer) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 7.422s
+
+OK

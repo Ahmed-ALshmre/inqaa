@@ -1,0 +1,140 @@
+[
+  {
+    "test": "binding_after_100_messages",
+    "products": [
+      "تنورة"
+    ],
+    "history_count": 20
+  },
+  {
+    "test": "single_bound_product",
+    "text": "شكد سعره؟",
+    "selected": "تنورة",
+    "request": {
+      "age_years": null,
+      "gender": "unknown",
+      "product_terms": [],
+      "color_terms": [],
+      "has_search_language": false,
+      "has_specific_filter": false,
+      "is_search": false
+    },
+    "reply": null
+  },
+  {
+    "test": "single_bound_product",
+    "text": "ست نفس الي بالصوره يوصل",
+    "selected": "تنورة",
+    "request": {
+      "age_years": null,
+      "gender": "unknown",
+      "product_terms": [
+        "ست"
+      ],
+      "color_terms": [],
+      "has_search_language": false,
+      "has_specific_filter": true,
+      "is_search": true
+    },
+    "reply": null
+  },
+  {
+    "test": "single_bound_product",
+    "text": "قطعه وحده بس اذا ماعجبتني ترجع بيد المندوب بدون ما ادفع شيء",
+    "selected": "تنورة",
+    "request": {
+      "age_years": null,
+      "gender": "unknown",
+      "product_terms": [
+        "قطعه"
+      ],
+      "color_terms": [],
+      "has_search_language": true,
+      "has_specific_filter": true,
+      "is_search": true
+    },
+    "reply": null
+  },
+  {
+    "test": "single_bound_product",
+    "text": "قماشها شنو\nاكو تصوير حقيقي\nللقطعة",
+    "selected": "تنورة",
+    "request": {
+      "age_years": null,
+      "gender": "unknown",
+      "product_terms": [
+        "قطعة"
+      ],
+      "color_terms": [],
+      "has_search_language": true,
+      "has_specific_filter": true,
+      "is_search": true
+    },
+    "reply": null
+  },
+  {
+    "test": "single_bound_product",
+    "text": "لعد شنو كاتبه نحدد لون تنوره",
+    "selected": "تنورة",
+    "request": {
+      "age_years": null,
+      "gender": "unknown",
+      "product_terms": [
+        "تنوره"
+      ],
+      "color_terms": [],
+      "has_search_language": false,
+      "has_specific_filter": true,
+      "is_search": true
+    },
+    "reply": null
+  },
+  {
+    "test": "single_bound_product",
+    "text": "اي التنوره\nدريت صورتها",
+    "selected": "تنورة",
+    "request": {
+      "age_years": null,
+      "gender": "unknown",
+      "product_terms": [
+        "تنوره"
+      ],
+      "color_terms": [],
+      "has_search_language": false,
+      "has_specific_filter": true,
+      "is_search": true
+    },
+    "reply": null
+  },
+  {
+    "test": "classifier_unavailable",
+    "text": "بس كوليلي شنو نوع القماش",
+    "reply": null,
+    "binding": [
+      "تنورة"
+    ]
+  },
+  {
+    "test": "classifier_unavailable",
+    "text": "لا حبي تسلمين",
+    "reply": null,
+    "binding": [
+      "تنورة"
+    ]
+  },
+  {
+    "test": "classifier_unavailable",
+    "text": "واذا مو نفس الصوره ارجعهه وكروه ماادفع",
+    "reply": null,
+    "binding": [
+      "تنورة"
+    ]
+  },
+  {
+    "test": "suggestions_reenter_clarification",
+    "active": [
+      "تنورة"
+    ],
+    "reply": null
+  }
+]

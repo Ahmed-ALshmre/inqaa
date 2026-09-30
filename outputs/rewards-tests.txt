@@ -1,0 +1,21 @@
+.....F.......................F.......................................................................................................................................................................................................................................................................................................................
+======================================================================
+FAIL: test_http_errors_keep_status_and_retry_only_transient_statuses (test_ai_configuration.AIConfigurationTests.test_http_errors_keep_status_and_retry_only_transient_statuses)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_ai_configuration.py", line 129, in test_http_errors_keep_status_and_retry_only_transient_statuses
+    self.assertEqual(post.call_count, 2 if status in (429, 503) else 1)
+AssertionError: 2 != 1
+
+======================================================================
+FAIL: test_manual_link_retains_review_on_failure_and_resumes_only_automatic_pause (test_ai_reliability.DashboardReliabilityTests.test_manual_link_retains_review_on_failure_and_resumes_only_automatic_pause)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\OneDrive\المستندات\ChatGPT\لمسة ستور\account_app\tests\test_ai_reliability.py", line 169, in test_manual_link_retains_review_on_failure_and_resumes_only_automatic_pause
+    self.assertFalse(m.is_customer_ai_enabled(self.db, self.sender))
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 341 tests in 29.639s
+
+FAILED (failures=2)

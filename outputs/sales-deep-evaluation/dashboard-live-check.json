@@ -1,0 +1,56 @@
+{
+  "checked_at": "2026-09-28T13:04:31.888853",
+  "stores": [
+    {
+      "store_id": "al-fatena",
+      "people": 354,
+      "buyers": 35,
+      "conversion": 9.89,
+      "enabled": true,
+      "followups": {}
+    },
+    {
+      "store_id": "khuyoot",
+      "people": 81,
+      "buyers": 13,
+      "conversion": 16.05,
+      "enabled": true,
+      "followups": {}
+    },
+    {
+      "store_id": "golden-threads",
+      "people": 3,
+      "buyers": 0,
+      "conversion": 0.0,
+      "enabled": true,
+      "followups": {}
+    },
+    {
+      "store_id": "baraah-kids",
+      "people": 99,
+      "buyers": 14,
+      "conversion": 14.14,
+      "enabled": true,
+      "followups": {}
+    },
+    {
+      "store_id": "default",
+      "people": 35,
+      "buyers": 3,
+      "conversion": 8.57,
+      "enabled": true,
+      "followups": {}
+    }
+  ],
+  "ui_checks": [
+    "Dashboard loads historical conversations",
+    "Booked filter returns results",
+    "Booked conversation opens with message history",
+    "Follow-up settings render 30 percent goal",
+    "No browser console errors observed"
+  ],
+  "limits": [
+    "No customer messages or test orders sent",
+    "Persistence across restart not tested"
+  ]
+}

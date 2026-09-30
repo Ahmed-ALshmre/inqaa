@@ -1,0 +1,1228 @@
+<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>مقارنة نماذج المبيعات</title><style>body{max-width:1250px;margin:40px auto;padding:0 24px;background:#f5f6f8;color:#172333;font:17px/1.8 system-ui}h1{font-size:32px}h2{margin-top:50px}h3{font-size:18px}blockquote{background:#102e48;color:white;padding:20px;border-radius:12px;margin:16px 0;white-space:pre-wrap}.muted,small{color:#566477}.table{overflow:auto}table{border-collapse:collapse;width:100%;background:white}td,th{padding:13px;border-bottom:1px solid #dce2e9;text-align:right;white-space:nowrap}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-top:20px}article{background:white;border:1px solid #dce2e9;border-radius:12px;padding:22px}.reply{white-space:pre-wrap;margin-top:20px}.review{border-top:1px solid #dce2e9;padding-top:14px;color:#805118}details{padding:12px;background:#eaf0f4;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.7 system-ui}select{padding:10px;margin:20px}article[hidden]{display:none}@media print{select{display:none}.cards{display:block}article{break-inside:avoid}}</style><body><h1>أي نموذج يفهم الزبون ويبيع بالعراقي؟</h1><p>تم إرسال 10 حالات حقيقية إلى النماذج الخمسة، بنفس السؤال والسياق والكتالوج وتعليمة موحدة. لم تُرسل رسائل للزبائن. الدرجات تقديري التحليلي للردود وليست قياساً لنسبة المبيعات الفعلية. البيع 40%، الفهم 35%، اللهجة العراقية 25%. كل محور من 10. السرعة منفصلة ولا تدخل في الدرجة.</p><p class="muted">العينة منتقاة من 11–16 أيلول 2026 وليست عشوائية؛ تشغيل واحد لكل حالة، حرارة 0.3 وحد خرج 1600 توكن. الاختبار نصي مباشر عبر OpenRouter، وليس اختبار صور أو تشغيل مسار التطبيق كاملاً. بيانات الكتالوج والسياسة من لقطة النسخة الاحتياطية؛ لا يمكن إعادة بناء كل تعديل تاريخي. العناوين والهواتف والروابط حُجبت. النصوص أدناه ردود فعلية دون إعادة صياغة.</p><div class="table"><table><tr><th>النموذج</th><th>البيع</th><th>الفهم</th><th>العراقية</th><th>الإجمالي</th><th>ثانية</th><th>مكتمل</th></tr><tr><td dir=ltr>google/gemini-3.8-flash</td><td>5.9</td><td>6.7</td><td>8.7</td><td><b>68.8</b></td><td>9.85</td><td>9/10</td></tr><tr><td dir=ltr>google/gemini-2.5-flash-lite</td><td>4.1</td><td>4.6</td><td>7.9</td><td><b>52.2</b></td><td>2.51</td><td>10/10</td></tr><tr><td dir=ltr>google/gemini-2.5-flash</td><td>3.6</td><td>4.1</td><td>8.9</td><td><b>51.0</b></td><td>2.75</td><td>10/10</td></tr><tr><td dir=ltr>z-ai/glm-5.3</td><td>3</td><td>3.7</td><td>5.5</td><td><b>38.7</b></td><td>17.87</td><td>6/10</td></tr><tr><td dir=ltr>anthropic/claude-haiku-4.5</td><td>3.6</td><td>4.5</td><td>3.3</td><td><b>38.4</b></td><td>5.53</td><td>10/10</td></tr></table></div><p>الوعود المختلقة تخفض درجة البيع والفهم. الرد المبتور يُقيّم كما وصل، والفارغ درجته صفر. افتح سياق كل سؤال لفهم سبب التقييم.</p><label>عرض نموذج: <select id="filter"><option value="all">جميع النماذج</option><option value="google/gemini-2.5-flash">google/gemini-2.5-flash</option><option value="google/gemini-3.8-flash">google/gemini-3.8-flash</option><option value="google/gemini-2.5-flash-lite">google/gemini-2.5-flash-lite</option><option value="anthropic/claude-haiku-4.5">anthropic/claude-haiku-4.5</option><option value="z-ai/glm-5.3">z-ai/glm-5.3</option></select></label><section><h2>السؤال 1</h2><blockquote>السلام عليكم السوت اللي ب١٥ الف بيه لون اسود لو فقط نيلي وبيه قياس ٤٢</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P001&quot;,
+    &quot;product_name&quot;: &quot;عباء&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;P002&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;فستان دانتيل&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;16000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P004&quot;,
+    &quot;product_name&quot;: &quot;سوت ياخة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P005&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 60 الى 120&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P006&quot;,
+    &quot;product_name&quot;: &quot;فستان انيقة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P007&quot;,
+    &quot;product_name&quot;: &quot;عباء مسطرة&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P008&quot;,
+    &quot;product_name&quot;: &quot;سوت نيلي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;نيلي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P009&quot;,
+    &quot;product_name&quot;: &quot;قميص رباط&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;12000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P010&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 130 قياسات خاصة متوفر&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P011&quot;,
+    &quot;product_name&quot;: &quot;سوت ملكي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P012&quot;,
+    &quot;product_name&quot;: &quot;عباء تطعيم&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P013&quot;,
+    &quot;product_name&quot;: &quot;سوت رصاصي&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;رصاصي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P014&quot;,
+    &quot;product_name&quot;: &quot;سوت رباط&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 7/10 · الفهم 7/10 · العراقية 9/10 · الإجمالي 75.0/100 · 3.36 ثانية · مكتمل</small><div class="reply">وعليكم السلام حبيبتي، السوت اللي سعره 15 ألف متوفر بس باللون النيلي، والقياس 42 موجود منه. هذا السوت قماشه باربي درجة أولى ومريح باللبس. إذا تحبين تشوفين صورته أو أي تفاصيل ثانية كوليلي.</div><p class="review">أجاب عن السوت النيلي والقياس بوضوح، لكنه لم يستثمر وجود سوت رباط أسود بنفس السعر كبديل مناسب.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 9/10 · الفهم 10/10 · العراقية 9/10 · الإجمالي 93.5/100 · 10.73 ثانية · مكتمل</small><div class="reply">وعليكم السلام عيني، أهلاً وسهلاً بيج.
+
+بسعر 15 ألف متوفر عندنا السوت النيلي (خامة باربي درجة أولى)، وهم متوفر سوت بلون أسود (موديل سوت رباط بخامة قماش فرسان درجة أولى).
+
+وقياس 42 متوفر بالاثنين ويناسب تقريباً وزن 67 إلى 72 كيلو.
+
+يا لون يعجبج تحجزين منه، الأسود لو النيلي؟</div><p class="review">فرّق بين السوت النيلي وسوت رباط الأسود، ذكر الخامتين والقياس والوزن وسأل عن اللون؛ أقوى معالجة لهذه الحالة.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 3/10 · الفهم 3/10 · العراقية 8/10 · الإجمالي 42.5/100 · 3.42 ثانية · مكتمل</small><div class="reply">أهلاً بيج، السوت اللي سعره 15 ألف متوفر منه لون أسود، وبالنسبة للقياس 42 هم متوفر. هذا السوت خامة باربي درجة أولى ومريح جداً، تحبين تشوفين صورته؟</div><p class="review">خلط السوت النيلي بسوت رباط الأسود ونسب خامة باربي إلى الخيار الأسود؛ عرض المنتج غير دقيق رغم الأسلوب السلس.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 4/10 · الفهم 4/10 · العراقية 3/10 · الإجمالي 37.5/100 · 7.11 ثانية · مكتمل</small><div class="reply">وعليكم السلام ورحمة الله وبركاته 🌸
+
+حبيبتي، السوت ب١٥ الف اللي بالأسود متوفر (السوت رباط P014)، بس للأسف ما فيه نيلي بهاي السعرة. 
+
+عندنا سوت نيلي بنفس السعر ١٥ الف (P008) وخامته باربي درجة أولى، وبخصوص القياس ٤٢ متوفر لأنه يناسب الأوزان من ٦٧ لـ ٧٢ كيلو.
+
+إذا بدك الأسود بالسعر هاي أو النيلي، أنا هسع أساعدك بأي واحد فيهم؟</div><p class="review">تناقض بشأن وجود النيلي بالسعر نفسه وأظهر المعرفات الداخلية؛ خلط العراقية بعبارات بدك وهسع.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 9/10 · الفهم 10/10 · العراقية 9/10 · الإجمالي 93.5/100 · 17.27 ثانية · مكتمل</small><div class="reply">وعليكم السلام حبيبتي 🌸
+
+سوت نيلي اللي بـ١٥ الف متوفر بس باللون النيلي، بس عندنا سوت رباط بنفس السعر ١٥ الف لونه أسود، والاثنين بيهن قياس ٤٢ متوفر.
+
+للمعلومة، قياس ٤٢ يناسب وزن ٦٧ لـ٧٢ كيلو تقريباً.
+
+تحبين النيلي لو الأسود؟</div><p class="review">فرق بين موديل النيلي وموديل الأسود بنفس السعر، وأجاب عن القياس ثم طرح اختيار لون واضحاً.</p></article></div></section><section><h2>السؤال 2</h2><blockquote>صباح خيرات  العرض باقي لو انتهى ومتوفر قياس ٥٤ ولون بدون زحمه ممكن رد</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P001&quot;,
+    &quot;product_name&quot;: &quot;عباء&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;P002&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;فستان دانتيل&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;16000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P004&quot;,
+    &quot;product_name&quot;: &quot;سوت ياخة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P005&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 60 الى 120&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P006&quot;,
+    &quot;product_name&quot;: &quot;فستان انيقة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P007&quot;,
+    &quot;product_name&quot;: &quot;عباء مسطرة&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P008&quot;,
+    &quot;product_name&quot;: &quot;سوت نيلي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;نيلي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P009&quot;,
+    &quot;product_name&quot;: &quot;قميص رباط&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;12000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P010&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 130 قياسات خاصة متوفر&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P011&quot;,
+    &quot;product_name&quot;: &quot;سوت ملكي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P012&quot;,
+    &quot;product_name&quot;: &quot;عباء تطعيم&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P013&quot;,
+    &quot;product_name&quot;: &quot;سوت رصاصي&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;رصاصي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P014&quot;,
+    &quot;product_name&quot;: &quot;سوت رباط&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 3/10 · الفهم 2/10 · العراقية 9/10 · الإجمالي 41.5/100 · 3.25 ثانية · مكتمل</small><div class="reply">صباح النور والعافية حبيبتي.
+العرض بعده مستمر والكمية محدودة. بالنسبة للقياس 54، للأسف ما متوفر عدنا حالياً، أكبر قياس هو 52.
+وبخصوص الألوان، كل الموديلات المتوفرة حالياً لونها أسود.
+إذا تحبين تشوفين الموديلات المتوفرة بقياس 52، ممكن أساعدج؟</div><p class="review">أكد استمرار عرض غير محدد وعمّم أن جميع الألوان سوداء رغم وجود نيلي وجوزي ورصاصي؛ لم يحدد الموديل.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 5/10 · الفهم 5/10 · العراقية 8/10 · الإجمالي 57.5/100 · 14.01 ثانية · مكتمل</small><div class="reply">صباح الورد والسرور عيوني، يا هلا بيج.
+
+العروض بعدها مستمرة على عدة موديلات، بس يا ريت توضحيلي يا موديل تقصدين أو تدزيلي صورته حتى أجاوبج بدقة؟ 
+
+علماً إن القياسات بالترقيم توصل يمنا لحد قياس 52، أما إذا كان قصدج الوزن 54 كيلو فمتوفر لمعظم الموديلات. يا ريت تدزيلي الموديل حتى أشوفلج ألوانه وتفاصيله؟</div><p class="review">طلب تحديد الموديل، لكنه اقترح أن 54 قد تكون وزناً وادعى توفره لمعظم الموديلات رغم أن معظم المدى يبدأ من55.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 6/10 · الفهم 6/10 · العراقية 8/10 · الإجمالي 65.0/100 · 2.77 ثانية · مكتمل</small><div class="reply">صباح النور. العرض باقي، بس قياس 54 ما متوفر حالياً. عدنا قياسات من 38 لحد 52، أو قياسات خاصة لحد 130 كيلو بمنتج ثاني. تحبين تشوفين شي ثاني؟</div><p class="review">ذكر حدود القياس وخيار القياسات الخاصة، لكنه أكد بقاء العرض دون تحديد الموديل ولم يحسم سؤال اللون.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 5/10 · الفهم 6/10 · العراقية 4/10 · الإجمالي 51.0/100 · 5.64 ثانية · مكتمل</small><div class="reply">صباح النور حبيبتي ☀️
+
+العرض الخاص باقي بحمد الله والكمية متوفرة. بس أنا ما أقدر أؤكد لك قياس 54 لأنه ما موجود بالكتالوج عندنا - أغلب المنتجات عندنا تبدأ من قياس 38 لحد 52، أو من 55 كيلو لحد 100 كيلو.
+
+شنو الوزن تقريباً حبيبتي؟ عشان أساعدك أحصل على القياس الصح اللي يناسبك بالظبط 💕</div><p class="review">تحفظ على قياس54 وطلب الوزن، لكنه لم يحدد الموديل أو اللون؛ اللهجة مختلطة وليست عراقية طبيعية.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 5/10 · الفهم 6/10 · العراقية 7/10 · الإجمالي 58.5/100 · 15.42 ثانية · مكتمل</small><div class="reply">صباح النور والفل هلا بيچ 🌸
+
+العرض باقي وشغال، بس حتى أدقق لچ على اللون والقياس، شنو المنتج اللي تشوفينه؟ عباءة لو فستان لو سوت؟
+
+وبخصوص القياس، أغلب موديلاتنه قياساتها من 38 إلى 52 وتناسب وزن من 55 إلى 100 كيلو، فإذا خبرتيني وزينه أرشدچ للقياس المضبوط 💕</div><p class="review">طلب تحديد المنتج وذكر المدى العام، لكنه أكد العرض قبل تحديده وفي الصياغة أخطاء مثل وزينه.</p></article></div></section><section><h2>السؤال 3</h2><blockquote>سلام عليكم بلا زحمه صار كم مره ارسلكم علمود تنوره بس مع الاسف شديد عدم مصداقيه هذا مو حلو واتمنى منكم انو تكونون صادقين ويه زبائن لان هذا باب رزقكم</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><p>الزبون: ان شاءالله خير</p><p>الموظف السابق: تدللين عيني، ملبوس الهنا مقدماً وأي شي تحتاجين إحنا بخدمتج.</p><p>الزبون: شكرا جزيلا</p><p>الموظف السابق: ولو عيني تدللين، بأي وقت إحنا بخدمتج.</p><p>الزبون: هااا عيني هسه شنو سالفه طولت تنوره</p><p>الزبون: شوكت توصيل</p><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P001&quot;,
+    &quot;product_name&quot;: &quot;سوت نيلي&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;نيلي&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;كيلوت&quot;,
+    &quot;category&quot;: &quot;كيلوت&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.\n\nاعتمد الجدول التالي عند الرد على الزبونة:\n\nوزن 55–60 كيلو = قياس 38\nوزن 61–66 كيلو = قياس 40\nوزن 67–72 كيلو = قياس 42\nوزن 73–78 كيلو = قياس 44\nوزن 79–84 كيلو = قياس 46\nوزن 85–90 كيلو = قياس 48\nوزن 91–95 كيلو = قياس 50\nوزن 96–100 كيلو = قياس 52&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;تنورة&quot;,
+    &quot;category&quot;: &quot;تنورة&quot;,
+    &quot;price&quot;: &quot;12000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 1/10 · الفهم 1/10 · العراقية 9/10 · الإجمالي 30.0/100 · 2.92 ثانية · مكتمل</small><div class="reply">وعليكم السلام عيني، آسفين جداً على أي تأخير صار. التنورة متوفرة حالياً، وإذا تحبين نثبت طلبج حتى توصلج بأقرب وقت؟</div><p class="review">حوّل شكوى تأخر طلب سابق إلى عرض تثبيت طلب جديد؛ فشل مهم في فهم السياق والاحتفاظ بالزبون.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 8/10 · الفهم 9/10 · العراقية 8/10 · الإجمالي 83.5/100 · 10.7 ثانية · مكتمل</small><div class="reply">وعليكم السلام عيني، حقج على راسنا ونعتذر من كل كلبنا على أي تأخير أو تقصير صار وياج، ومصداقيتنا ورضاكم والله أهم شي عدنا وباب رزقنا مثل ما تفضلتي. بس فدوة لعينج دزيلي رقم التلفون أو الاسم اللي مثبتة بيه الطلب حتى أعرف تفاصيل طلبيّة التنورة وأتابعها الج فوراً.</div><p class="review">فهم أنها شكوى عن طلب سابق وطلب بياناته دون محاولة بيع جديد؛ الاعتذار مبالغ قليلاً وفيه صياغة غير موفقة.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 1/10 · الفهم 1/10 · العراقية 7/10 · الإجمالي 25.0/100 · 2.98 ثانية · مكتمل</small><div class="reply">وعليكم السلام، اعتذر كلش هواي عن التأخير وعن أي تقصير صار. تنورتنا السوداء متوفرة حالياً، قماشها باربي درجة أولى، سعرها 12,000 وبيها عرض خاص الكمية محدودة. بالنسبة للقياس، تناسب أوزان من 55 إلى 100 كيلو. إذا تحبين تعرفين قياسج بالضبط، كوليلي وزنچ واني أساعدج. التوصيل متوفر لكل المحافظات، وتكدرين تفحصيها قبل ما تستلمينها.</div><p class="review">أرسل وصفاً إعلانياً للتنورة وطلب الوزن بدلاً من متابعة شكوى تأخر الطلب؛ رد طويل في غير موضعه.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 1/10 · الفهم 1/10 · العراقية 2/10 · الإجمالي 12.5/100 · 5.42 ثانية · مكتمل</small><div class="reply">وعليكم السلام ورحمة الله وبركاته ❤️
+
+أختي الكريمة، أنا أفهم إحساسج وأعتذر عن أي تقصير صار. صدقي إن ثقتج غالية عندنا وما نبي نخسرها.
+
+التنورة اللي طلبتيها متوفرة الحين والمخزون موجود، والتوصيل لكل المحافظات ب 5000 دينار مع إمكانية الفحص عند الاستلام حتى تتأكدي من الجودة قبل ما تدفعي.
+
+إذا بتطلبيها هسه، شنو المحافظة حقتج عشان نتأكد من التفاصيل؟</div><p class="review">عامل الشكوى كشراء جديد واستعمل الحين وما نبي وحقتج؛ فشل في الفهم واللهجة.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 1/10 · الفهم 1/10 · العراقية 6/10 · الإجمالي 22.5/100 · 9.48 ثانية · مكتمل</small><div class="reply">وعليكم السلام عيني، والله نعتذر منج بكل صدق، التقصير بالرد ما ينرضي وحقج علينا، وميول نكون صادقين ويه زبائنا لأن هذا فعلاً باب رزقنا. عيوني التنورة متوفرة هسه، سعرها 12,000 وعليها عرض خاص بس الكمية محدودة، والتوصيل 5,000 لكل المحافظات مع فحص عند الاستلام. بس خبريني وزنج ومحافظتج حتى أعطيج القياس المضبوط ونمشي بالطلب على أصوله.</div><p class="review">حوّل شكوى تأخر التنورة إلى عرض سعر وطلب وزن ومحافظة؛ صياغة مضطربة وفهم خاطئ لمرحلة المحادثة.</p></article></div></section><section><h2>السؤال 4</h2><blockquote>السلام عليكم بلازحمه هل السعر لعبايه هو والتوصيل ٢٠للف وشكد القياسات الي متوفره وشنو نوع القماش مالته</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P001&quot;,
+    &quot;product_name&quot;: &quot;عباء&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;P002&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;فستان دانتيل&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;16000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P004&quot;,
+    &quot;product_name&quot;: &quot;سوت ياخة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P005&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 60 الى 120&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P006&quot;,
+    &quot;product_name&quot;: &quot;فستان انيقة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P007&quot;,
+    &quot;product_name&quot;: &quot;عباء مسطرة&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P008&quot;,
+    &quot;product_name&quot;: &quot;سوت نيلي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;نيلي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P009&quot;,
+    &quot;product_name&quot;: &quot;قميص رباط&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;12000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P010&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 130 قياسات خاصة متوفر&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P011&quot;,
+    &quot;product_name&quot;: &quot;سوت ملكي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P012&quot;,
+    &quot;product_name&quot;: &quot;عباء تطعيم&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P013&quot;,
+    &quot;product_name&quot;: &quot;سوت رصاصي&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;رصاصي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P014&quot;,
+    &quot;product_name&quot;: &quot;سوت رباط&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 8/10 · الفهم 9/10 · العراقية 9/10 · الإجمالي 86.0/100 · 2.66 ثانية · مكتمل</small><div class="reply">وعليكم السلام حبيبتي، سعر العباية 20 ألف والتوصيل 5 آلاف لكل المحافظات، يعني المجموع 25 ألف.
+القياسات المتوفرة من وزن 55 كيلو لحد 100 كيلو، والقماش فرسان درجة أولى.
+العباية مريحة وعملية كلش، تحبين أحجزلك وحدة؟</div><p class="review">وضح السعر والتوصيل والمجموع والخامة والمدى الوزني، ثم طرح خطوة شراء؛ سؤال القياس كان أنسب قبل الحجز.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 9/10 · الفهم 9/10 · العراقية 9/10 · الإجمالي 90.0/100 · 7.59 ثانية · مكتمل</small><div class="reply">وعليكم السلام عيني، أهلاً بيج. 
+
+سعر العباية 20 ألف والتوصيل 5 آلاف لكل المحافظات (يعني السعر غير شامل التوصيل، وتكدرين تفحصين عند الاستلام). 
+
+قياساتها تناسب الأوزان من 55 إلى 100 كيلو، وقماشها فرسان درجة أولى راقي جداً. 
+
+شكد وزنج عيني حتى نتأكدلج من القياس المناسب؟</div><p class="review">غطى السعر والتوصيل والفحص والخامة والقياس، وختم بسؤال الوزن المناسب قبل البيع.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 8/10 · الفهم 9/10 · العراقية 8/10 · الإجمالي 83.5/100 · 2.11 ثانية · مكتمل</small><div class="reply">وعليكم السلام، العبايه سعرها 20 ألف والتوصيل 5 آلاف لكل المحافظات. قياساتها متوفرة من وزن 55 كيلو إلى 100 كيلو، والقماش مالتهه فرسان درجة أولى. تحبين تشوفينها؟</div><p class="review">أجاب عن السعر والتوصيل والخامة والمدى الوزني بصورة صحيحة؛ لم يذكر مجموع 25 ألف صراحة.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 7/10 · الفهم 8/10 · العراقية 3/10 · الإجمالي 63.5/100 · 5.09 ثانية · مكتمل</small><div class="reply">وعليكم السلام ورحمة الله وبركاته 🌸
+
+حبيبتي، العباية السعر **20 ألف** والتوصيل **5 آلاف** لكل المحافظات، مو 20 ألف التوصيل.
+
+القياسات متوفرة **من 55 كيلو لـ 100 كيلو**، والقماش **فرسان درجة أولى** - خامة ممتازة وتمام التمام 👌
+
+إذا بتبغين تطلبينها، شنو وزنك عشان أتأكد من القياس المناسب لك؟</div><p class="review">البيانات الأساسية صحيحة، لكن سؤالها عن شمول التوصيل أعاد صياغته بشكل مربك ولهجته بتبغين وعشان.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 3/10 · الفهم 5/10 · العراقية 8/10 · الإجمالي 49.5/100 · 7.56 ثانية · مكتمل</small><div class="reply">وعليكم السلام ورحمة الله، هلا وغلا بيج حبيبتي 🌸
+
+عباية سعرها ٢٠ ألف، والتوصيل ٥ آلاف لكل المحافظات، يعني المجموع ٢٥ ألف.
+
+القياسات تناسب من ٥٥ كيلو لحد ١٠٠ كيلو، والخامة قماش فرسان درجة أولى، ناعم وفخم ويلبس سنين ما يتغير شكله.
+
+وعليها حالياً عرض خاص بس الكمية محدودة، فإذا مالت عليها لا تتأخرين.
+
+قوليلي شقد وزنج حتى أرشحلج القياس المظبوط؟</div><p class="review">حسب المجموع وذكر البيانات، لكنه اخترع أن القماش يعيش سنين بلا تغير وأضاف ضغطاً بالندرة.</p></article></div></section><section><h2>السؤال 5</h2><blockquote>عيني احنه اكثر من مره وصينه وتجينه مومطابقه مع لصوره
+في حاله مومطابقه ترجع ويه لمندوب</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><p>الزبون: 44قياسي
+وزني 65</p><p>الزبون: في حال ماطلع مطابق لصوره او ماعجبنه يرجع ويه لمندوب؟</p><p>الموظف السابق: قياس 44 متوفر ومناسب لوزنج عيني.
+
+الفستان بي لونين (وردي وسماوي)، يا لون بيهم حبيتيه حتى أثبته إلج؟</p><p>الموظف السابق: اي عيني حقج، الفحص متاح عند الاستلام بوجود المندوب، وإذا مو نفس الصورة يرجع مجاناً.</p><p>الموظف السابق: يا لون بيهم حبيتيه أكثر، الوردي لو السماوي حتى أثبته إلج؟</p><p>الموظف السابق: [صورة أو رسالة دون نص]</p><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P004&quot;,
+    &quot;product_name&quot;: &quot;سوت ابو الورد&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;10000&quot;,
+    &quot;offer&quot;: &quot;عرض حالي: السوت كامل بـ10,000&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 85 كيلو&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;سوت قياس خاص&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات خاصة من وزن 70 كيلو إلى 130 كيلو.&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;دشداشة حوامل&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;وردي سماي&quot;,
+    &quot;sizes&quot;: &quot;من 60 الى 120&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي درجه اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P005&quot;,
+    &quot;product_name&quot;: &quot;سوت حوامل&quot;,
+    &quot;category&quot;: &quot;سوت&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص لفترة محدودة على اخر الكمية&quot;,
+    &quot;colors&quot;: &quot;أخضر بنفسجي زيتوني&quot;,
+    &quot;sizes&quot;: &quot;من 70 الى 130 كيلو&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;خام تركي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;توصيل 5 الف كل العراق&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P006&quot;,
+    &quot;product_name&quot;: &quot;فستان&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;16000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;وردي سماي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 2/10 · الفهم 3/10 · العراقية 9/10 · الإجمالي 41.0/100 · 2.73 ثانية · مكتمل</small><div class="reply">حقج عيني، هواي زبائن يواجهون هيج مشكلة. إحنا عدنا فحص كامل للمنتج كدام المندوب قبل ما تستلمين، وإذا شفتي أي اختلاف عن الصورة أو ما عجبج، تكدرين ترجعيه بنفس اللحظة ومتدفعين أي شي.
+
+بالنسبة للفستان، يا لون حبيتيه أكثر، الوردي لو السماوي؟</div><p class="review">وعد بإرجاع مجاني حتى عند عدم الإعجاب، بينما السياسة المقدمة تثبت الفحص فقط؛ كرر سؤال اللون قبل حل الاعتراض.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 3/10 · الفهم 4/10 · العراقية 9/10 · الإجمالي 48.5/100 · 11.94 ثانية · مكتمل</small><div class="reply">حقج عيني وأتفهم قلقج، عدنا الفحص متاح عند الاستلام تكدرين تشوفين الفستان وتفحصيه بوجود المندوب، وإذا طلع مو نفس الصورة يرجع وياه مباشرة وتتدللين.
+
+وحتى يوصلج القياس مضبوط تماماً، لوزن 65 كيلو قياس 40 هو الأنسب مو 44. تحبين نثبتلج منه الوردي لو السماوي؟</div><p class="review">توسع في الإرجاع غير الموثق وضمن القياس تماماً اعتماداً على الوزن، ثم كرر سؤال اللون قبل حسم مخاوف الزبونة.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 2/10 · الفهم 3/10 · العراقية 8/10 · الإجمالي 38.5/100 · 2.2 ثانية · مكتمل</small><div class="reply">عيني، حقج علينة، إذا ما طلع نفس الصورة أو ما عجبج، ترجعيه للمندوب بدون أي مشكلة. بالنسبة لقياسج ووزنج، فستان &quot;وردي سماي&quot; قياس 44 مناسب إلج. تحبين أثبته الج؟</div><p class="review">وسع سياسة الفحص إلى إرجاع عند عدم الإعجاب وأكد ملاءمة 44 دون دليل كافٍ، ثم استعجل التثبيت.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 2/10 · الفهم 3/10 · العراقية 5/10 · الإجمالي 31.0/100 · 5.16 ثانية · مكتمل</small><div class="reply">عيني حبيبتي، أنتِ محقة تماماً. إذا وصلج الفستان ومو مطابق للصورة أو ما عجبج، تقدرين ترجعينه مع المندوب بلا مشاكل. الفحص كامل عند الاستلام وإذا في أي مشكلة الرجوع مجاني.
+
+بس قبل ما نثبت الطلب، أي لون تفضلين - الوردي ولا السماوي؟</div><p class="review">وعد بإرجاع مجاني عند عدم الإعجاب دون سياسة تثبت ذلك، ثم دفع لاختيار اللون.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 0/10 · الفهم 0/10 · العراقية 0/10 · الإجمالي 0.0/100 · 11.22 ثانية · غير مكتمل: length</small><div class="reply">[لم يصل نص رد]</div><p class="review">لم يصل أي نص للزبون؛ استُهلك حد الخرج في المعالجة وانتهى الطلب بسبب الطول. الصفر لجودة النتيجة المستلمة، وليس حكماً على قدرة النموذج اللغوية.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3 — إعادة</h3><small>إعادة تشخيصية بسقف 4096 توكن — 42.34 ثانية — length. لا تدخل في الدرجات أعلاه.</small><div class="reply">[لم يصل نص رد]</div></article></div></section><section><h2>السؤال 6</h2><blockquote>وزني ١٠٠حامل بالشهر السابع ايلبسني للشهر التاسع وزني راح ليزيد اكثر</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><p>الموظف السابق: وعليكم السلام، هلا بيج 🌸 تفضلي</p><p>الزبون: اكدر اعرف شنو قماش السوت مال الحوامل</p><p>الموظف السابق: قماشه خام تركي درجة أولى عيني، بهاري (لا شتوي ولا صيفي) ومريح كلش.</p><p>الموظف السابق: شكد وزنج حتى أشوفلج القياس المناسب؟</p><p>الزبون: نوع القماش شنو</p><p>الموظف السابق: قماشه خام تركي درجة أولى عيني، بهاري مريح باللبس.
+
+شكد وزنج حتى أضبط القياس إلج؟</p><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P004&quot;,
+    &quot;product_name&quot;: &quot;سوت ابو الورد&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;10000&quot;,
+    &quot;offer&quot;: &quot;عرض حالي: السوت كامل بـ10,000&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 85 كيلو&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;سوت قياس خاص&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات خاصة من وزن 70 كيلو إلى 130 كيلو.&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;دشداشة حوامل&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;وردي سماي&quot;,
+    &quot;sizes&quot;: &quot;من 60 الى 120&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي درجه اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P005&quot;,
+    &quot;product_name&quot;: &quot;سوت حوامل&quot;,
+    &quot;category&quot;: &quot;سوت&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص لفترة محدودة على اخر الكمية&quot;,
+    &quot;colors&quot;: &quot;أخضر بنفسجي زيتوني&quot;,
+    &quot;sizes&quot;: &quot;من 70 الى 130 كيلو&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;خام تركي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;توصيل 5 الف كل العراق&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P006&quot;,
+    &quot;product_name&quot;: &quot;فستان&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;16000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;وردي سماي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 3/10 · الفهم 4/10 · العراقية 9/10 · الإجمالي 48.5/100 · 2.5 ثانية · مكتمل</small><div class="reply">هلا عيني، سوت الحوامل (P005) يلبسج مرتاح لأن قياساته من 70 كيلو لـ 130 كيلو، والقماش مالته خام تركي درجة أولى ومريح كلش للحوامل. يعني يخدمج للشهر التاسع وزيادة الوزن هم. تحبين تشوفين ألوانه؟</div><p class="review">ذكر المنتج والمدى الوزني، لكنه ضمن ملاءمته للشهر التاسع رغم عدم معرفة تغير القياس؛ أظهر معرف المنتج الداخلي.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 3/10 · الفهم 4/10 · العراقية 9/10 · الإجمالي 48.5/100 · 6.73 ثانية · مكتمل</small><div class="reply">تمام عيني والله يگومج بالسلامة 🌸
+
+إي يلبسج وبكل راحة ويخدمج للشهر التاسع، لأن قياسه خاص وراهي يلبس من 70 لحد 130 كيلو، فحتّى لو زاد وزنج راح يبقى مريح عليج.
+
+متوفر بي ألوان (أخضر، بنفسجي، زيتوني) وسعره 18 ألف، يا لون يعجبج تحجزين منه؟</div><p class="review">لهجة جيدة وبيانات منتج مفيدة، لكن ضمان الملاءمة والراحة للشهر التاسع غير مبرر بمدى الوزن وحده.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 7/10 · الفهم 7/10 · العراقية 8/10 · الإجمالي 72.5/100 · 2.62 ثانية · مكتمل</small><div class="reply">هلا بيج حبيبتي، الله يتمم عليج بالخير. بما إن وزنج حالياً 100 كيلو وبالشهر السابع، يعني راح يزيد بعد، أنصحج بـ &quot;سوت حوامل&quot; (P005). قياساته توصل لـ 130 كيلو، وخامته تركية درجة أولى ومريحة كلش للحوامل. سعره 18,000 وعليه عرض خاص. تحبين تشوفين ألوانه المتوفرة؟</div><p class="review">اقترح سوت الحوامل المناسب لمدى الوزن دون ضمان صريح للشهر التاسع؛ ذكر معرفاً داخلياً ولم يوضح حدود التقدير.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 3/10 · الفهم 4/10 · العراقية 3/10 · الإجمالي 33.5/100 · 5.92 ثانية · مكتمل</small><div class="reply">حبيبتي، تمام تمام 🌸 
+
+انتِ الحين بـ 100 كيلو والوزن راح يزيد لحد الشهر التاسع، صح؟ 
+
+أنصحج بـ **سوت الحوامل** (P005) لأنه يتسع من 70 لحد 130 كيلو، يعني يكفيج طول فترة الحمل بلا قلق. القماش خام تركي درجة أولى مريح كلش والسعر 18,000 فيه عرض خاص حالياً. متوفر بألوان أخضر وبنفسجي وزيتوني.
+
+أو إذا بتبين خيار ثاني، في **سوت القياس الخاص** (P003) من 70 لحد 130 كيلو كمان، قماشه لينن مريح وعملي بـ 17,000.
+
+شنو اللون اللي تفضلين؟</div><p class="review">اقترح خيارين مناسبين للمدى الوزني، لكنه ضمن كامل الحمل بلا قلق وأظهر المعرفات واستعمل لهجة مختلطة.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 3/10 · الفهم 4/10 · العراقية 8/10 · الإجمالي 46.0/100 · 9.99 ثانية · غير مكتمل: length</small><div class="reply">هلا عيني 🌸 لا تشيلين هم، سوت الحوامل قياساته من ٧٠ حتى ١٣٠ كيلو، يعني بوزنج الحالي وفية متسع واضح حتى لو زاد وزنج بالشهر الثامن والتاسع. وخامه تركي درجة أولى مريح ومرتاح على البطن لأنه مخصص للحوامل.
+
+متوفر بثلاث ألوان: أخضر، بنفسجي، وزيتوني، وسعره ١٨,٠٠٠ والعرض شغال على آخر الكمية. تحبين أثبتلج إياه</div><p class="review">الرد مبتور، ويضيف راحة البطن وندرة آخر الكمية بثقة أكبر من المعلومات المتاحة.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3 — إعادة</h3><small>إعادة تشخيصية بسقف 4096 توكن — 8.76 ثانية — stop. لا تدخل في الدرجات أعلاه.</small><div class="reply">لا تشيلين هم عيني 🌸 سوت الحوامل قياساته من ٧٠ لحد ١٣٠ كيلو، يعني بوزنج ١٠٠ بيكون عليج وسيع ومريح، وحتى لو زاد وزنج بالشهرين الجايين بيظل يلبيسج لأنه متخصص للحوامل. متوفر بثلاث ألوان: أخضر، بنفسجي وزيتوني، وعليه عرض خاص هذي الفترة على آخر كمية — أنهي لون يعجبج؟</div></article></div></section><section><h2>السؤال 7</h2><blockquote>حبي و٤٨ واني اخذ المناسب آلية ولو زحمة عليكم حتى لا ادفع توصيل مرتين</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><p>الموظف السابق: بس شكد وزنج تقريباً حتى نثبتلج القياس الأضبط وما يحيرج؟</p><p>الزبون: ٧٧ وزني وعندي امتلاء بالبطن والأفخاذ</p><p>الزبون: طولي ١٥٣</p><p>الموظف السابق: لوزنج ويا الامتلاء قياس 46 يجيج مريح ومضبوط كلش، والـ 48 راح يطلع كلش واسع عليج عيني.</p><p>الموظف السابق: تحبين أثبتلج قياس 46 وتدللين؟</p><p>الموظف السابق: تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.</p><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P001&quot;,
+    &quot;product_name&quot;: &quot;سوت نيلي&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;نيلي&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;كيلوت&quot;,
+    &quot;category&quot;: &quot;كيلوت&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.\n\nاعتمد الجدول التالي عند الرد على الزبونة:\n\nوزن 55–60 كيلو = قياس 38\nوزن 61–66 كيلو = قياس 40\nوزن 67–72 كيلو = قياس 42\nوزن 73–78 كيلو = قياس 44\nوزن 79–84 كيلو = قياس 46\nوزن 85–90 كيلو = قياس 48\nوزن 91–95 كيلو = قياس 50\nوزن 96–100 كيلو = قياس 52&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;تنورة&quot;,
+    &quot;category&quot;: &quot;تنورة&quot;,
+    &quot;price&quot;: &quot;12000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 2/10 · الفهم 3/10 · العراقية 9/10 · الإجمالي 41.0/100 · 2.8 ثانية · مكتمل</small><div class="reply">حبيبتي حسب الوزن والطول اللي ذكرتيه، قياس 44 هو الأنسب الج حتى يجيج مريح ومضبوط وما يضايقج باللبس. تحبين نثبتلج قياس 44؟</div><p class="review">اختار 44 من جدول الوزن مع ضمان الراحة، وتجاهل طلب تجربة قياسين ووجود طلب مثبت سابقاً.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 1/10 · الفهم 2/10 · العراقية 8/10 · الإجمالي 31.0/100 · 15.3 ثانية · غير مكتمل: length</small><div class="reply">يا عيني فدوة لعينج ماكو أي زحمة، بس قياس 48 مخصص لوزن 85 إلى 90 كيلو، وراح يطلع كلش جبير وطويل عليج ويه طولج 153. قياس 46 أصلاً محس</div><p class="review">الرد مبتور عند حد الخرج، وفي الجزء المتاح جزم أن48 طويل اعتماداً على الطول والوزن دون أبعاد القطعة.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash — إعادة</h3><small>إعادة تشخيصية بسقف 4096 توكن — 9.98 ثانية — stop. لا تدخل في الدرجات أعلاه.</small><div class="reply">تدللين حبيبتي، بس نظام التوصيل يوصل الطلب المحدد بالقياس، وما يحتاج تقلقين من موضوع التوصيل مرتين لأن تگدرين تفحصين القطعة بحضور المندوب قبل ما تدفعين، وإذا ما ناسبتج ترجع ويا المندوب مباشرة وبدون أي دفع.
+
+وبالنسبة لقياس 46 فهو أصلاً يلبس لوزن 84 كيلو يعني حاسبين حساب الامتلاء وراح يجيج مريح ومضبوط، والـ 48 مخصص لوزن 85-90 كيلو فراح يطلع كلش عريض وطويل عليج لأن طولج 153. 
+
+تحبين نعتمدلج قياس 46؟</div></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 2/10 · الفهم 2/10 · العراقية 8/10 · الإجمالي 35.0/100 · 2.12 ثانية · مكتمل</small><div class="reply">حبيبتي الـ 48 راح يكون واسع عليج كلش، الأنسب وزنج وطولج والامتلاء اللي ذكرتيه هو قياس 46. هذا القياس راح يجيج مضبوط ومريح. تحبين أضيفه لسلة مشترياتج؟</div><p class="review">كرر توصية الموظف السابق بـ46 خلاف جدول الوزن، وضمن المقاس وتجاهل رغبة الزبونة في تجربة قياسين.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 1/10 · الفهم 2/10 · العراقية 3/10 · الإجمالي 18.5/100 · 6.92 ثانية · مكتمل</small><div class="reply">حبيبتي، أنتِ وزنج ٧٧ كيلو يعني القياس المناسب لج حسب جدول المنتج هو **قياس ٤٤** وليس ٤٦ ولا ٤٨. القياس ٤٤ راح يكون مريح عليج ويطابق وزنج وتكويتج بالضبط.
+
+لو تبين تاخذين أكثر من منتج بطلبة واحد، توصيل واحد ٥ آلاف بس يكفي لكل المحافظات. وعند الاستلام تفحصين كل شي قبل ما تدفعين، والمندوب ما يأخذ منج شي إذا ما عجبج.
+
+شنو المنتج الثاني اللي تبين تاخذينه معاه؟</div><p class="review">فهم طلب مقاس إضافي كمنتج ثانٍ، وضمن المقاس والإرجاع المجاني وجمع التوصيل دون بيانات كافية.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 0/10 · الفهم 0/10 · العراقية 0/10 · الإجمالي 0.0/100 · 65.95 ثانية · غير مكتمل: length</small><div class="reply">[لم يصل نص رد]</div><p class="review">رد فارغ بسبب بلوغ حد الخرج؛ لا توجد إجابة قابلة للتقييم في المحاولة الأساسية.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3 — إعادة</h3><small>إعادة تشخيصية بسقف 4096 توكن — 42.31 ثانية — length. لا تدخل في الدرجات أعلاه.</small><div class="reply">[لم يصل نص رد]</div></article></div></section><section><h2>السؤال 8</h2><blockquote>السلام عليكم
+طلبت منكم عبايه من يوم الاربعاء بليل ولحد الان لم يتصل بي المندوب</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P001&quot;,
+    &quot;product_name&quot;: &quot;عباء&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;P002&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;فستان دانتيل&quot;,
+    &quot;category&quot;: &quot;فستان&quot;,
+    &quot;price&quot;: &quot;16000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P004&quot;,
+    &quot;product_name&quot;: &quot;سوت ياخة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P005&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 60 الى 120&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P006&quot;,
+    &quot;product_name&quot;: &quot;فستان انيقة&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P007&quot;,
+    &quot;product_name&quot;: &quot;عباء مسطرة&quot;,
+    &quot;category&quot;: &quot;عباءة نسائية&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P008&quot;,
+    &quot;product_name&quot;: &quot;سوت نيلي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;نيلي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P009&quot;,
+    &quot;product_name&quot;: &quot;قميص رباط&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;12000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P010&quot;,
+    &quot;product_name&quot;: &quot;سوت&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 130 قياسات خاصة متوفر&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P011&quot;,
+    &quot;product_name&quot;: &quot;سوت ملكي&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P012&quot;,
+    &quot;product_name&quot;: &quot;عباء تطعيم&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;جوزي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P013&quot;,
+    &quot;product_name&quot;: &quot;سوت رصاصي&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;رصاصي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P014&quot;,
+    &quot;product_name&quot;: &quot;سوت رباط&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 7/10 · الفهم 8/10 · العراقية 9/10 · الإجمالي 78.5/100 · 2.12 ثانية · مكتمل</small><div class="reply">وعليكم السلام حبيبتي، آسفين على التأخير. ممكن تنطيني اسمج ورقم تليفونج حتى أتأكد من الطلب وأشوف وين وصل؟</div><p class="review">اعتذر وطلب بيانات التعرف على الطلب؛ خطوة خدمة مناسبة بلا موعد مختلق، لكنها تحتاج آلية فعلية للمتابعة.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 8/10 · الفهم 9/10 · العراقية 9/10 · الإجمالي 86.0/100 · 6.17 ثانية · مكتمل</small><div class="reply">وعليكم السلام عيوني، نعتذر منج جداً على التأخير. 
+
+يا ريت تدزيلي رقم التلفون أو اسم المستلم اللي ثبتي بيه الطلب حتى أتابع الموضوع وأشوف وين صار؟</div><p class="review">اعتذار مختصر وطلب معلومة لتعريف الطلب، دون موعد توصيل مختلق أو بيع جديد.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 4/10 · الفهم 5/10 · العراقية 8/10 · الإجمالي 53.5/100 · 2.48 ثانية · مكتمل</small><div class="reply">هلا بيج حبيبتي، اعتذر كلش هواي عن التأخير. ممكن تذكرين اسم العبايه أو أي تفاصيل عنها حتى أشوفها؟</div><p class="review">اعتذر لكنه سأل عن اسم العباية بدلاً من معلومة تربط الشكوى بالطلب؛ متابعة ضعيفة.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 2/10 · الفهم 3/10 · العراقية 2/10 · الإجمالي 23.5/100 · 4.03 ثانية · مكتمل</small><div class="reply">وعليكم السلام ورحمة الله وبركاته 🌹
+
+حبيبتي، أعتذر من التأخير. للأسف ما عندي معلومات عن الطلب اللي طلبتيه يوم الأربعاء، بس أكيد المندوب بيتصل فيك قريب جداً.
+
+إذا بتحتاجين تتأكدين من حالة الطلب أو تحتاجين أي مساعدة، أنا هسع هنا لو أقدر أساعدك بشي؟</div><p class="review">اعترف بغياب معلومات الطلب ثم أكد أن المندوب سيتصل قريباً جداً بلا سند؛ لم يقدم خطوة متابعة محددة.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 7/10 · الفهم 8/10 · العراقية 8/10 · الإجمالي 76.0/100 · 4.88 ثانية · مكتمل</small><div class="reply">وعليكم السلام والرحمه 🌸
+عزيزتي اسفين على التأخير، حقك علينا نتابع الموضوع فوراً.
+ممكن تعطيني اسمك ورقم الموبايل اللي طلبتين بيه، حتى ارفع الطلب للمسؤول ويتواصلون ويه المندوب مباشرة ويتأكدون من موعد التوصيل؟</div><p class="review">فهم متابعة الطلب وطلب بياناته، لكنه وعد بمتابعة فورية ورفع للمسؤول دون وجود أداة تنفيذ في الاختبار.</p></article></div></section><section><h2>السؤال 9</h2><blockquote>اني مندوب توصيل واكو طلب استبدال وهم دازي غلط والطلب القديم جان سعره صفر ومبلغين الزبونه ترجعهن ثنينهن؟</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><p>الزبون: السلام عليكم</p><p>الموظف السابق: وعليكم السلام، هلا بيج 🌸 تفضلي</p><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P004&quot;,
+    &quot;product_name&quot;: &quot;سوت ابو الورد&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;10000&quot;,
+    &quot;offer&quot;: &quot;عرض حالي: السوت كامل بـ10,000&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 85 كيلو&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;قماش فرسان درجة أولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;سوت قياس خاص&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات خاصة من وزن 70 كيلو إلى 130 كيلو.&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;لينن، خامة مريحة وعملية&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;دشداشة حوامل&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;20000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;وردي سماي&quot;,
+    &quot;sizes&quot;: &quot;من 60 الى 120&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي درجه اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P005&quot;,
+    &quot;product_name&quot;: &quot;سوت حوامل&quot;,
+    &quot;category&quot;: &quot;سوت&quot;,
+    &quot;price&quot;: &quot;18000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص لفترة محدودة على اخر الكمية&quot;,
+    &quot;colors&quot;: &quot;أخضر بنفسجي زيتوني&quot;,
+    &quot;sizes&quot;: &quot;من 70 الى 130 كيلو&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;خام تركي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;توصيل 5 الف كل العراق&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P006&quot;,
+    &quot;product_name&quot;: &quot;فستان&quot;,
+    &quot;category&quot;: &quot;&quot;,
+    &quot;price&quot;: &quot;16000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;وردي سماي&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 2/10 · الفهم 2/10 · العراقية 8/10 · الإجمالي 35.0/100 · 2.16 ثانية · مكتمل</small><div class="reply">أهلاً بيك أخوية، بس أحنا ما عدنا طلبات سعرها صفر، وكل الطلبات اللي تطلع من عدنا بيها سعر. ممكن تتأكد من رقم الطلب أو اسم الزبونة حتى نكدر نساعدك؟</div><p class="review">نفى وجود طلبات بسعر صفر بلا معلومات عن الطلب؛ قد يكون طلب استبدال فعلاً، رغم طلبه بيانات مفيدة لاحقاً.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 8/10 · الفهم 9/10 · العراقية 9/10 · الإجمالي 86.0/100 · 7.75 ثانية · مكتمل</small><div class="reply">هلا بيك عيني، حتى نتأكد من تفاصيل الطلب وننطيك التوجيه الصحيح بالضبط، يا ريت تدزلنا رقم الوصل أو رقم تليفون الزبونة؟</div><p class="review">طلب رقم الوصل أو الهاتف لتحديد الطلب قبل إعطاء توجيه؛ طبيعي ومباشر ولم يفترض أن المندوب زبونة.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 8/10 · الفهم 9/10 · العراقية 8/10 · الإجمالي 83.5/100 · 1.88 ثانية · مكتمل</small><div class="reply">هلا بيك، الله يساعدك. بالنسبة للاستبدال والغلط اللي صار، لازم نراجع الطلب القديم والجديد حتى نعرف شنو صار بالضبط. ممكن تدزلي رقم الطلب القديم ورقم الطلب الجديد حتى أشوف التفاصيل؟</div><p class="review">فهم أن المرسل مندوب وأن المسألة استبدال، وطلب رقمي الطلبين دون اختراع قرار إرجاع.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 6/10 · الفهم 7/10 · العراقية 3/10 · الإجمالي 56.0/100 · 4.52 ثانية · مكتمل</small><div class="reply">وعليكم السلام ورحمة الله وبركاته 🌸
+
+أخي الكريم، أنا موظفة المبيعات في المتجر وما عندي صلاحية أتعامل مع موضوع الاستبدالات والمرجعات. هذي الأمور تحتاج تنسيق مع إدارة الطلبات والتوصيل مباشرة.
+
+الأفضل تتواصل مع مسؤول الطلبات أو تتركي رقم الزبونة وتفاصيل الطلب القديم عشان يتولون الموضوع من البداية ويوضحون لها الإجراء الصحيح.
+
+شنو أسم الزبونة ورقم الطلب عشان نسجل المعلومة؟</div><p class="review">فهم الحاجة لمراجعة الاستبدال ولم يحسم الإجراء، لكن الرد طويل وخلط مخاطبة المندوب المذكر بالمؤنث.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 0/10 · الفهم 0/10 · العراقية 0/10 · الإجمالي 0.0/100 · 26.03 ثانية · غير مكتمل: length</small><div class="reply">[لم يصل نص رد]</div><p class="review">رد فارغ بسبب بلوغ حد الخرج؛ لا توجد إجابة قابلة للتقييم في المحاولة الأساسية.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3 — إعادة</h3><small>إعادة تشخيصية بسقف 4096 توكن — 42.55 ثانية — length. لا تدخل في الدرجات أعلاه.</small><div class="reply">هلا بيك اخوية، تسلم 🌸 وعذراً منكم على الغلط.
+
+اي، الزبونة ترجع كل شي استلمته من الطلب الغلط — يعني ترجعهن ثنينهن مو وحدة، لان الاستبدال يكون على الطلب كامل.
+
+بس لان سعر الطلب القديم طالع صفر</div></article></div></section><section><h2>السؤال 10</h2><blockquote>اريده باجر   ؟. اذا مو نفس الصورة وماعجبني القماش يرجع بدون دفع اي مبلغ تمام</blockquote><details><summary>سياق المحادثة والبيانات التي وصلت للنماذج</summary><p>الزبون: شنو الالوان الموجودة</p><p>الموظف السابق: متوفر منه اللون الأسود فقط عيني.
+
+تحبين أثبتلج قياس 48 لو 50؟</p><p>الزبون: كم يوم يوصل الطلب</p><p>الموظف السابق: التوصيل سريع عيني والفحص متاح عند الاستلام.
+
+تحبين نثبت قياس 48 لو 50؟</p><p>الزبون: يعني يوصل باجر ان شاء الله</p><p>الموظف السابق: التوصيل سريع ويوصل بأقرب وقت عيني.. يا قياس نثبت، 48 لو 50؟</p><h3>سياسة التوصيل</h3><pre>{
+  &quot;delivery_policy&quot;: &quot;&quot;,
+  &quot;delivery_inspection_message&quot;: &quot;التوصيل متوفر لجميع المحافظات مع إمكانية الفحص عند الاستلام&quot;,
+  &quot;delivery_baghdad_fee&quot;: &quot;5000&quot;,
+  &quot;delivery_other_fee&quot;: &quot;5000&quot;
+}</pre><h3>الكتالوج</h3><pre>[
+  {
+    &quot;product_id&quot;: &quot;P001&quot;,
+    &quot;product_name&quot;: &quot;سوت نيلي&quot;,
+    &quot;category&quot;: &quot;سوت نسائي&quot;,
+    &quot;price&quot;: &quot;15000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;نيلي&quot;,
+    &quot;sizes&quot;: &quot;من 55 كيلو الى 100&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;القماش تركي&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P002&quot;,
+    &quot;product_name&quot;: &quot;كيلوت&quot;,
+    &quot;category&quot;: &quot;كيلوت&quot;,
+    &quot;price&quot;: &quot;17000&quot;,
+    &quot;offer&quot;: &quot;&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.\n\nاعتمد الجدول التالي عند الرد على الزبونة:\n\nوزن 55–60 كيلو = قياس 38\nوزن 61–66 كيلو = قياس 40\nوزن 67–72 كيلو = قياس 42\nوزن 73–78 كيلو = قياس 44\nوزن 79–84 كيلو = قياس 46\nوزن 85–90 كيلو = قياس 48\nوزن 91–95 كيلو = قياس 50\nوزن 96–100 كيلو = قياس 52&quot;
+  },
+  {
+    &quot;product_id&quot;: &quot;P003&quot;,
+    &quot;product_name&quot;: &quot;تنورة&quot;,
+    &quot;category&quot;: &quot;تنورة&quot;,
+    &quot;price&quot;: &quot;12000&quot;,
+    &quot;offer&quot;: &quot;عرض خاص الكمية محدودة&quot;,
+    &quot;colors&quot;: &quot;اسود&quot;,
+    &quot;sizes&quot;: &quot;قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52&quot;,
+    &quot;stock&quot;: &quot;متوفر&quot;,
+    &quot;fabric&quot;: &quot;باربي درجة اولى&quot;,
+    &quot;delivery&quot;: &quot;التوصيل 5,000  لكل محافظات&quot;,
+    &quot;notes&quot;: &quot;&quot;
+  }
+]</pre></details><div class="cards"><article data-model="google/gemini-2.5-flash"><h3 dir="ltr">google/gemini-2.5-flash</h3><small>البيع 1/10 · الفهم 2/10 · العراقية 9/10 · الإجمالي 33.5/100 · 2.97 ثانية · مكتمل</small><div class="reply">هلا عيني، التوصيل ياخذ من يومين لـ 4 أيام عمل، ومو شرط يوصل باجر.
+بالنسبة للفحص، تكدرين تفحصين الطلب قبل الاستلام وتتأكدين من كلشي. إذا ما عجبج القماش أو شفتي شي مو مثل الصورة، تكدرين ترجعين الطلب بدون ما تدفعين أي مبلغ.
+
+شنو القياس اللي تحبين أثبته الج؟ 48 لو 50؟</div><p class="review">اخترع مدة يومين إلى أربعة أيام عمل وإرجاعاً دون أي مبلغ، ثم دفع لإتمام الحجز قبل التحقق من الشرطين.</p></article><article data-model="google/gemini-3.8-flash"><h3 dir="ltr">google/gemini-3.8-flash</h3><small>البيع 5/10 · الفهم 6/10 · العراقية 9/10 · الإجمالي 63.5/100 · 7.53 ثانية · مكتمل</small><div class="reply">تدللين عيني، ما أكدر أضمنلج يوصل باجر تحديداً حتى أكون صادقة وياج، بس يطلع بأسرع وقت. وبالنسبة للمعاينة، من حقج تماماً تفحصين القطعة وتتأكدين من القماش والشكل عند الاستلام قبل ما تستلميها. 
+
+إذا يناسبج، يا قياس نثبتلج 48 لو 50؟</div><p class="review">امتنع عن ضمان الغد، لكنه لم يجب بوضوح عن الإرجاع دون دفع، وانتقل للقياس قبل حل الاعتراض.</p></article><article data-model="google/gemini-2.5-flash-lite"><h3 dir="ltr">google/gemini-2.5-flash-lite</h3><small>البيع 0/10 · الفهم 1/10 · العراقية 8/10 · الإجمالي 23.5/100 · 2.53 ثانية · مكتمل</small><div class="reply">حبيبتي التوصيل ياخذ يوم واحد، وبالنسبة للارجاع اذا ما عجبج أو مو نفس الصورة، أكيد ترجعيه بدون أي مبلغ. بس هو القماش مالته باربي درجة أولى، كلش حلو. تحبين نثبت قياس 48 لو 50؟</div><p class="review">ضمن التوصيل خلال يوم والإرجاع بلا مبلغ رغم غياب هاتين المعلومتين؛ إقناع قد يسبب نزاعاً.</p></article><article data-model="anthropic/claude-haiku-4.5"><h3 dir="ltr">anthropic/claude-haiku-4.5</h3><small>البيع 5/10 · الفهم 7/10 · العراقية 5/10 · الإجمالي 57.0/100 · 5.45 ثانية · مكتمل</small><div class="reply">عيني، التوصيل سريع بس ما أقدر أضمن باجر لأنه يعتمد على المحافظة وحالة الطلبات. 
+
+بخصوص الرجوع: إذا ما عجبج القماش أو الصورة، تقدرين ترجعينه بس لازم تتواصلين معنا عشان نعرف شروط الرجوع الدقيقة - ما أقدر أضمن رجوع بدون دفع من غير ما أتأكد من السياسة.
+
+خلينا نثبت القياس الأول: شنو وزنج عشان أختار لج القياس الصح؟</div><p class="review">رفض ضمان التوصيل والإرجاع المجاني دون التحقق، وهي نقطة جيدة؛ لكنه دفع للقياس بدلاً من حسم شروط البيع.</p></article><article data-model="z-ai/glm-5.3"><h3 dir="ltr">z-ai/glm-5.3</h3><small>البيع 2/10 · الفهم 3/10 · العراقية 9/10 · الإجمالي 41.0/100 · 10.89 ثانية · مكتمل</small><div class="reply">هلا عيني، التوصيل سريع لكل المحافظات بس ما أقدر أضمنلج يوم معين، يوصلج بأقرب وقت إن شاء الله. ولاتشيلين هم بهالموضوع، الفحص متاح عند الاستلام، يعني تشوفين القماش وتتأكدين مثل الصورة قبل الدفع، وإذا ما عجبج ترجعينه بدون ما تدفعين ولا دينار. بس خليني أثبتلج القياس عيني، وزنج شكد تقريباً حتى أختارلج 48 لو 50؟</div><p class="review">رفض ضمان يوم معين لكنه ضمن الإرجاع بلا دينار رغم غياب السياسة، ثم طلب الوزن قبل حسم الاعتراض.</p></article></div></section><script>document.getElementById("filter").onchange=function(){document.querySelectorAll("article[data-model]").forEach(a=>a.hidden=this.value!=="all"&&a.dataset.model!==this.value)}</script></body></html>

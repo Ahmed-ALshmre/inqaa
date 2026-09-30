@@ -1,0 +1,5 @@
+z-ai/glm-5.3 6 stop 8.76
+google/gemini-3.8-flash 7 stop 9.98
+z-ai/glm-5.3 7 length 42.31
+z-ai/glm-5.3 5 length 42.34
+z-ai/glm-5.3 9 length 42.55

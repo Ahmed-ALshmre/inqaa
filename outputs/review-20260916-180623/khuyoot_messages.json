@@ -1,0 +1,1622 @@
+[
+  {
+    "id": 18911,
+    "sender_id": "khuyoot::cw-184605-1065",
+    "name": "أولادي نظر عيني",
+    "created_at": "2026-09-16T16:06:36+03:00",
+    "direction": "incoming",
+    "text": "اني احب التنوره اتكون حيل طويله",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1065\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789563996250, \"message\": {\"mid\": \"chatwoot-184605-859695492\", \"text\": \"اني احب التنوره اتكون حيل طويله\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 18913,
+    "sender_id": "khuyoot::cw-184605-1065",
+    "name": "أولادي نظر عيني",
+    "created_at": "2026-09-16T16:06:54+03:00",
+    "direction": "incoming",
+    "text": "تمام شوفني شنو عدكم موديلات تكون طويله",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1065\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564014911, \"message\": {\"mid\": \"chatwoot-184605-859696280\", \"text\": \"تمام شوفني شنو عدكم موديلات تكون طويله\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19006,
+    "sender_id": "khuyoot::cw-184605-1065",
+    "name": "أولادي نظر عيني",
+    "created_at": "2026-09-16T16:15:47+03:00",
+    "direction": "incoming",
+    "text": "اريد تنوره",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1065\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564547342, \"message\": {\"mid\": \"chatwoot-184605-859720357\", \"text\": \"اريد تنوره\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19021,
+    "sender_id": "khuyoot::cw-184605-1065",
+    "name": "أولادي نظر عيني",
+    "created_at": "2026-09-16T16:16:46+03:00",
+    "direction": "outgoing",
+    "text": "والله عيني حالياً التنانير المتوفرة بس هذا الموديل بطول 90 سم.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"والله عيني حالياً التنانير المتوفرة بس هذا الموديل بطول 90 سم.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"الأنبار\", \"address\": \"محافظة الانبار الرمادي\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19022,
+    "sender_id": "khuyoot::cw-184605-1065",
+    "name": "أولادي نظر عيني",
+    "created_at": "2026-09-16T16:16:46+03:00",
+    "direction": "outgoing",
+    "text": "تحبين تشوفين موديلات ثانية مثل الكيلوت أو السوت؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تحبين تشوفين موديلات ثانية مثل الكيلوت أو السوت؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"الأنبار\", \"address\": \"محافظة الانبار الرمادي\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 18929,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:08:47+03:00",
+    "direction": "incoming",
+    "text": "تنورةقياس٦٠",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1133\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564127308, \"message\": {\"mid\": \"chatwoot-184605-859701414\", \"text\": \"تنورةقياس٦٠\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 18930,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:08:53+03:00",
+    "direction": "incoming",
+    "text": "الاسودموجودة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1133\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564133454, \"message\": {\"mid\": \"chatwoot-184605-859701717\", \"text\": \"الاسودموجودة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 18931,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:08:56+03:00",
+    "direction": "incoming",
+    "text": "قياس٦٠",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1133\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564136731, \"message\": {\"mid\": \"chatwoot-184605-859701878\", \"text\": \"قياس٦٠\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 18937,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:09:32+03:00",
+    "direction": "outgoing",
+    "text": null,
+    "message_type": "image",
+    "raw_payload": "{\"auto_default_product_image\": true, \"sent\": true}"
+  },
+  {
+    "id": 18945,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:10:18+03:00",
+    "direction": "incoming",
+    "text": "قياس٦٠",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1133\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564218339, \"message\": {\"mid\": \"chatwoot-184605-859705543\", \"text\": \"قياس٦٠\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 18947,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:10:24+03:00",
+    "direction": "incoming",
+    "text": "نوع قماش",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1133\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564224882, \"message\": {\"mid\": \"chatwoot-184605-859705867\", \"text\": \"نوع قماش\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 18955,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:11:10+03:00",
+    "direction": "outgoing",
+    "text": "قماشها باربي درجة أولى عيني، وإذا وزنج 60 كيلو فقياس 38 يجي مضبوط عليج.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"قماشها باربي درجة أولى عيني، وإذا وزنج 60 كيلو فقياس 38 يجي مضبوط عليج.\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 18956,
+    "sender_id": "khuyoot::cw-184605-1133",
+    "name": "أمي الغاليه",
+    "created_at": "2026-09-16T16:11:10+03:00",
+    "direction": "outgoing",
+    "text": "من يا محافظة إنتي حتى نحسب أجور التوصيل؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"من يا محافظة إنتي حتى نحسب أجور التوصيل؟\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 18972,
+    "sender_id": "khuyoot::cw-184605-1141",
+    "name": "اوراق الخريف",
+    "created_at": "2026-09-16T16:13:20+03:00",
+    "direction": "incoming",
+    "text": "اذا امكن شنو قياسات التنورة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1141\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564400101, \"message\": {\"mid\": \"chatwoot-184605-859713777\", \"text\": \"اذا امكن شنو قياسات التنورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 18981,
+    "sender_id": "khuyoot::cw-184605-1141",
+    "name": "اوراق الخريف",
+    "created_at": "2026-09-16T16:14:07+03:00",
+    "direction": "outgoing",
+    "text": "أهلاً عيني، قياساتها من 38 لحد 52 وتناسب أوزان من 55 للـ 100 كيلو.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"أهلاً عيني، قياساتها من 38 لحد 52 وتناسب أوزان من 55 للـ 100 كيلو.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 18982,
+    "sender_id": "khuyoot::cw-184605-1141",
+    "name": "اوراق الخريف",
+    "created_at": "2026-09-16T16:14:07+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج أو قياسج حتى أشوفلج المناسب؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج أو قياسج حتى أشوفلج المناسب؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 18996,
+    "sender_id": "khuyoot::cw-184605-1141",
+    "name": "اوراق الخريف",
+    "created_at": "2026-09-16T16:15:13+03:00",
+    "direction": "incoming",
+    "text": "حياتي اذا مو زحمة صورة للتنورة بدون ذكاء صناعي",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1141\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564513018, \"message\": {\"mid\": \"chatwoot-184605-859718618\", \"text\": \"حياتي اذا مو زحمة صورة للتنورة بدون ذكاء صناعي\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19043,
+    "sender_id": "khuyoot::cw-184605-1141",
+    "name": "اوراق الخريف",
+    "created_at": "2026-09-16T16:18:33+03:00",
+    "direction": "incoming",
+    "text": "حياتي من تصوريها دزيلي صورة حتى لايتعنى ابو التوصيل",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1141\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789564713689, \"message\": {\"mid\": \"chatwoot-184605-859727582\", \"text\": \"حياتي من تصوريها دزيلي صورة حتى لايتعنى ابو التوصيل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19050,
+    "sender_id": "khuyoot::cw-184605-1141",
+    "name": "اوراق الخريف",
+    "created_at": "2026-09-16T16:19:08+03:00",
+    "direction": "outgoing",
+    "text": "المتوفر حالياً لهذا الموديل هو صورة الكتالوج المسجلة فقط؛ ما عندي تصوير إضافي من المحل.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"المتوفر حالياً لهذا الموديل هو صورة الكتالوج المسجلة فقط؛ ما عندي تصوير إضافي من المحل.\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19320,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:50:16+03:00",
+    "direction": "incoming",
+    "text": "شكد توصيل لبغداد",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1152\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566616644, \"message\": {\"mid\": \"chatwoot-184605-859812538\", \"text\": \"شكد توصيل لبغداد\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19331,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:50:53+03:00",
+    "direction": "outgoing",
+    "text": null,
+    "message_type": "image",
+    "raw_payload": "{\"auto_default_product_image\": true, \"sent\": true}"
+  },
+  {
+    "id": 19332,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:50:58+03:00",
+    "direction": "outgoing",
+    "text": "أهلاً عيني، التوصيل لبغداد 5 آلاف ويوصلج سريع مع الفحص عند الاستلام..",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"أهلاً عيني، التوصيل لبغداد 5 آلاف ويوصلج سريع مع الفحص عند الاستلام..\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"بغداد\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19333,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:50:58+03:00",
+    "direction": "outgoing",
+    "text": "شكد قياسج أو وزنج حتى أشوفه الج؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد قياسج أو وزنج حتى أشوفه الج؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"بغداد\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19342,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:51:32+03:00",
+    "direction": "incoming",
+    "text": "وزني ٧٨",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1152\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566692993, \"message\": {\"mid\": \"chatwoot-184605-859816305\", \"text\": \"وزني ٧٨\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19345,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:51:42+03:00",
+    "direction": "incoming",
+    "text": "قياس ٤٤ ومرات ٤٦",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1152\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566702727, \"message\": {\"mid\": \"chatwoot-184605-859816752\", \"text\": \"قياس ٤٤ ومرات ٤٦\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19348,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:52:01+03:00",
+    "direction": "incoming",
+    "text": "عالاكثر ٤٦",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1152\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566721531, \"message\": {\"mid\": \"chatwoot-184605-859817576\", \"text\": \"عالاكثر ٤٦\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19357,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:52:46+03:00",
+    "direction": "outgoing",
+    "text": "تدللين عيني، قياس 46 متوفر ويجي كلش مضبوط ومرتب عليج.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تدللين عيني، قياس 46 متوفر ويجي كلش مضبوط ومرتب عليج.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"بغداد\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"46\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19358,
+    "sender_id": "khuyoot::cw-184605-1152",
+    "name": "حنين الربيعي",
+    "created_at": "2026-09-16T16:52:46+03:00",
+    "direction": "outgoing",
+    "text": "إذا حابة أثبته الج دزيلي العنوان بالتفصيل ورقم الموبايل؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"إذا حابة أثبته الج دزيلي العنوان بالتفصيل ورقم الموبايل؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"بغداد\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"46\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19148,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:28:21+03:00",
+    "direction": "incoming",
+    "text": "السلام عليكم",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565301346, \"message\": {\"mid\": \"chatwoot-184605-859753602\", \"text\": \"السلام عليكم\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19155,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:28:57+03:00",
+    "direction": "outgoing",
+    "text": null,
+    "message_type": "image",
+    "raw_payload": "{\"auto_default_product_image\": true, \"sent\": true}"
+  },
+  {
+    "id": 19156,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:28:57+03:00",
+    "direction": "outgoing",
+    "text": "وعليكم السلام، هلا بيج 🌸 تفضلي",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"وعليكم السلام، هلا بيج 🌸 تفضلي\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19160,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:29:13+03:00",
+    "direction": "incoming",
+    "text": "",
+    "message_type": "image",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565353703, \"message\": {\"mid\": \"chatwoot-184605-859755785\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://app.chatwoot.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCTjJpcGdZPSIsImV4cCI6bnVsbCwicHVyIjoiYmxvYl9pZCJ9fQ==--5a022fc97add7865bfb637da043ece625425c9d3/806247958_1642727953852753_2202983045403190543_n.jpg\"}}]}}]}]}"
+  },
+  {
+    "id": 19162,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:29:18+03:00",
+    "direction": "incoming",
+    "text": "بيه قياس على وزن ٩٠",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565358352, \"message\": {\"mid\": \"chatwoot-184605-859756007\", \"text\": \"بيه قياس على وزن ٩٠\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19173,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:30:01+03:00",
+    "direction": "outgoing",
+    "text": "قياس 48 عيني، تناسب وزن 85–90 كيلو وتلبس مرتبة كلش.",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19174,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:30:01+03:00",
+    "direction": "outgoing",
+    "text": "سعرها 12 ألف وعليها عرض خاص لأن الكمية محدودة.",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19175,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:30:01+03:00",
+    "direction": "outgoing",
+    "text": "من يا محافظة إنتي حتى أحسبلج التوصيل؟",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19177,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:30:26+03:00",
+    "direction": "incoming",
+    "text": "بصره",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565426542, \"message\": {\"mid\": \"chatwoot-184605-859758907\", \"text\": \"بصره\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19178,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:30:43+03:00",
+    "direction": "incoming",
+    "text": "واذا ماعجبني القماش ممكن ارجعها",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565443614, \"message\": {\"mid\": \"chatwoot-184605-859759596\", \"text\": \"واذا ماعجبني القماش ممكن ارجعها\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19183,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:31:24+03:00",
+    "direction": "outgoing",
+    "text": "حقج عيني ومطمنة، الفحص متاح عند الاستلام بوجود المندوب، افتحي التنورة براحتج وتأكدي من خامتها، وإذا مو نفس الصورة ترجع مجاناً.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"حقج عيني ومطمنة، الفحص متاح عند الاستلام بوجود المندوب، افتحي التنورة براحتج وتأكدي من خامتها، وإذا مو نفس الصورة ترجع مجاناً.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"البصرة\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19184,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:31:24+03:00",
+    "direction": "outgoing",
+    "text": "توصيل البصرة 5 آلاف، دزيلي رقم الموبايل والعنوان بالتفصيل حتى أثبتلج الحجز.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"توصيل البصرة 5 آلاف، دزيلي رقم الموبايل والعنوان بالتفصيل حتى أثبتلج الحجز.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"البصرة\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19191,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:32:16+03:00",
+    "direction": "incoming",
+    "text": "بصره الطويسة قرب الجسر الاحمر \n٠٧٨١٠٧٨١٨١٩",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565536429, \"message\": {\"mid\": \"chatwoot-184605-859764242\", \"text\": \"بصره الطويسة قرب الجسر الاحمر \\n٠٧٨١٠٧٨١٨١٩\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19197,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:32:57+03:00",
+    "direction": "outgoing",
+    "text": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\", \"checkout_proposal\": null, \"checkout_draft\": null}"
+  },
+  {
+    "id": 19200,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:33:21+03:00",
+    "direction": "incoming",
+    "text": "يعني اذا ماصارت او ماعجبتني حتى توصيل ماادفع",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565601835, \"message\": {\"mid\": \"chatwoot-184605-859767053\", \"text\": \"يعني اذا ماصارت او ماعجبتني حتى توصيل ماادفع\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19204,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:34:03+03:00",
+    "direction": "outgoing",
+    "text": "آي حبيبتي، هذا نظام الفحص عندنا 💚\n\nالفحص متاح عند الاستلام بوجود المندوب، تفتحين التنورة وتتأكدين من القماش والقياس والموديل كلش قبل ما تدفعين أي مبلغ.",
+    "message_type": "text",
+    "raw_payload": "{\"post_order_followup\": true, \"order_id\": 231, \"human_review_id\": null}"
+  },
+  {
+    "id": 19205,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:34:03+03:00",
+    "direction": "outgoing",
+    "text": "إذا مو نفس الصورة أو ما عجبتج الخامة، ترجع مع المندوب مجاناً بدون دفع توصيل ولا أي حاجة، والمبلغ يرجعلج كامل.",
+    "message_type": "text",
+    "raw_payload": "{\"post_order_followup\": true, \"order_id\": 231, \"human_review_id\": null}"
+  },
+  {
+    "id": 19208,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:34:41+03:00",
+    "direction": "incoming",
+    "text": "يسلموو شكرا جزيلا يمتى توصل",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1160\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565681981, \"message\": {\"mid\": \"chatwoot-184605-859770488\", \"text\": \"يسلموو شكرا جزيلا يمتى توصل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19212,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:35:22+03:00",
+    "direction": "outgoing",
+    "text": "التوصيل سريع عيني، بتوصل خلال 2-3 أيام من تثبيت الطلب.",
+    "message_type": "text",
+    "raw_payload": "{\"post_order_followup\": true, \"order_id\": 231, \"human_review_id\": null}"
+  },
+  {
+    "id": 19213,
+    "sender_id": "khuyoot::cw-184605-1160",
+    "name": "Da Alaradi",
+    "created_at": "2026-09-16T16:35:22+03:00",
+    "direction": "outgoing",
+    "text": "المندوب بيتصل عليج قبل الوصول بشوي حتى تتأكدي من الاستقبال.",
+    "message_type": "text",
+    "raw_payload": "{\"post_order_followup\": true, \"order_id\": 231, \"human_review_id\": null}"
+  },
+  {
+    "id": 19150,
+    "sender_id": "khuyoot::cw-184605-1161",
+    "name": "ancient-tree-810",
+    "created_at": "2026-09-16T16:28:34+03:00",
+    "direction": "incoming",
+    "text": "S3r",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1161\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789565314066, \"message\": {\"mid\": \"chatwoot-184605-859754121\", \"text\": \"S3r\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19152,
+    "sender_id": "khuyoot::cw-184605-1161",
+    "name": "ancient-tree-810",
+    "created_at": "2026-09-16T16:28:38+03:00",
+    "direction": "incoming",
+    "text": "",
+    "message_type": "image",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1161\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789565318237, \"message\": {\"mid\": \"chatwoot-184605-859754288\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=28031601099844088&signature=Ab3L9VesG3qVXp9PJJV4xCa2wM6OFUibkjHgTOqm8yowtSed6z-XhpH5XydFOkv2hMHLbJeUZChXQCHEn2JuiY7Io_oPzp37OHOdMKsFdherXNt4l0L8K9XUsMBj3M04EMRiR1FQeqdWr8yiArwdnMIUX7xGVOxy61zzOiKAh0dSGB5mvJCybDQ2dn-mGXxdSJ_eiAXAkOfa6sQwwteQDM6QZ3Ct1Ds\"}}]}}]}]}"
+  },
+  {
+    "id": 19692,
+    "sender_id": "khuyoot::cw-184605-1161",
+    "name": "ancient-tree-810",
+    "created_at": "2026-09-16T17:33:59+03:00",
+    "direction": "outgoing",
+    "text": "هلا عيني، سعر هالموديل 12 ألف دينار وعليها عرض خاص.",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19693,
+    "sender_id": "khuyoot::cw-184605-1161",
+    "name": "ancient-tree-810",
+    "created_at": "2026-09-16T17:33:59+03:00",
+    "direction": "outgoing",
+    "text": "شكد قياسج أو وزنج حتى أشوفلج المتوفر؟",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19695,
+    "sender_id": "khuyoot::cw-184605-1161",
+    "name": "ancient-tree-810",
+    "created_at": "2026-09-16T17:34:10+03:00",
+    "direction": "outgoing",
+    "text": "تدللين عيني، التنورة سعرها 12 ألف دينار، شكد وزنج أو قياسج حتى أشوفلج المتوفر؟",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19230,
+    "sender_id": "khuyoot::cw-184605-1169",
+    "name": "Egdan Koksu",
+    "created_at": "2026-09-16T16:40:22+03:00",
+    "direction": "incoming",
+    "text": "شكد سعر التنورة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1169\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566022749, \"message\": {\"mid\": \"chatwoot-184605-859785334\", \"text\": \"شكد سعر التنورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19238,
+    "sender_id": "khuyoot::cw-184605-1169",
+    "name": "Egdan Koksu",
+    "created_at": "2026-09-16T16:41:03+03:00",
+    "direction": "outgoing",
+    "text": "أهلاً عيني، سعر التنورة 12 ألف وعليها عرض خاص حالياً.. شكد قياسج حتى أشوفلج توفره؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"أهلاً عيني، سعر التنورة 12 ألف وعليها عرض خاص حالياً.. شكد قياسج حتى أشوفلج توفره؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19245,
+    "sender_id": "khuyoot::cw-184605-1169",
+    "name": "Egdan Koksu",
+    "created_at": "2026-09-16T16:41:28+03:00",
+    "direction": "incoming",
+    "text": "اللون زيتوني",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1169\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566088945, \"message\": {\"mid\": \"chatwoot-184605-859788731\", \"text\": \"اللون زيتوني\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19254,
+    "sender_id": "khuyoot::cw-184605-1169",
+    "name": "Egdan Koksu",
+    "created_at": "2026-09-16T16:42:17+03:00",
+    "direction": "outgoing",
+    "text": "التنورة متوفرة باللون الأسود فقط عيني، يناسبج حتى أشوفلج القياس؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"التنورة متوفرة باللون الأسود فقط عيني، يناسبج حتى أشوفلج القياس؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19262,
+    "sender_id": "khuyoot::cw-184605-1169",
+    "name": "Egdan Koksu",
+    "created_at": "2026-09-16T16:42:57+03:00",
+    "direction": "incoming",
+    "text": "عذرا بس جنت رايدة لون غير الأسود",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1169\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566177246, \"message\": {\"mid\": \"chatwoot-184605-859792791\", \"text\": \"عذرا بس جنت رايدة لون غير الأسود\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19269,
+    "sender_id": "khuyoot::cw-184605-1169",
+    "name": "Egdan Koksu",
+    "created_at": "2026-09-16T16:43:41+03:00",
+    "direction": "outgoing",
+    "text": "تدللين عيني، حقج، بس التنورة متوفرة حالياً باللون الأسود فقط.. تحبين تشوفين موديل ثاني بغير لون؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تدللين عيني، حقج، بس التنورة متوفرة حالياً باللون الأسود فقط.. تحبين تشوفين موديل ثاني بغير لون؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19231,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:40:23+03:00",
+    "direction": "incoming",
+    "text": "السلام عليكم",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1170\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566023417, \"message\": {\"mid\": \"chatwoot-184605-859785360\", \"text\": \"السلام عليكم\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19232,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:40:25+03:00",
+    "direction": "incoming",
+    "text": "شنو نوع القماش",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1170\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566025022, \"message\": {\"mid\": \"chatwoot-184605-859785449\", \"text\": \"شنو نوع القماش\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19237,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:41:01+03:00",
+    "direction": "outgoing",
+    "text": null,
+    "message_type": "image",
+    "raw_payload": "{\"auto_default_product_image\": true, \"sent\": true}"
+  },
+  {
+    "id": 19239,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:41:07+03:00",
+    "direction": "outgoing",
+    "text": "وعليكم السلام يا هلا عيني، القماش باربي درجة أولى راقي ومرتب باللبس.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"وعليكم السلام يا هلا عيني، القماش باربي درجة أولى راقي ومرتب باللبس.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19240,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:41:07+03:00",
+    "direction": "outgoing",
+    "text": "شكد قياسج أو وزنج حتى أتأكدلج من توفره؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد قياسج أو وزنج حتى أتأكدلج من توفره؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19248,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:41:39+03:00",
+    "direction": "incoming",
+    "text": "يعني مطاطي",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1170\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566099580, \"message\": {\"mid\": \"chatwoot-184605-859789219\", \"text\": \"يعني مطاطي\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19253,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:42:15+03:00",
+    "direction": "incoming",
+    "text": "مثل اليكرا",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1170\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566135164, \"message\": {\"mid\": \"chatwoot-184605-859790890\", \"text\": \"مثل اليكرا\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19257,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:42:20+03:00",
+    "direction": "outgoing",
+    "text": "لا عيني، قماش الباربي خامة راقية وثابتة مو مطاطية وتجي قالب مرتب باللبس.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"لا عيني، قماش الباربي خامة راقية وثابتة مو مطاطية وتجي قالب مرتب باللبس.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19258,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:42:20+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج أو قياسج حتى أشوفلج الترتيب المناسب؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج أو قياسج حتى أشوفلج الترتيب المناسب؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19260,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:42:38+03:00",
+    "direction": "incoming",
+    "text": "اني البس قياس 48",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1170\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566158649, \"message\": {\"mid\": \"chatwoot-184605-859791973\", \"text\": \"اني البس قياس 48\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19267,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:43:26+03:00",
+    "direction": "outgoing",
+    "text": "قياس 48 متوفر وتدللين عيني.\n\nمن يا محافظة حتى أحسبلج التوصيل؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"قياس 48 متوفر وتدللين عيني.\\n\\nمن يا محافظة حتى أحسبلج التوصيل؟\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19281,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:45:43+03:00",
+    "direction": "incoming",
+    "text": "نوع القماش شنو والكمر بيه سحابه",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1170\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566343881, \"message\": {\"mid\": \"chatwoot-184605-859800283\", \"text\": \"نوع القماش شنو والكمر بيه سحابه\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19288,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:46:45+03:00",
+    "direction": "outgoing",
+    "text": "القماش باربي درجة أولى وثابت عيني، والكمر يجي مرتب عاللبس وتكدرين تفحصين كل تفاصيله عند الاستلام.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"القماش باربي درجة أولى وثابت عيني، والكمر يجي مرتب عاللبس وتكدرين تفحصين كل تفاصيله عند الاستلام.\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19289,
+    "sender_id": "khuyoot::cw-184605-1170",
+    "name": "الحقوقية ناظم",
+    "created_at": "2026-09-16T16:46:45+03:00",
+    "direction": "outgoing",
+    "text": "من يا محافظة إنتي حتى أحسبلج التوصيل؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"من يا محافظة إنتي حتى أحسبلج التوصيل؟\", \"checkout_proposal\": null, \"checkout_draft\": {}}"
+  },
+  {
+    "id": 19482,
+    "sender_id": "khuyoot::cw-184605-1191",
+    "name": "ام ديمه",
+    "created_at": "2026-09-16T17:02:02+03:00",
+    "direction": "incoming",
+    "text": "شكد سعر التنورة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1191\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789567322889, \"message\": {\"mid\": \"chatwoot-184605-859845782\", \"text\": \"شكد سعر التنورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19495,
+    "sender_id": "khuyoot::cw-184605-1191",
+    "name": "ام ديمه",
+    "created_at": "2026-09-16T17:02:45+03:00",
+    "direction": "outgoing",
+    "text": "يا هلا عيني، سعر التنورة 12 ألف وقماشها باربي يجنن باللبس.\n\nشكد تلبسين قياس حتى أشوفه الج؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"يا هلا عيني، سعر التنورة 12 ألف وقماشها باربي يجنن باللبس.\\n\\nشكد تلبسين قياس حتى أشوفه الج؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19690,
+    "sender_id": "khuyoot::cw-184605-1211",
+    "name": "Maha Alani",
+    "created_at": "2026-09-16T17:33:44+03:00",
+    "direction": "incoming",
+    "text": "شنو قياسات التنورة المتوفرة؟",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1211\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569224611, \"message\": {\"mid\": \"chatwoot-184605-859926771\", \"text\": \"شنو قياسات التنورة المتوفرة؟\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19699,
+    "sender_id": "khuyoot::cw-184605-1211",
+    "name": "Maha Alani",
+    "created_at": "2026-09-16T17:34:26+03:00",
+    "direction": "outgoing",
+    "text": "يا هلا عيني، متوفرة من قياس 38 إلى 52 وتلبس أوزان من 55 لـ 100 كيلو.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"يا هلا عيني، متوفرة من قياس 38 إلى 52 وتلبس أوزان من 55 لـ 100 كيلو.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19700,
+    "sender_id": "khuyoot::cw-184605-1211",
+    "name": "Maha Alani",
+    "created_at": "2026-09-16T17:34:26+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج أو قياسج حتى أشوفه الج؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج أو قياسج حتى أشوفه الج؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19701,
+    "sender_id": "khuyoot::cw-184605-1213",
+    "name": "أم حسوني",
+    "created_at": "2026-09-16T17:34:36+03:00",
+    "direction": "incoming",
+    "text": "شنو قياسات التنورة المتوفرة؟",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1213\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569276539, \"message\": {\"mid\": \"chatwoot-184605-859928908\", \"text\": \"شنو قياسات التنورة المتوفرة؟\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19703,
+    "sender_id": "khuyoot::cw-184605-1213",
+    "name": "أم حسوني",
+    "created_at": "2026-09-16T17:34:41+03:00",
+    "direction": "incoming",
+    "text": "شكد سعر التنورة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1213\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569281353, \"message\": {\"mid\": \"chatwoot-184605-859929137\", \"text\": \"شكد سعر التنورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19705,
+    "sender_id": "khuyoot::cw-184605-1213",
+    "name": "أم حسوني",
+    "created_at": "2026-09-16T17:34:52+03:00",
+    "direction": "incoming",
+    "text": "",
+    "message_type": "image",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1213\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569292479, \"message\": {\"mid\": \"chatwoot-184605-859929566\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://app.chatwoot.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBCRjd1cGdZPSIsImV4cCI6bnVsbCwicHVyIjoiYmxvYl9pZCJ9fQ==--b6c661cc7d75bedb553b1df2177e867d8b47cfac/801219685_4455453531359329_502194595027863634_n.jpg\"}}]}}]}]}"
+  },
+  {
+    "id": 19706,
+    "sender_id": "khuyoot::cw-184605-1213",
+    "name": "أم حسوني",
+    "created_at": "2026-09-16T17:34:58+03:00",
+    "direction": "incoming",
+    "text": "شكد سعره",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1213\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569298704, \"message\": {\"mid\": \"chatwoot-184605-859929766\", \"text\": \"شكد سعره\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19717,
+    "sender_id": "khuyoot::cw-184605-1213",
+    "name": "أم حسوني",
+    "created_at": "2026-09-16T17:36:10+03:00",
+    "direction": "outgoing",
+    "text": "يا هلا عيني، سعرها 12 ألف وقياساتها من 38 إلى 52 وتناسب من 55 للـ 100 كيلو.",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"weight\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19718,
+    "sender_id": "khuyoot::cw-184605-1213",
+    "name": "أم حسوني",
+    "created_at": "2026-09-16T17:36:10+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج حتى أشوفلج المتوفر؟",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"weight\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19737,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:38:27+03:00",
+    "direction": "incoming",
+    "text": "شنو قياسات التنورة المتوفرة؟",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1215\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569507264, \"message\": {\"mid\": \"chatwoot-184605-859938809\", \"text\": \"شنو قياسات التنورة المتوفرة؟\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19741,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:38:43+03:00",
+    "direction": "incoming",
+    "text": "السلام عليكم شكد السعر",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1215\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569523454, \"message\": {\"mid\": \"chatwoot-184605-859939520\", \"text\": \"السلام عليكم شكد السعر\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19744,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:38:58+03:00",
+    "direction": "incoming",
+    "text": "قياس 46",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1215\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569538427, \"message\": {\"mid\": \"chatwoot-184605-859940234\", \"text\": \"قياس 46\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19772,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:41:28+03:00",
+    "direction": "outgoing",
+    "text": "وعليكم السلام يا هلا.\n\nقياساتها من 38 للـ52 وسعرها 12 ألف، وقياس 46 متوفر.",
+    "message_type": "text",
+    "raw_payload": "{\"manual_reply\": true, \"ai_generated\": true, \"order_created\": false, \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"46\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}, \"delivery_id\": \"manual:9aaf67f0c7b3ce0ddacd037399ff4b9f519cda6d96882dcff6a359f8e1674963\"}"
+  },
+  {
+    "id": 19774,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:41:29+03:00",
+    "direction": "outgoing",
+    "text": "من يا محافظة حتى نحسب التوصيل؟",
+    "message_type": "text",
+    "raw_payload": "{\"manual_reply\": true, \"ai_generated\": true, \"order_created\": false, \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"46\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}, \"delivery_id\": \"manual:9aaf67f0c7b3ce0ddacd037399ff4b9f519cda6d96882dcff6a359f8e1674963\"}"
+  },
+  {
+    "id": 19777,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:41:42+03:00",
+    "direction": "incoming",
+    "text": "بغداد",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1215\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569702906, \"message\": {\"mid\": \"chatwoot-184605-859948099\", \"text\": \"بغداد\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19784,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:42:25+03:00",
+    "direction": "outgoing",
+    "text": "توصيل بغداد 5 آلاف أستاذ.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"توصيل بغداد 5 آلاف أستاذ.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"بغداد\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"46\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19785,
+    "sender_id": "khuyoot::cw-184605-1215",
+    "name": "جعفر ناجي",
+    "created_at": "2026-09-16T17:42:25+03:00",
+    "direction": "outgoing",
+    "text": "دزلي رقم الموبايل والعنوان بالتفصيل حتى أثبتلك الحجز؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"دزلي رقم الموبايل والعنوان بالتفصيل حتى أثبتلك الحجز؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"بغداد\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"46\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19790,
+    "sender_id": "khuyoot::cw-184605-1219",
+    "name": "زهراء الهنداوي",
+    "created_at": "2026-09-16T17:42:59+03:00",
+    "direction": "incoming",
+    "text": "شنو قياسات التنورة المتوفرة؟",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1219\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789569779130, \"message\": {\"mid\": \"chatwoot-184605-859951285\", \"text\": \"شنو قياسات التنورة المتوفرة؟\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19793,
+    "sender_id": "khuyoot::cw-184605-1219",
+    "name": "زهراء الهنداوي",
+    "created_at": "2026-09-16T17:43:40+03:00",
+    "direction": "outgoing",
+    "text": "هلا حبيبتي، متوفرة من قياس 38 للـ 52 وتناسب أوزان من 55 للـ 100 كيلو.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"هلا حبيبتي، متوفرة من قياس 38 للـ 52 وتناسب أوزان من 55 للـ 100 كيلو.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19794,
+    "sender_id": "khuyoot::cw-184605-1219",
+    "name": "زهراء الهنداوي",
+    "created_at": "2026-09-16T17:43:40+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج عيني حتى أشوفلج القياس المضبوط؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج عيني حتى أشوفلج القياس المضبوط؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19804,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:45:27+03:00",
+    "direction": "incoming",
+    "text": "مرحبا",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789569927272, \"message\": {\"mid\": \"chatwoot-184605-859957735\", \"text\": \"مرحبا\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19807,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:45:36+03:00",
+    "direction": "incoming",
+    "text": "",
+    "message_type": "image",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789569936070, \"message\": {\"mid\": \"chatwoot-184605-859958111\", \"text\": \"\", \"attachments\": [{\"type\": \"image\", \"payload\": {\"url\": \"https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1071833592158726&signature=Ab39oX3HpkPebYEMoYxAnV5LPhGNWbUIr8ZZ2j4EYBlSXD-3k4IMv0BBz9gLuDJn4IYdM83k20rvB_ZIxXJbQ4TnPqYQS9X9s4GXAxCNYLb2HcFXR1atrrZwQTAT2cw7gqt4l6m9Q_M0QuYOx9uZ0Tmfp_e72g3vyLL-S-pm_9o5DXtGgODGHwGs_nhYP4wglmWJbDwBrvCPiJX8ideR-J2m_bv0ow\"}}]}}]}]}"
+  },
+  {
+    "id": 19811,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:45:41+03:00",
+    "direction": "incoming",
+    "text": "اريد اطلب",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789569941998, \"message\": {\"mid\": \"chatwoot-184605-859958436\", \"text\": \"اريد اطلب\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19813,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:45:51+03:00",
+    "direction": "incoming",
+    "text": "متوفر هسه",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789569951387, \"message\": {\"mid\": \"chatwoot-184605-859958906\", \"text\": \"متوفر هسه\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19814,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:45:51+03:00",
+    "direction": "incoming",
+    "text": "اريد قياس ٤٠",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789569951848, \"message\": {\"mid\": \"chatwoot-184605-859958940\", \"text\": \"اريد قياس ٤٠\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19822,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:46:38+03:00",
+    "direction": "outgoing",
+    "text": "مراحب عيني، قياس 40 متوفر وتدللين.",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"40\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19823,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:46:38+03:00",
+    "direction": "outgoing",
+    "text": "من يا محافظة إنتي حتى نثبتلج الحجز؟",
+    "message_type": "text",
+    "raw_payload": "{\"auto_after_product_link\": true, \"product_id\": \"P003\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"40\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19824,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:46:52+03:00",
+    "direction": "incoming",
+    "text": "اربيل",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789570012061, \"message\": {\"mid\": \"chatwoot-184605-859961679\", \"text\": \"اربيل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19829,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:47:34+03:00",
+    "direction": "outgoing",
+    "text": "حتى أثبت الطلب أحتاج رقم الهاتف والعنوان الكامل 🌸",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"حتى أثبت الطلب أحتاج رقم الهاتف والعنوان الكامل 🌸\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"أربيل\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"40\", \"size_type\": \"size\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19833,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:48:19+03:00",
+    "direction": "incoming",
+    "text": "07504129778   اربيل - بيرمام",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789570099403, \"message\": {\"mid\": \"chatwoot-184605-859965382\", \"text\": \"07504129778   اربيل - بيرمام\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19837,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:49:04+03:00",
+    "direction": "outgoing",
+    "text": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\", \"checkout_proposal\": null, \"checkout_draft\": null}"
+  },
+  {
+    "id": 19841,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:49:13+03:00",
+    "direction": "incoming",
+    "text": "سعر التنوره ١٢٠٠٠؟",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1220\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789570153856, \"message\": {\"mid\": \"chatwoot-184605-859967621\", \"text\": \"سعر التنوره ١٢٠٠٠؟\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19844,
+    "sender_id": "khuyoot::cw-184605-1220",
+    "name": "sarona",
+    "created_at": "2026-09-16T17:49:55+03:00",
+    "direction": "outgoing",
+    "text": "اي نعم عيني، سعرها 12 ألف، ويا التوصيل 5 آلاف يصير المجموع 17 ألف وتدللين 🌸",
+    "message_type": "text",
+    "raw_payload": "{\"post_order_followup\": true, \"order_id\": 237, \"human_review_id\": null}"
+  },
+  {
+    "id": 19888,
+    "sender_id": "khuyoot::cw-184605-1228",
+    "name": "Zahraa riadh",
+    "created_at": "2026-09-16T17:56:33+03:00",
+    "direction": "incoming",
+    "text": "تنوره",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1228\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789570593989, \"message\": {\"mid\": \"chatwoot-184605-859987502\", \"text\": \"تنوره\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19897,
+    "sender_id": "khuyoot::cw-184605-1228",
+    "name": "Zahraa riadh",
+    "created_at": "2026-09-16T17:57:14+03:00",
+    "direction": "outgoing",
+    "text": "يا هلا عيني، متوفرة التنورة بلونها الأسود الملكي وسعرها 12 ألف بس،",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"يا هلا عيني، متوفرة التنورة بلونها الأسود الملكي وسعرها 12 ألف بس،\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19898,
+    "sender_id": "khuyoot::cw-184605-1228",
+    "name": "Zahraa riadh",
+    "created_at": "2026-09-16T17:57:14+03:00",
+    "direction": "outgoing",
+    "text": "شكد قياسج أو وزنج حتى أتأكدلج منه؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد قياسج أو وزنج حتى أتأكدلج منه؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19914,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T17:58:28+03:00",
+    "direction": "incoming",
+    "text": "شكد سعر التنورة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1231\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789570708616, \"message\": {\"mid\": \"chatwoot-184605-859992227\", \"text\": \"شكد سعر التنورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19915,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T17:58:29+03:00",
+    "direction": "incoming",
+    "text": "شكد سعر التنورة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1231\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789570709301, \"message\": {\"mid\": \"chatwoot-184605-859992264\", \"text\": \"شكد سعر التنورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19917,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T17:58:30+03:00",
+    "direction": "incoming",
+    "text": "شنو قياسات التنورة المتوفرة؟",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1231\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789570710445, \"message\": {\"mid\": \"chatwoot-184605-859992306\", \"text\": \"شنو قياسات التنورة المتوفرة؟\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19918,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T17:58:34+03:00",
+    "direction": "incoming",
+    "text": "شكد سعر التنورة",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1231\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789570714384, \"message\": {\"mid\": \"chatwoot-184605-859992443\", \"text\": \"شكد سعر التنورة\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19930,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T17:59:19+03:00",
+    "direction": "outgoing",
+    "text": "يا هلا عيني، سعر التنورة 12 ألف، وقياساتها متوفرة من 38 إلى 52 وتلبس من 55 إلى 100 كيلو.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"يا هلا عيني، سعر التنورة 12 ألف، وقياساتها متوفرة من 38 إلى 52 وتلبس من 55 إلى 100 كيلو.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19931,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T17:59:19+03:00",
+    "direction": "outgoing",
+    "text": "شكد القياس أو الوزن المطلوب حتى أتأكدلك منه؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد القياس أو الوزن المطلوب حتى أتأكدلك منه؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19979,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T18:03:22+03:00",
+    "direction": "incoming",
+    "text": "يصير اطلب أكثر من قياس لكي اجرب وياهو يصير ياقياس يصير لي اشتري والباقي ارجعها",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1231\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789571002567, \"message\": {\"mid\": \"chatwoot-184605-860005209\", \"text\": \"يصير اطلب أكثر من قياس لكي اجرب وياهو يصير ياقياس يصير لي اشتري والباقي ارجعها\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19989,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T18:04:11+03:00",
+    "direction": "outgoing",
+    "text": "تدللين عيني، الأفضل تنطيني وزنج حتى نحدد القياس المضبوط الج، وتكدرين تفحصين القطعة عند الاستلام.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تدللين عيني، الأفضل تنطيني وزنج حتى نحدد القياس المضبوط الج، وتكدرين تفحصين القطعة عند الاستلام.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19990,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T18:04:11+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج تقريباً؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج تقريباً؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 20001,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T18:04:56+03:00",
+    "direction": "incoming",
+    "text": "شكد توصيل لكركوك",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1231\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789571096425, \"message\": {\"mid\": \"chatwoot-184605-860009117\", \"text\": \"شكد توصيل لكركوك\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 20007,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T18:05:09+03:00",
+    "direction": "incoming",
+    "text": "نوع القماش شنو",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1231\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789571109668, \"message\": {\"mid\": \"chatwoot-184605-860009624\", \"text\": \"نوع القماش شنو\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 20013,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T18:05:51+03:00",
+    "direction": "outgoing",
+    "text": "التوصيل لكركوك 5 آلاف، والقماش باربي درجة أولى.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"التوصيل لكركوك 5 آلاف، والقماش باربي درجة أولى.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"كركوك\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"weight\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 20014,
+    "sender_id": "khuyoot::cw-184605-1231",
+    "name": "Noor Gul",
+    "created_at": "2026-09-16T18:05:51+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج تقريباً حتى نثبتلج القياس المضبوط؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج تقريباً حتى نثبتلج القياس المضبوط؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"كركوك\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"weight\", \"weight\": \"\", \"notes\": \"\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19950,
+    "sender_id": "khuyoot::cw-184605-1233",
+    "name": "الودق الودق",
+    "created_at": "2026-09-16T18:01:28+03:00",
+    "direction": "incoming",
+    "text": "مرحبا",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1233\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789570888852, \"message\": {\"mid\": \"chatwoot-184605-859999884\", \"text\": \"مرحبا\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19956,
+    "sender_id": "khuyoot::cw-184605-1233",
+    "name": "الودق الودق",
+    "created_at": "2026-09-16T18:02:06+03:00",
+    "direction": "outgoing",
+    "text": null,
+    "message_type": "image",
+    "raw_payload": "{\"auto_default_product_image\": true, \"sent\": true}"
+  },
+  {
+    "id": 19959,
+    "sender_id": "khuyoot::cw-184605-1233",
+    "name": "الودق الودق",
+    "created_at": "2026-09-16T18:02:12+03:00",
+    "direction": "outgoing",
+    "text": "مراحب يا هلا بيج عيني، تفضلي شلون أگدر أساعدج؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"مراحب يا هلا بيج عيني، تفضلي شلون أگدر أساعدج؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19953,
+    "sender_id": "khuyoot::cw-184605-1234",
+    "name": "Alyaa Alabodi",
+    "created_at": "2026-09-16T18:02:02+03:00",
+    "direction": "incoming",
+    "text": "شنو قياسات التنورة المتوفرة؟",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-1234\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789570922540, \"message\": {\"mid\": \"chatwoot-184605-860001671\", \"text\": \"شنو قياسات التنورة المتوفرة؟\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19969,
+    "sender_id": "khuyoot::cw-184605-1234",
+    "name": "Alyaa Alabodi",
+    "created_at": "2026-09-16T18:02:51+03:00",
+    "direction": "outgoing",
+    "text": "أهلاً عيني، متوفرة من قياس 38 للـ 52 وتناسب وزن 55 إلى 100 كيلو.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"أهلاً عيني، متوفرة من قياس 38 للـ 52 وتناسب وزن 55 إلى 100 كيلو.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19970,
+    "sender_id": "khuyoot::cw-184605-1234",
+    "name": "Alyaa Alabodi",
+    "created_at": "2026-09-16T18:02:51+03:00",
+    "direction": "outgoing",
+    "text": "شكد قياسج أو وزنج حتى أشوفلج المناسب؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد قياسج أو وزنج حتى أشوفلج المناسب؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19102,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:24:44+03:00",
+    "direction": "incoming",
+    "text": "شنو الوان التنوره",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-573\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565084283, \"message\": {\"mid\": \"chatwoot-184605-859743909\", \"text\": \"شنو الوان التنوره\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19106,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:25:23+03:00",
+    "direction": "outgoing",
+    "text": "اللون أسود عيني، وقماشه باربي درجة أولى ناعم جداً وتجنن باللبس.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"اللون أسود عيني، وقماشه باربي درجة أولى ناعم جداً وتجنن باللبس.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"weight\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19107,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:25:23+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج حتى أحسبلج القياس المناسب وأثبته إلج؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج حتى أحسبلج القياس المناسب وأثبته إلج؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"\", \"size_type\": \"weight\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19120,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:26:19+03:00",
+    "direction": "incoming",
+    "text": "احتاج قهوائي او عسلي او نيلي",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-573\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565179254, \"message\": {\"mid\": \"chatwoot-184605-859748274\", \"text\": \"احتاج قهوائي او عسلي او نيلي\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19129,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:26:58+03:00",
+    "direction": "outgoing",
+    "text": "للأسف عيني، التنورة اللي عندنا متوفرة بس باللون الأسود فقط.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"للأسف عيني، التنورة اللي عندنا متوفرة بس باللون الأسود فقط.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19130,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:26:58+03:00",
+    "direction": "outgoing",
+    "text": "بس عندنا سوت نيلي تجنن وقماشه تركي درجة أولى، إذا حابة أشوفلج ياه؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"بس عندنا سوت نيلي تجنن وقماشه تركي درجة أولى، إذا حابة أشوفلج ياه؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19137,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:27:20+03:00",
+    "direction": "incoming",
+    "text": "تمام",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-573\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565240973, \"message\": {\"mid\": \"chatwoot-184605-859751023\", \"text\": \"تمام\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19141,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:27:59+03:00",
+    "direction": "outgoing",
+    "text": "تمام حبيبتي، السوت النيلي سعره 15 ألف وقماشه تركي تجنن باللبس.\n\nشكد وزنج حتى أثبتلج القياس المناسب؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تمام حبيبتي، السوت النيلي سعره 15 ألف وقماشه تركي تجنن باللبس.\\n\\nشكد وزنج حتى أثبتلج القياس المناسب؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P001\", \"product_name\": \"سوت نيلي\", \"color\": \"نيلي\", \"size\": \"\", \"size_type\": \"weight\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19153,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:28:44+03:00",
+    "direction": "incoming",
+    "text": "ابعثي صوره الموديل",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-573\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789565324726, \"message\": {\"mid\": \"chatwoot-184605-859754599\", \"text\": \"ابعثي صوره الموديل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19165,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:29:24+03:00",
+    "direction": "outgoing",
+    "text": "صورة السوت النيلي وصلت عيني، هاي القطعة تجنن باللبس والقماش تركي درجة أولى ناعم جداً.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"صورة السوت النيلي وصلت عيني، هاي القطعة تجنن باللبس والقماش تركي درجة أولى ناعم جداً.\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P001\", \"product_name\": \"سوت نيلي\", \"color\": \"نيلي\", \"size\": \"\", \"size_type\": \"weight\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19166,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:29:24+03:00",
+    "direction": "outgoing",
+    "text": "شكد وزنج حتى أحسبلج القياس المناسب من 55 لـ 100 كيلو؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"شكد وزنج حتى أحسبلج القياس المناسب من 55 لـ 100 كيلو؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": [{\"product_id\": \"P001\", \"product_name\": \"سوت نيلي\", \"color\": \"نيلي\", \"size\": \"\", \"size_type\": \"weight\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19167,
+    "sender_id": "khuyoot::cw-184605-573",
+    "name": "LM Ali",
+    "created_at": "2026-09-16T16:29:24+03:00",
+    "direction": "outgoing",
+    "text": null,
+    "message_type": "image",
+    "raw_payload": "{\"reply_image\": true, \"product_image_url\": \"https://inqaa-production.up.railway.app/product_image/uploads/product_1788021536779596578_0.jpg\"}"
+  },
+  {
+    "id": 19460,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:00:06+03:00",
+    "direction": "incoming",
+    "text": "بغداد البكريه الي يم الفروسيه\n07723854578",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-897\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789567206726, \"message\": {\"mid\": \"chatwoot-184605-859839949\", \"text\": \"بغداد البكريه الي يم الفروسيه\\n07723854578\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19466,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:00:27+03:00",
+    "direction": "incoming",
+    "text": "كم يوم ويوصل",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-897\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789567227043, \"message\": {\"mid\": \"chatwoot-184605-859840888\", \"text\": \"كم يوم ويوصل\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19467,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:00:30+03:00",
+    "direction": "incoming",
+    "text": "الطلب",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-897\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789567230184, \"message\": {\"mid\": \"chatwoot-184605-859841030\", \"text\": \"الطلب\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19473,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:01:15+03:00",
+    "direction": "outgoing",
+    "text": "هذه القطع المقترحة للحجز، ولم يثبت الطلب بعد:",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"هذه القطع المقترحة للحجز، ولم يثبت الطلب بعد:\", \"checkout_proposal\": {\"customer_name\": \"Rana 💕\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}], \"_catalog_snapshot\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"price\": \"12000\", \"colors\": \"اسود\", \"sizes\": \"قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52\", \"stock\": \"متوفر\", \"status\": \"active\"}], \"_delivery_fee\": 5000}, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19474,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:01:15+03:00",
+    "direction": "outgoing",
+    "text": "تنورة ×1 — اسود / قياس 48 — 12,000 د.ع\n\nتنورة ×1 — اسود / قياس 50 — 12,000 د.ع",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تنورة ×1 — اسود / قياس 48 — 12,000 د.ع\\n\\nتنورة ×1 — اسود / قياس 50 — 12,000 د.ع\", \"checkout_proposal\": {\"customer_name\": \"Rana 💕\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}], \"_catalog_snapshot\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"price\": \"12000\", \"colors\": \"اسود\", \"sizes\": \"قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52\", \"stock\": \"متوفر\", \"status\": \"active\"}], \"_delivery_fee\": 5000}, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19475,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:01:15+03:00",
+    "direction": "outgoing",
+    "text": "التوصيل: 5,000 د.ع\n\nالمجموع: 29,000 د.ع",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"التوصيل: 5,000 د.ع\\n\\nالمجموع: 29,000 د.ع\", \"checkout_proposal\": {\"customer_name\": \"Rana 💕\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}], \"_catalog_snapshot\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"price\": \"12000\", \"colors\": \"اسود\", \"sizes\": \"قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52\", \"stock\": \"متوفر\", \"status\": \"active\"}], \"_delivery_fee\": 5000}, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19476,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:01:15+03:00",
+    "direction": "outgoing",
+    "text": "العنوان: بغداد / بغداد البكريه الي يم الفروسيه\n\nالهاتف: 07723854578\n\nمدة التوصيل: يؤكدها فريق المتجر",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"العنوان: بغداد / بغداد البكريه الي يم الفروسيه\\n\\nالهاتف: 07723854578\\n\\nمدة التوصيل: يؤكدها فريق المتجر\", \"checkout_proposal\": {\"customer_name\": \"Rana 💕\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}], \"_catalog_snapshot\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"price\": \"12000\", \"colors\": \"اسود\", \"sizes\": \"قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52\", \"stock\": \"متوفر\", \"status\": \"active\"}], \"_delivery_fee\": 5000}, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19477,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:01:15+03:00",
+    "direction": "outgoing",
+    "text": "هل أثبت الطلب بهذه القطع والقياسات والأسعار؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"هل أثبت الطلب بهذه القطع والقياسات والأسعار؟\", \"checkout_proposal\": {\"customer_name\": \"Rana 💕\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}], \"_catalog_snapshot\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"price\": \"12000\", \"colors\": \"اسود\", \"sizes\": \"قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو.  اعتمد الجدول التالي عند الرد على الزبونة:  وزن 55–60 كيلو = قياس 38 وزن 61–66 كيلو = قياس 40 وزن 67–72 كيلو = قياس 42 وزن 73–78 كيلو = قياس 44 وزن 79–84 كيلو = قياس 46 وزن 85–90 كيلو = قياس 48 وزن 91–95 كيلو = قياس 50 وزن 96–100 كيلو = قياس 52\", \"stock\": \"متوفر\", \"status\": \"active\"}], \"_delivery_fee\": 5000}, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"07723854578\", \"province\": \"بغداد\", \"address\": \"بغداد البكريه الي يم الفروسيه\", \"notes\": \"\", \"items\": [{\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"48\", \"size_type\": \"size\", \"quantity\": 1}, {\"product_id\": \"P003\", \"product_name\": \"تنورة\", \"color\": \"اسود\", \"size\": \"50\", \"size_type\": \"size\", \"quantity\": 1}]}}"
+  },
+  {
+    "id": 19481,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:02:00+03:00",
+    "direction": "incoming",
+    "text": "نعم",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-897\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789567320240, \"message\": {\"mid\": \"chatwoot-184605-859845662\", \"text\": \"نعم\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19491,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:02:35+03:00",
+    "direction": "outgoing",
+    "text": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+    "message_type": "text",
+    "raw_payload": "{\"order_created\": true, \"cart_confirmed\": true}"
+  },
+  {
+    "id": 19499,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:03:02+03:00",
+    "direction": "incoming",
+    "text": "شوكت يوصل الطلب",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-897\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789567382320, \"message\": {\"mid\": \"chatwoot-184605-859848657\", \"text\": \"شوكت يوصل الطلب\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19507,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:03:45+03:00",
+    "direction": "outgoing",
+    "text": "التوصيل سريع عيني، وفريق المتجر راح يبلغج بموعد وصول الطلب بأقرب وقت.",
+    "message_type": "text",
+    "raw_payload": "{\"post_order_followup\": true, \"order_id\": 232, \"human_review_id\": null}"
+  },
+  {
+    "id": 19512,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:04:17+03:00",
+    "direction": "incoming",
+    "text": "اهم شي الطلب العصر لان الصبح اني دوام",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-897\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789567457934, \"message\": {\"mid\": \"chatwoot-184605-859852108\", \"text\": \"اهم شي الطلب العصر لان الصبح اني دوام\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19514,
+    "sender_id": "khuyoot::cw-184605-897",
+    "name": "Rana 💕",
+    "created_at": "2026-09-16T17:04:23+03:00",
+    "direction": "incoming",
+    "text": "اكون ممنونه منكم",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-897\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789567463884, \"message\": {\"mid\": \"chatwoot-184605-859852374\", \"text\": \"اكون ممنونه منكم\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19241,
+    "sender_id": "khuyoot::cw-184605-899",
+    "name": "محمد حسن خوش ناو",
+    "created_at": "2026-09-16T16:41:07+03:00",
+    "direction": "incoming",
+    "text": "٥٤",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-899\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566067867, \"message\": {\"mid\": \"chatwoot-184605-859787695\", \"text\": \"٥٤\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19247,
+    "sender_id": "khuyoot::cw-184605-899",
+    "name": "محمد حسن خوش ناو",
+    "created_at": "2026-09-16T16:41:34+03:00",
+    "direction": "incoming",
+    "text": "٩٥",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"page\", \"entry\": [{\"id\": \"chatwoot-184605-136896\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-899\"}, \"recipient\": {\"id\": \"chatwoot-184605-136896\"}, \"timestamp\": 1789566094667, \"message\": {\"mid\": \"chatwoot-184605-859789008\", \"text\": \"٩٥\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19255,
+    "sender_id": "khuyoot::cw-184605-899",
+    "name": "محمد حسن خوش ناو",
+    "created_at": "2026-09-16T16:42:18+03:00",
+    "direction": "outgoing",
+    "text": "يا هلا.. قياسات التنورة من 38 لحد 52، وإذا كان الوزن 95 كيلو فيناسبه قياس 50.\n\nتحبون نثبت الحجز؟",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"يا هلا.. قياسات التنورة من 38 لحد 52، وإذا كان الوزن 95 كيلو فيناسبه قياس 50.\\n\\nتحبون نثبت الحجز؟\", \"checkout_proposal\": null, \"checkout_draft\": {\"customer_name\": \"\", \"phone\": \"\", \"province\": \"\", \"address\": \"\", \"notes\": \"\", \"items\": []}}"
+  },
+  {
+    "id": 19850,
+    "sender_id": "khuyoot::cw-184605-989",
+    "name": "thrumming-voice-676",
+    "created_at": "2026-09-16T17:50:43+03:00",
+    "direction": "incoming",
+    "text": "انتوا  كولش توب  مشكورين",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-989\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789570243089, \"message\": {\"mid\": \"chatwoot-184605-859971366\", \"text\": \"انتوا  كولش توب  مشكورين\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19852,
+    "sender_id": "khuyoot::cw-184605-989",
+    "name": "thrumming-voice-676",
+    "created_at": "2026-09-16T17:51:06+03:00",
+    "direction": "incoming",
+    "text": "يعني الجمعه ان شاء الله",
+    "message_type": "text",
+    "raw_payload": "{\"_ad_context\": {}, \"object\": \"instagram\", \"entry\": [{\"id\": \"chatwoot-184605-136900\", \"_store_id\": \"khuyoot\", \"messaging\": [{\"sender\": {\"id\": \"khuyoot::cw-184605-989\"}, \"recipient\": {\"id\": \"chatwoot-184605-136900\"}, \"timestamp\": 1789570266884, \"message\": {\"mid\": \"chatwoot-184605-859972627\", \"text\": \"يعني الجمعه ان شاء الله\", \"attachments\": []}}]}]}"
+  },
+  {
+    "id": 19857,
+    "sender_id": "khuyoot::cw-184605-989",
+    "name": "thrumming-voice-676",
+    "created_at": "2026-09-16T17:52:02+03:00",
+    "direction": "outgoing",
+    "text": "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.",
+    "message_type": "text",
+    "raw_payload": "{\"reply\": \"تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.\", \"checkout_proposal\": null, \"checkout_draft\": null}"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "live_dashboard": {
+    "ai_enabled": true,
+    "catalog_match_enabled": true,
+    "catalog_match_model": "google/gemini-2.5-flash",
+    "catalog_match_max_tokens": 20,
+    "vision_enabled": false
+  },
+  "live_catalog_image_count": 2,
+  "live_provider_test": {
+    "expected_product": "P004",
+    "matched": false,
+    "http_status": 401,
+    "error": "authentication",
+    "catalog_images": 2
+  },
+  "scope": "Live provider call from local updated code using backup images. Does not establish server key validity or deployed matching behavior.",
+  "second_test": "Not executed after authentication failure"
+}

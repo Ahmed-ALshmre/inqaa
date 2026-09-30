@@ -1,0 +1,7 @@
+<dialog id="quickNavigation" class="quick-navigation" aria-labelledby="quickNavigationTitle">
+  <div class="quick-navigation-head"><div><small>مساحة عمل صوف</small><h2 id="quickNavigationTitle">إلى أين تريد الانتقال؟</h2></div><button type="button" data-close-navigation aria-label="إغلاق قائمة التنقل">×</button></div>
+  <label class="navigation-search"><i class="bi bi-search" aria-hidden="true"></i><input id="navigationSearch" type="search" placeholder="ابحث عن صفحة…" autocomplete="off" aria-label="البحث في الصفحات"><kbd>Esc</kbd></label>
+  <nav class="quick-navigation-links" aria-label="صفحات مساحة العمل">{% include '_page_links.html' %}</nav>
+  <p id="navigationEmpty" hidden role="status">لا توجد صفحة بهذا الاسم. جرّب كلمة أخرى.</p>
+  <footer>انتقال سريع <kbd>Ctrl / ⌘ + K</kbd></footer>
+</dialog>

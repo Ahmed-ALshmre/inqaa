@@ -1,0 +1,23 @@
+[
+  {
+    "conversation": "al-fatena::cw-184605-4178",
+    "message_id": 42569,
+    "customer_reply": "اي",
+    "question": "تحبين أشوفلج موديل ثاني متوفر بي قياسج؟",
+    "resolved_intent": "browse"
+  },
+  {
+    "conversation": "al-fatena::cw-184605-4575",
+    "message_id": 46609,
+    "customer_reply": "دزيلي حبيبتي",
+    "question": "تحبين أدزلج صورهم حتى تشوفين تفاصيلهم؟",
+    "resolved_intent": "browse"
+  },
+  {
+    "conversation": "al-fatena::cw-184605-4670",
+    "message_id": 51334,
+    "customer_reply": "ي",
+    "question": "تحبين تشوفين موديل العباية؟",
+    "resolved_intent": "browse"
+  }
+]

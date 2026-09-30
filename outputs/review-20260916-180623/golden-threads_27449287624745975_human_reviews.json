@@ -1,0 +1,15 @@
+[
+  {
+    "id": 170,
+    "sender_id": "golden-threads::27449287624745975",
+    "message_text": "سلام عليكم",
+    "image_url": null,
+    "candidates_json": "[{\"product_id\": \"P001\", \"product_name\": \"صدرية\", \"image_url\": [\"https://inqaa-production.up.railway.app/product_image/uploads/product_1788533997435540783_0.jpg\", \"https://inqaa-production.up.railway.app/product_image/uploads/product_1788533997435873453_1.jpg\", \"https://inqaa-production.up.railway.app/product_image/uploads/product_1788533997436000184_2.jpg\"], \"visual_description\": \"\", \"description\": \"اسم المنتج: صدرية اطفال\\n\\nالقماش: فور وي.\\n\\nالألوان المتوفرة: أسود، رصاصي، نيلي.\\n\\nالقياسات: من عمر 3 إلى 7 سنوات.\\n\\nالبيع: جملة فقط.\\n\\nسعر الدرزن: 60,000 دينار، ويحتوي على 12 قطعة.\\n\\nأقل كمية للطلب: ربع درزن، يحتوي على 3 قطع بسعر 15,000 دينار.\\n\\nتعليمات الرد: استخدم اللهجة العراقية وبأسلوب مختصر ومناسب لأصحاب المحلات وتجار الجملة. وضّح دائماً أن البيع جملة فقط ولا يوجد بيع مفرد.\", \"price\": \"60000\", \"stock\": \"متوفر\", \"colors\": \"اسود رصاصي نيلي\", \"sizes\": \"من 3 الى 7 سنوات\", \"status\": \"active\", \"score\": 0}, {\"product_id\": \"P002\", \"product_name\": \"تراك بهاري\", \"image_url\": [\"https://inqaa-production.up.railway.app/product_image/uploads/product_1788716717851534795_0.jpg\", \"https://inqaa-production.up.railway.app/product_image/uploads/product_1788716717851906719_1.jpg\", \"https://inqaa-production.up.railway.app/product_image/uploads/product_1788716717852087567_2.jpg\"], \"visual_description\": \"\", \"description\": \"الوان تجي كاملة 4 الوان جملة فقط اقل كمية لطلب 1 درزن سعر الدرزن ب 48 الف\", \"price\": \"48000\", \"stock\": \"متوفر\", \"colors\": \"زيتوني بنفسجي اخظر\", \"sizes\": \"من 1 الى 3 سنوات\", \"status\": \"active\", \"score\": 0}]",
+    "reason": "AI could not produce a reply (empty_reply); human action required",
+    "status": "linked",
+    "admin_reply": null,
+    "created_at": "2026-09-07T00:47:05+03:00",
+    "replied_at": "2026-09-07T12:27:42+03:00",
+    "store_id": "golden-threads"
+  }
+]

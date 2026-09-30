@@ -1,0 +1,4 @@
+{"id": "remembered_options", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.23, "failure_reason": null}
+{"id": "last_minute_change", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 20.44, "failure_reason": null}
+{"id": "answered_price_then_trust", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 22.05, "failure_reason": null}
+{"id": "acknowledged_size", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.47, "failure_reason": null}

@@ -1,0 +1,42 @@
+replayed 250
+replayed 500
+replayed 750
+replayed 1000
+replayed 1250
+replayed 1500
+replayed 1750
+replayed 2000
+{
+  "archive_sha256": "75247ef8a1ad3193ac7050511257bc1a396891d1897309dc00676e9f42c2b052",
+  "integrity": "ok",
+  "window": [
+    "2026-09-15T12:53:07+03:00",
+    "2026-09-16T12:53:07+03:00"
+  ],
+  "incoming_events_replayed": 2105,
+  "routing_counts": {
+    "_download_image_to_data_url": 769,
+    "generate_first_message_reply": 287,
+    "_call_main_ai_once": 980,
+    "classify_contextual_selection": 15,
+    "no_reply": 29,
+    "local_reply": 25
+  },
+  "historical_review_count": 372,
+  "historical_timeouts": 125,
+  "historical_image_no_match": 146,
+  "historical_billing_errors": 30,
+  "layout_parts_distribution": {
+    "1": 953,
+    "2": 155,
+    "3": 3
+  },
+  "layout_content_changes": 0,
+  "limitations": [
+    "Offline routing, not live AI accuracy or latency measurement.",
+    "AI enabled counterfactually to exercise routing; the snapshot global AI switch is off.",
+    "Settings/product metadata are snapshot values; their historical revisions are unavailable.",
+    "Only links whose last_seen_at precedes each event are used; earlier overwritten links cannot be reconstructed.",
+    "No external provider requests or customer messages were sent."
+  ]
+}

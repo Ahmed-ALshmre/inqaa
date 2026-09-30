@@ -1,0 +1,226 @@
+{
+  "model": "google/gemini-3.8-flash",
+  "variant": "improved",
+  "results": [
+    {
+      "id": "two_variants",
+      "goal": "قطعتان مستقلتان بقياسين مختلفين",
+      "text": "اريد الرباط اسود قياس 42 والكريمي قياس 46، قطعة من كل لون ثبتيهن",
+      "result": {
+        "reply": "صار عيني، سجلت الج فستان رباط اسود قياس 42، وكريمي قياس 46.\n\nسعر القطعتين 30 ألف والتوصيل 5 آلاف، المجموع 35 ألف. يوصلج خلال يومين إلى 3 أيام وتكدرين تفحصين قبل الدفع.",
+        "reply_parts": [
+          "صار عيني، سجلت الج فستان رباط اسود قياس 42، وكريمي قياس 46.",
+          "سعر القطعتين 30 ألف والتوصيل 5 آلاف، المجموع 35 ألف.\n\nيوصلج خلال يومين إلى 3 أيام وتكدرين تفحصين قبل الدفع."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "كريمي",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1,
+        "_explicit_checkout_recovered": true
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true,
+        "separate_variants": true
+      },
+      "seconds": 4.81
+    },
+    {
+      "id": "defer_salary",
+      "goal": "يحترم التأجيل بلا ضغط ولا موعد متابعة مخترع",
+      "text": "خلي استلم الراتب وبعدين اطلب",
+      "result": {
+        "reply": "تدللين عيني، براحتج شوكت ما يعجبج راسلينا وأني بخدمتج بأي وقت.",
+        "reply_parts": [
+          "تدللين عيني، براحتج شوكت ما يعجبج راسلينا وأني بخدمتج بأي وقت."
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.31
+    },
+    {
+      "id": "bundle_order",
+      "goal": "ثلاث قطع بمجموع 25 ألف مع التوصيل المجاني",
+      "text": "ثبتي بكج 3 قطع سنة: وردي وماروني وتركوازي وحدة من كل لون",
+      "result": {
+        "reply": "تدللين عيني، تم تثبيت طلبج بكج 3 قطع قياس سنة (وردي، ماروني، تركوازي). السعر 25 ألف والتوصيل مجاني لعنوانج ببغداد.\n\nيرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس.",
+        "reply_parts": [
+          "تدللين عيني، تم تثبيت طلبج بكج 3 قطع قياس سنة (وردي، ماروني، تركوازي).",
+          "السعر 25 ألف والتوصيل مجاني لعنوانج ببغداد.",
+          "يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس."
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": true,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "وردي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "ماروني",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            },
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "تركوازي",
+              "size": "سنة",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 1,
+        "_explicit_checkout_recovered": true
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true,
+        "correct_bundle_total": true
+      },
+      "seconds": 4.66
+    },
+    {
+      "id": "no_premature_order",
+      "goal": "يفصل سؤال القياس عن الموافقة بالحجز",
+      "text": "لا تثبتين بس اريد اتأكد من القياس",
+      "result": {
+        "reply": "تدللين عيني، ما نثبت إلا تكونين متأكدة.\n\nقياسات فستان الرباط متوفرة من 38 إلى 52، وطول الفستان 135 سم. شكد قياسج بالعادي؟",
+        "reply_parts": [
+          "تدللين عيني، ما نثبت إلا تكونين متأكدة.\n\nقياسات فستان الرباط متوفرة من 38 إلى 52، وطول الفستان 135 سم.",
+          "شكد قياسج بالعادي؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.34
+    },
+    {
+      "id": "quantity_ambiguity",
+      "goal": "يحسم العدد بسؤال واحد ولا ينشئ سلة مختلقة",
+      "text": "اريد ثنين من الاسود واثنين كريمي لو خليها ثلاث بعدني محتارة",
+      "result": {
+        "reply": "أهلاً عيني، تدللين. تقصدين ثلاث قطع بالمجموع لو ثلاث قطع من الكريمي؟",
+        "reply_parts": [
+          "أهلاً عيني، تدللين. تقصدين ثلاث قطع بالمجموع لو ثلاث قطع من الكريمي؟"
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "requires_human": false,
+        "handoff_reason": "",
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.83
+    }
+  ]
+}

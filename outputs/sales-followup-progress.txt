@@ -1,0 +1,6 @@
+{"id": "missing_contact", "block_reason": null, "message": "التوصيل 5 آلاف لجميع المحافظات مع الفحص عند الاستلام، نثبت الحجز على يا محافظة؟", "delivered": false}
+{"id": "measuring", "block_reason": null, "message": null, "delivered": false}
+{"id": "budget", "block_reason": null, "message": "التوصيل متوفر لجميع المحافظات بـ5 آلاف مع إمكانية الفحص عند الاستلام. تحب تشوف صوره؟", "delivered": false}
+{"id": "requested", "block_reason": null, "message": "هلا عيني، حبيت أذكرك بالطلب مثل ما طلبت، نعتمد قياس 42 للفستان؟", "delivered": false}
+{"id": "declined", "block_reason": "customer_rejection", "message": null, "delivered": false}
+{"id": "human_pending", "block_reason": "human_review_pending", "message": null, "delivered": false}

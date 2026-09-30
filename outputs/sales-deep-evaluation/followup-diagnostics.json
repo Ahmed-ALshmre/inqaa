@@ -1,0 +1,114 @@
+[
+  {
+    "status": 200,
+    "finish_reason": "stop",
+    "content": "{\"silent_reason\":\"missing_info\",\"risk_level\":\"medium\",\"reply\":\"التوصيل 5 آلاف لجميع المحافظات مع الفحص عند الاستلام، نثبت الحجز على يا محافظة؟\"}",
+    "usage": {
+      "prompt_tokens": 2145,
+      "completion_tokens": 989,
+      "total_tokens": 3134,
+      "cost": 0.0053175,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0053175,
+        "upstream_inference_prompt_cost": 0.00160875,
+        "upstream_inference_completions_cost": 0.00370875
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 943,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "status": 200,
+    "finish_reason": "stop",
+    "content": "{\"silent_reason\":\"missing_info\",\"risk_level\":\"low\",\"reply\":\"\"}",
+    "usage": {
+      "prompt_tokens": 2149,
+      "completion_tokens": 563,
+      "total_tokens": 2712,
+      "cost": 0.003723,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.003723,
+        "upstream_inference_prompt_cost": 0.00161175,
+        "upstream_inference_completions_cost": 0.00211125
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 544,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "status": 200,
+    "finish_reason": "stop",
+    "content": "{\"silent_reason\":\"price_hesitation\",\"risk_level\":\"medium\",\"reply\":\"التوصيل متوفر لجميع المحافظات بـ5 آلاف مع إمكانية الفحص عند الاستلام. تحب تشوف صوره؟\"}",
+    "usage": {
+      "prompt_tokens": 2092,
+      "completion_tokens": 772,
+      "total_tokens": 2864,
+      "cost": 0.004464,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.004464,
+        "upstream_inference_prompt_cost": 0.001569,
+        "upstream_inference_completions_cost": 0.002895
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 722,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  {
+    "status": 200,
+    "finish_reason": "stop",
+    "content": "{\"silent_reason\":\"waiting_choice\",\"risk_level\":\"low\",\"reply\":\"هلا عيني، حبيت أذكرك بالطلب مثل ما طلبت، نعتمد قياس 42 للفستان؟\"}",
+    "usage": {
+      "prompt_tokens": 2139,
+      "completion_tokens": 603,
+      "total_tokens": 2742,
+      "cost": 0.0038655,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0038655,
+        "upstream_inference_prompt_cost": 0.00160425,
+        "upstream_inference_completions_cost": 0.00226125
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 558,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  }
+]

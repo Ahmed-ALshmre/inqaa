@@ -1,0 +1,2508 @@
+{
+  "archive_sha256": "36b07b99443b7547b12a65764a2a831466cb8eef9757166639eec14cf83803a2",
+  "integrity": "ok",
+  "window": [
+    "2026-09-20T14:02:21+03:00",
+    "2026-09-20T18:02:21+03:00"
+  ],
+  "incoming_events_replayed": 412,
+  "routing_counts": {
+    "_call_main_ai_once": 267,
+    "no_reply": 2,
+    "generate_first_message_reply": 41,
+    "_download_image_to_data_url": 89,
+    "classify_contextual_selection": 5,
+    "local_reply": 8
+  },
+  "historical_review_count": 41,
+  "historical_timeouts": 0,
+  "historical_image_no_match": 10,
+  "historical_billing_errors": 0,
+  "layout_parts_distribution": {
+    "1": 306,
+    "3": 2,
+    "2": 2
+  },
+  "layout_content_changes": 0,
+  "limitations": [
+    "Offline routing, not live AI accuracy or latency measurement.",
+    "AI enabled counterfactually to exercise routing; the snapshot global AI switch is off.",
+    "Settings/product metadata are snapshot values; their historical revisions are unavailable.",
+    "Only links whose last_seen_at precedes each event are used; earlier overwritten links cannot be reconstructed.",
+    "No external provider requests or customer messages were sent."
+  ],
+  "cases": [
+    {
+      "message_id": 34297,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34300,
+      "store": "khuyoot",
+      "outcome": "no_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34301,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34303,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34304,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34305,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34306,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34307,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34308,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34311,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34313,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34314,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34317,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34318,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34319,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34323,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34324,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34326,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "classify_contextual_selection"
+    },
+    {
+      "message_id": 34327,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34328,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34334,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "classify_contextual_selection"
+    },
+    {
+      "message_id": 34335,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34338,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34339,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34340,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34344,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34347,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34348,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34349,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34354,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34355,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34356,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34359,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34362,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34363,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34364,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34365,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34366,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34367,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34370,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34371,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34372,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34373,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34376,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34377,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34378,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34379,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34380,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34381,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34382,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34383,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34384,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34385,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34386,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34390,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34391,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34395,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34397,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34399,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34400,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34401,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34402,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34403,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34404,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34409,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34410,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34413,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34414,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34415,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34418,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34419,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34420,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34421,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34422,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34424,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34426,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34427,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34428,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34429,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34430,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34431,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34436,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34437,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34438,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34439,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34440,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34444,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34445,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34449,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34450,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34451,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34454,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34455,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34456,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34457,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34459,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34460,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34461,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34462,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34463,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34464,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34473,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34474,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34476,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34478,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34479,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34482,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34484,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34485,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34488,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34489,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34490,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34495,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34496,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34497,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34498,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34499,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34502,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34508,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34509,
+      "store": "al-fatena",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34512,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34513,
+      "store": "al-fatena",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34514,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34515,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34517,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34518,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34519,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34520,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34521,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34522,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34523,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34526,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34529,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34530,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34531,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34532,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34535,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34536,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34537,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34538,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34539,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34545,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34546,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34547,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34550,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34553,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34554,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34558,
+      "store": "al-fatena",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34560,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34561,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34564,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34565,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34566,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34569,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34570,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34571,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34572,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34573,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34574,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34575,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34576,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34580,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34582,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34583,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34586,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34587,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34588,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34589,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34595,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34596,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34597,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34600,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34601,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34602,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34603,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34604,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34605,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34606,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34607,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34608,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34609,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34612,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34616,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34617,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34621,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "classify_contextual_selection"
+    },
+    {
+      "message_id": 34623,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "classify_contextual_selection"
+    },
+    {
+      "message_id": 34624,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34625,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34626,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34629,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34630,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34632,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34633,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34634,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34635,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34636,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34637,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34638,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34641,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34642,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34643,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34645,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34650,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34651,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34656,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34657,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34658,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34662,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34663,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34664,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34665,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34666,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34671,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34673,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34674,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34675,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34679,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34680,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34681,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34684,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34685,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34687,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34688,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34689,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34690,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34691,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34692,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34693,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34694,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34699,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34704,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34705,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34706,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34707,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34708,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34709,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34710,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34711,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34717,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34718,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34719,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34720,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34721,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34722,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34723,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34727,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34728,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34731,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34732,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34733,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34734,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34735,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34736,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34739,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34741,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34742,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34743,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34750,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34754,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34755,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34760,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34762,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34764,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34765,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34766,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34769,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34770,
+      "store": "khuyoot",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34771,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34772,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34774,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34775,
+      "store": "khuyoot",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34778,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34780,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34781,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34782,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34783,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34784,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34787,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34788,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34789,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34790,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34792,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34793,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34794,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34797,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34799,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34801,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34802,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34803,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34805,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34809,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34812,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34813,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34814,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34815,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34816,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34817,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34818,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34819,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34820,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34825,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34826,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34827,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34828,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34829,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34831,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34833,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34835,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34836,
+      "store": "default",
+      "outcome": "no_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34837,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34838,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "classify_contextual_selection"
+    },
+    {
+      "message_id": 34839,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34842,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34845,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34847,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34848,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34849,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34850,
+      "store": "default",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34851,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34852,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34854,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34855,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34857,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34858,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34859,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34863,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34864,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34865,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34866,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34867,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34868,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34869,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34870,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34873,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34874,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34882,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34883,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34884,
+      "store": "al-fatena",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34885,
+      "store": "al-fatena",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34889,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34890,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34891,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34892,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34894,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34895,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34896,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34897,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34898,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34901,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34902,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34903,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34906,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34911,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34914,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34915,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34916,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34917,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34918,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34919,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34922,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34923,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34926,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34927,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34928,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34929,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34932,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34933,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34934,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34935,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34936,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34937,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34938,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34939,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34940,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34941,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34942,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34945,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34946,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34948,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34949,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34951,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34952,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34953,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34954,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34955,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34958,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34959,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34961,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34962,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34964,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34965,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34966,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34975,
+      "store": "khuyoot",
+      "outcome": "local_reply",
+      "reason": null
+    },
+    {
+      "message_id": 34976,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34982,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34985,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34986,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34991,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34993,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 34995,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 34998,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 34999,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35000,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35001,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "generate_first_message_reply"
+    },
+    {
+      "message_id": 35006,
+      "store": "al-fatena",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35007,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35012,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35013,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35014,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35015,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    },
+    {
+      "message_id": 35017,
+      "store": "baraah-kids",
+      "outcome": "external_required",
+      "stage": "_download_image_to_data_url"
+    },
+    {
+      "message_id": 35021,
+      "store": "khuyoot",
+      "outcome": "external_required",
+      "stage": "_call_main_ai_once"
+    }
+  ]
+}

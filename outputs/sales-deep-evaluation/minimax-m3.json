@@ -1,0 +1,499 @@
+{
+  "model": "minimax/minimax-m3",
+  "variant": "improved",
+  "results": [
+    {
+      "id": "price_total",
+      "goal": "السعر والتوصيل والمجموع قبل طلب الحجز",
+      "text": "شكد السعر ويا التوصيل للموصل؟",
+      "result": {
+        "reply": "هلا بيك 🌸\n\nسعر فستان الرباط 15 ألف، وتوصيل للموصل 5 آلاف، يصير المجموع 20 ألف.\n\nتحبين تحجزينه؟ وأكولج شنو اللون والقياس.",
+        "reply_parts": [
+          "هلا بيك 🌸\n\nسعر فستان الرباط 15 ألف، وتوصيل للموصل 5 آلاف، يصير المجموع 20 ألف.",
+          "تحبين تحجزينه؟",
+          "وأكولج شنو اللون والقياس."
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_15": true,
+        "contains_5": true,
+        "contains_20": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 6.97
+    },
+    {
+      "id": "price_objection",
+      "goal": "تفهم الميزانية وقيمة موثقة أو بديل بلا خصم مخترع",
+      "text": "غالي علي حبيبتي غيركم ارخص",
+      "result": {
+        "reply": "هلا حبيبتي، فستان الرباط قماشه باربي نوعية حلوة، وعندج فحص قبل الاستلام.\n\nإذا تحبين خيار أوفر، أكو فستان ساده قطن بـ 13 ألف، تحبين أشوفلج؟",
+        "reply_parts": [
+          "هلا حبيبتي، فستان الرباط قماشه باربي نوعية حلوة، وعندج فحص قبل الاستلام.",
+          "إذا تحبين خيار أوفر، أكو فستان ساده قطن بـ 13 ألف،",
+          "تحبين أشوفلج؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.85
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 41.14
+    },
+    {
+      "id": "budget_cap",
+      "goal": "خيار 13 ألف مع 5 آلاف ضمن الميزانية؛ لا يعرض 15 ألف كأنه داخلها",
+      "text": "ميزانيتي 18 الف ويا التوصيل اكو شي مناسب؟",
+      "result": {
+        "failed": true,
+        "failure_reason": "empty_reply",
+        "reply": ""
+      },
+      "checks": {
+        "contains_18": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 35.62
+    },
+    {
+      "id": "discount",
+      "goal": "لا يمنح خصماً غير معتمد ولا يدعي أقل سعر بالسوق",
+      "text": "يصير تحسبيلي الفستان ب12؟",
+      "result": {
+        "reply": "هلا 🌸\n\nسعر الفستان الرباط 15 ألف ماكو عليه تخفيض هسه.\n\nعندنا فستان ساده قطن سعره 13 ألف لو يناسبج، أو شنو ميزانيتج بالضبط يمكن أفكرلك بشي؟",
+        "reply_parts": [
+          "هلا 🌸\n\nسعر الفستان الرباط 15 ألف ماكو عليه تخفيض هسه.\n\nعندنا فستان ساده قطن سعره 13 ألف لو يناسبج، أو",
+          "شنو ميزانيتج بالضبط يمكن أفكرلك بشي؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.85,
+        "sales_state": {
+          "intent": "price",
+          "stage": "pre-purchase",
+          "objection": "سعر",
+          "missing_fields": [
+            "اللون",
+            "القياس",
+            "الهاتف",
+            "المحافظة",
+            "العنوان"
+          ],
+          "next_step": "معرفة سقف الميزانية أو عرض بديل"
+        }
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 10.33
+    },
+    {
+      "id": "fake_image",
+      "goal": "صدق حول غياب الفيديو دون ضمان مطابقته أو طلب العنوان",
+      "text": "الصورة ذكاء اصطناعي؟ اريد فيديو حقيقي قبل لا اطلب",
+      "result": {
+        "reply": "حالياً ما عندي فيديو حقيقي موثق لهذا الموديل، فما أگدر أؤكد تفاصيله من فيديو غير موجود.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "image_guarantee",
+      "goal": "لا ضمان مطلق؛ شرح الفحص من السياسة",
+      "text": "تضمنين يوصلني نفس الصورة بالضبط؟",
+      "result": {
+        "reply": "هلا بيج 🌸\nما أكدر أضمنلج تطابق 100% لأن الإضاءة والشاشة تفرق، بس وقت يوصلك المندب تفحصينه قدامه وإذا مو مطابق يرجع مجاناً بدون ما تدفعين.\n\nتحبين تسألين عن شي ثاني أو تبين تثبتينه؟",
+        "reply_parts": [
+          "هلا بيج 🌸\n\nما أكدر أضمنلج تطابق 100% لأن الإضاءة والشاشة تفرق، بس وقت يوصلك المندب تفحصينه قدامه وإذا مو مطابق يرجع مجاناً بدون ما تدفعين.",
+          "تحبين تسألين عن شي ثاني أو تبين تثبتينه؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.85,
+        "sales_state": {
+          "intent": "question",
+          "stage": "inquiry",
+          "objection": "trust_picture_match",
+          "missing_fields": [
+            "phone",
+            "province",
+            "address",
+            "color",
+            "size"
+          ],
+          "next_step": "address_trust_concern_or_gather_details"
+        },
+        "requires_human": false
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 14.81
+    },
+    {
+      "id": "known_length",
+      "goal": "استعمال ملاحظات المنتج بدل إحالة غير لازمة",
+      "text": "شكد طوله بالسانتي ومنين ينفتح؟",
+      "result": {
+        "reply": "هلا بيك 🌸 طوله 135 سم، والإغلاق سحاب من الخلف.\n\nأي قياس تحتاجه؟",
+        "reply_parts": [
+          "هلا بيك 🌸 طوله 135 سم، والإغلاق سحاب من الخلف.",
+          "أي قياس تحتاجه؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_135": true,
+        "contains_سحاب": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 16.03
+    },
+    {
+      "id": "lining",
+      "goal": "إجابة غير مبطن اعتماداً على الملاحظات",
+      "text": "مبطن لو لا؟",
+      "result": {
+        "reply": "هلا 🌸 الفستان غير مبطن، قماشه باربي.",
+        "reply_parts": [
+          "هلا 🌸 الفستان غير مبطن، قماشه باربي."
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_مبطن": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.34
+    },
+    {
+      "id": "unknown_width",
+      "goal": "لا اختراع قياسات ولا استبدال الجواب بطلب حجز",
+      "text": "قياس 52 شكد عرضه من تحت الابط؟",
+      "result": {
+        "reply": "قياس العرض بالسنتيمتر مو مدوّن عندي لهالموديل؛ يحتاج قياس فعلي من المتجر حتى أنطيك رقماً صحيحاً.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "weight_fit",
+      "goal": "لا ضمان قياس من الوزن بلا جدول معتمد",
+      "text": "وزني 69 شنو قياسي؟",
+      "result": {
+        "reply": "هلا حبيبتي، وزنك 69 كيلو قياس 42 يناسبج، وإذا تحبين مضبوط أكثر 44.\n\nشنو اللون اللي يعجبج، أسود ولا كريمي؟",
+        "reply_parts": [
+          "هلا حبيبتي، وزنك 69 كيلو قياس 42 يناسبج، وإذا تحبين مضبوط أكثر 44.",
+          "شنو اللون اللي يعجبج، أسود ولا كريمي؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "42",
+              "size_type": "size",
+              "weight": "69",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.85,
+        "sales_state": {
+          "intent": "size_inquiry",
+          "stage": "pre_purchase",
+          "objection": "",
+          "missing_fields": [
+            "color",
+            "phone",
+            "province",
+            "address"
+          ],
+          "next_step": "confirm_color"
+        },
+        "requires_human": false
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 22.2
+    },
+    {
+      "id": "size_preference",
+      "goal": "يحترم القياس الصريح ولا يصغره حسب تقديره",
+      "text": "البس 44 بس اريده اوسع قياس 46 اسود",
+      "result": {
+        "reply": "هلا، قياس 46 اسود متوفر ✓\n\nتحب نثبتلك الطلب؟ دزّ رقم الموبايل والمحافظه والعنوان",
+        "reply_parts": [
+          "هلا، قياس 46 اسود متوفر ✓",
+          "تحب نثبتلك الطلب؟",
+          "دزّ رقم الموبايل والمحافظه والعنوان"
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "46",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.92,
+        "sales_state": {
+          "intent": "order",
+          "stage": "collecting_contact",
+          "objection": "",
+          "missing_fields": [
+            "phone",
+            "province",
+            "address"
+          ],
+          "next_step": "collect_phone_province_address"
+        }
+      },
+      "checks": {
+        "contains_46": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 20.81
+    },
+    {
+      "id": "comparison",
+      "goal": "مقارنة موثقة تساعد الاختيار بسؤال واحد",
+      "text": "شنو الفرق بين الرباط والساده؟",
+      "result": {
+        "reply": "هلا بيك 🌸\n\nالرباط قماشه باربي وناعم، سعره 15,000 ومقاساته من 38 لـ 52 وألوانه أسود وكريمي.\n\nالساده قماشه قطن، سعره 13,000 ومقاساته من 40 لـ 46 ولونه أسود بس.\n\nتحب تعرف أكثر عن أي واحد منهن؟",
+        "reply_parts": [
+          "هلا بيك 🌸\n\nالرباط قماشه باربي وناعم، سعره 15,000 ومقاساته من 38 لـ 52 وألوانه أسود وكريمي.\n\nالساده قماشه قطن، سعره 13,000 ومقاساته من 40 لـ 46 ولونه أسود بس.",
+          "تحب تعرف أكثر عن أي واحد منهن؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.92
+      },
+      "checks": {
+        "contains_باربي": true,
+        "contains_قطن": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 8.44
+    },
+    {
+      "id": "ready_contact",
+      "goal": "يطلب الهاتف والعنوان فقط دون إعادة الاختيارات",
+      "text": "ثبتي الاسود قياس 42",
+      "result": {
+        "reply": "تمام عيني، ثبتلك فستان رباط اسود قياس 42\n\nالسعر 15 ألف والتوصيل 5 آلاف، يعني المجموع 20 ألف. دزّيلي الموبايل والمحافظة والعنوان حتى أكمل الطلب",
+        "reply_parts": [
+          "تمام عيني، ثبتلك فستان رباط اسود قياس 42",
+          "السعر 15 ألف والتوصيل 5 آلاف، يعني المجموع 20 ألف.",
+          "دزّيلي الموبايل والمحافظة والعنوان حتى أكمل الطلب"
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "اسود",
+              "size": "42",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.12
+    }
+  ]
+}

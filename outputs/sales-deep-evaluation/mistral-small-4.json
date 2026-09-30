@@ -1,0 +1,361 @@
+{
+  "model": "mistralai/mistral-small-2603",
+  "variant": "improved",
+  "results": [
+    {
+      "id": "price_total",
+      "goal": "السعر والتوصيل والمجموع قبل طلب الحجز",
+      "text": "شكد السعر ويا التوصيل للموصل؟",
+      "result": {
+        "reply_parts": [
+          "هلا أستاذ، فستان الرباط 15 ألف، أجور التوصيل للموصل 5 آلاف.\n\nالمجموع 20 ألف، مدة التوصيل من يومين إلى ثلاثة أيام، مع فحص عند الاستلام.",
+          "تحب تحجزه؟",
+          "شلون نكدر نساعدك؟"
+        ],
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0,
+        "sales_state": {
+          "intent": "price",
+          "stage": "price_confirmed",
+          "objection": "",
+          "missing_fields": [
+            "phone",
+            "province",
+            "address"
+          ],
+          "next_step": "confirm_order"
+        },
+        "reply": "هلا أستاذ، فستان الرباط 15 ألف، أجور التوصيل للموصل 5 آلاف. المجموع 20 ألف، مدة التوصيل من يومين إلى ثلاثة أيام، مع فحص عند الاستلام.\n\nتحب تحجزه؟ شلون نكدر نساعدك؟"
+      },
+      "checks": {
+        "contains_15": true,
+        "contains_5": true,
+        "contains_20": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 3.88
+    },
+    {
+      "id": "price_objection",
+      "goal": "تفهم الميزانية وقيمة موثقة أو بديل بلا خصم مخترع",
+      "text": "غالي علي حبيبتي غيركم ارخص",
+      "result": {
+        "reply_parts": [
+          "حاضر حبيبتي، هذا الفستان 15 ألف مع أجور التوصيل 5 آلاف، الكل 20 ألف.",
+          "الفستان قماش باربي، رباط، سحاب خلفي، طول 135 سم.",
+          "متوفر باسود وكريمي، مقاسات 38 إلى 52.",
+          "هسه إذا أعجبتك، حابب تحجزيه؟",
+          "بس لازم تعطيني رقمك ومحافظتك وعنوانك عشان أكمل الطلب."
+        ],
+        "reply": "حاضر حبيبتي، هذا الفستان 15 ألف مع أجور التوصيل 5 آلاف، الكل 20 ألف. الفستان قماش باربي، رباط، سحاب خلفي، طول 135 سم. متوفر باسود وكريمي، مقاسات 38 إلى 52.\n\nهسه إذا أعجبتك، حابب تحجزيه؟ بس لازم تعطيني رقمك ومحافظتك وعنوانك عشان أكمل الطلب.",
+        "intent": "price",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "D1",
+              "product_name": "فستان رباط",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 1
+            }
+          ]
+        },
+        "confidence": 0.95,
+        "sales_state": {
+          "intent": "price_objection",
+          "stage": "handling_price_objection",
+          "objection": "high_price",
+          "missing_fields": [
+            "phone",
+            "province",
+            "address"
+          ],
+          "next_step": "confirm_order_intent"
+        }
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.31
+    },
+    {
+      "id": "budget_cap",
+      "goal": "خيار 13 ألف مع 5 آلاف ضمن الميزانية؛ لا يعرض 15 ألف كأنه داخلها",
+      "text": "ميزانيتي 18 الف ويا التوصيل اكو شي مناسب؟",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "contains_18": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 6.3
+    },
+    {
+      "id": "comparison",
+      "goal": "مقارنة موثقة تساعد الاختيار بسؤال واحد",
+      "text": "شنو الفرق بين الرباط والساده؟",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "contains_باربي": false,
+        "contains_قطن": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.12
+    },
+    {
+      "id": "complete_order",
+      "goal": "قرار حجز مع سلة صحيحة دون إعادة السؤال",
+      "text": "ثبتي فستان رباط اسود قياس 42 قطعة وحدة، بغداد حي تجريبي، 07700000000",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 5.28
+    },
+    {
+      "id": "two_variants",
+      "goal": "قطعتان مستقلتان بقياسين مختلفين",
+      "text": "اريد الرباط اسود قياس 42 والكريمي قياس 46، قطعة من كل لون ثبتيهن",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true,
+        "separate_variants": false
+      },
+      "seconds": 4.84
+    },
+    {
+      "id": "optout",
+      "goal": "إغلاق لطيف دون سؤال بيع أو متابعة",
+      "text": "ما اريد اطلب لا تراسلوني",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.58
+    },
+    {
+      "id": "bundle_order",
+      "goal": "ثلاث قطع بمجموع 25 ألف مع التوصيل المجاني",
+      "text": "ثبتي بكج 3 قطع سنة: وردي وماروني وتركوازي وحدة من كل لون",
+      "result": {
+        "reply_parts": [
+          "هلا حبيبتي، بكج 3 قطع من سوت بهاري سعره 25 ألف والتوصيل مجاني 🌸",
+          "الألوان المتوفرة: وردي، ماروني، تركوازي.",
+          "المقاسات: سنة، سنتين.",
+          "تحبين تثبتيهن؟"
+        ],
+        "reply": "هلا حبيبتي، بكج 3 قطع من سوت بهاري سعره 25 ألف والتوصيل مجاني 🌸\n\nالألوان المتوفرة: وردي، ماروني، تركوازي. المقاسات: سنة، سنتين.\n\nتحبين تثبتيهن؟",
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "07700000000",
+          "province": "بغداد",
+          "address": "بغداد حي تجريبي",
+          "notes": "",
+          "items": [
+            {
+              "product_id": "B1",
+              "product_name": "سوت بهاري",
+              "color": "",
+              "size": "",
+              "size_type": "size",
+              "weight": "",
+              "notes": "",
+              "quantity": 3
+            }
+          ]
+        },
+        "confidence": 0,
+        "sales_state": {
+          "intent": "order",
+          "stage": "confirmation",
+          "objection": "",
+          "missing_fields": [
+            "colors",
+            "sizes"
+          ],
+          "next_step": "confirm colors and sizes"
+        }
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true,
+        "correct_bundle_total": true
+      },
+      "seconds": 4.75
+    },
+    {
+      "id": "quantity_ambiguity",
+      "goal": "يحسم العدد بسؤال واحد ولا ينشئ سلة مختلقة",
+      "text": "اريد ثنين من الاسود واثنين كريمي لو خليها ثلاث بعدني محتارة",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.34
+    },
+    {
+      "id": "remembered_options",
+      "goal": "يتذكر الأسود 42 والهاتف ويكمل الحجز عند وصول العنوان",
+      "text": "بغداد حي تجريبي",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.92
+    },
+    {
+      "id": "last_minute_change",
+      "goal": "يحدّث الخيار ولا يعيد اللون والقياس القديمين",
+      "text": "لا مو الاسود 42، خليها كريمي قياس 46 وثبتي",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.7
+    },
+    {
+      "id": "acknowledged_size",
+      "goal": "القياس المصرح به يتقدم على الاقتراح السابق ولا يعاد السؤال",
+      "text": "اي اعتمدي 42 اسود وثبتي",
+      "result": {
+        "reply": "",
+        "intent": "unknown",
+        "create_order": false,
+        "order": {},
+        "confidence": 0,
+        "failed": true,
+        "failure_reason": "provider_http_429",
+        "_provider_retries_exhausted": true
+      },
+      "checks": {
+        "order_decision": false,
+        "not_failed": false,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 4.25
+    }
+  ]
+}

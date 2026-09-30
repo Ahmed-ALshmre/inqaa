@@ -1,0 +1,169 @@
+............F..F.....F..F...F.......FF...FFFFFF.............F......F.... [ 87%]
+..........                                                               [100%]
+================================== FAILURES ===================================
+_ CheckoutRegressionTests.test_ai_cannot_settle_unresolved_size_from_history __
+account_app\tests\test_checkout_regressions.py:286: in test_ai_cannot_settle_unresolved_size_from_history
+    self.assertIn("\u0647\u0630\u0647 \u0627\u0644\u0642\u0637\u0639 \u0627\u0644\u0645\u0642\u062a\u0631\u062d\u0629", reply)
+E   AssertionError: '\u0647\u0630\u0647 \u0627\u0644\u0642\u0637\u0639 \u0627\u0644\u0645\u0642\u062a\u0631\u062d\u0629' not found in '\u062a\u0645 \u062a\u062b\u0628\u064a\u062a \u0627\u0644\u0637\u0644\u0628. \u064a\u0631\u062c\u0649 \u0641\u062d\u0635 \u0627\u0644\u0637\u0644\u0628 \u0628\u062d\u0636\u0648\u0631 \u0627\u0644\u0645\u0646\u062f\u0648\u0628 \u0648\u0627\u0644\u062a\u0623\u0643\u062f \u0645\u0646 \u0627\u0644\u0645\u0648\u062f\u064a\u0644 \u0648\u0627\u0644\u0642\u064a\u0627\u0633. \u0625\u0630\u0627 \u0644\u0645 \u064a\u0637\u0627\u0628\u0642 \u0627\u0644\u0637\u0644\u0628 \u064a\u0631\u062c\u0639 \u0645\u0639 \u0627\u0644\u0645\u0646\u062f\u0648\u0628 \u0628\u062f\u0648\u0646 \u062f\u0641\u0639. \u0623\u0647\u0645 \u0634\u064a \u062a\u0641\u062d\u0635\u064a\u0646 \u0627\u0644\u0637\u0644\u0628 \u0642\u0628\u0644 \u062f\u0641\u0639 \u0627\u0644\u0645\u0628\u0644\u063a.'
+__ CheckoutRegressionTests.test_bundle_price_receipt_confirmation_and_export __
+account_app\tests\test_checkout_regressions.py:116: in test_bundle_price_receipt_confirmation_and_export
+    self.assertIsNone(created)
+E   AssertionError: True is not None
+___ CheckoutRegressionTests.test_dashboard_send_accepts_confirmed_cart_once ___
+account_app\tests\test_checkout_regressions.py:426: in test_dashboard_send_accepts_confirmed_cart_once
+    self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
+                                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: '_checkout_proposal'
+_ CheckoutRegressionTests.test_enabled_default_greeting_uses_product_without_asking_for_photo _
+account_app\tests\test_checkout_regressions.py:513: in test_enabled_default_greeting_uses_product_without_asking_for_photo
+    response = self.m.process_webhook(self.db, {}, use_debounce=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:8837: in process_webhook
+    reply_product = select_product_mentioned_in_reply(reply, products)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:5281: in select_product_mentioned_in_reply
+    if not normalized_reply or not customer_products:
+                                   ^^^^^^^^^^^^^^^^^
+E   NameError: name 'customer_products' is not defined
+_ CheckoutRegressionTests.test_full_webhook_collects_burst_then_creates_one_receipt _
+account_app\tests\test_checkout_regressions.py:272: in test_full_webhook_collects_burst_then_creates_one_receipt
+    response = self.m.process_webhook(self.db, {}, use_debounce=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:8837: in process_webhook
+    reply_product = select_product_mentioned_in_reply(reply, products)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:5281: in select_product_mentioned_in_reply
+    if not normalized_reply or not customer_products:
+                                   ^^^^^^^^^^^^^^^^^
+E   NameError: name 'customer_products' is not defined
+_ CheckoutRegressionTests.test_model_failure_does_not_disable_next_linked_product_question _
+account_app\tests\test_checkout_regressions.py:203: in test_model_failure_does_not_disable_next_linked_product_question
+    answered = self.m.process_webhook(self.db, {}, use_debounce=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:8837: in process_webhook
+    reply_product = select_product_mentioned_in_reply(reply, products)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:5281: in select_product_mentioned_in_reply
+    if not normalized_reply or not customer_products:
+                                   ^^^^^^^^^^^^^^^^^
+E   NameError: name 'customer_products' is not defined
+_ CheckoutRegressionTests.test_multi_piece_proposal_requires_exact_confirmation _
+account_app\tests\test_checkout_regressions.py:230: in test_multi_piece_proposal_requires_exact_confirmation
+    self.assertFalse(created); self.assertIn("39,000", reply)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: True is not false
+_ CheckoutRegressionTests.test_old_reviewed_image_does_not_silence_new_question _
+account_app\tests\test_checkout_regressions.py:409: in test_old_reviewed_image_does_not_silence_new_question
+    response = self.m.process_webhook(self.db, {}, use_debounce=False)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:8837: in process_webhook
+    reply_product = select_product_mentioned_in_reply(reply, products)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+account_app\app.py:5281: in select_product_mentioned_in_reply
+    if not normalized_reply or not customer_products:
+                                   ^^^^^^^^^^^^^^^^^
+E   NameError: name 'customer_products' is not defined
+_ CheckoutRegressionTests.test_photo_different_model_failure_requires_review __
+account_app\tests\test_checkout_regressions.py:482: in test_photo_different_model_failure_requires_review
+    self.simulate_customer_photo(1, fallback=True)
+account_app\tests\test_checkout_regressions.py:454: in simulate_customer_photo
+    self.assertEqual(self.m.load_customer_products(self.db, self.sender), [])
+E   AssertionError: Lists differ: [{'product_id': 'F1', 'product_name': '\u0641\u0633\u062a[362 chars]rue}] != []
+E   
+E   First list contains 1 additional elements.
+E   First extra element 0:
+E   {'product_id': 'F1', 'product_name': '\u0641\u0633\u062a\u0627\u0646 \u062f\u0627\u0646\u062a\u064a\u0644', 'category': '\u0641\u0633\u062a\u0627\u0646', 'colors': '\u0627\u0633\u0648\u062f', 'sizes': '38 \u0625\u0644\u0649 52', 'price': '16000', 'stock': '\u0645\u062a\u0648\u0641\u0631', 'status': 'active', 'match_method': 'manual_admin', 'confidence': 100.0, 'last_seen_at': '2026-09-21T12:09:26+03:00', 'source': 'manual_admin', 'rejected_at': None, 'binding_notes': None, 'image_sent': 0, 'image_positions': [], '_has_image_positions': True}
+E   
+E   + []
+E   - [{'_has_image_positions': True,
+E   -   'binding_notes': None,
+E   -   'category': '\u0641\u0633\u062a\u0627\u0646',
+E   -   'colors': '\u0627\u0633\u0648\u062f',
+E   -   'confidence': 100.0,
+E   -   'image_positions': [],
+E   -   'image_sent': 0,
+E   -   'last_seen_at': '2026-09-21T12:09:26+03:00',
+E   -   'match_method': 'manual_admin',
+E   -   'price': '16000',
+E   -   'product_id': 'F1',
+E   -   'product_name': '\u0641\u0633\u062a\u0627\u0646 \u062f\u0627\u0646\u062a\u064a\u0644',
+E   -   'rejected_at': None,
+E   -   'sizes': '38 \u0625\u0644\u0649 52',
+E   -   'source': 'manual_admin',
+E   -   'status': 'active',
+E   -   'stock': '\u0645\u062a\u0648\u0641\u0631'}]
+__ CheckoutRegressionTests.test_photo_different_model_relinks_and_continues ___
+account_app\tests\test_checkout_regressions.py:476: in test_photo_different_model_relinks_and_continues
+    self.simulate_customer_photo(1)
+account_app\tests\test_checkout_regressions.py:456: in simulate_customer_photo
+    self.assertEqual(ai.call_args.args[5]["product_id"], selected["product_id"])
+                     ^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'args'
+_ CheckoutRegressionTests.test_photo_same_model_continues_without_duplicate_binding _
+account_app\tests\test_checkout_regressions.py:473: in test_photo_same_model_continues_without_duplicate_binding
+    self.simulate_customer_photo(0)
+account_app\tests\test_checkout_regressions.py:456: in simulate_customer_photo
+    self.assertEqual(ai.call_args.args[5]["product_id"], selected["product_id"])
+                     ^^^^^^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'args'
+____ CheckoutRegressionTests.test_photo_same_model_failure_requires_review ____
+account_app\tests\test_checkout_regressions.py:479: in test_photo_same_model_failure_requires_review
+    self.simulate_customer_photo(0, fallback=True)
+account_app\tests\test_checkout_regressions.py:454: in simulate_customer_photo
+    self.assertEqual(self.m.load_customer_products(self.db, self.sender), [])
+E   AssertionError: Lists differ: [{'product_id': 'F1', 'product_name': '\u0641\u0633\u062a[362 chars]rue}] != []
+E   
+E   First list contains 1 additional elements.
+E   First extra element 0:
+E   {'product_id': 'F1', 'product_name': '\u0641\u0633\u062a\u0627\u0646 \u062f\u0627\u0646\u062a\u064a\u0644', 'category': '\u0641\u0633\u062a\u0627\u0646', 'colors': '\u0627\u0633\u0648\u062f', 'sizes': '38 \u0625\u0644\u0649 52', 'price': '16000', 'stock': '\u0645\u062a\u0648\u0641\u0631', 'status': 'active', 'match_method': 'manual_admin', 'confidence': 100.0, 'last_seen_at': '2026-09-21T12:09:26+03:00', 'source': 'manual_admin', 'rejected_at': None, 'binding_notes': None, 'image_sent': 0, 'image_positions': [], '_has_image_positions': True}
+E   
+E   + []
+E   - [{'_has_image_positions': True,
+E   -   'binding_notes': None,
+E   -   'category': '\u0641\u0633\u062a\u0627\u0646',
+E   -   'colors': '\u0627\u0633\u0648\u062f',
+E   -   'confidence': 100.0,
+E   -   'image_positions': [],
+E   -   'image_sent': 0,
+E   -   'last_seen_at': '2026-09-21T12:09:26+03:00',
+E   -   'match_method': 'manual_admin',
+E   -   'price': '16000',
+E   -   'product_id': 'F1',
+E   -   'product_name': '\u0641\u0633\u062a\u0627\u0646 \u062f\u0627\u0646\u062a\u064a\u0644',
+E   -   'rejected_at': None,
+E   -   'sizes': '38 \u0625\u0644\u0649 52',
+E   -   'source': 'manual_admin',
+E   -   'status': 'active',
+E   -   'stock': '\u0645\u062a\u0648\u0641\u0631'}]
+_______ CheckoutRegressionTests.test_price_change_requires_new_summary ________
+account_app\tests\test_checkout_regressions.py:250: in test_price_change_requires_new_summary
+    self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
+                                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: '_checkout_proposal'
+_ CheckoutRegressionTests.test_yes_with_correction_does_not_confirm_stale_cart _
+account_app\tests\test_checkout_regressions.py:242: in test_yes_with_correction_does_not_confirm_stale_cart
+    self.m.saved_checkout_reply(self.db, self.ev, reply, {}, {"checkout_proposal": result["_checkout_proposal"]})
+                                                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: '_checkout_proposal'
+___ AuditFixTests.test_real_cart_confirmation_variants_and_correction_guard ___
+account_app\tests\test_audit_orders.py:90: in test_real_cart_confirmation_variants_and_correction_guard
+    self.m.saved_checkout_reply(self.db,event,reply,{}, {'checkout_proposal':result['_checkout_proposal']})
+                                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: '_checkout_proposal'
+=========================== short test summary info ===========================
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_ai_cannot_settle_unresolved_size_from_history
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_bundle_price_receipt_confirmation_and_export
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_dashboard_send_accepts_confirmed_cart_once
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_enabled_default_greeting_uses_product_without_asking_for_photo
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_full_webhook_collects_burst_then_creates_one_receipt
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_model_failure_does_not_disable_next_linked_product_question
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_multi_piece_proposal_requires_exact_confirmation
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_old_reviewed_image_does_not_silence_new_question
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_photo_different_model_failure_requires_review
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_photo_different_model_relinks_and_continues
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_photo_same_model_continues_without_duplicate_binding
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_photo_same_model_failure_requires_review
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_price_change_requires_new_summary
+FAILED account_app/tests/test_checkout_regressions.py::CheckoutRegressionTests::test_yes_with_correction_does_not_confirm_stale_cart
+FAILED account_app/tests/test_audit_orders.py::AuditFixTests::test_real_cart_confirmation_variants_and_correction_guard
+15 failed, 67 passed in 11.42s

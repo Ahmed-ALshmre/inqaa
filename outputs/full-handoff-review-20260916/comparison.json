@@ -1,0 +1,42 @@
+{
+  "before": {
+    "snapshot": {
+      "ai_disabled_for_conversation": 244,
+      "_call_main_ai_once": 280,
+      "local_reply": 4,
+      "image_download_required": 23,
+      "classify_contextual_selection": 16,
+      "ai_globally_disabled": 154,
+      "no_reply": 9,
+      "external_network": 29
+    },
+    "enabled_counterfactual": {
+      "image_download_required": 164,
+      "_call_main_ai_once": 504,
+      "local_reply": 11,
+      "classify_contextual_selection": 36,
+      "no_reply": 15,
+      "external_network": 29
+    }
+  },
+  "after": {
+    "snapshot": {
+      "ai_disabled_for_conversation": 244,
+      "_call_main_ai_once": 277,
+      "local_reply": 7,
+      "image_download_required": 23,
+      "classify_contextual_selection": 16,
+      "ai_globally_disabled": 154,
+      "no_reply": 9,
+      "external_network": 29
+    },
+    "enabled_counterfactual": {
+      "image_download_required": 164,
+      "_call_main_ai_once": 496,
+      "local_reply": 19,
+      "classify_contextual_selection": 36,
+      "no_reply": 15,
+      "external_network": 29
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{"id": "price_total", "checks": {"contains_15": true, "contains_5": true, "contains_20": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 6.97, "failure_reason": null}
+{"id": "price_objection", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 23.52, "failure_reason": null}
+{"id": "budget_cap", "checks": {"contains_18": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 12.06, "failure_reason": null}
+{"id": "discount", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 13.0, "failure_reason": null}
+{"id": "fake_image", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 0.0, "failure_reason": null}
+{"id": "image_guarantee", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 10.5, "failure_reason": null}
+{"id": "known_length", "checks": {"contains_135": true, "contains_سحاب": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 9.64, "failure_reason": null}
+{"id": "lining", "checks": {"contains_مبطن": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.19, "failure_reason": null}
+{"id": "unknown_width", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 0.02, "failure_reason": null}
+{"id": "weight_fit", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 26.97, "failure_reason": null}
+{"id": "size_preference", "checks": {"contains_46": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.39, "failure_reason": null}
+{"id": "comparison", "checks": {"contains_باربي": true, "contains_قطن": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 19.94, "failure_reason": null}
+{"id": "ready_contact", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 10.14, "failure_reason": null}
+{"id": "complete_order", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 23.89, "failure_reason": null}
+{"id": "two_variants", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true, "separate_variants": true}, "seconds": 11.19, "failure_reason": null}
+{"id": "defer_salary", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.25, "failure_reason": null}
+{"id": "optout", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 16.16, "failure_reason": null}
+{"id": "thanks", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 10.7, "failure_reason": null}
+{"id": "delivery_deadline", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 6.86, "failure_reason": null}
+{"id": "single_from_bundle", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 17.7, "failure_reason": null}
+{"id": "bundle_order", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true, "correct_bundle_total": true}, "seconds": 22.97, "failure_reason": null}
+{"id": "reject_one_option", "checks": {"contains_44": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 9.69, "failure_reason": null}
+{"id": "no_premature_order", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 11.48, "failure_reason": null}
+{"id": "quantity_ambiguity", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.59, "failure_reason": null}
+{"id": "remembered_options", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.17, "failure_reason": null}
+{"id": "last_minute_change", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.98, "failure_reason": null}
+{"id": "answered_price_then_trust", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 0.0, "failure_reason": null}
+{"id": "acknowledged_size", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 21.67, "failure_reason": null}

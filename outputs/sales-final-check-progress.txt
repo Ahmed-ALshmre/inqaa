@@ -1,0 +1,6 @@
+{"id": "price_objection", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 20.84, "failure_reason": null}
+{"id": "fake_image", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 0.0, "failure_reason": null}
+{"id": "unknown_width", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 0.0, "failure_reason": null}
+{"id": "weight_fit", "checks": {"not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 21.05, "failure_reason": null}
+{"id": "comparison", "checks": {"contains_باربي": true, "contains_قطن": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 8.94, "failure_reason": null}
+{"id": "quantity_ambiguity", "checks": {"order_decision": true, "not_failed": true, "grounded_reply": true, "no_premature_close": true}, "seconds": 7.12, "failure_reason": null}

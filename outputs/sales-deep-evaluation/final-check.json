@@ -1,0 +1,167 @@
+{
+  "model": "google/gemini-3.8-flash",
+  "variant": "improved",
+  "results": [
+    {
+      "id": "price_objection",
+      "goal": "تفهم الميزانية وقيمة موثقة أو بديل بلا خصم مخترع",
+      "text": "غالي علي حبيبتي غيركم ارخص",
+      "result": {
+        "reply": "هلا عيني، حقج، سعره 15 ألف لأن قماشه باربي.\n\nوإذا تحبين متوفر عدنا موديل فستان ساده قطن بـ 13 ألف، تحبين تشوفينه؟",
+        "reply_parts": [
+          "هلا عيني، حقج، سعره 15 ألف لأن قماشه باربي.\n\nوإذا تحبين متوفر عدنا موديل فستان ساده قطن بـ 13 ألف،",
+          "تحبين تشوفينه؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 20.84
+    },
+    {
+      "id": "fake_image",
+      "goal": "صدق حول غياب الفيديو دون ضمان مطابقته أو طلب العنوان",
+      "text": "الصورة ذكاء اصطناعي؟ اريد فيديو حقيقي قبل لا اطلب",
+      "result": {
+        "reply": "حالياً ما عندي فيديو حقيقي موثق لهذا الموديل، فما أگدر أؤكد تفاصيله من فيديو غير موجود.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "unknown_width",
+      "goal": "لا اختراع قياسات ولا استبدال الجواب بطلب حجز",
+      "text": "قياس 52 شكد عرضه من تحت الابط؟",
+      "result": {
+        "reply": "قياس العرض بالسنتيمتر مو مدوّن عندي لهالموديل؛ يحتاج قياس فعلي من المتجر حتى أنطيك رقماً صحيحاً.",
+        "create_order": false,
+        "order": {},
+        "_needs_fact_review": true,
+        "_suppress_product_images": true
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 0.0
+    },
+    {
+      "id": "weight_fit",
+      "goal": "لا ضمان قياس من الوزن بلا جدول معتمد",
+      "text": "وزني 69 شنو قياسي؟",
+      "result": {
+        "reply": "الوزن وحده ما يكفي لتحديد قياس مضبوط لهالموديل؛ شنو قياس الملابس المعتاد إلك؟",
+        "create_order": false,
+        "order": {}
+      },
+      "checks": {
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 21.05
+    },
+    {
+      "id": "comparison",
+      "goal": "مقارنة موثقة تساعد الاختيار بسؤال واحد",
+      "text": "شنو الفرق بين الرباط والساده؟",
+      "result": {
+        "reply": "يا هلا عيني 🌸 فستان الرباط قماشه باربي وسعره 15 ألف، أما فستان السادة فقماشه قطن وسعره 13 ألف.\n\nالرباط متوفر بالأسود والكريمي (قياسات 38 لـ 52)، والسادة متوفر بالأسود فقط (قياسات 40 لـ 46). أي واحد يناسبك أكثر؟",
+        "reply_parts": [
+          "يا هلا عيني 🌸 فستان الرباط قماشه باربي وسعره 15 ألف، أما فستان السادة فقماشه قطن وسعره 13 ألف.",
+          "الرباط متوفر بالأسود والكريمي (قياسات 38 لـ 52)، والسادة متوفر بالأسود فقط (قياسات 40 لـ 46).",
+          "أي واحد يناسبك أكثر؟"
+        ],
+        "intent": "question",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "sales_state": {
+          "intent": "comparison",
+          "stage": "consideration",
+          "objection": "none",
+          "missing_fields": [
+            "product_choice",
+            "size",
+            "color",
+            "phone",
+            "province",
+            "address"
+          ],
+          "next_step": "choose_product"
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "contains_باربي": true,
+        "contains_قطن": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 8.94
+    },
+    {
+      "id": "quantity_ambiguity",
+      "goal": "يحسم العدد بسؤال واحد ولا ينشئ سلة مختلقة",
+      "text": "اريد ثنين من الاسود واثنين كريمي لو خليها ثلاث بعدني محتارة",
+      "result": {
+        "reply": "يا هلا عيني تدللين 🌸 الألوان ثنينهن متوفرات.\n\nحتى أجهزهن الج، شنو القياس المطلوب؟ وتحبين نعتمد قطعتين كريمي لو ثلاث ويا الأسود؟",
+        "reply_parts": [
+          "يا هلا عيني تدللين 🌸 الألوان ثنينهن متوفرات.",
+          "حتى أجهزهن الج، شنو القياس المطلوب؟",
+          "وتحبين نعتمد قطعتين كريمي لو ثلاث ويا الأسود؟"
+        ],
+        "intent": "order",
+        "image_color": "",
+        "create_order": false,
+        "order": {
+          "customer_name": "",
+          "phone": "",
+          "province": "",
+          "address": "",
+          "notes": "",
+          "items": []
+        },
+        "confidence": 0.95
+      },
+      "checks": {
+        "order_decision": true,
+        "not_failed": true,
+        "grounded_reply": true,
+        "no_premature_close": true
+      },
+      "seconds": 7.12
+    }
+  ]
+}

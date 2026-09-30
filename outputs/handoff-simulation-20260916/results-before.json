@@ -1,0 +1,2879 @@
+{
+  "summary": {
+    "all_reviews": 759,
+    "pending_reviews": 262,
+    "disabled_conversations": 235,
+    "sample_size": 100,
+    "categories": {
+      "snapshot": {
+        "image_download_required": 11,
+        "ai_disabled_for_conversation": 51,
+        "_call_main_ai_once": 27,
+        "ai_globally_disabled": 11
+      },
+      "enabled_counterfactual": {
+        "image_download_required": 64,
+        "_call_main_ai_once": 35,
+        "classify_contextual_selection": 1
+      }
+    },
+    "reason_counts": {
+      "AI could not confidently match customer image; routed to human review": 203,
+      "AI could not produce a reply (exception:ReadTimeout); human action required": 49,
+      "AI could not produce a reply after product link (exception:ReadTimeout)": 18,
+      "AI متوقف (ai_globally_disabled); رسالة جديدة من الزبون تحتاج تدخل بشري": 6,
+      "تعذر الرد بعد الحجز: exception:ReadTimeout": 3,
+      "متابعة طلب سابق غير موجود في قاعدة الطلبات الحالية": 9,
+      "AI متوقف (ai_disabled_for_conversation); رسالة جديدة من الزبون تحتاج تدخل بشري": 59,
+      "AI could not produce a reply (invalid_ai_response); human action required": 24,
+      "Image analysis service failure: service_error": 4,
+      "AI could not produce a reply after product link (empty_reply)": 1,
+      "مرفق يحتاج استماعاً أو قراءة بشرية: video": 8,
+      "AI produced a handoff/apology reply; suppressed customer message": 53,
+      "AI could not produce a reply after product link (invalid_ai_response)": 5,
+      "مرفق يحتاج استماعاً أو قراءة بشرية: audio": 9,
+      "تعذر الرد بعد الحجز: empty_reply": 20,
+      "تعذر الرد بعد الحجز: invalid_ai_response": 1,
+      "AI could not produce a reply after product link (provider_http_402)": 26,
+      "AI could not produce a reply (provider_http_402); human action required": 53,
+      "تعذر الرد بعد الحجز: provider_http_402": 11,
+      "AI could not produce a reply after product link (exception:ValueError)": 19,
+      "مرفق يحتاج استماعاً أو قراءة بشرية: file": 23,
+      "AI could not produce a reply (exception:ValueError); human action required": 30,
+      "تعذر الرد بعد الحجز: exception:ValueError": 4,
+      "تعذر تحديد الموديل بعد محاولتين؛ مراجعة الصورة مطلوبة": 4,
+      "طلب تعديل أو متابعة تنفيذية يحتاج تأكيداً من الموظف": 4,
+      "AI could not produce a reply after product link (exception:HTTPError)": 6,
+      "AI could not produce a reply (exception:HTTPError); human action required": 15,
+      "استفسار بعد الحجز يحتاج معلومات غير متاحة للمساعد": 1,
+      "تعذر الرد بعد الحجز: exception:HTTPError": 3,
+      "Conversation has a customer image but no product is manually linked yet": 37,
+      "طلب إجراء على حجز مثبت يحتاج معالجة موظف": 3,
+      "الزبونة طلبت إلغاء الطلب المثبت رقم 126 بسبب ظرف خاص.": 1,
+      "الزبون قام بإرجاع الطلب مع المندوب بسبب عدم مناسبة القياس والقصة": 1,
+      "طلب الزبون تعديل على طلبه المثبت: استبدال درزن من التراك بدرزن من الموديل المرفق صورته": 1,
+      "الزبونة استلمت لون خطأ (أزرق بدل الوردي) ورجعت الطلب وتريد معالجة من الإدارة": 1,
+      "فشل إرسال رد ManyChat للمتجر al-fatena: error HTTP 400 — Validation error": 9,
+      "الزبون يطلب إلغاء الطلب المثبت رقم 106": 1,
+      "فشل إرسال رد ManyChat للمتجر al-fatena: error HTTP 400 — Validation error — Subscriber is not active": 1,
+      "AI could not produce a reply (empty_reply); human action required": 2,
+      "استفسار الزبونة عن تأخر وصول الطلب ومتابعة الشحن": 1,
+      "استفسار ومتابعة تأخر توصيل الطلب المثبت للزبونة": 1,
+      "رسالة بعد تثبيت الطلب تحتاج مراجعة بشرية (قد تكون تعديل لون/كمية/قياس/عنوان)": 26,
+      "مشكلة في المنتج أو رغبة بإرجاع/استبدال": 1,
+      "AI could not produce a reply (exception:KeyError); human action required": 2
+    }
+  },
+  "cases": [
+    {
+      "review_id": 856,
+      "store": "al-fatena",
+      "question": "السلام عليكم\nشنو القياسات الي بي\nشنو نوع القماش\nبلازحمة",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T10:47:17+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 855,
+      "store": "al-fatena",
+      "question": "متوفر هذا الموديل والون قياس يلبس وزن  110",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T10:44:48+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 855
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 854,
+      "store": "khuyoot",
+      "question": "السعر\nتوصيل اشكد",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T10:42:42+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 853,
+      "store": "al-fatena",
+      "question": "شنو نوع القماش",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T10:42:04+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": true,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": true,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 852,
+      "store": "al-fatena",
+      "question": "مرحبا شنو بي قياس يرهم للحامل",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T10:41:17+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 852
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 851,
+      "store": "al-fatena",
+      "question": "مرحبا بيش سعر الفستان والقماش صيفي لو شتوي\nواكو لون نيلي",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T10:38:35+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 851
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 850,
+      "store": "al-fatena",
+      "question": "شنو نوع القماش",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T10:38:34+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": true,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": true,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 846,
+      "store": "al-fatena",
+      "question": "سعر",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T10:36:00+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": true,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": true,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 845,
+      "store": "khuyoot",
+      "question": "Shared post\nشلون أطلب التنورة وكم التوصيل؟",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T10:35:41+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 844,
+      "store": "al-fatena",
+      "question": "السلام عليكم\nشنو قماشه",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T10:34:50+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 844
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 843,
+      "store": "al-fatena",
+      "question": "كيفية الدفع والتوصيل؟\nشنو نوع القماش",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T10:34:29+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 842,
+      "store": "al-fatena",
+      "question": "وزني 95بس عندي بطن\nيعني واسع لو لا\nوهذا القميص شنو قياساته",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T10:32:30+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 837,
+      "store": "default",
+      "question": "شكد سعر ؟",
+      "historical_reason": "AI متوقف (ai_globally_disabled); رسالة جديدة من الزبون تحتاج تدخل بشري",
+      "historical_date": "2026-09-16T10:28:51+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 837
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 831,
+      "store": "al-fatena",
+      "question": "قياس 44",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T10:17:16+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 829,
+      "store": "al-fatena",
+      "question": "صباح الخير\nقياس 52 موجود\nواشكد السعر مع التوصيل",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T10:16:44+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 828,
+      "store": "default",
+      "question": "شنو قياساته",
+      "historical_reason": "AI متوقف (ai_globally_disabled); رسالة جديدة من الزبون تحتاج تدخل بشري",
+      "historical_date": "2026-09-16T10:16:17+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 828
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 826,
+      "store": "al-fatena",
+      "question": "التوصيل للبصره اشكد",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T10:11:46+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 826
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 823,
+      "store": "khuyoot",
+      "question": "شكد سعر التنورة\nالعنوان",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T10:04:32+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 821,
+      "store": "al-fatena",
+      "question": "هذا الموديل شنو قماشة\nوهذا الموديل شنو قماشة",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:58:59+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 820,
+      "store": "default",
+      "question": "شنو نوع لقماش",
+      "historical_reason": "AI متوقف (ai_globally_disabled); رسالة جديدة من الزبون تحتاج تدخل بشري",
+      "historical_date": "2026-09-16T09:58:22+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 820
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 818,
+      "store": "al-fatena",
+      "question": "بشكد اسعر",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:57:09+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 818
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 817,
+      "store": "al-fatena",
+      "question": "قياس 52\nوشنو نوع القماش",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:56:59+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 815,
+      "store": "default",
+      "question": "ممكن السعر",
+      "historical_reason": "AI متوقف (ai_globally_disabled); رسالة جديدة من الزبون تحتاج تدخل بشري",
+      "historical_date": "2026-09-16T09:44:30+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 815
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 814,
+      "store": "al-fatena",
+      "question": "اني وزني 63 قياسي 42\nاي يعني شكد طوله تقريبا85\nالووو\nصباح الخير شنو قماشه وشكد طوله",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:44:21+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 811,
+      "store": "al-fatena",
+      "question": "السعر",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:43:25+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 811
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 810,
+      "store": "al-fatena",
+      "question": "اني وزني 63 قياسي 42\nاي يعني شكد طوله تقريبا85\nالووو",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:43:21+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 809,
+      "store": "al-fatena",
+      "question": "صباح الخير\nأكبر قياس شكد",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:43:16+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 809
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 808,
+      "store": "al-fatena",
+      "question": "بي الوان",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:42:29+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 808
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 807,
+      "store": "al-fatena",
+      "question": "السلام عليكم السعر مع التوصيل",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T09:41:55+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 806,
+      "store": "al-fatena",
+      "question": "Shared post\nموجود وبي الالوان",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:41:06+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 806
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 804,
+      "store": "al-fatena",
+      "question": "Shared post\nشكد اسعر",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:40:42+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 804
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 801,
+      "store": "al-fatena",
+      "question": "فقك قميص وبنطرون عادى نشرتو لونه اسود",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:38:00+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 800,
+      "store": "khuyoot",
+      "question": "صباح الخير هاي التنوره شنو قماشها",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:36:45+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 798,
+      "store": "al-fatena",
+      "question": "بيه قياس 38\nاللون الجوزي\nوشكد التوصيل",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:35:51+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 798
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 797,
+      "store": "al-fatena",
+      "question": "شنو الالوان\nوشكد التوصيل",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:35:44+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 795,
+      "store": "al-fatena",
+      "question": "Shared post\nشكد سايزات مالته\nShared post\nسايز",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T09:32:51+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 792,
+      "store": "al-fatena",
+      "question": "هل يوجد أحجام أخرى؟\nشكد. لقياس",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:30:29+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 792
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 787,
+      "store": "al-fatena",
+      "question": "اني وزني 63 قياسي 42\nاي يعني شكد طوله تقريبا85",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:20:16+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 785,
+      "store": "al-fatena",
+      "question": "شنو نوع القماش\nقياس\nوزن ٨٨ طول من الكتف ١٤٥",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:17:56+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 785
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 784,
+      "store": "al-fatena",
+      "question": "متوفر\nنفس اللون",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T09:17:45+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 784
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 780,
+      "store": "default",
+      "question": "اريد لون اسود\nوزن 100",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-16T09:11:57+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 859
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "classify_contextual_selection"
+      }
+    },
+    {
+      "review_id": 779,
+      "store": "al-fatena",
+      "question": "شكد طوله",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T09:08:48+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 775,
+      "store": "al-fatena",
+      "question": "قياس 42",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T08:58:26+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 788
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 772,
+      "store": "al-fatena",
+      "question": "السلام عليكم ممكن الألوان المتوفره",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T08:51:59+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 769,
+      "store": "al-fatena",
+      "question": "Shared post\nبيش السعر بدون زحمه",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T08:44:29+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 768,
+      "store": "al-fatena",
+      "question": "٩٤\nاكو الوان لوبس هذا",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T08:43:04+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 768
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 763,
+      "store": "al-fatena",
+      "question": "هذا السوت شكد طول القميص مالته",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T08:32:38+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 2,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 761,
+      "store": "al-fatena",
+      "question": "هل يوجد خصم إضافي؟\nما هي المادة المستخدمة في العباءة؟\nكيفية الدفع والتوصيل؟\nمتوفر غير الوان\nقياس 54\nموجود",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T08:24:51+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 760,
+      "store": "al-fatena",
+      "question": "شكد وزن تلبس",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T08:22:57+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 760
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 758,
+      "store": "al-fatena",
+      "question": "بغداد\nشنو قماشه",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T08:18:06+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 757,
+      "store": "al-fatena",
+      "question": "اشكد السعر",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T08:05:38+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 757
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 754,
+      "store": "khuyoot",
+      "question": "مرحبا\nقياس 44\nهاي التنوره\nاو 42\nنفس الموديل\nكصتها اريدها",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T07:53:49+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 754
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 752,
+      "store": "al-fatena",
+      "question": "السلام عليكم \nنوع القماش  ومتوفر الوان",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T07:47:17+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 750,
+      "store": "al-fatena",
+      "question": "يالون\nاكو\nشنو قماشه لخو ردن خفيفه تبين منها لايد",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T07:42:27+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 750
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 749,
+      "store": "al-fatena",
+      "question": "السلام عليكم\nبيها قياسات\nاللون هذا متوفر\nقياس 38\nوشكد التوصيل",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T07:40:26+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 749
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 748,
+      "store": "al-fatena",
+      "question": "مرحبا\nشنو نوع القماش",
+      "historical_reason": "Image analysis service failure: service_error",
+      "historical_date": "2026-09-16T07:38:19+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 748
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 746,
+      "store": "al-fatena",
+      "question": "موجود قياس ٥٠ من هالقطع",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T07:32:55+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 746
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 745,
+      "store": "al-fatena",
+      "question": "شنو قماشه وشنو القياسات المتوفره وشنو الألوان",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T07:31:28+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 744,
+      "store": "al-fatena",
+      "question": "شنو قياساته",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T07:25:55+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 744
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 743,
+      "store": "al-fatena",
+      "question": "مكتوب عليه ١٢ الف اخر قطعه\nبس اريد طول القميص شكد",
+      "historical_reason": "AI could not produce a reply after product link (empty_reply)",
+      "historical_date": "2026-09-16T07:25:37+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 741,
+      "store": "al-fatena",
+      "question": "مرحبا \nممكن قياسات هذا سوت",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T07:15:51+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 741
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 740,
+      "store": "al-fatena",
+      "question": "السلام عليكم\nمتوفره\nقياس 48\nشنو قماشه",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:59:11+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 740
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 739,
+      "store": "al-fatena",
+      "question": "شنو بيها الوان",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:54:42+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 739
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 737,
+      "store": "al-fatena",
+      "question": "Shared post\nالالوان المتوفره ؟",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:43:44+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 737
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 736,
+      "store": "al-fatena",
+      "question": "شكد بيها قياسات",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:43:00+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 736
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 732,
+      "store": "al-fatena",
+      "question": "قياس",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:32:18+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 732
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 731,
+      "store": "al-fatena",
+      "question": "قياسات",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:31:41+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 731
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 730,
+      "store": "al-fatena",
+      "question": "هذا يا لون",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:27:49+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 730
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 729,
+      "store": "al-fatena",
+      "question": "قياس 80",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T06:22:22+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 729
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 724,
+      "store": "al-fatena",
+      "question": "السلام عليكم شنو نوع القماش",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T05:20:54+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 724
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 722,
+      "store": "al-fatena",
+      "question": "Shared post\nقياساته",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T05:05:58+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 722
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 720,
+      "store": "al-fatena",
+      "question": "بي الوان",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T04:46:58+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 720
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 719,
+      "store": "al-fatena",
+      "question": "سعر",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T04:02:16+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 719
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 718,
+      "store": "khuyoot",
+      "question": "شكد سعره",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T03:43:43+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 718
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 717,
+      "store": "al-fatena",
+      "question": "السلام عليكم\nشنو الوان الي بيهه",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T03:33:42+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 717
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 715,
+      "store": "al-fatena",
+      "question": "سلام عليكم\nشنو سعر وشنو بيها قياسات",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T03:07:09+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 715
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 712,
+      "store": "al-fatena",
+      "question": "Shared post\nكم سعر",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T02:37:52+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 712
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 709,
+      "store": "al-fatena",
+      "question": "اي قلبي بس اهلي ميقبلون اسود هههههههههه\nتسلمين قلبي",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T02:19:37+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 704,
+      "store": "al-fatena",
+      "question": "متوفر هذا قياس 46\nوبيه ألوان ثانيه لو لا",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T01:56:42+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 704
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 700,
+      "store": "al-fatena",
+      "question": "شنو نوعية القماش",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T01:36:16+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 700
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 699,
+      "store": "default",
+      "question": "سعر الفستان والقياسات والألوان",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-16T01:35:12+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 699
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 697,
+      "store": "default",
+      "question": "قياس٤٨\nوهذا؟! كلهن ب24",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-16T01:31:16+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 697
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 694,
+      "store": "al-fatena",
+      "question": "السلام عليكم ورحمه الله وبركاته  ممكن القياس",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T01:27:41+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 694
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 692,
+      "store": "al-fatena",
+      "question": "Shared post\nعيوني بس هذا الون باقي؟",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T01:18:42+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 692
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 689,
+      "store": "default",
+      "question": "مع التوصيل",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-16T00:57:40+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 859
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 687,
+      "store": "al-fatena",
+      "question": "السلام عليكم\nفقط هذا اللون؟",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T00:42:09+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 687
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 684,
+      "store": "al-fatena",
+      "question": "Shared post\nShared post\nهذولي متوفرين\nبلون اسود",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T00:38:16+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 684
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 2,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 681,
+      "store": "al-fatena",
+      "question": "اريد قياس ١٠٠وقياس ٨٠\nShared post",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T00:34:26+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 681
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 679,
+      "store": "al-fatena",
+      "question": "الوزن ٧٠\nاريد هذا الموديل شنو الالوان لي بي",
+      "historical_reason": "AI could not produce a reply after product link (exception:ReadTimeout)",
+      "historical_date": "2026-09-16T00:29:48+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 678,
+      "store": "khuyoot",
+      "question": "هااا عيني هسه شنو سالفه طولت تنوره\nشوكت توصيل",
+      "historical_reason": "تعذر الرد بعد الحجز: empty_reply",
+      "historical_date": "2026-09-16T00:29:17+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 677,
+      "store": "al-fatena",
+      "question": "قلت اكو سوت نزلي الصورة حتى اشوف\nالفستان ازغير القياس",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T00:27:56+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 675,
+      "store": "al-fatena",
+      "question": "السلام عليكم شنو قياسات هاي الفساتين",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T00:23:32+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 3,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 675
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 3,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 673,
+      "store": "al-fatena",
+      "question": "بي غير الوان",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-16T00:18:42+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 670,
+      "store": "al-fatena",
+      "question": "هاي العبايه الجوزيه بيها بعد اللوان؟\nوشنو قماشها",
+      "historical_reason": "AI could not confidently match customer image; routed to human review",
+      "historical_date": "2026-09-16T00:05:48+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": false,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_disabled_for_conversation",
+          "human_review_id": 670
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 0,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 667,
+      "store": "default",
+      "question": "اهم شي نفس الصوره يوصلني ومريح",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-15T23:55:20+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 859
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 661,
+      "store": "al-fatena",
+      "question": "عباية وفستان قياسهم52",
+      "historical_reason": "AI could not produce a reply (exception:ReadTimeout); human action required",
+      "historical_date": "2026-09-15T23:26:48+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 657,
+      "store": "al-fatena",
+      "question": "كركوك\nالحساب كامل شكد يصير؟\nاذا ماعجبني ارجعه بيد المندوب؟",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-15T23:15:10+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 650,
+      "store": "default",
+      "question": "شنو ألوان سوت حوامل المتوفرة؟",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-15T23:02:08+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 650
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    },
+    {
+      "review_id": 649,
+      "store": "default",
+      "question": "مرحبا\nشنو نوع القماش\nمتوفر توصيل نجف\nاكو وزن 75",
+      "historical_reason": "AI could not produce a reply after product link (invalid_ai_response)",
+      "historical_date": "2026-09-15T22:58:47+03:00",
+      "snapshot": {
+        "store_enabled": false,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "no_reply",
+        "meta": {
+          "skipped": true,
+          "reason": "ai_globally_disabled",
+          "human_review_id": 649
+        },
+        "reply": ""
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 1,
+        "outcome": "requires_external_stage",
+        "stage": "image_download_required"
+      }
+    },
+    {
+      "review_id": 645,
+      "store": "al-fatena",
+      "question": "كركوك\nالحساب كامل شكد يصير؟",
+      "historical_reason": "AI could not produce a reply (invalid_ai_response); human action required",
+      "historical_date": "2026-09-15T22:33:25+03:00",
+      "snapshot": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      },
+      "enabled_counterfactual": {
+        "store_enabled": true,
+        "conversation_enabled": true,
+        "linked_products": 1,
+        "direct_catalog_answer_available": false,
+        "pending_image_messages": 0,
+        "outcome": "requires_external_stage",
+        "stage": "_call_main_ai_once"
+      }
+    }
+  ]
+}

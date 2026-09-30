@@ -1,0 +1,106 @@
+{
+  "source": "Local Menger database; local store/page mappings checked against live Lamsa dashboard",
+  "stores": [
+    {
+      "id": "be9d1bf9-8080-46e0-9b8f-88f71719ec13",
+      "name": "ملابس الفاتنة",
+      "slug": "ملابس الفاتنة",
+      "logo_url": null,
+      "description": null,
+      "facebook_url": null,
+      "instagram_url": null,
+      "daily_ad_budget": 0.0,
+      "daily_sales_target": 0.0,
+      "daily_profit_target": 0.0,
+      "is_active": 1,
+      "currency": "IQD",
+      "created_at": "2026-06-16 16:41:35.783452",
+      "updated_at": "2026-06-16 16:41:35.783455",
+      "fb_ad_account_id": "553171501784000",
+      "telegram_order_chat_ids": [
+        "-1003967696974",
+        "-1003905957284"
+      ],
+      "telegram_report_chat_ids": [],
+      "local_store_id": "al-fatena",
+      "facebook_page_id": "192938490568577"
+    },
+    {
+      "id": "da633416-0ccf-4f5f-8f79-5cf98b9496ee",
+      "name": "لمسة ستور",
+      "slug": "لمسة ستور",
+      "logo_url": null,
+      "description": null,
+      "facebook_url": null,
+      "instagram_url": null,
+      "daily_ad_budget": 0.0,
+      "daily_sales_target": 0.0,
+      "daily_profit_target": 0.0,
+      "is_active": 1,
+      "currency": "IQD",
+      "created_at": "2026-06-16 16:41:54.838433",
+      "updated_at": "2026-06-16 16:41:54.838435",
+      "fb_ad_account_id": null,
+      "telegram_order_chat_ids": [],
+      "telegram_report_chat_ids": [],
+      "local_store_id": "default",
+      "facebook_page_id": "596659223521775"
+    },
+    {
+      "id": "cb40328d-4980-4c7c-89f4-cab37de0647a",
+      "name": "خيوط ستور",
+      "slug": "خيوط",
+      "logo_url": null,
+      "description": null,
+      "facebook_url": null,
+      "instagram_url": null,
+      "daily_ad_budget": 0.0,
+      "daily_sales_target": 0.0,
+      "daily_profit_target": 0.0,
+      "is_active": 1,
+      "currency": "IQD",
+      "created_at": "2026-06-16 16:42:11.601040",
+      "updated_at": "2026-06-16 16:42:11.601043",
+      "fb_ad_account_id": null,
+      "telegram_order_chat_ids": [],
+      "telegram_report_chat_ids": [],
+      "local_store_id": "khuyoot",
+      "facebook_page_id": "836725722859109"
+    },
+    {
+      "id": "900794f2-fdfd-4910-b329-352778355083",
+      "name": "عالم البراءة لملابس الأطفال",
+      "slug": "imported-store-48f34827",
+      "logo_url": null,
+      "description": null,
+      "facebook_url": null,
+      "instagram_url": null,
+      "daily_ad_budget": 0.0,
+      "daily_sales_target": 0.0,
+      "daily_profit_target": 0.0,
+      "is_active": 1,
+      "currency": "IQD",
+      "created_at": "2026-07-04 18:25:29.368175",
+      "updated_at": "2026-07-04 18:25:29.368181",
+      "fb_ad_account_id": null,
+      "telegram_order_chat_ids": [
+        "-1003893436409"
+      ],
+      "telegram_report_chat_ids": [],
+      "local_store_id": null,
+      "facebook_page_id": null
+    }
+  ],
+  "unmatched_local_stores": [
+    {
+      "store_id": "golden-threads",
+      "name": "خيوط الذهب جملة",
+      "facebook_page_id": "1026659770525558"
+    }
+  ],
+  "connection": {
+    "configured_url": "https://menger-production.up.railway.app/api/v1/orders",
+    "probe_result": "404 Application not found",
+    "verified_api_key_available": false
+  }
+}

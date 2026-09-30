@@ -1,0 +1,12 @@
+<div class="page-nav-group">العمل اليومي</div>
+<a class="page-nav-link" href="/dashboard"><i class="bi bi-chat-dots"></i><span>المحادثات<small>الرسائل والتدخل البشري</small></span></a>
+{% if can('orders') %}<a class="page-nav-link" href="/orders"><i class="bi bi-receipt"></i><span>الطلبات<small>متابعة الحجوزات والعملاء</small></span></a>{% endif %}
+{% if can('products') %}<a class="page-nav-link" href="/products"><i class="bi bi-box-seam"></i><span>المنتجات<small>الكتالوج والأسعار والتفاصيل</small></span></a>{% endif %}
+<a class="page-nav-link" href="/rewards"><i class="bi bi-stars"></i><span>رصيد الإنجاز<small>المكافآت وهدف اليوم</small></span></a>
+{% if can('advisor') %}<a class="page-nav-link" href="/advisor"><i class="bi bi-lightbulb"></i><span>المستشار<small>تحليل ومساعدة في اتخاذ القرار</small></span></a>{% endif %}
+{% if can('settings') or (staff_person and staff_person.owner) %}<div class="page-nav-group">الإدارة</div>{% endif %}
+{% if can('settings') %}<a class="page-nav-link" href="/settings"><i class="bi bi-gear"></i><span>الإعدادات<small>المتاجر والذكاء الاصطناعي</small></span></a>{% endif %}
+{% if staff_person and staff_person.owner %}
+<a class="page-nav-link" href="/settings/staff"><i class="bi bi-people"></i><span>فريق العمل<small>الحسابات والصلاحيات</small></span></a>
+<a class="page-nav-link" href="/settings/maintenance"><i class="bi bi-shield-check"></i><span>النسخ الاحتياطي<small>حفظ البيانات واستعادتها</small></span></a>
+{% endif %}

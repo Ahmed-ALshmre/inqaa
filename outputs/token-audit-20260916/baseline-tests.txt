@@ -1,0 +1,17 @@
+...................................................................................................................................................................................................................................................E.....................
+======================================================================
+ERROR: test_problem_alert_includes_urgent_reason_and_order (test_sales_core.SalesCoreTests.test_problem_alert_includes_urgent_reason_and_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\Ghost الشبح\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py", line 1387, in patched
+    return func(*newargs, **newkeywargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\GHOST~1\AppData\Local\Temp\lamsa-baseline-dpjqct4j\account_app\tests\test_sales_core.py", line 255, in test_problem_alert_includes_urgent_reason_and_order
+    alert = send_message.call_args.args[0]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'args'
+
+----------------------------------------------------------------------
+Ran 265 tests in 20.480s
+
+FAILED (errors=1)

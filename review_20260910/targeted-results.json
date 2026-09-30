@@ -1,0 +1,69 @@
+[
+  {
+    "case": "اي حياتي",
+    "expected": true,
+    "actual": true,
+    "passed": true,
+    "orders": 1
+  },
+  {
+    "case": "نعم",
+    "expected": true,
+    "actual": true,
+    "passed": true,
+    "orders": 1
+  },
+  {
+    "case": "تمام ثبتي",
+    "expected": true,
+    "actual": true,
+    "passed": true,
+    "orders": 1
+  },
+  {
+    "case": "يي عيني ثبتي",
+    "expected": true,
+    "actual": true,
+    "passed": true,
+    "orders": 1
+  },
+  {
+    "case": "ثبتي الحجز يمعوده",
+    "expected": true,
+    "actual": true,
+    "passed": true,
+    "orders": 1
+  },
+  {
+    "case": "لا تثبتين",
+    "expected": false,
+    "actual": false,
+    "passed": true,
+    "orders": 0
+  },
+  {
+    "case": "اي بس غيري القياس",
+    "expected": false,
+    "actual": false,
+    "passed": true,
+    "orders": 0
+  },
+  {
+    "case": "البصره / القبله / حي القائم",
+    "expected": "البصرة",
+    "actual": {
+      "province": "البصرة",
+      "address": "البصره / القبله / حي القائم"
+    },
+    "passed": true
+  },
+  {
+    "case": "البصرة / القبلة / حي القائم",
+    "expected": "البصرة",
+    "actual": {
+      "province": "البصرة",
+      "address": "البصرة / القبلة / حي القائم"
+    },
+    "passed": true
+  }
+]
