@@ -27,6 +27,25 @@ class HandoffRecoveryTests(unittest.TestCase):
             self.assertFalse(self.ask('شكد التوصيل؟')['create_order'])
         self.assertEqual(model.call_count, 2)
 
+    def test_truncated_response_keeps_completed_reply_without_order_action(self):
+        class Response:
+            status_code = 200
+            def raise_for_status(self): pass
+            def json(self):
+                return {'choices': [{'finish_reason': 'length', 'message': {
+                    'content': '{"reply":"سعره 20 ألف حبيبتي","create_order":true,"order":'
+                }}]}
+        with patch.object(app.ai_transport, 'post', return_value=Response()), \
+             patch.object(app.ai_efficiency, 'record_usage'):
+            with app.app.app_context():
+                result = app._call_main_ai_once(
+                    {'text': 'شكد السعر؟'}, 'text', {}, [], [self.product],
+                    self.product, None, '', [])
+        self.assertEqual(result['reply'], 'سعره 20 ألف حبيبتي')
+        self.assertFalse(result['create_order'])
+        self.assertEqual(result['order'], {})
+        self.assertTrue(result['_truncated_reply_recovered'])
+
 
     def test_provider_failure_gets_second_reply_attempt(self):
         failed = {'reply': '', 'failed': True, 'failure_reason': 'provider_http_503'}
@@ -34,6 +53,29 @@ class HandoffRecoveryTests(unittest.TestCase):
         with patch.object(app, '_call_main_ai_once', side_effect=[failed, recovered]) as model:
             self.assertEqual(self.ask('شكد التوصيل؟'), recovered)
         self.assertEqual(model.call_count, 2)
+
+    def test_explicit_complete_checkout_is_not_reconfirmed(self):
+        customer = {'phone': '07700000000', 'province': 'بغداد', 'address': 'بغداد حي تجريبي'}
+        product = dict(self.product, product_name='قطعة', status='active')
+        generated = {'reply': 'نثبت الطلب؟', 'create_order': False, 'order': {
+            'items': [{'product_id': 'P1', 'product_name': 'قطعة', 'color': 'وردي',
+                       'size': '70', 'quantity': 1}]}}
+        with patch.object(app, '_call_main_ai_once', return_value=generated):
+            result = app.call_main_ai({'text': 'ثبتيها'}, 'text', customer, [],
+                                      [product], product, None, '', [])
+        self.assertTrue(result['create_order'])
+        self.assertTrue(result['_explicit_checkout_recovered'])
+
+    def test_negated_checkout_is_never_promoted(self):
+        customer = {'phone': '07700000000', 'province': 'بغداد', 'address': 'بغداد حي تجريبي'}
+        product = dict(self.product, product_name='قطعة', status='active')
+        generated = {'reply': 'تمام', 'create_order': False, 'order': {
+            'items': [{'product_id': 'P1', 'product_name': 'قطعة', 'color': 'وردي',
+                       'size': '70', 'quantity': 1}]}}
+        with patch.object(app, '_call_main_ai_once', return_value=generated):
+            result = app.call_main_ai({'text': 'لا تثبتيها هسه'}, 'text', customer, [],
+                                      [product], product, None, '', [])
+        self.assertFalse(result['create_order'])
 
     def test_unmatched_image_does_not_retry_recognition(self):
         failed = {'reply': '', 'requires_human': True}

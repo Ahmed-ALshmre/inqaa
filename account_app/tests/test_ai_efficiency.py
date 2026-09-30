@@ -32,6 +32,19 @@ class EfficiencyTests(unittest.TestCase):
         self.assertEqual([m['text'] for m in merged], ['اللون زيتي', 'قياس 44'])
         self.assertEqual(len(history), 1)
 
+    def test_history_compaction_keeps_recent_context_and_unanswered_messages(self):
+        history = [
+            {'direction': 'incoming', 'text': 'قديم'},
+            {'direction': 'outgoing', 'text': 'رد قديم'},
+            {'direction': 'incoming', 'text': 'اختيار اللون'},
+            {'direction': 'outgoing', 'text': 'شنو القياس؟'},
+            {'direction': 'incoming', 'text': 'قياس 42'},
+            {'direction': 'incoming', 'text': 'واللون اسود'},
+            {'direction': 'incoming', 'text': 'ثبتيه'},
+        ]
+        compacted = e.compact_history(history, limit=3)
+        self.assertEqual([m['text'] for m in compacted], ['قياس 42', 'واللون اسود', 'ثبتيه'])
+
     def test_success_failure_and_store_isolation(self):
         recognize = Mock(return_value={'product_found': True, 'product_id': 'A'})
         for _ in range(3):
@@ -72,6 +85,17 @@ class EfficiencyTests(unittest.TestCase):
         e.record_usage(self.db, 'store', 'main', 'unchanged-model', {}, 12)
         row = self.db.execute('SELECT prompt_tokens,completion_tokens,reasoning_tokens,cached_tokens FROM ai_usage_events').fetchone()
         self.assertEqual(row, (None, None, None, None))
+
+    def test_cache_savings_are_recorded(self):
+        e.record_usage(self.db, 'store', 'main', 'model', {
+            'usage': {'prompt_tokens': 2000, 'completion_tokens': 100,
+                      'cost': 0.01, 'cache_discount': 0.006,
+                      'prompt_tokens_details': {'cached_tokens': 1500, 'cache_write_tokens': 200}},
+            'choices': [{'finish_reason': 'stop'}],
+        }, 20)
+        row = self.db.execute('''SELECT cached_tokens,cache_write_tokens,cache_discount,cost
+            FROM ai_usage_events''').fetchone()
+        self.assertEqual(row, (1500, 200, 0.006, 0.01))
 
     def test_rejected_association_does_not_reappear_or_retry(self):
         recognize = Mock(return_value={'product_found': True, 'product_id': 'A'})

@@ -40,7 +40,7 @@ def main():
         with m.app.app_context(), patch('requests.sessions.Session.request',new=only_model):
             db=m.get_db()
             m.set_store_setting(db,'ai_main_model',args.model)
-            m.set_store_setting(db,'ai_main_max_tokens','1500')
+            m.set_store_setting(db,'ai_main_max_tokens','800')
             if args.variant=='improved':m.set_store_setting(db,'ai_main_temperature','0.35')
             m.set_store_setting(db,'delivery_time','من يومين إلى ثلاثة أيام')
             for case in cases:
@@ -86,7 +86,8 @@ def main():
                 print(json.dumps({'id':case['id'],'checks':checks,'seconds':row['seconds'],'failure_reason':result.get('failure_reason')},ensure_ascii=False),flush=True)
                 if str(result.get('failure_reason','')).startswith(('provider_http_401','provider_http_402','provider_http_403','provider_http_404')):
                     break
-            usage=[dict(r) for r in db.execute('SELECT purpose,model,prompt_tokens,completion_tokens,elapsed_ms FROM ai_usage_events')]
+            usage=[dict(r) for r in db.execute('''SELECT purpose,model,prompt_tokens,completion_tokens,
+                cached_tokens,cache_write_tokens,cache_discount,cost,elapsed_ms FROM ai_usage_events''')]
             (out/((args.output or args.variant)+'-usage.json')).write_text(json.dumps(usage),encoding='utf-8')
     return 0
 

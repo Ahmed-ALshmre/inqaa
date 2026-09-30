@@ -48,6 +48,8 @@ class SalesMethodsTests(unittest.TestCase):
 
     def test_weight_without_mapping_and_unverified_photo_are_rejected(self):
         self.assertTrue(strategy.reply_error('وزن 69 يناسبج قياس 42','وزني 69',DRESS))
+        self.assertTrue(strategy.reply_error('وزن 69 يلبسج قياس 42','وزني 69',DRESS))
+        self.assertIn('الوزن وحده', strategy.missing_fact_reply('وزني 69 شنو قياسي؟', DRESS))
         self.assertTrue(strategy.reply_error('تصوير الموديل حقيقي','اريد فيديو',DRESS))
         self.assertFalse(strategy.reply_error('ما عندي فيديو حقيقي موثق','اريد فيديو',DRESS))
 

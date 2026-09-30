@@ -24,6 +24,20 @@ def merge_history(history, memory):
     return missing + list(history)
 
 
+def compact_history(history, limit=6):
+    """Keep the recent turn and every still-unanswered customer message."""
+    messages = list(history or [])
+    if len(messages) <= limit:
+        return messages
+    last_outgoing = max(
+        (index for index, message in enumerate(messages)
+         if message.get('direction') != 'incoming'),
+        default=-1,
+    )
+    start = min(max(0, len(messages) - limit), last_outgoing + 1)
+    return messages[start:]
+
+
 def compact(value):
     if isinstance(value, dict):
         return {k: compact(v) for k, v in value.items() if v is not None and v != '' and v != [] and v != {}}
@@ -55,6 +69,11 @@ def init_db(db):
                              ('attempt_count', 'INTEGER NOT NULL DEFAULT 1'), ('owner', 'TEXT')]:
         if name not in columns:
             db.execute(f'ALTER TABLE image_recognition_attempts ADD COLUMN {name} {definition}')
+    usage_columns = {row[1] for row in db.execute('PRAGMA table_info(ai_usage_events)')}
+    for name, definition in [('cache_write_tokens', 'INTEGER'),
+                             ('cache_discount', 'REAL'), ('cost', 'REAL')]:
+        if name not in usage_columns:
+            db.execute(f'ALTER TABLE ai_usage_events ADD COLUMN {name} {definition}')
 
 
 def fingerprint(data_url):
@@ -156,8 +175,11 @@ def record_usage(db, store, purpose, model, payload, elapsed_ms):
     choices = payload.get('choices') or [{}]
     db.execute('''INSERT INTO ai_usage_events
         (store_id,purpose,model,prompt_tokens,completion_tokens,reasoning_tokens,
-         cached_tokens,finish_reason,elapsed_ms) VALUES(?,?,?,?,?,?,?,?,?)''',
+         cached_tokens,finish_reason,elapsed_ms,cache_write_tokens,cache_discount,cost)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
         (store, purpose, model, usage.get('prompt_tokens'), usage.get('completion_tokens'),
          completion.get('reasoning_tokens'), prompt.get('cached_tokens'),
-         choices[0].get('finish_reason'), elapsed_ms))
+         choices[0].get('finish_reason'), elapsed_ms, prompt.get('cache_write_tokens'),
+         usage.get('cache_discount', payload.get('cache_discount')),
+         usage.get('cost', payload.get('cost'))))
     db.commit()

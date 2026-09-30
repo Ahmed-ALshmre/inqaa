@@ -52,7 +52,7 @@ async function initAISettingsPage() {
   document.getElementById('checkerModelInput').value = data.checker_model || '';
   document.getElementById('improveModelInput').value = data.improve_model || '';
   document.getElementById('mainTemperatureInput').value = data.main_temperature ?? 0.7;
-  document.getElementById('mainMaxTokensInput').value = data.main_max_tokens ?? 1500;
+  document.getElementById('mainMaxTokensInput').value = data.main_max_tokens ?? 800;
   
   const formEl = document.getElementById('aiSettingsForm');
   if (formEl) {

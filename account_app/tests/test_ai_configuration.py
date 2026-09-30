@@ -64,7 +64,40 @@ class AIConfigurationTests(unittest.TestCase):
         self.assertEqual(text.count('قياس 44'), 1)
         self.assertEqual(text.count('"product_id":"P003"'), 1)
         self.assertIn('[غير مجابة]', text)
+        request = post.call_args.kwargs['json']
+        self.assertEqual(request['max_tokens'], 800)
+        self.assertEqual(request['reasoning'], {'effort': 'low', 'exclude': True})
+        self.assertRegex(request['session_id'], r'^sales-[0-9a-f]{24}$')
         self.assertEqual(self.db.execute('SELECT count(*) FROM ai_usage_events').fetchone()[0], 1)
+
+    def test_simple_question_does_not_send_unrelated_catalog(self):
+        unrelated = dict(product_id='P004', product_name='بلوزة بعيدة', store_id='khuyoot',
+                         status='active', stock='متوفر', price='9000')
+        response = requests.Response(); response.status_code = 200
+        response._content = json.dumps({'choices': [{'message': {'content': json.dumps({
+            'reply': 'سعرها 12 ألف.', 'create_order': False})}}]}).encode()
+        with patch.object(m.requests, 'post', return_value=response) as post:
+            m._call_main_ai_once(dict(self.ev, text='شكد سعرها؟'), 'text', self.customer, [],
+                [self.product, unrelated], self.product, None, '', [])
+        prompt = post.call_args.kwargs['json']['messages'][-1]['content']
+        self.assertNotIn('بلوزة بعيدة', prompt)
+        self.assertNotIn('P004', prompt)
+
+    def test_comparison_sends_only_explicitly_named_available_product(self):
+        other = dict(product_id='P004', product_name='بلوزة قطن', store_id='khuyoot',
+                     status='active', stock='متوفر', price='9000', fabric='قطن')
+        unrelated = dict(product_id='P005', product_name='عباية شتوية', store_id='khuyoot',
+                         status='active', stock='متوفر', price='22000')
+        response = requests.Response(); response.status_code = 200
+        response._content = json.dumps({'choices': [{'message': {'content': json.dumps({
+            'reply': 'التنورة غير عن بلوزة القطن.', 'create_order': False})}}]}).encode()
+        with patch.object(m.requests, 'post', return_value=response) as post:
+            m._call_main_ai_once(dict(self.ev, text='شنو الفرق بين التنورة وبلوزة قطن؟'),
+                'text', self.customer, [], [self.product, other, unrelated], self.product,
+                None, '', [])
+        prompt = post.call_args.kwargs['json']['messages'][-1]['content']
+        self.assertIn('بلوزة قطن', prompt)
+        self.assertNotIn('عباية شتوية', prompt)
 
     def test_price_and_delivery_use_store_fees_without_guessing_province(self):
         with patch.object(m, 'get_delivery_settings', return_value={'baghdad_fee': 4000, 'other_fee': 6000}):

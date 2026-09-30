@@ -90,7 +90,7 @@ def reply_error(reply, question, product=None):
     if re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',text) and not re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',evidence) and not re.search(r'ما عندي|ما متوفر|غير متوفر|لا يوجد|لا املك|مو متوفر',text):
         return 'مصدر التصوير غير موثق؛ لا تدع أن الصور حقيقية. اعترف بعدم وجود فيديو موثق إذا لا يوجد.'
     catalog = normalized(' '.join(str((product or {}).get(k) or '') for k in ('sizes','notes','description')))
-    if re.search(r'وزن|كيلو',normalized(question)) and re.search(r'(?:يناسب|البس|تلبس).{0,20}قياس\s*\d+',text) and not re.search(r'(?:قياس|مقاس)\s*\d+.{0,25}(?:وزن|كيلو)',catalog):
+    if re.search(r'وزن|كيلو',normalized(question)) and re.search(r'(?:يناسب|البس|تلبس|يلبس).{0,20}قياس\s*\d+',text) and not re.search(r'(?:قياس|مقاس)\s*\d+.{0,25}(?:وزن|كيلو)',catalog):
         return 'لا يوجد جدول يربط الوزن بقياس محدد لهذا المنتج. اسأل عن قياس الملابس المعتاد أو القياس المطلوب ولا تخترع 42 أو 44 من الوزن.'
     if signals(question) == ['refusal'] and re.search(r'احجز|اثبت|نثبت|تحب|تحبين|اريد رقم|دز.{0,8}عنوان',text):
         return 'الزبون رفض الشراء؛ اختم بلطف دون سؤال بيع أو جمع بيانات.'
@@ -124,8 +124,14 @@ def missing_fact_reply(question, product):
     if not product:
         return ''
     text=normalized(question)
+    product_measurements = normalized(' '.join(str(product.get(k) or '')
+                                      for k in ('sizes', 'notes', 'description')))
+    if (re.search(r'وزن|وزني|كيلو|كغم', text)
+            and not re.search(r'(?:وزن|كيلو|كغم).{0,35}(?:قياس|مقاس)|(?:قياس|مقاس).{0,35}(?:وزن|كيلو|كغم)',
+                              product_measurements)):
+        return 'الوزن وحده ما يكفي أحدد قياس مضبوط لهالموديل؛ شنو قياس الملابس المعتاد إلج؟'
     if 'فيديو' in text and not product.get('video_url'):
         return 'حالياً ما عندي فيديو حقيقي موثق لهذا الموديل، فما أگدر أؤكد تفاصيله من فيديو غير موجود.'
-    if re.search(r'عرض(?:ه|ها)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not re.search(r'عرض|ابط|محيط الصدر',normalized(' '.join(str(product.get(k) or '') for k in ('sizes','notes','description')))):
+    if re.search(r'عرض(?:ه|ها)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not re.search(r'عرض|ابط|محيط الصدر',product_measurements):
         return 'قياس العرض بالسنتيمتر مو مدوّن عندي لهالموديل؛ يحتاج قياس فعلي من المتجر حتى أنطيك رقماً صحيحاً.'
     return ''
