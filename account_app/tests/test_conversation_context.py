@@ -256,9 +256,8 @@ class ConversationContextTests(unittest.TestCase):
                 self.assertIn('دانتيل', result['reply'])
                 self.assertIn('انيقة', result['reply'])
             else:
-                self.assertEqual(result['reply'], '')
-                self.assertTrue(result['meta']['needs_human'])
-            self.assertNotIn('صورة', result['reply'])
+                self.assertIn('اسم الموديل', result['reply'])
+                self.assertFalse(result['meta'].get('needs_human'))
             after = [dict(r) for r in self.db.execute('SELECT * FROM customer_product_interests WHERE sender_id=?', (self.sender,))]
             self.assertEqual(before, after)
             self.assertIsNotNone(m.pending_product_choice(self.db, self.sender))
@@ -679,17 +678,18 @@ class ConversationContextTests(unittest.TestCase):
         classifier.assert_not_called();review.assert_not_called()
         self.assertFalse(m.customer_declines_purchase('ما اريد السوت اريد الفستان'))
 
-    def test_second_unresolved_choice_creates_one_review_without_repeating_question(self):
+    def test_second_unresolved_choice_asks_identifier_without_human_review(self):
         ev=dict(self.ev,text='هذا لو هذا')
         with patch.object(m,'send_telegram_message',return_value=True) as notify:
             first=m.product_clarification_or_review(self.db,ev,'تقصدين الفستان الأول لو الثاني؟')
             second=m.product_clarification_or_review(self.db,ev,'تقصدين الفستان الأول لو الثاني؟')
             third=m.product_clarification_or_review(self.db,ev,'تقصدين الفستان الأول لو الثاني؟')
         self.assertTrue(first['reply'])
-        self.assertEqual(second['reply'],'')
-        self.assertTrue(second['meta']['needs_human'])
-        self.assertEqual(second['meta']['human_review_id'],third['meta']['human_review_id'])
-        self.assertEqual(notify.call_count,1)
+        self.assertIn('اسم الموديل',second['reply'])
+        self.assertFalse(second['meta'].get('needs_human'))
+        self.assertTrue(third['reply'])
+        self.assertEqual(notify.call_count,0)
+        self.assertFalse(m.has_pending_human_review(self.db,self.sender))
         self.assertTrue(m.is_customer_ai_enabled(self.db,self.sender))
 
     def test_multi_product_contact_does_not_get_blocked_before_model(self):

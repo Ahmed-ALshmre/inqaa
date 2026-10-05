@@ -110,7 +110,7 @@ class SalesReplyPipelineTests(unittest.TestCase):
         bad={'reply':'','create_order':False,'requires_human':True,'handoff_reason':'video unavailable'}
         result,_=self.ask('اريد فيديو حقيقي قبل اطلب',[bad,bad])
         self.assertIn('ما عندي فيديو',result['reply'])
-        self.assertTrue(result['_needs_fact_review'])
+        self.assertFalse(result['_needs_fact_review'])
         self.assertFalse(result.get('failed'))
 
     def test_linked_product_missing_fact_still_opens_internal_review(self):

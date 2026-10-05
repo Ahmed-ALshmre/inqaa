@@ -73,6 +73,9 @@ def guidance(ev, customer, history):
             'اجعل القرار أسهل بالمعلومة الصحيحة: جواب مباشر، فائدة مرتبطة بالحاجة إن لزمت، ثم خطوة واحدة فقط. '
             'هذه الأدوات تختار حسب الحالة، وليست قائمة تنفذ كلها في كل رد. لا تذكر أسماء تقنيات البيع. '
             'الأولوية لسؤال الزبون الحالي؛ لا تعتبر السكوت اعتراضاً ولا تعتبر السؤال موافقة. '
+            'اعتمد المعلومات الموثقة في الكتالوج أولاً، ولا تحول استفسار السعر أو اللون أو القياس أو طلب الصور إلى موظف. '
+            'إذا المنتج غير متوفر اعرض أقرب بديل متوفر يلائم القياس والميزانية مع سعره، واسأل عن اختياره دون إضافته للسلة. '
+            'عند وجود اختيار سابق لا تعيد سؤال الموديل؛ عند الموافقة أكمل الحقول الناقصة وثبت الطلب بعد التحقق. '
             'لا تكرر طلب الحجز بعد كل جملة، ولا تستخدم ندرة أو تقييمات أو ضمانات أو هدايا غير موثقة.\n'
             + '\n'.join(METHODS[key] for key in selected)
             + '\nحقول التواصل الناقصة من الملف (قد تكون وصلت بالرسالة الحالية؛ اقرأها قبل السؤال): '
@@ -82,14 +85,14 @@ def guidance(ev, customer, history):
 
 def reply_error(reply, question, product=None):
     text = normalized(reply)
-    evidence = normalized(' '.join(str((product or {}).get(k) or '') for k in ('stock','stock_quantity','offer','notes','description')))
+    evidence = normalized(' '.join(str((product or {}).get(k) or '') for k in ('stock','stock_quantity','offer','notes','description','real_photo_notes')))
     if re.search(r'اخر قطع[هة]|باقي قطعتين|راح يخلص|قبل ما يخلص|الكمي[هة] محدود[هة]',text) and not re.search(r'اخر قطع[هة]|باقي قطعتين|كمي[هة] محدود[هة]',evidence):
         return 'احذف الندرة غير الموثقة؛ أقنع بالمعلومة والفائدة الفعلية فقط.'
     if re.search(r'نفس الصور[ةه] بالضبط|مضمون.{0,12}(?:قياس|يلبس)|يناسب.{0,10}100%',text):
         return 'لا تضمن تطابق الصورة أو ملاءمة القياس؛ وضح البيانات وسياسة الفحص دون ضمان مختلق.'
     if re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',text) and not re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',evidence) and not re.search(r'ما عندي|ما متوفر|غير متوفر|لا يوجد|لا املك|مو متوفر',text):
         return 'مصدر التصوير غير موثق؛ لا تدع أن الصور حقيقية. اعترف بعدم وجود فيديو موثق إذا لا يوجد.'
-    catalog = normalized(' '.join(str((product or {}).get(k) or '') for k in ('sizes','notes','description')))
+    catalog = normalized(' '.join(str((product or {}).get(k) or '') for k in ('sizes','notes','description','measurements','fit_notes')))
     if re.search(r'وزن|كيلو',normalized(question)) and re.search(r'(?:يناسب|البس|تلبس|يلبس).{0,20}قياس\s*\d+',text) and not re.search(r'(?:قياس|مقاس)\s*\d+.{0,25}(?:وزن|كيلو)',catalog):
         return 'لا يوجد جدول يربط الوزن بقياس محدد لهذا المنتج. اسأل عن قياس الملابس المعتاد أو القياس المطلوب ولا تخترع 42 أو 44 من الوزن.'
     if signals(question) == ['refusal'] and re.search(r'احجز|اثبت|نثبت|تحب|تحبين|اريد رقم|دز.{0,8}عنوان',text):
@@ -125,7 +128,7 @@ def missing_fact_reply(question, product):
         return ''
     text=normalized(question)
     product_measurements = normalized(' '.join(str(product.get(k) or '')
-                                      for k in ('sizes', 'notes', 'description')))
+                                      for k in ('sizes', 'notes', 'description', 'measurements', 'fit_notes')))
     if (re.search(r'وزن|وزني|كيلو|كغم', text)
             and not re.search(r'(?:وزن|كيلو|كغم).{0,35}(?:قياس|مقاس)|(?:قياس|مقاس).{0,35}(?:وزن|كيلو|كغم)',
                               product_measurements)):
@@ -135,3 +138,8 @@ def missing_fact_reply(question, product):
     if re.search(r'عرض(?:ه|ها)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not re.search(r'عرض|ابط|محيط الصدر',product_measurements):
         return 'قياس العرض بالسنتيمتر مو مدوّن عندي لهالموديل؛ يحتاج قياس فعلي من المتجر حتى أنطيك رقماً صحيحاً.'
     return ''
+
+
+def fact_requires_human(question, product):
+    text = normalized(question)
+    return bool(re.search(r'عرض|تحت الابط|محيط الصدر', text)) and bool(missing_fact_reply(question, product))

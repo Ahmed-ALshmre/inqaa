@@ -155,7 +155,20 @@
             <label class="form-label">القصة والاستخدام</label>
             <input class="form-control" id="productStyle" placeholder="واسع، رسمي، للدوام...">
           </div>
-          <div class="col-12"><h6 class="product-section-title">الصور ومعرفة الذكاء الاصطناعي</h6></div>
+          <div class="col-12"><h6 class="product-section-title">تفاصيل موثقة تساعد على إكمال البيع</h6><p class="small text-muted">حقول اختيارية؛ اترك المعلومة غير المعروفة فارغة. وثّق القياسات والصور دون تخمين.</p></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_lining">البطانة</label><textarea class="form-control" id="knowledge_lining" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_transparency">الشفافية</label><textarea class="form-control" id="knowledge_transparency" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_stretch">المطاطية</label><textarea class="form-control" id="knowledge_stretch" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_closure">طريقة الإغلاق</label><textarea class="form-control" id="knowledge_closure" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_measurements">جدول القياسات بالسنتيمتر</label><textarea class="form-control" id="knowledge_measurements" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_fit_notes">ملاحظات الملاءمة</label><textarea class="form-control" id="knowledge_fit_notes" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_bundle_contents">محتويات البكج</label><textarea class="form-control" id="knowledge_bundle_contents" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_sale_unit">طريقة البيع: مفرد أو بكج</label><textarea class="form-control" id="knowledge_sale_unit" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_real_photo_notes">توثيق الصور الحقيقية</label><textarea class="form-control" id="knowledge_real_photo_notes" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_video_url">رابط فيديو المنتج</label><textarea class="form-control" id="knowledge_video_url" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_faq">أسئلة متكررة وإجابات موثقة</label><textarea class="form-control" id="knowledge_faq" rows="2"></textarea></div>
+<div class="col-md-6"><label class="form-label" for="knowledge_inspection_policy">سياسة الفحص والاستبدال</label><textarea class="form-control" id="knowledge_inspection_policy" rows="2"></textarea></div>
+<div class="col-12"><h6 class="product-section-title">الصور ومعرفة الذكاء الاصطناعي</h6></div>
           <div class="col-12">
             <label class="form-label">صور المنتج</label>
             <input id="productImageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onchange="uploadProductImages(this)">
@@ -212,6 +225,6 @@
   <div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/static/js/mobile_app.js?v=2"></script>
-  <script src="/static/js/products.js?v=14"></script>
+  <script src="/static/js/products.js?v=15"></script>
 </body>
 </html>

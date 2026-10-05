@@ -33,18 +33,41 @@ async function openCatalogDialog() {
     send.onclick=async()=>{if(sender!==currentSenderId)return; send.disabled=true; await sendCatalog(); dialog.close();}; content.append(send);
   } catch(error){content.textContent=error.message;}
 }
-function openImageDialog() {
+async function openImageDialog() {
   if(!currentSenderId) return showToast('اختر محادثة أولاً','warning');
-  const dialog=toolDialog('imageChooseDialog','اختر صورة لإرفاقها'); dialog.querySelector('.tool-content')?.remove();
+  const sender=currentSenderId;
+  const store=currentCustomer?.store_id || 'default';
+  const dialog=toolDialog('imageChooseDialog','مكتبة الصور'); dialog.querySelector('.tool-content')?.remove();
   const content=document.createElement('div'); content.className='tool-content';
-  const upload=document.createElement('button'); upload.className='btn btn-primary'; upload.textContent='رفع صورة من الجهاز'; upload.onclick=()=>{dialog.close();document.getElementById('imageUpload').click();}; content.append(upload);
-  const hint=document.createElement('p'); hint.className='mt-3'; hint.textContent='أو اختر من صور المنتجات. ستظهر الصورة بجانب الرسالة قبل إرسالها.'; content.append(hint);
-  const grid=document.createElement('div');grid.className='tool-image-grid';
-  for(const product of allProducts) for(const url of productImageList(product)) {
-    const button=document.createElement('button'); button.type='button'; button.className='tool-image-choice';
-    const image=document.createElement('img'); image.src=url; image.alt=product.product_name || 'صورة المنتج';
-    const label=document.createElement('span'); label.textContent=product.product_name || 'صورة المنتج'; button.append(image,label);
-    button.onclick=()=>{uploadedImageUrl=url;document.getElementById('previewImg').src=url;document.getElementById('imagePreview').style.cssText='display:block!important';dialog.close();};grid.append(button);
+  const upload=document.createElement('button'); upload.className='btn btn-primary'; upload.textContent='رفع صورة جديدة من الجهاز';
+  upload.onclick=()=>{dialog.close();if(sender===currentSenderId)document.getElementById('imageUpload').click();};content.append(upload);
+  const hint=document.createElement('p'); hint.className='mt-3'; hint.textContent='صور الجهاز محفوظة هنا لإعادة استخدامها. اختر صورة ثم اضغط إرسال؛ النص اختياري.';content.append(hint);
+  const title=document.createElement('h3');title.className='h6';title.textContent='صورك المحفوظة';content.append(title);
+  const grid=document.createElement('div');grid.className='tool-image-grid';content.append(grid);
+  function addImage(target,url,label){
+    const button=document.createElement('button');button.type='button';button.className='tool-image-choice';
+    const image=document.createElement('img');image.src=url;image.alt=label;image.loading='lazy';
+    const caption=document.createElement('span');caption.textContent=label;button.append(image,caption);
+    button.onclick=()=>{if(sender!==currentSenderId)return;clearImage();uploadedImageUrl=url;document.getElementById('previewImg').src=url;document.getElementById('imagePreview').style.cssText='display:block!important;';dialog.close();};target.append(button);
   }
-  content.append(grid);dialog.append(content);dialog.showModal();
+  const state=document.createElement('p');state.className='small';content.append(state);
+  const more=document.createElement('button');more.className='btn btn-outline-primary';more.textContent='عرض المزيد';more.hidden=true;content.append(more);
+  let offset=0;
+  async function loadSaved(){
+    more.disabled=true;state.textContent='جاري تحميل الصور المحفوظة…';
+    try{
+      const response=await apiFetch('/api/image_library?store_id='+encodeURIComponent(store)+'&offset='+offset);
+      const data=await response.json();if(!response.ok)throw Error(data.error || 'تعذر تحميل المكتبة');
+      if(sender!==currentSenderId || !dialog.open)return;
+      for(const item of data.images || [])addImage(grid,item.image_url,item.name || 'صورة محفوظة');
+      offset=data.next_offset;more.hidden=!data.has_more;
+      state.textContent=grid.children.length ? '' : 'ارفع أول صورة لتظهر في المكتبة.';
+    }catch(error){state.textContent=error.message;more.hidden=false;more.textContent='إعادة المحاولة';}
+    finally{more.disabled=false;}
+  }
+  more.onclick=loadSaved;
+  const productTitle=document.createElement('h3');productTitle.className='h6 mt-3';productTitle.textContent='صور المنتجات';content.append(productTitle);
+  const productsGrid=document.createElement('div');productsGrid.className='tool-image-grid';content.append(productsGrid);
+  for(const product of allProducts)for(const url of productImageList(product))addImage(productsGrid,url,product.product_name || 'صورة المنتج');
+  dialog.append(content);dialog.showModal();await loadSaved();
 }

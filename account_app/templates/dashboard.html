@@ -264,6 +264,7 @@
       <div class="input-area">
         <div id="imagePreview" class="mb-2 position-relative d-inline-block" style="display:none!important;">
           <img id="previewImg" src="" alt="preview" style="height:72px; border-radius:8px; border:2px solid var(--border);">
+          <div id="imageUploadStatus" class="small mt-1" role="status" aria-live="polite"></div>
           <button class="btn btn-danger btn-sm position-absolute top-0 end-0 p-0 px-1" onclick="clearImage()" style="font-size:10px;">
             <i class="bi bi-x"></i>
           </button>
@@ -618,8 +619,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=3"></script>
-  <script src="/static/js/dashboard.js?v=28"></script>
-<script src="/static/js/conversation_tools.js?v=1"></script>
+  <script src="/static/js/dashboard.js?v=31"></script>
+<script src="/static/js/conversation_tools.js?v=3"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

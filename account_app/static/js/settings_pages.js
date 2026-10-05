@@ -374,3 +374,26 @@ async function clearBrowserCacheAndReload() {
     window.location.reload();
   }
 }
+
+let storageCleanupReady=false;
+function storageSummary(data){
+  const rows=Object.values(data.deleted_rows || {}).reduce((sum,n)=>sum+Number(n),0);
+  return `${data.images || 0} صور غير مستخدمة (${((data.image_bytes || 0)/1048576).toFixed(1)} ميغابايت) و${rows} سجلات تشغيل قديمة. الرسائل والطلبات والمكتبة محفوظة.`;
+}
+async function storageAction(action){
+  const preview=document.getElementById('storagePreview'),run=document.getElementById('storageCleanup'),status=document.getElementById('storageCleanupStatus');
+  preview.disabled=true;run.disabled=true;status.textContent=action==='preview'?'جاري فحص المساحة…':'جاري تنظيف المساحة…';
+  try{
+    const key=new URLSearchParams(location.search).get('key') || '';
+    const response=await fetch(`/api/maintenance/storage/${action}?key=${encodeURIComponent(key)}`,{method:'POST'});
+    const data=await response.json();if(!response.ok || !data.ok)throw Error(data.error || 'تعذر التنظيف');
+    storageCleanupReady=action==='preview';
+    status.textContent=(action==='preview'?'يمكن تنظيف: ':'تم تنظيف: ')+storageSummary(data)+(action==='cleanup'?(data.compacted?' تم ضغط قاعدة البيانات.':' سيستخدم النظام المساحة الفارغة مجدداً؛ يمكن ضغط القاعدة بعد انتهاء المهام الجارية.'):'');
+  }catch(error){storageCleanupReady=false;status.textContent=error.message;}
+  finally{preview.disabled=false;run.disabled=!storageCleanupReady;}
+}
+function previewStorageCleanup(){return storageAction('preview');}
+function runStorageCleanup(){
+  if(!storageCleanupReady)return;
+  if(confirm('تنظيف الملفات والسجلات غير اللازمة الظاهرة في الفحص؟ تبقى الرسائل والطلبات وصور المكتبة.'))return storageAction('cleanup');
+}

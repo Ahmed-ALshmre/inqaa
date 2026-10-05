@@ -281,9 +281,9 @@ class TelegramAlertFormatTests(unittest.TestCase):
         import account_app.app as m
         with patch.object(m, 'get_store_name', return_value='لمسة ستور'):
             text=m.format_telegram_alert('ReadTimeout: HTTPSConnectionPool ' + 'details '*200, review_id=42)
-        self.assertIn('انتهت مهلة', text)
+        self.assertIn('تدخل بشري', text)
         self.assertIn('#42', text)
-        self.assertIn('المطلوب:', text)
+        self.assertNotIn('المطلوب:', text)
         self.assertNotIn('HTTPSConnectionPool', text)
         self.assertLess(len(text), 250)
 
@@ -292,7 +292,7 @@ class TelegramAlertFormatTests(unittest.TestCase):
         with patch.object(m, 'get_store_name', return_value='المتجر'):
             text=m.format_telegram_alert('تأخر التوصيل', order_id=17, customer='زبون', message='وين الطلب؟\n'*100)
         self.assertIn('#17', text)
-        self.assertEqual(len(text.splitlines()), 6)
+        self.assertEqual(len(text.splitlines()), 4)
         self.assertLess(len(text), 300)
 
 

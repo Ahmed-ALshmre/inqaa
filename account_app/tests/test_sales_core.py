@@ -230,7 +230,7 @@ class SalesCoreTests(unittest.TestCase):
         create_human_review(
             self.db,
             {"sender_id": self.sender_id, "text": "هذا موجود؟", "image_url": "https://example.com/customer.jpg"},
-            "لم يتم التعرف تلقائياً",
+            "Image analysis service failure: provider_http_402",
             candidates,
         )
         self.assertEqual(send_message.call_count, 1)
@@ -238,7 +238,7 @@ class SalesCoreTests(unittest.TestCase):
         notification = send_message.call_args.args[0]
         self.assertNotIn("https://", notification)
         self.assertIn("المراجعة: #", notification)
-        self.assertIn("المطلوب:", notification)
+        self.assertNotIn("المطلوب:", notification)
         self.assertNotIn("P001", notification)
         self.assertNotIn("هذا موجود", notification)
 
@@ -253,11 +253,7 @@ class SalesCoreTests(unittest.TestCase):
             "message_text": "وين طلبي؟",
             "order_id": 77,
         })
-        alert = send_message.call_args.args[0]
-        self.assertIn("المشكلة:", alert)
-        self.assertIn("المطلوب:", alert)
-        self.assertIn("تأخر الطلب", alert)
-        self.assertIn("77", alert)
+        send_message.assert_not_called()
 
     def test_returned_order_phrases_are_classified(self):
         from account_app.app import classify_customer_problem

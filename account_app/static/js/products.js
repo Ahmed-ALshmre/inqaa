@@ -24,6 +24,18 @@ const fields = {
   offer: 'productOffer',
   delivery: 'productDelivery',
   notes: 'productNotes',
+  lining: 'knowledge_lining',
+  transparency: 'knowledge_transparency',
+  stretch: 'knowledge_stretch',
+  closure: 'knowledge_closure',
+  measurements: 'knowledge_measurements',
+  fit_notes: 'knowledge_fit_notes',
+  bundle_contents: 'knowledge_bundle_contents',
+  sale_unit: 'knowledge_sale_unit',
+  real_photo_notes: 'knowledge_real_photo_notes',
+  video_url: 'knowledge_video_url',
+  faq: 'knowledge_faq',
+  inspection_policy: 'knowledge_inspection_policy',
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -288,6 +300,7 @@ async function uploadProductImages(input) {
   progress.innerHTML = '<span class="spinner-border spinner-border-sm"></span> جاري رفع الصور...';
   const form = new FormData();
   files.forEach(file => form.append('images', file));
+  form.append('purpose', 'product');
   try {
     const response = await apiFetch('/api/upload_image', { method: 'POST', body: form });
     const result = await response.json();

@@ -61,6 +61,7 @@ def required_permission(path, method):
         if tail in {'send', 'ask_ai', 'send_catalog', 'customer', 'gender', 'link_product', 'unlink_product', 'mark_reviewed', 'ai', 'media'}:
             return 'reply'
         if tail == 'save_instructions': return 'settings'
+    if path == '/api/image_library' and read: return 'reply|products'
     if path == '/api/upload_image': return 'reply|products'
     if path == '/api/improve_message': return 'reply'
     if path == '/api/catalog_image' and read: return 'read'

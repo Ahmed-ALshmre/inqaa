@@ -23,6 +23,10 @@ let messageRequest = null;
 const messageCache = new Map();
 let renderedMessageSender = null;
 let uploadedImageUrl  = null;
+let imageUploadPromise = null;
+let imageUploadController = null;
+let imageUploadGeneration = 0;
+let imagePreviewObjectUrl = null;
 let aiPendingReply    = null;
 let allProducts       = [];
 let productRequestVersion = 0;
@@ -171,7 +175,7 @@ function closeAllPanels() {
 }
 
 // ══ Conversations ══════════════════════════════════════════════════════════
-async function loadConversations(showSpinner = true, isLoadMore = false) {
+async function loadConversations(showSpinner = true, isLoadMore = false, resetList = false) {
   if (isLoadMore && inboxRequest) return;
   inboxRequest?.abort();
   const controller = new AbortController();
@@ -208,6 +212,7 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
     const res = await apiFetch(`/api/conversations?${params}`, {signal: controller.signal});
     if (!res.ok) throw new Error("فشل تحميل المحادثات");
     const data = await res.json();
+    if (inboxRequest !== controller || controller.signal.aborted) return;
     
     let listChanged = true;
     if (isLoadMore) {
@@ -220,7 +225,7 @@ async function loadConversations(showSpinner = true, isLoadMore = false) {
       hasMoreConv = Boolean(data.has_more);
     } else {
       const fresh = data.conversations || [];
-      if (!showSpinner && latestSort && previousCount) {
+      if (!resetList && currentFilter === 'all' && !showSpinner && latestSort && previousCount) {
         listChanged = JSON.stringify(fresh) !== JSON.stringify(allConversations.slice(0, fresh.length));
         const seen = new Set(fresh.map(c => c.sender_id));
         allConversations = fresh.concat(allConversations.filter(c => !seen.has(c.sender_id)));
@@ -464,6 +469,7 @@ function renderConversations(appendFrom = 0) {
 
 // ══ Select Conversation ════════════════════════════════════════════════════
 async function selectConversation(senderId) {
+  if (currentSenderId !== senderId) clearImage();
   currentSenderId = senderId;
   closeAllPanels();
 
@@ -998,11 +1004,15 @@ async function hiCloseReview() {
   if (_hiBusy || !currentSenderId) return;
   _hiSetBusy(true, 'hiBtnCloseReview');
   try {
-    await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
+    const res = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'تعذر إغلاق المراجعة');
+    currentConversationAIEnabled = Boolean(data.ai_enabled);
+    renderConversationAIToggle();
     showToast('تم إغلاق المراجعة', 'success');
     _hiCloseModal();
     hideHumanIntervention();
-    await loadConversations(false);
+    await loadConversations(false, false, true);
   } catch (e) {
     showToast('خطأ: ' + e.message, 'danger');
   } finally {
@@ -1080,22 +1090,26 @@ async function sendMessage(text = null, imgUrl = null) {
   if (!currentSenderId) return;
   if (_isSending) { showToast('جاري الإرسال... انتظر', 'warning'); return; }
 
-  const txt = text  !== null ? text   : (document.getElementById('messageInput').value || '').trim();
-  const img = imgUrl !== null ? imgUrl : uploadedImageUrl;
-
-  if (!txt && !img) { showToast('اكتب رسالة أو ارفع صورة', 'warning'); return; }
-
   const sendingTo = currentSenderId;
+  const generation = imageUploadGeneration;
+  const txt = text !== null ? text : (document.getElementById('messageInput').value || '').trim();
   _setSendingState(true);
   try {
+    if (imgUrl === null && imageUploadPromise) {
+      showToast('جاري تجهيز الصورة للإرسال…', 'info');
+      if (!await imageUploadPromise) return false;
+    }
+    if (currentSenderId !== sendingTo || (imgUrl === null && generation !== imageUploadGeneration)) return false;
+    const img = imgUrl !== null ? imgUrl : uploadedImageUrl;
+    if (!txt && !img) { showToast('اكتب رسالة أو اختر صورة', 'warning'); return false; }
     const res  = await apiFetch(`/api/conversations/${encodeURIComponent(sendingTo)}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: txt, image_url: img }),
     });
     const data = await res.json();
-    if (data.ok) {
-      if (currentSenderId === sendingTo && document.getElementById('messageInput').value.trim() === txt) { document.getElementById('messageInput').value = ''; clearImage(); }
+    if (res.ok && data.ok) {
+      if (currentSenderId === sendingTo && document.getElementById('messageInput').value.trim() === txt) { document.getElementById('messageInput').value = ''; if (generation === imageUploadGeneration) clearImage(); }
       if (data.warning) showToast(data.warning, 'warning');
       else showToast('تم الإرسال', 'success');
       await loadMessages(sendingTo, currentSenderId === sendingTo);
@@ -1209,6 +1223,7 @@ async function askAI(options = {}) {
 }
 
 function resetConversationView() {
+  clearImage();
   currentSenderId = null;
   currentCustomer = null;
   document.body.classList.remove('mobile-conversation-open');
@@ -1325,34 +1340,83 @@ async function improveMessage() {
 }
 
 // ══ Image Upload ═══════════════════════════════════════════════════════════
+async function prepareComposerImage(file) {
+  if (file.size <= 1024 * 1024 || typeof createImageBitmap !== 'function') return file;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, type, 0.86));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], type === 'image/png' ? 'attachment.png' : 'attachment.jpg', {type});
+  } catch (_) { return file; }
+  finally { bitmap?.close(); }
+}
+
 async function handleImageUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    document.getElementById('previewImg').src              = e.target.result;
-    document.getElementById('imagePreview').style.display = 'block';
-    document.getElementById('imagePreview').style.cssText = 'display:block!important;';
-  };
-  reader.readAsDataURL(file);
-
-  const fd = new FormData();
-  fd.append('image', file);
-  try {
-    const res  = await apiFetch('/api/upload_image', { method: 'POST', body: fd });
-    const data = await res.json();
-    if (data.image_url) { uploadedImageUrl = data.image_url; showToast('تم رفع الصورة', 'success'); }
-    else showToast('فشل رفع الصورة', 'danger');
-  } catch (e) { showToast('خطأ رفع: ' + e.message, 'danger'); }
+  clearImage();
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    showToast('اختر صورة JPG أو PNG أو WEBP', 'warning'); return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    showToast('الصورة كبيرة جداً؛ الحد الأقصى 20 ميغابايت', 'warning'); return;
+  }
+  const generation = imageUploadGeneration;
+  const sender = currentSenderId;
+  const controller = new AbortController();
+  imageUploadController = controller;
+  imagePreviewObjectUrl = URL.createObjectURL(file);
+  document.getElementById('previewImg').src = imagePreviewObjectUrl;
+  document.getElementById('imagePreview').style.cssText = 'display:block!important;';
+  const status = document.getElementById('imageUploadStatus');
+  if (status) status.textContent = 'جاري تجهيز ورفع الصورة…';
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  imageUploadPromise = (async () => {
+    try {
+      const prepared = await prepareComposerImage(file);
+      if (generation !== imageUploadGeneration || sender !== currentSenderId || controller.signal.aborted) return false;
+      const fd = new FormData(); fd.append('image', prepared); fd.append('purpose', 'library');
+      const res = await apiFetch('/api/upload_image?store_id=' + encodeURIComponent(currentCustomer?.store_id || 'default'), {method: 'POST', body: fd, signal: controller.signal});
+      const data = await res.json();
+      if (generation !== imageUploadGeneration || sender !== currentSenderId) return false;
+      if (!res.ok || !data.image_url) throw new Error(data.error || 'تعذر رفع الصورة');
+      uploadedImageUrl = data.image_url;
+      if (status) status.textContent = 'الصورة جاهزة؛ اضغط إرسال — النص اختياري';
+      return true;
+    } catch (error) {
+      if (generation === imageUploadGeneration && sender === currentSenderId) {
+        clearImage();
+        showToast(error.name === 'AbortError' ? 'انتهت مهلة رفع الصورة؛ حاول مجدداً' : error.message, 'danger');
+      }
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      if (generation === imageUploadGeneration) { imageUploadController = null; imageUploadPromise = null; }
+    }
+  })();
+  return await imageUploadPromise;
 }
 
 function clearImage() {
+  imageUploadGeneration++;
+  imageUploadController?.abort();
+  imageUploadController = null;
+  imageUploadPromise = null;
   uploadedImageUrl = null;
-  document.getElementById('imagePreview').style.display = 'none';
+  if (imagePreviewObjectUrl) URL.revokeObjectURL(imagePreviewObjectUrl);
+  imagePreviewObjectUrl = null;
   document.getElementById('imagePreview').style.cssText = 'display:none!important;';
-  document.getElementById('previewImg').src             = '';
-  document.getElementById('imageUpload').value          = '';
+  document.getElementById('previewImg').src = '';
+  document.getElementById('imageUpload').value = '';
+  const status = document.getElementById('imageUploadStatus');
+  if (status) status.textContent = '';
 }
 
 // ══ Customer Info ══════════════════════════════════════════════════════════
@@ -1807,7 +1871,12 @@ async function markHumanReview() {
   try {
     const res  = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
     const data = await res.json();
-    if (data.ok) { showToast('تم إغلاق المراجعة', 'success'); loadConversations(false); }
+    if (!res.ok || !data.ok) throw new Error(data.error || 'تعذر إغلاق المراجعة');
+    currentConversationAIEnabled = Boolean(data.ai_enabled);
+    renderConversationAIToggle();
+    hideHumanIntervention();
+    showToast('تم إغلاق المراجعة', 'success');
+    await loadConversations(false, false, true);
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
@@ -1829,7 +1898,7 @@ async function deleteConversation() {
       history.replaceState(cleanState, '', cleanUrl);
     }
     showToast('تم حذف المحادثة', 'success');
-    await loadConversations(false);
+    await loadConversations(false, false, true);
     await loadStats();
   } catch (e) {
     showToast(e.message || 'فشل حذف المحادثة', 'danger');

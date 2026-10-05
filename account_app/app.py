@@ -28,7 +28,7 @@ try:
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
-    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context
+    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance
     from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
@@ -41,7 +41,7 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
-    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context
+    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance
     from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
@@ -1450,6 +1450,8 @@ PRODUCT_FIELDS = (
     "store_id", "product_id", "ref", "ad_id", "product_name", "keywords", "category",
     "description", "visual_description", "price", "offer", "colors", "sizes",
     "stock", "stock_quantity", "fabric", "style", "delivery", "image_url",
+    "lining", "transparency", "stretch", "closure", "measurements", "fit_notes",
+    "bundle_contents", "sale_unit", "real_photo_notes", "video_url", "faq", "inspection_policy",
     "image_colors", "image_embedding", "status", "notes", "order_name",
 )
 
@@ -1530,6 +1532,15 @@ def load_products_from_file(store_id=None, all_stores=False):
 
 
 def save_products_to_file(products):
+    if os.path.exists(PRODUCTS_FILE):
+        storage_db = sqlite3.connect(DB_PATH, timeout=30)
+        try:
+            storage_maintenance.init(storage_db)
+            old_products = load_products_from_file(all_stores=True)
+            storage_maintenance.register_legacy(storage_db, UPLOADS_DIR, old_products)
+            storage_maintenance.retire_product_images(sys.modules[__name__], storage_db, old_products, products)
+        finally:
+            storage_db.close()
     temp_path = PRODUCTS_FILE + ".tmp"
     with open(temp_path, "w", encoding="utf-8") as f:
         json.dump(products, f, ensure_ascii=False, indent=2)
@@ -3605,21 +3616,29 @@ def notification_problem_summary(reason):
 
 
 def format_telegram_alert(reason, review_id=None, order_id=None, customer=None, message=None):
-    problem, action = notification_problem_summary(reason)
-    lines = ["🔔 " + short_notification_text(get_store_name(), 50), "المشكلة: " + problem]
+    lines = ["🔔 تدخل بشري", short_notification_text(get_store_name(), 50)]
     if review_id:
         lines.append(f"المراجعة: #{review_id}")
     if order_id:
         lines.append(f"الطلب: #{order_id}")
     if customer:
         lines.append("الزبون: " + short_notification_text(customer, 50))
-    if message:
-        lines.append("رسالته: " + short_notification_text(message, 90))
-    lines.append("المطلوب: " + action)
     return "\n".join(lines)
 
 
+def is_technical_handoff(reason):
+    text = str(reason or '').lower()
+    return any(marker in text for marker in (
+        'exception:', 'provider_http_', 'image analysis service failure:',
+        'invalid_ai_response', 'empty_reply', 'could not produce a reply',
+        'timeout', 'timed out', 'payment required', 'insufficient credit',
+        'send_failed', 'delivery_uncertain',
+    )) and 'unresolved_product_decision' not in text
+
+
 def send_problem_to_telegram(problem):
+    if not is_technical_handoff(problem.get('reason')):
+        return False
     chat_id = telegram_notifications_chat_id()
     if not chat_id:
         print("[Telegram] No problems chat configured. Problem message skipped.", flush=True)
@@ -3635,10 +3654,10 @@ def send_problem_to_telegram(problem):
 
 
 def get_problem_reports(db, status=None, limit=200):
-    query = "SELECT * FROM problem_reports"
+    query = "SELECT * FROM problem_reports WHERE EXISTS (SELECT 1 FROM customers c WHERE c.sender_id=problem_reports.sender_id)"
     params = []
     if status:
-        query += " WHERE status=?"
+        query += " AND status=?"
         params.append(status)
     query += " ORDER BY created_at DESC LIMIT ?"
     params.append(limit)
@@ -3726,7 +3745,8 @@ def create_human_review(db, ev, reason, candidates=None, notify_telegram=True):
                           (ev.get('sender_id'), reason)).fetchone()
     if existing:
         return existing['id']
-    technical = any(part in str(reason) for part in ('exception:', 'provider_http_', 'Image analysis service failure:', 'invalid_ai_response'))
+    technical = is_technical_handoff(reason)
+    notify_telegram = notify_telegram and technical
     if technical:
         code = next((part for part in ('provider_http_402', 'provider_http_401', 'provider_http_429', 'ReadTimeout') if part in reason), 'ai_service')
         store = ev.get('store_id') or current_store_id()
@@ -6136,11 +6156,9 @@ def previous_product_clarification(db, sender_id):
 
 
 def product_clarification_or_review(db, ev, question):
+    # Ask for a concrete identifier instead of repeating the same comparison.
     if previous_product_clarification(db, ev['sender_id']):
-        review_id = create_human_review(db, ev,
-            "تعذر حسم اختيار المنتجات بعد سؤال توضيح؛ راجع الصور والقطع المطلوبة قبل الحجز")
-        return {'sender_id': ev['sender_id'], 'reply': '', 'send_image': False,
-                'meta': {'needs_human': True, 'human_review_id': review_id, 'reason': 'unresolved_product_decision'}}
+        question = 'حتى أحدد اختيارج صح، دزي اسم الموديل أو صورته وحددي القطعة المطلوبة.'
     return saved_checkout_reply(db, ev, question, {'product_selection_clarification': True})
 
 
@@ -7209,6 +7227,7 @@ def call_main_ai(
 ):
     context = (sales_context.load(get_db(), current_store_id(), ev['sender_id'])
                if has_app_context() and ev.get('sender_id') else sales_context.advance({}, history))
+    context = sales_context.advance(context, [{'direction': 'incoming', 'text': ev.get('text'), 'id': ev.get('message_id')}])
     continuation = sales_context.continuation(ev.get('text'), context)
     if message_type != 'text' or ev.get('image_url') or ev.get('_image_matches'):
         continuation = None
@@ -7253,7 +7272,7 @@ def call_main_ai(
     question = ev.get("text") or ""
     missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') else ''
     if missing_fact and not re.search(r'سعر|بكم|بشكد|توصيل|الوان|ألوان|خصم', question):
-        return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':True,'_suppress_product_images':True}
+        return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':sales_strategy.fact_requires_human(question, matched_product),'_suppress_product_images':True}
     if matched_product and requests_alternative_photo(question) and len(product_image_urls(matched_product)) <= 1:
         instructions_text += "\nالزبون يطلب تصويراً إضافياً، ولا يوجد لهذا المنتج سوى صورة الكتالوج. وضّح ذلك بطريقتك دون طلب صورته مجدداً أو الوعد بتصوير غير موجود."
     simple_text = re.sub(r"[^\w\u0600-\u06ff]+", " ", question).strip()
@@ -7366,21 +7385,28 @@ def call_main_ai(
     if result.get('requires_human') is True or is_ai_handoff_reply(result.get('reply')):
         missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') else ''
         if missing_fact:
-            return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':True,'_suppress_product_images':True}
+            return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':sales_strategy.fact_requires_human(question, matched_product),'_suppress_product_images':True}
         return dict(result, reply='', create_order=False, failed=True,
                     failure_reason=result.get('handoff_reason') or 'unresolved_decision_after_context_review')
+    if (sales_context.browse_request(question) and not ev.get('_post_order')
+            and reply_reasks_known_product(result.get('reply'))):
+        options = [p for p in sales_context.browse_candidates(question, products or [])
+                   if _stock_state(p) == 'available' and str(p.get('price') or '').replace(',', '').isdigit()
+                   and int(str(p['price']).replace(',', '')) > 0][:2]
+        if options:
+            labels = [f"{p['product_name']} بـ{int(str(p['price']).replace(',', '')):,} د.ع" for p in options]
+            return {'reply': 'من الخيارات المتوفرة: ' + '، '.join(labels) + '؛ يا موديل تحبين تشوفين تفاصيله؟',
+                    'create_order': False, 'order': {}, '_browse_only': True,
+                    '_local_reply': True, '_suppress_product_images': True}
     if (has_app_context() and ev.get('sender_id') and reply_reasks_known_product(result.get('reply'))
             and previous_product_clarification(get_db(), ev['sender_id'])):
-        return {'reply': '', 'create_order': False, 'failed': True, 'requires_human': True,
-                'failure_reason': 'unresolved_product_decision_after_clarification'}
+        return {'reply': 'حتى أحدد اختيارج صح، دزي اسم الموديل أو صورته وحددي القطعة المطلوبة.',
+                'create_order': False, 'order': {}, '_local_reply': True}
     pending = pending_product_choice(get_db(), ev.get("sender_id")) if has_app_context() else None
     if pending and checkout_requested(get_db(), ev, result):
         catalog = {p["product_id"]: p for p in products}
         previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
         selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
-        if previous_product_clarification(get_db(), ev['sender_id']):
-            return {'reply': '', 'create_order': False, 'failed': True, 'requires_human': True,
-                    'failure_reason': 'unresolved_product_decision_after_clarification'}
         return {"reply": product_choice_question(previous, selected), "create_order": False, "order": {}, "intent": "product_choice"}
     return result
 
@@ -7507,10 +7533,11 @@ def _call_main_ai_once(
             "product_id", "product_name", "price", "stock",
             "stock_quantity", "sizes", "colors", "fabric", "style",
             "description", "category", "keywords", "offer", "delivery", "notes",
+            *sales_context.PRODUCT_KNOWLEDGE_FIELDS,
             "image_url" if full else None,
             "image_colors" if full else None,
         )
-        shortened = {k: prod.get(k) for k in keys if k}
+        shortened = {k: prod.get(k) for k in keys if k and prod.get(k) not in (None, "", [])}
         if full:
             shortened["image_variants"] = product_image_variants(prod)
         return shortened
@@ -7524,14 +7551,15 @@ def _call_main_ai_once(
     question_text = ev.get("text") or ""
     normalized_question = sales_strategy.normalized(question_text)
     wants_options = (
-        _text_contains_any(question_text, _CATALOG_KEYWORDS)
+        sales_context.browse_request(question_text)
+        or _text_contains_any(question_text, _CATALOG_KEYWORDS)
         or bool(re.search(r"ارخص|بديل|ميزاني|خيارات|موديلات|الفرق|شنو الفرق", normalized_question))
     )
     named_products = [
         p for p in (products or [])
         if p.get("product_name") and sales_strategy.normalized(p["product_name"]) in normalized_question
     ]
-    candidate_products = named_products or ((products or []) if wants_options else [])
+    candidate_products = named_products or (sales_context.browse_candidates(question_text, products or []) if wants_options else [])
     products_short = [
         _short_product(p)
         for p in candidate_products
@@ -7549,6 +7577,7 @@ def _call_main_ai_once(
         f"{IRAQI_HUMAN_STYLE_LOCK}\n\n"
         f"{COMPACT_MAIN_OUTPUT_PROMPT}"
     )
+    system_prompt += "\nتصحيحات العميل الأحدث تتقدم على اختيار المنتج القديم. طلب الخيارات ضمن ميزانية هو استكشاف: اعرضي خيارين مناسبين ولا تطلبي صورة لقطعة لم يخترها. الحقول الجديدة حقائق موثقة إن كانت معبأة فقط؛ فراغ البطانة أو القياسات لا يعني عدم وجودها. محتويات البكج وطريقة البيع مرجع قبل عرض المفرد.\n"
     system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
     if post_order:
         system_prompt += "\n\n" + POST_ORDER_SERVICE_RULES
@@ -10967,6 +10996,12 @@ def api_delete_conversation(sender_id):
         return jsonify({"ok": False, "error": "sender_id required"}), 400
 
     db = get_db()
+    # Reserve the write lock so a queued worker cannot claim this sender midway
+    # through deletion. Running jobs must finish before their state is removed.
+    db.execute('BEGIN IMMEDIATE')
+    if db.execute("SELECT 1 FROM ai_jobs WHERE sender_id=? AND status='running' LIMIT 1", (sender_id,)).fetchone():
+        db.rollback()
+        return jsonify(ok=False, error="المحادثة قيد المعالجة حالياً؛ أعد الحذف بعد اكتمال الرد"), 409
     deleted = {}
     for table in (
         "sales_conversation_context",
@@ -10974,11 +11009,20 @@ def api_delete_conversation(sender_id):
         "messages",
         "conversation_memory",
         "human_reviews",
+        "problem_reports",
+        "ai_jobs",
+        "followups",
+        "customer_followup_messages",
+        "customer_image_positions",
+        "customer_product_choices",
+        "ai_reply_drafts",
         "customer_product_interests",
         "customer_instructions",
         "customer_ai_settings",
         "sender_processing_locks",
     ):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+            continue
         cur = db.execute(f"DELETE FROM {table} WHERE sender_id=?", (sender_id,))
         deleted[table] = cur.rowcount
     cur = db.execute("DELETE FROM customers WHERE sender_id=?", (sender_id,))
@@ -11130,7 +11174,7 @@ def api_send_message(sender_id):
     owner_store = (customer["store_id"] if customer else None) or current_store_id()
     token = _current_store_id.set(owner_store)
     try:
-        text, reply_meta, error = apply_dashboard_ai_checkout(db, sender_id, text)
+        text, reply_meta, error = apply_dashboard_ai_checkout(db, sender_id, text) if text else (text, {"manual_reply": True}, None)
         if error:
             return jsonify({"ok": False, "error": error}), 409
     finally:
@@ -11786,6 +11830,40 @@ def api_link_product(sender_id):
     })
 
 
+@app.get('/api/image_library')
+@_dash_require
+def api_image_library():
+    try:
+        offset = max(0, int(request.args.get('offset', 0)))
+    except ValueError:
+        return jsonify(error="صفحة غير صحيحة"), 400
+    db = get_db()
+    storage_maintenance.init(db)
+    with _products_file_lock:
+        storage_maintenance.register_legacy(db, UPLOADS_DIR, load_products_from_file(all_stores=True))
+    return jsonify(ok=True, **storage_maintenance.library_page(db, UPLOADS_DIR, current_store_id(), offset))
+
+
+@app.post('/api/maintenance/storage/preview')
+@app.post('/api/maintenance/storage/cleanup')
+@_dash_require
+def api_storage_cleanup():
+    preview = request.path.endswith('/preview')
+    db = get_db()
+    try:
+        products = storage_maintenance.catalog_snapshot(PRODUCTS_FILE)
+    except (OSError, ValueError):
+        return jsonify(error="تعذر قراءة كتالوج المنتجات؛ لم يتم تنظيف الصور"), 409
+    with _products_file_lock:
+        products = storage_maintenance.catalog_snapshot(PRODUCTS_FILE)
+        storage_maintenance.init(db)
+        storage_maintenance.register_legacy(db, UPLOADS_DIR, products)
+        result = storage_maintenance.cleanup(db, UPLOADS_DIR, products, preview=preview, force=True, product_root=PRODUCT_IMAGE_DIR)
+    if not preview:
+        result['compacted'] = storage_maintenance.compact_database(db)
+    return jsonify(ok=True, **result)
+
+
 @app.route("/api/upload_image", methods=["POST"])
 @_dash_require
 def api_upload_image():
@@ -11799,14 +11877,20 @@ def api_upload_image():
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     allowed_extensions = {".png", ".jpg", ".jpeg", ".webp"}
     uploaded = []
+    db = get_db()
+    storage_maintenance.init(db)
+    library = request.form.get('purpose', 'library') != 'product'
+    store = current_store_id()
     for index, file in enumerate(files):
         ext = os.path.splitext(file.filename)[1].lower()
         if ext not in allowed_extensions:
             return jsonify({"error": f"صيغة الصورة غير مدعومة: {file.filename}"}), 400
-        filename = f"product_{time.time_ns()}_{index}{ext}"
-        file.save(os.path.join(UPLOADS_DIR, filename))
+        content = file.stream.read(20 * 1024 * 1024 + 1)
+        if not content or len(content) > 20 * 1024 * 1024:
+            return jsonify(error="الصورة فارغة أو تتجاوز 20 ميغابايت"), 400
+        filename, reused = storage_maintenance.store_upload(db, UPLOADS_DIR, store, file.filename, content, ext, library)
         image_url = build_public_image_url(f"/product_image/uploads/{filename}")
-        uploaded.append({"image_url": image_url, "filename": filename})
+        uploaded.append({"image_url": image_url, "filename": filename, "reused": reused})
         print(f"[Dashboard] Image uploaded: {filename}", flush=True)
     return jsonify({
         "ok": True,
@@ -13400,6 +13484,11 @@ def start_smart_reviewer_thread():
             try:
                 db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
                 db.row_factory = sqlite3.Row
+                try:
+                    with _products_file_lock:
+                        storage_maintenance.cleanup(db, UPLOADS_DIR, storage_maintenance.catalog_snapshot(PRODUCTS_FILE), product_root=PRODUCT_IMAGE_DIR)
+                except Exception as cleanup_error:
+                    print(f"[Storage] Cleanup skipped: {type(cleanup_error).__name__}")
                 for store in list_stores(db):
                     if not store.get("active"):
                         continue

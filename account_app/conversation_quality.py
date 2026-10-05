@@ -71,7 +71,7 @@ def grounded_error(reply, product, products):
             count, price, free = 1, None, False
         if count > 1 and re.search(r"(?:المفرد|مفرد|قطعه وحده|قطعة وحدة).{0,25}(?:سعر|الف|الاف|\d)", text):
             return "هذا المنتج يباع بكجاً فقط؛ لا يوجد سعر مفرد معتمد."
-        recorded = normalized(" ".join(str(product.get(k) or "") for k in ("description", "notes", "fabric", "sizes")))
+        recorded = normalized(" ".join(str(product.get(k) or "") for k in ("description", "notes", "fabric", "sizes", "lining", "stretch", "measurements", "bundle_contents")))
         if re.search(r"(?:طولها|طوله|طول الموديل)\s*\d", text) and not re.search(r"طول|سم", recorded):
             return "طول المنتج غير مسجل؛ لا تستنتجه من طول الزبون."
         if re.search(r"(?:بدون|بلا|مع|ويه) شال", text) and "شال" not in recorded:
