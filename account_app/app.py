@@ -27,7 +27,7 @@ try:
     from . import baraah, sales_engagement, menger, chatwoot, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
-    from .staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
+    from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance
     from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
@@ -40,7 +40,7 @@ except ImportError:
     import ad_attribution
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
-    from staff_access import install as install_staff, authenticate as authenticate_staff, StaffPermissionDenied
+    from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance
     from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
@@ -320,7 +320,9 @@ PRODUCTS_SEED_FILE = os.path.join(APP_DIR, "products.json")
 PRODUCTS_FILE = os.environ.get("PRODUCTS_FILE", os.path.join(DATA_DIR, "products.json"))
 if PRODUCTS_FILE != PRODUCTS_SEED_FILE and not os.path.exists(PRODUCTS_FILE):
     shutil.copyfile(PRODUCTS_SEED_FILE, PRODUCTS_FILE)
-PRODUCT_IMAGE_DIR = os.path.join(APP_DIR, "product_image")
+PRODUCT_IMAGE_DIR = os.path.join(DATA_DIR, "product_image")
+if DATA_DIR != APP_DIR and not os.path.exists(PRODUCT_IMAGE_DIR):
+    shutil.copytree(os.path.join(APP_DIR, "product_image"), PRODUCT_IMAGE_DIR)
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", os.path.join(DATA_DIR, "uploads"))
 CATALOG_IMAGE_DIR = os.environ.get("CATALOG_IMAGE_DIR", os.path.join(DATA_DIR, "catalog"))
 if not os.path.isabs(CATALOG_IMAGE_DIR):
@@ -780,6 +782,16 @@ def _extract_ad_info_from_body(body):
                     f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 
             print(f"[AdTrack] page_id={page_id} ad_id={ad_id}", flush=True)
+
+
+@app.before_request
+def guard_storage_restore():
+    if storage_restore_pending() and request.method not in {'GET', 'HEAD', 'OPTIONS'} and request.path not in {'/login', '/api/import/full-backup'}:
+        return jsonify(error='نقل البيانات قيد التنفيذ؛ أعد المحاولة بعد قليل'), 503, {'Retry-After': '30'}
+
+
+def storage_restore_pending():
+    return os.environ.get('STORAGE_RESTORE_REQUIRED') == '1' and not os.path.isfile(os.path.join(DATA_DIR, '.storage-restored'))
 
 
 @app.before_request
@@ -6395,10 +6407,18 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
 
 # ── AI config loader ──────────────────────────────────────────────────────────
 
-_INSTRUCTIONS_FILE  = os.path.join(os.path.dirname(__file__), "instructions.txt")
-_PLAYBOOK_FILE      = os.path.join(os.path.dirname(__file__), "gemini_sales_playbook.md")
-_PRODUCT_AI_SUMMARY_FILE = os.path.join(os.path.dirname(__file__), "product_ai_summary.txt")
-_FORBIDDEN_RULES_FILE = os.path.join(os.path.dirname(__file__), "forbidden_rules.txt")
+def persistent_editable_file(filename):
+    destination = os.path.join(DATA_DIR, filename)
+    seed = os.path.join(APP_DIR, filename)
+    if destination != seed and not os.path.exists(destination) and os.path.isfile(seed):
+        shutil.copyfile(seed, destination)
+    return destination
+
+
+_INSTRUCTIONS_FILE  = persistent_editable_file("instructions.txt")
+_PLAYBOOK_FILE      = persistent_editable_file("gemini_sales_playbook.md")
+_PRODUCT_AI_SUMMARY_FILE = persistent_editable_file("product_ai_summary.txt")
+_FORBIDDEN_RULES_FILE = persistent_editable_file("forbidden_rules.txt")
 _ADVISOR_MEMORY_FILE = os.path.join(DATA_DIR, "advisor_memory.md")
 _advisor_memory_lock = threading.RLock()
 
@@ -10672,7 +10692,7 @@ def api_import_full_backup():
                 if integrity != "ok" or not required.issubset(tables):
                     return jsonify({"error": "قاعدة البيانات داخل النسخة ناقصة أو تالفة"}), 400
 
-                backups_dir = os.path.join(APP_DIR, "backups")
+                backups_dir = os.path.join(DATA_DIR, "backups")
                 os.makedirs(backups_dir, exist_ok=True)
                 safety_path = os.path.join(
                     backups_dir,
@@ -10729,6 +10749,9 @@ def api_import_full_backup():
                 _restore_directory_from_backup(bundle, "images/products", PRODUCT_IMAGE_DIR),
             ))
             _advisor_sync_memory_file(get_db())
+            if os.environ.get('STORAGE_RESTORE_REQUIRED') == '1':
+                with open(os.path.join(DATA_DIR, '.storage-restored'), 'w', encoding='utf-8') as marker:
+                    marker.write(now_baghdad_iso())
         return jsonify({
             "ok": True,
             "message": "تمت استعادة النسخة الكاملة بنجاح",
@@ -10777,7 +10800,7 @@ def api_import_database():
             if missing:
                 return jsonify({"error": "قاعدة البيانات لا تحتوي الجداول المطلوبة: " + ", ".join(missing)}), 400
 
-            backups_dir = os.path.join(os.path.dirname(__file__), "backups")
+            backups_dir = os.path.join(DATA_DIR, "backups")
             os.makedirs(backups_dir, exist_ok=True)
             backup_path = os.path.join(
                 backups_dir,
@@ -14246,6 +14269,7 @@ def api_create_order(sender_id):
 def close_human_attention(db, sender_id=None):
     """Close both persisted sources of the human-intervention inbox filter."""
     order_actions.init(db)
+    order_actions.reconcile(db, sender_id)
     clause = ' AND sender_id NOT IN (SELECT sender_id FROM order_action_requests WHERE status="pending")'
     if sender_id is not None:
         clause += ' AND sender_id=?'
@@ -14284,7 +14308,22 @@ def api_mark_reviewed(sender_id):
     data = request.get_json(silent=True) or {}
     db  = get_db()
     if order_actions.pending(db, sender_id):
-        return jsonify(ok=False, error="يوجد إلغاء أو تعديل طلب لم يُنفذ بعد؛ نفّذه من الطلب قبل إغلاق المراجعة"), 409
+        pending = [dict(row) for row in db.execute("SELECT id,order_id,kind,value FROM order_action_requests WHERE sender_id=? AND status='pending' ORDER BY id", (sender_id,))]
+        person = current_dashboard_person() or {}
+        can_confirm = bool(person.get('owner') or 'orders' in person.get('permissions', []))
+        ids = data.get('completed_action_ids')
+        if ids is not None:
+            if not can_confirm:
+                return jsonify(ok=False, error='تأكيد تنفيذ مهام الطلب يحتاج صلاحية إدارة الطلبات'), 403
+            if not isinstance(ids, list) or any(type(value) is not int for value in ids) or set(ids) != {row['id'] for row in pending}:
+                return jsonify(ok=False, error='تغيرت مهام الطلب؛ حدّث المحادثة وراجعها مجدداً'), 409
+            staff_tables(db)
+            with db:
+                for action_id in ids:
+                    db.execute("UPDATE order_action_requests SET status='completed_externally',resolved_at=? WHERE id=? AND sender_id=? AND status='pending'", (now_baghdad_iso(), action_id, sender_id))
+                    db.execute("INSERT INTO staff_audit(staff_id,method,path) VALUES(?, 'POST', ?)", (person.get('id'), f'/order_action_requests/{action_id}/completed_externally'))
+        else:
+            return jsonify(ok=False, error="يوجد إلغاء أو تعديل طلب معلّق؛ نفّذه من الطلب، أو أكد إنجازه خارج النظام", pending_actions=pending, can_confirm_completion=can_confirm), 409
     closed = close_human_attention(db, sender_id)
     if _setting_bool(data.get("resume_ai"), True):
         try:
@@ -14322,7 +14361,7 @@ bootstrap_app(load_clip=False)
 
 # Gunicorn imports the module and never enters __main__. Start the automatic
 # reviewer here as well so production follow-ups do not depend on a manual action.
-if os.environ.get("ENABLE_BACKGROUND_JOBS", "1") == "1" and "pytest" not in sys.modules:
+if os.environ.get("ENABLE_BACKGROUND_JOBS", "1") == "1" and "pytest" not in sys.modules and not storage_restore_pending():
     _background_jobs_started = True
     start_smart_reviewer_thread()
     menger.start_worker(DB_PATH)

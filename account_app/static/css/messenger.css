@@ -1,4 +1,22 @@
 /* Inbox layout scoped to the messaging page. */
+.messenger-page { --surface:#ffffff; --surface-2:#f1f6f4; --border:#dce8e3; --primary-light:#29877b; --msg-in:#fff; --msg-out:#176d65; --sidebar-bg:#fff; --control-bg:#fff; --chat-bg:#f4f8f5; }
+.messenger-page .navbar-custom { background:linear-gradient(110deg,#153f3b,#176d65)!important; box-shadow:0 4px 20px #153f3b18; }
+.messenger-page .chat-panel {min-width:0;}
+.messenger-page .msg-bubble {font-size:14px;line-height:1.9!important;box-shadow:0 2px 8px #173e3510!important;overflow-wrap:anywhere;}
+.messenger-page .msg-wrapper.incoming .msg-bubble {background:#fff!important;border:1px solid #e0ebe5!important;border-radius:18px 18px 5px 18px!important;}
+.messenger-page .msg-wrapper.outgoing .msg-bubble {background:linear-gradient(125deg,#176d65,#248578)!important;border-radius:18px 18px 18px 5px!important;}
+.messenger-page .msg-time {font-size:10px;opacity:.8;}
+.messenger-page .messages-area {overscroll-behavior:contain;scrollbar-width:thin;}
+.messenger-page .ctrl-section {margin:10px;padding:14px;border:1px solid #e3ece7;border-radius:16px;background:#fff;}
+.messenger-page .ctrl-header {font-weight:700;margin-bottom:12px;}
+.messenger-page .form-control:focus,.messenger-page .input-textarea:focus {border-color:#29877b;box-shadow:0 0 0 3px #29877b16;}
+.messenger-page .input-btn {min-height:40px;border-radius:12px;}
+.messenger-page .send-btn {box-shadow:0 4px 12px #176d6520;}
+.messenger-page .customer-item:hover {background:#f2f7f4;}
+.messenger-page button:focus-visible,.messenger-page a:focus-visible {outline:2px solid #29877b;outline-offset:3px;}
+.messenger-page .chat-placeholder>i {display:inline-flex;align-items:center;justify-content:center;width:96px;height:96px;margin-bottom:24px;border-radius:30px;background:#e1eee7;color:#176d65;opacity:1!important;}
+@media(min-width:769px) and (max-width:1199px){.messenger-page {--sidebar-w:320px}.messenger-page .main-container{padding:8px;gap:8px}.messenger-page .sidebar,.messenger-page .chat-panel{border-radius:16px;border:1px solid #dfe9e3;overflow:hidden}}
+@media(max-width:768px){.messenger-page .input-btn{min-height:44px}.messenger-page .msg-bubble{font-size:14px}.messenger-page .chat-placeholder h2{font-size:21px}}
 .messenger-page { --sidebar-w:370px; --primary:#176d65; --text:#203d38; --text-muted:#647c76; }
 .messenger-page .inbox-heading {display:flex;align-items:center;justify-content:space-between;padding:22px 18px 12px;gap:12px;background:#fff}
 .inbox-heading h1 {font-size:25px;font-weight:800;margin:3px 0}.inbox-heading small {font-size:11px;color:#647c76}

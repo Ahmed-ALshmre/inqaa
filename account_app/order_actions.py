@@ -20,15 +20,38 @@ def record(db, sender, order_id, action, now):
 
 def pending(db, sender):
     init(db)
+    reconcile(db, sender)
     return db.execute("SELECT id FROM order_action_requests WHERE sender_id=? AND status='pending' LIMIT 1", (sender,)).fetchone() is not None
+
+
+def reconcile(db, sender=None):
+    """Recover completed actions from the saved order before blocking review closure."""
+    init(db)
+    clause = ' AND r.sender_id=?' if sender is not None else ''
+    params = (sender,) if sender is not None else ()
+    orders = db.execute('''SELECT DISTINCT o.* FROM orders o
+        JOIN order_action_requests r ON r.order_id=o.id AND r.sender_id=o.sender_id
+        WHERE r.status='pending' ''' + clause, params).fetchall()
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo('Asia/Baghdad')).isoformat()
+    with db:
+        for order in orders:
+            resolve_applied(db, dict(order), now)
 
 
 def resolve_applied(db, order, now):
     init(db)
-    for row in db.execute("SELECT id,kind,value FROM order_action_requests WHERE order_id=? AND status='pending'", (order['id'],)).fetchall():
+    for row in db.execute("SELECT id,kind,value FROM order_action_requests WHERE order_id=? AND sender_id=? AND status='pending'", (order['id'], order.get('sender_id'))).fetchall():
         applied = row['kind'] == 'cancel' and order.get('status') in {'cancelled','canceled','ملغي'}
         if row['kind'] == 'size':
-            items = json.loads(order.get('order_items') or '[]')
-            applied = len(items) == 1 and str(items[0].get('size')) == row['value']
+            try:
+                items = json.loads(order.get('order_items') or '[]')
+            except (ValueError, TypeError):
+                items = []
+            if isinstance(items, list):
+                applied = len(items) == 1 and isinstance(items[0], dict) and str(items[0].get('size', '')).strip() == row['value'].strip()
+                if not items:
+                    applied = str(order.get('size') or '').strip() == row['value'].strip()
         if applied:
             db.execute("UPDATE order_action_requests SET status='applied',resolved_at=? WHERE id=?", (now,row['id']))

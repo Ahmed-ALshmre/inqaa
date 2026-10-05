@@ -58,6 +58,52 @@ class CloseHumanAttentionTests(unittest.TestCase):
         client = m.app.test_client()
         self.assertIn(client.post('/api/maintenance/close_human_reviews').status_code, [302, 401, 403])
 
+    def test_completed_cancel_is_reconciled_before_closing(self):
+        order_id = self.db.execute("INSERT INTO orders(sender_id,status) VALUES('old','cancelled')").lastrowid
+        m.order_actions.record(self.db, 'old', order_id, {'kind': 'cancel', 'value': 'cancelled'}, m.now_baghdad_iso())
+        response = self.client.post('/api/conversations/old/mark_reviewed', json={'resume_ai': False})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(m.order_actions.pending(self.db, 'old'))
+        self.assertFalse(m.is_customer_ai_enabled(self.db, 'old'))
+
+    def test_completed_size_is_reconciled_in_bulk_close(self):
+        order_id = self.db.execute('''INSERT INTO orders(sender_id,order_items) VALUES('old','[{"size":"44"}]')''').lastrowid
+        m.order_actions.record(self.db, 'old', order_id, {'kind': 'size', 'value': '44'}, m.now_baghdad_iso())
+        self.assertEqual(self.client.post('/api/maintenance/close_human_reviews').json['closed_conversations'], 2)
+        self.assertFalse(m.order_actions.pending(self.db, 'old'))
+
+    def test_unfinished_action_still_blocks_closing(self):
+        order_id = self.db.execute("INSERT INTO orders(sender_id,status) VALUES('old','new')").lastrowid
+        m.order_actions.record(self.db, 'old', order_id, {'kind': 'cancel', 'value': 'cancelled'}, m.now_baghdad_iso())
+        self.assertEqual(self.client.post('/api/conversations/old/mark_reviewed').status_code, 409)
+        self.assertTrue(m.has_pending_human_review(self.db, 'old'))
+
+    def test_explicit_external_completion_is_saved_and_audited(self):
+        order_id = self.db.execute("INSERT INTO orders(sender_id,status) VALUES('old','new')").lastrowid
+        action_id = m.order_actions.record(self.db, 'old', order_id, {'kind': 'cancel', 'value': 'cancelled'}, m.now_baghdad_iso())
+        first = self.client.post('/api/conversations/old/mark_reviewed')
+        self.assertTrue(first.json['can_confirm_completion'])
+        response = self.client.post('/api/conversations/old/mark_reviewed', json={'completed_action_ids': [action_id]})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(m.order_actions.pending(self.db, 'old'))
+        self.assertEqual(self.db.execute('SELECT status FROM order_action_requests WHERE id=?', (action_id,)).fetchone()[0], 'completed_externally')
+        self.assertEqual(self.db.execute('SELECT status FROM orders WHERE id=?', (order_id,)).fetchone()[0], 'new')
+        self.assertIsNotNone(self.db.execute('SELECT 1 FROM staff_audit WHERE path=?', (f'/order_action_requests/{action_id}/completed_externally',)).fetchone())
+
+    def test_new_action_requires_new_confirmation(self):
+        first = m.order_actions.record(self.db, 'old', 99, {'kind': 'cancel', 'value': 'cancelled'}, m.now_baghdad_iso())
+        m.order_actions.record(self.db, 'old', 100, {'kind': 'size', 'value': '44'}, m.now_baghdad_iso())
+        response = self.client.post('/api/conversations/old/mark_reviewed', json={'completed_action_ids': [first]})
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(m.order_actions.pending(self.db, 'old'))
+
+    def test_reply_permission_does_not_allow_external_order_completion(self):
+        action_id = m.order_actions.record(self.db, 'old', 99, {'kind': 'cancel', 'value': 'cancelled'}, m.now_baghdad_iso())
+        with patch.object(m, 'current_dashboard_person', return_value={'id': 7, 'owner': False, 'permissions': ['reply']}):
+            response = self.client.post('/api/conversations/old/mark_reviewed', json={'completed_action_ids': [action_id]})
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(m.order_actions.pending(self.db, 'old'))
+
     def test_silent_link_resumes_immediately_without_sending(self):
         product = {'product_id': 'P1', 'product_name': 'فستان'}
         with patch.object(m, 'find_product_by_id', return_value=product), patch.object(m, 'auto_reply_after_product_link') as reply:

@@ -1004,7 +1004,8 @@ async function hiCloseReview() {
   if (_hiBusy || !currentSenderId) return;
   _hiSetBusy(true, 'hiBtnCloseReview');
   try {
-    const res = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
+    const res = await closeReviewWithCompletion(currentSenderId);
+    if (!res) return;
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'تعذر إغلاق المراجعة');
     currentConversationAIEnabled = Boolean(data.ai_enabled);
@@ -1866,10 +1867,22 @@ async function sendCatalog() {
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
+async function closeReviewWithCompletion(senderId) {
+  const path = `/api/conversations/${senderId}/mark_reviewed`;
+  const response = await apiFetch(path, {method:'POST'});
+  if (response.status !== 409) return response;
+  const data = await response.clone().json();
+  if (!data.can_confirm_completion || !data.pending_actions?.length) return response;
+  const actions = data.pending_actions.map(action => `الطلب #${action.order_id}: ${action.kind === 'cancel' ? 'إلغاء الطلب' : 'تعديل القياس إلى ' + action.value}`).join('\n');
+  if (!confirm(`هذه المهام ما زالت معلّقة بالسجل:\n${actions}\n\nهل نفّذتها بالفعل خارج النظام؟ التأكيد يسجل إنجازها ويغلق المراجعة، ولا يرسل تعديلًا أو إلغاءً إلى شركة الطلبات.`)) return null;
+  return apiFetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({completed_action_ids:data.pending_actions.map(action => action.id)})});
+}
+
 async function markHumanReview() {
   if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   try {
-    const res  = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
+    const res = await closeReviewWithCompletion(currentSenderId);
+    if (!res) return;
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'تعذر إغلاق المراجعة');
     currentConversationAIEnabled = Boolean(data.ai_enabled);
