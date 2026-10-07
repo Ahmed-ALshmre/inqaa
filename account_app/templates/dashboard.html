@@ -6,7 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <script>window.workspacePerson = {{ staff_person|tojson }};</script>
   <script src="/static/js/workspace.js?v=1"></script>
-  <meta name="theme-color" content="#642447">
+  <meta name="theme-color" content="#33243f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="صوف">
@@ -24,6 +24,9 @@
   <link rel="stylesheet" href="/static/css/rewards.css?v=3">
   <script defer src="/static/js/mascot.js?v=1"></script>
   <script defer src="/static/js/rewards.js?v=3"></script>
+  <link rel="stylesheet" href="/static/css/theme.css?v=1">
+  <link rel="stylesheet" href="/static/css/ui.css?v=1">
+  <script defer src="/static/js/ui.js?v=1"></script>
 </head>
 <body class="messenger-page">
 
@@ -124,7 +127,7 @@
 
   <!-- Column 1: Sidebar -->
   <div class="sidebar" id="sidebarPanel">
-    <div class="inbox-heading"><div><small>مساحة العمل</small><h1>المحادثات</h1></div><span id="inboxConnection" role="status">جاري الاتصال</span></div>
+    <div class="inbox-heading"><div class="ui-inbox-title"><span class="ui-inbox-symbol" aria-hidden="true"><i class="bi bi-chat-square-heart"></i></span><div><small>مساحة العمل</small><h1>المحادثات</h1></div></div><span id="inboxConnection" role="status">جاري الاتصال</span></div>
     <div id="inboxFilterPanel" class="inbox-filter-panel">
     <div class="p-2 border-bottom" style="border-color:var(--border)!important; background:var(--sidebar-bg);">
       <select class="form-select form-select-sm mb-2" id="conversationStoreFilter" onchange="setConversationStoreFilter(this.value)">
@@ -176,8 +179,17 @@
 
     <!-- Placeholder -->
     <div class="chat-placeholder" id="chatPlaceholder">
-      <i class="bi bi-chat-heart display-1 opacity-25"></i>
-      <h2 class="mt-3">كل محادثة، فرصة جديدة</h2><p>اختر زبوناً من القائمة لمتابعة الرسائل والطلبات</p>
+      <div class="ui-empty-content">
+        <span class="ui-empty-kicker"><i class="bi bi-stars" aria-hidden="true"></i> مساحة مبيعاتك</span>
+        <div class="ui-empty-icon" aria-hidden="true"><i class="bi bi-chat-heart"></i></div>
+        <h2>محادثات أقرب، خدمة أفضل</h2>
+        <p>اختر محادثة من القائمة لمتابعة الرسائل، مراجعة اختيارات الزبون وإكمال الطلب.</p>
+        <div class="ui-empty-links">
+          {% if can('products') %}<a href="/products"><i class="bi bi-box-seam" aria-hidden="true"></i> المنتجات</a>{% endif %}
+          {% if can('orders') %}<a href="/orders"><i class="bi bi-receipt" aria-hidden="true"></i> الطلبات</a>{% endif %}
+          {% if can('advisor') %}<a href="/advisor"><i class="bi bi-stars" aria-hidden="true"></i> المستشار</a>{% endif %}
+        </div>
+      </div>
     </div>
 
     <!-- Chat Content -->
@@ -276,7 +288,7 @@
           <button type="button" onclick="toggleControl()"><i class="bi bi-person-lines-fill"></i> بيانات وأدوات</button>
         </div>
         <div class="input-row">
-          <textarea class="form-control form-control-sm input-textarea" id="messageInput" rows="2"
+          <textarea class="form-control form-control-sm input-textarea" id="messageInput" rows="1" aria-label="رسالة إلى الزبون" aria-describedby="composerHint"
             placeholder="اكتب رسالة للزبون..."
             onkeydown="handleKeyDown(event)"></textarea>
           <div class="input-actions">
@@ -294,6 +306,7 @@
             </button>
           </div>
         </div>
+        <div class="ui-composer-hint" id="composerHint"><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> للإرسال · Enter لسطر جديد</span><span>راجع الرد قبل الإرسال</span></div>
         <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
       </div>
 

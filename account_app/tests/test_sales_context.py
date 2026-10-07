@@ -6,6 +6,46 @@ from account_app import sales_context, checkout
 
 
 class SalesContextTests(unittest.TestCase):
+    def test_short_answers_remain_linked_to_size_age_color_or_quantity_question(self):
+        for question, answer in [('شنو القياس؟', 'XL'), ('شنو اللون؟', 'تركواز'),
+                                 ('شكد عدد القطع؟', '٢'), ('شنو عمر الطفل؟', 'اربع')]:
+            with self.subTest(question=question):
+                state = sales_context.advance({}, [
+                    {'direction': 'outgoing', 'text': 'الموديل الثاني سوت'},
+                    {'direction': 'outgoing', 'text': question},
+                    {'direction': 'incoming', 'text': answer}])
+                evidence = state['evidence'][-1]
+                self.assertEqual(evidence['text'], answer)
+                self.assertEqual(evidence['in_reply_to'], question)
+                self.assertIn('الموديل الثاني سوت', evidence['staff_context'])
+                self.assertNotIn('size', evidence)
+
+    def test_color_correction_is_preserved_in_order_without_erasing_other_item(self):
+        state = sales_context.advance({}, [
+            {'direction': 'incoming', 'text': 'الاول قياس 44 اسود'},
+            {'direction': 'incoming', 'text': 'الثاني XL احمر'},
+            {'direction': 'incoming', 'text': 'لا اقصد الثاني ابيض مو احمر'}])
+        self.assertEqual([x['text'] for x in state['evidence']],
+                         ['الاول قياس 44 اسود', 'الثاني XL احمر', 'لا اقصد الثاني ابيض مو احمر'])
+        self.assertEqual(state['corrections'][-1]['text'], 'لا اقصد الثاني ابيض مو احمر')
+
+    def test_loaded_triggering_message_does_not_duplicate_its_evidence(self):
+        message = {'id': 8, 'direction': 'incoming', 'text': 'قياس 44'}
+        state = sales_context.advance({}, [message])
+        self.assertEqual(sales_context.advance(state, [message]), state)
+
+    def test_waiting_for_image_is_not_a_booking_or_model_failure(self):
+        from account_app import app as m
+        for text in ['هسة ادزلج الموديل', 'هسه ادز الصورة', 'راح ارسل الصورة', 'تمام ادزلج الصورة']:
+            with self.subTest(text=text), patch.object(m, '_call_main_ai_once') as model:
+                result = m.call_main_ai({'text': text}, 'text', {}, [], [], None, None, '', [])
+                model.assert_not_called()
+                self.assertFalse(result['create_order'])
+                self.assertFalse(result['requires_human'])
+                self.assertIn('بانتظار الصورة', result['reply'])
+        for text in ['ادزلج الصورة بس شكد التوصيل؟', 'اريد احجز', 'ادز الصورة لو الاسم؟']:
+            self.assertFalse(sales_context.awaiting_image_reply(text))
+
     def test_outgoing_image_before_new_offer_does_not_restore_rejected_product(self):
         state = sales_context.advance({}, [
             {'direction': 'outgoing', 'text': 'فستان أنيقة، تحبين صوره؟'},

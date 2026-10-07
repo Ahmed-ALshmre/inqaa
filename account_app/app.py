@@ -7302,6 +7302,12 @@ def call_main_ai(
     if sales_strategy.signals(question) == ['refusal']:
         return {'reply': 'حاضر، ما راح نراسلك بعد.', 'reply_parts': ['حاضر، ما راح نراسلك بعد.'],
                 'create_order': False, 'order': {}, 'intent': 'unknown', '_local_reply': True}
+    waiting_reply = sales_context.awaiting_image_reply(question)
+    if (waiting_reply and message_type == 'text' and not ev.get('image_url')
+            and not ev.get('_post_order') and not ev.get('_image_matches')):
+        return {'reply': waiting_reply, 'reply_parts': [waiting_reply],
+                'create_order': False, 'order': {}, 'intent': 'image_check',
+                'requires_human': False, '_local_reply': True}
     args = (ev, message_type, customer, history, products, matched_product,
             image_result, instructions_text, rules_list)
     kwargs = dict(fix_instruction=fix_instruction, customer_products=customer_products,
@@ -7460,11 +7466,20 @@ def _call_main_ai_once(
         and not matched_product
         and not customer_products
     ):
+        clarification = (
+            "ما واضح عندي أي موديل تقصدين حالياً. "
+            "دزيلي صورة المنتج أو اسمه حتى أتأكدلج من السعر والتوفر."
+        )
+        # Missing product identity does not make store policy unknown. Answer
+        # the independent part of a mixed question before asking for the model.
+        if re.search(r'توصيل|شحن|دفع', sales_strategy.normalized(ev['text'])):
+            policy = factual_customer_request(dict(ev, text='شلون الدفع والتوصيل؟'), products)
+            if policy:
+                parts = [policy['reply'], clarification]
+                return dict(policy, reply='\n\n'.join(parts), reply_parts=parts,
+                            intent='question', confidence=100, _local_reply=True)
         return {
-            "reply": (
-                "ما واضح عندي أي موديل تقصدين حالياً 🌸 "
-                "دزيلي صورة المنتج أو اسمه حتى أتأكدلج من السعر والتوفر."
-            ),
+            "reply": clarification,
             "intent": "question",
             "create_order": False,
             "order": {},
@@ -7594,6 +7609,7 @@ def _call_main_ai_once(
     system_prompt = (
         f"{base_prompt}\n\n"
         f"{COMPACT_MAIN_SALES_POLICY}\n\n"
+        f"{sales_context.GUIDE}\n\n"
         f"{IRAQI_HUMAN_STYLE_LOCK}\n\n"
         f"{COMPACT_MAIN_OUTPUT_PROMPT}"
     )

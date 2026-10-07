@@ -43,7 +43,26 @@ class EfficiencyTests(unittest.TestCase):
             {'direction': 'incoming', 'text': 'ثبتيه'},
         ]
         compacted = e.compact_history(history, limit=3)
-        self.assertEqual([m['text'] for m in compacted], ['قياس 42', 'واللون اسود', 'ثبتيه'])
+        self.assertEqual([m['text'] for m in compacted], ['شنو القياس؟', 'قياس 42', 'واللون اسود', 'ثبتيه'])
+
+    def test_many_unanswered_messages_keep_question_and_existing_agent_turn(self):
+        history = [{'direction': 'incoming', 'text': 'قديم'},
+                   {'direction': 'outgoing', 'text': 'تريدين قطعة لو قطعتين؟'}]
+        history += [{'direction': 'incoming', 'text': str(i)} for i in range(10)]
+        result = e.compact_history(history)
+        self.assertEqual(result, history[1:])
+        self.assertEqual(history[0]['text'], 'قديم')
+
+    def test_first_conversation_keeps_all_unanswered_messages(self):
+        history = [{'direction': 'incoming', 'text': str(i)} for i in range(10)]
+        self.assertEqual(e.compact_history(history), history)
+
+    def test_compaction_keeps_product_offer_and_question_in_separate_bubbles(self):
+        history = [{'direction': 'incoming', 'text': 'قديم'}]
+        history += [{'direction': 'outgoing', 'text': text}
+                    for text in ['الاول فستان والثاني سوت', 'السوت متوفر', 'تحبين صور الثاني؟']]
+        history += [{'direction': 'incoming', 'text': str(i)} for i in range(8)]
+        self.assertEqual(e.compact_history(history), history[1:])
 
     def test_success_failure_and_store_isolation(self):
         recognize = Mock(return_value={'product_found': True, 'product_id': 'A'})

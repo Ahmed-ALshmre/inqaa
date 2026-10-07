@@ -25,7 +25,7 @@ def merge_history(history, memory):
 
 
 def compact_history(history, limit=6):
-    """Keep the recent turn and every still-unanswered customer message."""
+    """Keep recent context, unanswered messages, and the question they answer."""
     messages = list(history or [])
     if len(messages) <= limit:
         return messages
@@ -34,7 +34,11 @@ def compact_history(history, limit=6):
          if message.get('direction') != 'incoming'),
         default=-1,
     )
-    start = min(max(0, len(messages) - limit), last_outgoing + 1)
+    start = min(max(0, len(messages) - limit), max(0, last_outgoing))
+    # A staff turn may be several bubbles: the product list precedes the
+    # question. Keep the whole boundary turn rather than an orphaned question.
+    while start > 0 and messages[start].get('direction') == 'outgoing' and messages[start - 1].get('direction') == 'outgoing':
+        start -= 1
     return messages[start:]
 
 

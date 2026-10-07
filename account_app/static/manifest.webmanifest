@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "صوف",
   "short_name": "صوف",
   "description": "تطبيق صوف لإدارة المحادثات والطلبات وخدمة العملاء.",
@@ -6,8 +6,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0f172a",
-  "theme_color": "#1f2937",
+  "background_color": "#f7f5f8",
+  "theme_color": "#33243f",
   "lang": "ar",
   "dir": "rtl",
   "icons": [

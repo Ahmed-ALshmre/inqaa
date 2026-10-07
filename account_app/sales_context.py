@@ -50,7 +50,41 @@ GUIDE = """
 لا تقولي «ثبتت/حجزت» قبل نجاح التسجيل. لا ضمان قياس من الوزن، ولا ندرة أو خصم أو موعد مختلق.
 لا تضغطي بعد الرفض أو طلب مهلة. متابعة «وين طلبي/شوكت يوصل» تخص الطلب السابق، وليست بداية بيع جديد.
 اللهجة: «تدللين، هذا المتوفر، ناقص بس، حتى نكمل طلبج» بصورة طبيعية وبلا تكرار ألقاب أو تحية بكل رد.
+الإجابة المختصرة قد تكون لوناً أو قياساً أو عدداً أو عمراً جواباً لسؤالك السابق؛ اربطيها بالسؤال قبل تفسيرها. «4» بعد سؤال العمر عمر، وبعد سؤال العدد كمية، وليست قياساً تلقائياً.
+«هذا/الثاني/نفسه» يعود إلى آخر عرض واضح أو ترتيب صور موثق؛ إذا كان المرجع يحتمل قطعتين اسألي عن القطعة فقط، ولا تعيدي المحادثة من البداية.
+إذا صحح الزبون اللون أو القياس، استخدمي التصحيح لنفس القطعة مع إبقاء بقية اختياراتها. كلام المساعد السابق يفسر المرجع فقط ولا يثبت حقائق الكتالوج.
+إذا قال إنه سيرسل صورة انتظريها برد بسيط، ولا تعتبري الوعد صورة وصلت أو تعذراً يستدعي موظفاً.
+يمكن الإجابة عن التوصيل والدفع حتى لو الموديل مجهول؛ أجيبي المعروف ثم وضحي المعلومة الناقصة للسعر أو التوفر فقط.
+إذا سأل عدة أسئلة جاوبيها كلها قبل خطوة البيع التالية. سؤال المتابعة اختياري؛ بعد جواب مكتمل لا تضيفي سؤالاً أو طلب حجز لمجرد إنهاء الرد.
 """
+
+
+def question_from_turn(turn):
+    """The last question in a multi-bubble staff turn, without inventing slots."""
+    questions = [part.strip() for item in turn
+                 for part in re.findall(r'[^؟?\n]+[؟?]|[^؟?\n]+$', item['text'])
+                 if re.search(r'[؟?]|تحبين|تحب |دزيلي|ارسلي|شنو|شكد|يا لون|اي قياس', normalized(part))]
+    return questions[-1] if questions else ''
+
+
+def context_evidence(text, turn):
+    clean = normalized(text)
+    declarations = r'قياس|مقاس|سايز|وزن|عمر|سنوات|سنه|سنة|لون|اسود|ابيض|احمر|ازرق|اخضر|اصفر|رصاصي|جوزي|نيلي|وردي|بيج|بيجي|زيتي|تركواز|بنفسجي|ميزاني|غالي|احجز|حجزت|ما اريد|مو هذا|مو هاي|اقصد|غيره|غيرها|الاول|الثاني|الثالث|قطعتين|قطعه|قطعة'
+    if re.search(declarations, clean) or re.fullmatch(r'(?:xs|s|m|l|xl|xxl|xxxl|[2-6]xl)', clean):
+        return True
+    question = question_from_turn(turn)
+    # Preserve the raw answer with its question; never turn it into a guessed
+    # size/age/quantity. Ignore small-talk and follow-up questions as answers.
+    return bool(question and len(clean) <= 80
+                and re.search(r'قياس|مقاس|سايز|وزن|عمر|لون|عدد|كمية|كم قط|شكد قط', normalized(question))
+                and not re.search(r'[؟?]|\b(?:شكرا|شكراً|تمام|اي|نعم|لا|هلو|مرحبا|شكد|شلون|ليش|متى)\b', clean))
+
+
+def awaiting_image_reply(text):
+    clean = normalized(text).strip(' .!،؟?\n')
+    if re.fullmatch(r'(?:اي\s+|تمام\s+)?(?:هسه\s+|هسة\s+|الان\s+)?(?:ادز(?:لج|لك|ها|ه)?|ادزل|ارسل(?:ها|ه|لك|لج)?|راح\s+(?:ادز(?:لج|لك)?|ارسل))\s+(?:الصورة|صوره|صورة|الموديل)(?:\s+(?:هسه|هسة|بعد شوي))?', clean):
+        return 'تمام، بانتظار الصورة حتى نتأكد من الموديل.'
+    return ''
 
 
 def init_db(db):
@@ -69,11 +103,14 @@ def advance(state, messages):
     interrupted = state.get('offer_interrupted', False)
     for row in messages:
         row = dict(row)
+        if (row.get('direction') == 'incoming' and row.get('id') is not None
+                and row.get('id') == latest.get('message_id')):
+            continue  # The triggering event may already have been loaded from DB.
         text = str(row.get('text') or '').strip()
         clean = normalized(text)
         if row.get('direction') == 'incoming' and text:
             latest = {'text': text[:500], 'message_id': row.get('id')}
-            if re.search(r'مو هذا|مو هاي|اقصد|أقصد|لا.*(?:فستان|سوت|موديل)|بدل|غيره|غيرها', clean):
+            if re.search(r'مو هذا|مو هاي|اقصد|لا.*(?:فستان|سوت|موديل|لون|قياس)|بدل|غيره|غيرها', clean):
                 correction = {'text': text[:250], 'message_id': row.get('id')}
                 if not corrections or corrections[-1] != correction:
                     corrections.append(correction)
@@ -86,12 +123,12 @@ def advance(state, messages):
                 turn.append({'text': text[:600], 'message_id': row.get('id'),
                              'created_at': row.get('created_at')})
                 turn = turn[-6:]
-        elif text and (re.search(r'قياس|مقاس|وزن|عمر|سنوات|سنه|سنة|لون|اسود|رصاصي|جوزي|نيلي|وردي|ميزاني|غالي|احجز|حجزت|ما اريد|مو هذا|غيره|غيرها', clean)
-                       or (re.fullmatch(r'\d{1,3}', clean) and turn and re.search(r'قياس|وزن|عمر', turn[-1]['text']))):
+        elif text and context_evidence(text, turn):
             # Preserve declarations and their context, not guessed normalized options.
             evidence.append({'text': text[:300], 'message_id': row.get('id'),
                              'created_at': row.get('created_at'),
-                             'in_reply_to': turn[-1]['text'][:150] if turn else ''})
+                             'in_reply_to': question_from_turn(turn)[:250],
+                             'staff_context': '\n'.join(item['text'] for item in turn[-3:])[:900]})
             evidence = [item for index, item in enumerate(evidence) if index == 0 or item != evidence[index - 1]][-24:]
         if row.get('direction') == 'incoming' and (
                 row.get('image_url') or row.get('message_type') in {'image', 'video', 'audio', 'file', 'attachment'}
@@ -101,14 +138,14 @@ def advance(state, messages):
         # incoming reply, the next staff text must still replace the old turn.
         if row.get('direction') == 'incoming' or text:
             direction = row.get('direction')
-    state.update(evidence=evidence, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, version=3)
+    state.update(evidence=evidence, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, version=4)
     return state
 
 
 def load(db, store, sender):
     row = db.execute('SELECT last_message_id,data FROM sales_conversation_context WHERE store_id=? AND sender_id=?', (store, sender)).fetchone()
     cursor, state = (row[0], json.loads(row[1])) if row else (0, {})
-    if state.get('version') != 3:
+    if state.get('version') != 4:
         cursor, state = 0, {}
     rows = db.execute('SELECT id,direction,text,created_at,message_type,image_url FROM messages WHERE store_id=? AND sender_id=? AND id>? ORDER BY id', (store, sender, cursor)).fetchall()
     if rows:
@@ -132,9 +169,7 @@ def continuation(text, state):
     if not turn:
         return None
     # Resolve the last explicit question, not an earlier question in the turn.
-    questions = [part.strip() for item in turn for part in re.findall(r'[^؟?\n]+[؟?]|[^؟?\n]+$', item['text'])
-                 if re.search(r'[؟?]|تحبين|تحب |دزيلي|ارسلي', part)]
-    question = questions[-1] if questions else ''
+    question = question_from_turn(turn)
     q = normalized(question)
     if re.search(r'صور|تشوف|اشوف|ادزل|موديل ثاني|موديلات ثاني|بديل', q):
         intent = 'clarify' if re.search(r'احجز|اثبت|نثبت|حجز', q) else 'browse'

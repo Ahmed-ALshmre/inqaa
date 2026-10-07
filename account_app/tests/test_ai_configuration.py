@@ -83,6 +83,27 @@ class AIConfigurationTests(unittest.TestCase):
         self.assertNotIn('بلوزة بعيدة', prompt)
         self.assertNotIn('P004', prompt)
 
+    def test_unknown_product_still_answers_delivery_in_mixed_question(self):
+        ev = dict(self.ev, text='السعر وطريقة التوصيل؟')
+        with patch.object(m, 'get_delivery_settings', return_value={'baghdad_fee': 4000, 'other_fee': 6000}), \
+             patch.object(m.ai_transport, 'post') as provider:
+            result = m._call_main_ai_once(ev, 'text', self.customer, [], [], None, None, '', [])
+        provider.assert_not_called()
+        self.assertIn('4,000', result['reply'])
+        self.assertIn('6,000', result['reply'])
+        self.assertIn('صورة المنتج أو اسمه', result['reply'])
+        self.assertFalse(result['create_order'])
+
+    def test_system_prompt_guides_short_answers_and_optional_next_step(self):
+        response = requests.Response(); response.status_code = 200
+        response._content = json.dumps({'choices': [{'message': {'content': json.dumps({
+            'reply': 'متوفر.', 'create_order': False})}}]}).encode()
+        with patch.object(m.ai_transport, 'post', return_value=response) as provider:
+            m._call_main_ai_once(self.ev, 'text', self.customer, [], [self.product], self.product, None, '', [])
+        system = provider.call_args.kwargs['json']['messages'][0]['content']
+        self.assertIn('بعد سؤال العمر عمر', system)
+        self.assertIn('سؤال المتابعة اختياري', system)
+
     def test_comparison_sends_only_explicitly_named_available_product(self):
         other = dict(product_id='P004', product_name='بلوزة قطن', store_id='khuyoot',
                      status='active', stock='متوفر', price='9000', fabric='قطن')
