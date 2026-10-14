@@ -637,8 +637,8 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الصورة الأولى متوفرة والثانية متوفرة', 'create_order': False, 'order': {}}) as model:
             sent = m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
         model.assert_not_called()
-        self.assertIn('الصورة الأولى: فستان دانتيل', sent['reply'])
-        self.assertIn('الصورة الثانية: فستان انيقة', sent['reply'])
+        self.assertIn('الأول متوفر عيني، فستان دانتيل', sent['reply'])
+        self.assertIn('الثاني هم عدنا، فستان انيقة', sent['reply'])
         self.assertLess(sent['reply'].index('دانتيل'), sent['reply'].index('انيقة'))
 
     def test_repeated_product_keeps_both_image_positions(self):

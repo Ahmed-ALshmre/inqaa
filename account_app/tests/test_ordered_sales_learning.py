@@ -32,7 +32,7 @@ class VerifiedLearningTests(unittest.TestCase):
         recalled = sales_learning.recalled_image(self.db, 'default', 'photo', [product])
         self.assertEqual(recalled['product_id'], 'A')
         summary = product_albums.summary([dict(recalled, stock='متوفر', price='17000')], [product])
-        self.assertIn('غير متوفر', summary)
+        self.assertIn('مو متوفر', summary)
         self.assertNotIn('17000', summary)
 
     def test_identity_memory_is_store_scoped_and_expires_when_photo_changes(self):
@@ -98,31 +98,37 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         results = [dict(product_found=True, product_id=x['product_id']) for x in CATALOG]
         result, send, model = self.process(results)
         reply = send.call_args.args[0]['reply']
-        self.assertLess(reply.index('الأولى'), reply.index('الثانية'))
-        self.assertLess(reply.index('الثانية'), reply.index('الثالثة'))
-        for text in ['كيلوت', '17000', 'تنورة', '12000', 'قميص، غير متوفر']:
+        self.assertLess(reply.index('الأول'), reply.index('الثاني'))
+        self.assertLess(reply.index('الثاني'), reply.index('الثالث'))
+        for text in ['كيلوت', '17,000', 'تنورة', '12,000', 'قميص مو متوفر']:
             self.assertIn(text, reply)
         model.assert_not_called()
         active = self.db.execute("SELECT product_id FROM customer_product_interests WHERE sender_id='album-customer' AND status='active'").fetchall()
         self.assertEqual({x[0] for x in active}, {'A', 'B'})
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
         self.assertTrue(result['meta']['auto_reply']['sent'])
+        self.assertEqual(len(send.call_args.args[0]['reply_parts']), 3)
+        self.assertTrue(send.call_args.args[0]['_ordered_album'])
+        self.assertFalse(send.call_args.args[0]['_single_message'])
 
     def test_unknown_middle_photo_does_not_pause_known_products_or_close_its_review(self):
         results = [dict(product_found=True, product_id='A'), dict(product_found=False), dict(product_found=True, product_id='B')]
         result, send, model = self.process(results)
         reply = send.call_args.args[0]['reply']
-        self.assertIn('الصورة الثانية: بعدني ما حددت موديلها', reply)
-        self.assertNotIn('الصورة الثانية: غير متوفر', reply)
-        self.assertIn('الصورة الثالثة: تنورة، متوفر', reply)
+        self.assertIn('الثاني، هذا الموديل مو متوفر عدنا حالياً.', reply)
+        self.assertIn('الثالث هم عدنا، تنورة', reply)
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'album-customer'))
         review = self.db.execute("SELECT image_url,status FROM human_reviews WHERE sender_id='album-customer'").fetchall()
         self.assertEqual([(x[0], x[1]) for x in review], [('https://images.test/1.jpg', 'pending')])
 
-    def test_unrecognized_album_gets_ordered_clarification_without_claiming_sold_out(self):
+    def test_unrecognized_album_uses_owner_reply_policy_and_retains_unknown_identity(self):
         result, send, model = self.process([dict(product_found=False)] * 3)
-        self.assertIn('الصورة الثالثة', result['reply'])
+        self.assertIn('الثالث', result['reply'])
         self.assertNotIn('غير متوفر', result['reply'])
+        self.assertEqual(result['reply'].count('مو متوفر عدنا حالياً'), 3)
+        self.assertEqual(len(result['reply_parts']), 3)
+        self.assertNotIn('دزي لقطة', result['reply'])
+        self.assertTrue(all(not item['product_found'] for item in self.m.customer_image_positions(self.db, 'album-customer')))
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'album-customer'))
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
@@ -168,13 +174,13 @@ class OrderedSalesPipelineTests(unittest.TestCase):
                                            dict(product_found=True, product_id='B')], 'شنو القياسات والالوان؟')
         reply = send.call_args.args[0]['reply']
         self.assertEqual(reply.count('38 إلى 52'), 2)
-        self.assertEqual(reply.count('ألوانه اسود'), 2)
+        self.assertEqual(reply.count('ألوانه أسود'), 2)
         self.assertFalse(result['meta']['auto_reply'].get('order_created'))
 
     def test_separate_messages_are_collected_in_customer_order(self):
         result, send, model = self.process([dict(product_found=True, product_id=x['product_id']) for x in CATALOG], separate=True)
-        self.assertIn('الصورة الأولى: كيلوت', send.call_args.args[0]['reply'])
-        self.assertIn('الصورة الثالثة: قميص', send.call_args.args[0]['reply'])
+        self.assertIn('الأول متوفر عيني، كيلوت', send.call_args.args[0]['reply'])
+        self.assertIn('الثالث، قميص', send.call_args.args[0]['reply'])
 
     def test_recognized_album_recovers_image_pause_but_respects_manual_pause(self):
         result, send, model = self.process([dict(product_found=True, product_id='A'), dict(product_found=True, product_id='B')], pause='image_unresolved')

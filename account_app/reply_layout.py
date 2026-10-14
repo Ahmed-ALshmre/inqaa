@@ -93,6 +93,12 @@ def approved_parts(result, reply):
         return []
     if result.get("_single_message") or receipt(reply):
         return [reply]
+    proposed = result.get('reply_parts')
+    if (result.get('_ordered_album') and isinstance(proposed, list) and proposed
+            and all(isinstance(p, str) and p.strip() for p in proposed)
+            and compact(' '.join(proposed)) == compact(reply)):
+        # One customer photo per bubble, even for albums larger than five.
+        return [p.strip() for p in proposed]
     # Short answers and courtesies do not benefit from extra message bubbles.
     if len(compact(reply)) <= 100 and not re.search(r'\n\s*\n', reply):
         return [reply]

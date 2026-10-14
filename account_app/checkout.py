@@ -1,6 +1,10 @@
 """Deterministic contact and checkout guards; no model or network calls."""
 import re
 import unicodedata
+try:
+    from . import product_variants
+except ImportError:
+    import product_variants
 
 
 DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
@@ -174,4 +178,7 @@ def order_line_error(raw_items, catalog):
             value = str(item.get(key) or "").strip()
             if product.get(field) and (not value or ambiguous_measurement(value)):
                 return f"باقي نحدد {name} {label} بشكل واضح حتى أثبت الطلب."
+            problem=product_variants.order_choice_error(product,key,value)
+            if problem:
+                return f'{label}: {problem}.'
     return ""
