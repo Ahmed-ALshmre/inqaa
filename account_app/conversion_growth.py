@@ -50,7 +50,7 @@ def followup_plan(db, sender_id, now, settings, delay_minutes=None):
     answered = timestamp(outgoing['created_at'])
     if not received or not answered or not current:
         return None
-    turn = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='incoming' AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing' AND id<?),0) ORDER BY id", (sender_id, sender_id, incoming['id'])).fetchall()
+    turn = db.execute("SELECT text,message_type,image_url FROM messages WHERE sender_id=? AND direction='incoming' AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing' AND id<?),0) ORDER BY id", (sender_id, sender_id, incoming['id'])).fetchall()
     text = ' '.join(row['text'] or '' for row in turn)
     requested = reminder_minutes(text)
     reason = 'general_interest'
@@ -64,7 +64,7 @@ def followup_plan(db, sender_id, now, settings, delay_minutes=None):
         customer = db.execute('SELECT phone,address,lead_stage FROM customers WHERE sender_id=?', (sender_id,)).fetchone()
         if re.search(r'ثبت|احجز|أحجز|اطلب|أطلب', text) or (customer and customer['phone'] and customer['address']):
             reason, delay = 'checkout', settings.get('checkout_delay_minutes', 60)
-        elif re.search(r'قياس|مقاس|لون|عمر|وزن', text):
+        elif re.search(r'قياس|مقاس|لون|عمر|وزن', text) or any(row['message_type'] == 'image' or row['image_url'] for row in turn):
             reason, delay = 'selection', settings.get('selection_delay_minutes', 120)
         else:
             delay = settings.get('general_delay_minutes', 240)

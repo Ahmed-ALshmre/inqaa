@@ -32,7 +32,7 @@ class ConversionPhaseOneTests(unittest.TestCase):
             {'id': 3, 'direction': 'incoming', 'text': 'الاكتاف مبطنة؟'}])
         self.assertEqual(state['corrections'][0]['message_id'], 2)
         self.assertEqual(state['latest_customer_turn']['message_id'], 3)
-        self.assertEqual(state['version'], 3)
+        self.assertEqual(state['version'], 4)
 
     def test_documented_new_measurements_accepted_unknown_rejected(self):
         self.assertEqual(conversation_quality.grounded_error('طوله 135 سم',

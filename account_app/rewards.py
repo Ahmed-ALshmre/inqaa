@@ -27,13 +27,15 @@ def tables(db):
         created_at TEXT NOT NULL)''')
 
 
-def award_pending(db, sender_id, person, cutoff=None, now=None):
+def award_pending(db, sender_id, person, cutoff=None, now=None, review_ids=None):
     """Caller holds the write transaction and closes these reviews atomically."""
     if not person or person.get('owner'):
         return
     now = now or datetime.now(BAGHDAD)
     rows = db.execute("SELECT id,created_at FROM human_reviews WHERE sender_id=? AND status='pending' AND id<=?",
                       (sender_id, cutoff if cutoff is not None else 9223372036854775807)).fetchall()
+    if review_ids is not None:
+        rows = [row for row in rows if row['id'] in review_ids]
     previous = db.execute('''SELECT duration_seconds FROM staff_rewards
         WHERE staff_id=? AND duration_seconds IS NOT NULL ORDER BY id DESC LIMIT 10''', (person['id'],)).fetchall()
     baseline = sum(r[0] for r in previous) / len(previous) if previous else None
@@ -70,8 +72,11 @@ def summary(db, staff_id):
     grants = [dict(r) for r in db.execute('SELECT id,amount,reason,granted_by,created_at FROM staff_reward_grants WHERE staff_id=? ORDER BY id DESC LIMIT 50', (staff_id,))]
     manual = db.execute('SELECT COALESCE(SUM(amount),0) FROM staff_reward_grants WHERE staff_id=?', (staff_id,)).fetchone()[0]
     daily['earned'] += db.execute('SELECT COALESCE(SUM(amount),0) FROM staff_reward_grants WHERE staff_id=? AND substr(created_at,1,10)=?', (staff_id,today)).fetchone()[0]
-    total['balance'] += manual
-    return dict(total, available=max(0,total['balance']-reserved-paid), reserved=reserved, paid=paid,
+    total_earned = total['balance'] + manual
+    # Paid withdrawals reduce the current balance once. Pending withdrawals
+    # reserve part of that balance without being treated as paid a second time.
+    total['balance'] = max(0, total_earned-paid)
+    return dict(total, total_earned=total_earned, available=max(0,total['balance']-reserved), reserved=reserved, paid=paid,
                 manual_bonus=manual, grants=grants,
                 withdrawals=withdrawals, day=today, today=dict(daily), goal=DAILY_GOAL, history=history,
                 baseline_seconds=sum(durations)/len(durations) if durations else None)

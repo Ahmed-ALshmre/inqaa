@@ -4,7 +4,7 @@
   const money = n => `${number(n)} د.ع`;
   const escape = value => { const e = document.createElement('span'); e.textContent = String(value); return e.innerHTML; };
   const duration = seconds => seconds == null ? 'غير متوفر' : `${number(seconds / 60)} دقيقة`;
-  let balance, busy = false, submitting = false;
+  let earned, busy = false, submitting = false;
   const statusNames = {pending:'قيد المراجعة',paid:'تم الصرف',rejected:'أُعيد إلى الرصيد'};
   let grantBusy=false, grantRequest=null;
   function grantHistory(data) {
@@ -49,7 +49,7 @@
     const button=event.target.closest('[data-withdraw],[data-settle]');
     if(!button || submitting) return;
     const paid=button.dataset.status==='paid';
-    if(!confirm(button.hasAttribute('data-withdraw') ? 'إرسال طلب سحب كامل الرصيد المتاح إلى المالك؟' : paid ? 'هل صرفت هذا المبلغ فعلياً للموظف؟ سيتم تسجيله كمصروف.' : 'إعادة مبلغ الطلب إلى رصيد الموظف؟')) return;
+    if(!confirm(button.hasAttribute('data-withdraw') ? 'إرسال طلب سحب كامل الرصيد المتاح إلى المالك؟' : paid ? 'هل صرفت هذا المبلغ فعلياً للموظف؟ سيتم خصمه من رصيد المكافآت وتسجيله كمصروف.' : 'إعادة مبلغ الطلب إلى رصيد الموظف؟')) return;
     submitting=true; button.disabled=true;
     try {
       const response=await fetch(button.hasAttribute('data-withdraw') ? '/api/rewards/withdraw' : `/api/rewards/withdrawals/${button.dataset.settle}`, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name=csrf-token]')?.content || ''},body:JSON.stringify({status:button.dataset.status})});
@@ -59,7 +59,7 @@
     finally {submitting=false;button.disabled=false;}
   });
   function cards(data) {
-    return `<div class="reward-cards"><div class="reward-card"><span>الرصيد المتراكم</span><strong>${money(data.balance)}</strong></div><div class="reward-card"><span>مشاكل تم حلها</span><strong>${number(data.solved)}</strong></div><div class="reward-card"><span>علاوات السرعة</span><strong>${money(data.bonus)}</strong></div><div class="reward-card"><span>مكافآت الأدمن</span><strong>${money(data.manual_bonus || 0)}</strong></div></div>`;
+    return `<div class="reward-cards"><div class="reward-card"><span>رصيد المكافآت الحالي</span><strong>${money(data.balance)}</strong></div><div class="reward-card"><span>مشاكل تم حلها</span><strong>${number(data.solved)}</strong></div><div class="reward-card"><span>علاوات السرعة المكتسبة</span><strong>${money(data.bonus)}</strong></div><div class="reward-card"><span>مكافآت الأدمن المكتسبة</span><strong>${money(data.manual_bonus || 0)}</strong></div></div>`;
   }
   function render(data) {
     const content = document.getElementById('reward-content');
@@ -86,16 +86,17 @@
         const target=(Math.floor(data.today.solved/data.goal)+1)*data.goal;
         document.querySelectorAll('[data-credit-goal]').forEach(e => e.textContent = `اليوم ${number(data.today.solved)} / ${number(target)}`);
         document.querySelectorAll('[data-credit-progress]').forEach(e => {e.max=target;e.value=data.today.solved;});
-        if (balance !== undefined && data.balance > balance) {
+        const totalEarned = data.total_earned ?? data.balance;
+        if (earned !== undefined && totalEarned > earned) {
           const toast = document.createElement('div'); toast.className='reward-toast';toast.setAttribute('role','status');
           const mascot=document.createElement('img'); mascot.src='/static/icons/soof-mascot-celebrate.png?v=1'; mascot.alt=''; mascot.setAttribute('aria-hidden','true');
-          const label=document.createElement('span'); label.textContent=`✦ +${money(data.balance-balance)}${data.history[0]?.multiplier > 1 ? ' · مكافأة سرعة ×1.2 ⚡' : ' · أحسنت، تم تسجيل إنجازك!'}`;
+          const label=document.createElement('span'); label.textContent=`✦ +${money(totalEarned-earned)}${data.history[0]?.multiplier > 1 ? ' · مكافأة سرعة ×1.2 ⚡' : ' · أحسنت، تم تسجيل إنجازك!'}`;
           toast.append(mascot,label);
           document.body.append(toast);setTimeout(()=>toast.remove(),4500);
           document.dispatchEvent(new Event('soof:celebrate'));
           document.querySelectorAll('.credit-bar').forEach(e=>{e.classList.remove('credit-pulse');void e.offsetWidth;e.classList.add('credit-pulse');});
         }
-        balance = data.balance;
+        earned = totalEarned;
       }
       render(data);
       if (!data.owner) celebrate(data);

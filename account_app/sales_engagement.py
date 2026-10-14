@@ -36,6 +36,8 @@ FOLLOWUP_GUIDE = """[متابعة مفيدة واحدة]
 إذا لم توجد فائدة جديدة أو خطوة معلقة واضحة اجعل reply فارغاً. بعد الشكر أو التأجيل أو الرفض أو الحجز reply فارغ. لا تضف منتجات أو وعوداً أو أسعاراً غير موثقة.
 لا تطلب جميع البيانات من جديد؛ استخدم الحقول الناقصة المرفقة فقط. سؤال واحد، ورسالة واحدة.
 اكتب كرسالة عراقية طبيعية قصيرة، وليس كإشعار خدمة عملاء بالفصحى. تجنب «نشكركم»، «يسعدنا»، «يرجى التكرم»، «حسب طلبكم» و«نتمنى خدمتكم».
+إذا عرض الزبون عدة صور فالمتابعة تخص اختياره من المنتجات المتوفرة فقط؛ لا تطلب كل الصور مجدداً ولا تجعل الصورة المجهولة عائقاً للقطعة المعروفة.
+اربط المتابعة بالحاجة المحفوظة: قياس مناسب، مجموع مع التوصيل عند معرفة المحافظة، أو بديل يوافق الميزانية. لا تعرض الثلاثة دفعة واحدة.
 """
 
 
@@ -101,7 +103,7 @@ def followup_block_reason(db, sender_id, now):
     paused = db.execute("SELECT enabled FROM customer_ai_settings WHERE sender_id=?", (sender_id,)).fetchone()
     if paused and not paused['enabled']:
         return "customer_ai_paused"
-    if db.execute("SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending' LIMIT 1", (sender_id,)).fetchone():
+    if db.execute("SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending' AND reason NOT LIKE 'partial_image_match:%' LIMIT 1", (sender_id,)).fetchone():
         return "human_review_pending"
     sent = db.execute("SELECT sent_at,created_at FROM followups WHERE sender_id=? AND status='sent'", (sender_id,)).fetchall()
     if any((timestamp(row['sent_at'] or row['created_at']) or last_time) >= last_time for row in sent):

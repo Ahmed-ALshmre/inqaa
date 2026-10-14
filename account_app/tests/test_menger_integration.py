@@ -3,7 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import account_app.app as m
 from account_app import menger
@@ -95,6 +95,30 @@ class IntegrationTests(unittest.TestCase):
             response = self.client.put('/api/products/manage/alias-test', json={'order_name':''}, headers=self.headers)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.get_json()['product']['order_name'], '')
+
+    def test_telegram_reports_actual_api_result_for_new_orders(self):
+        menger.save_connection(m.get_db(), dict(api_url='https://menger.example/api/v1/orders', api_key='private-test-key'))
+        catalog = [dict(product_id='P1', product_name='فستان', price='18000', status='active')]
+        cases = [
+            (Mock(status_code=201, json=Mock(return_value={'ok': True, 'order_id': 'remote-1'})), 'نجح إرسال الطلب عبر API', 'sent'),
+            (Mock(status_code=400, json=Mock(return_value={'error': 'عنوان غير صالح'})), 'عنوان غير صالح', 'blocked'),
+            (Mock(status_code=503, json=Mock(return_value={})), 'ستتم إعادة المحاولة تلقائياً', 'retry'),
+            (Mock(status_code=200, json=Mock(return_value={'ok': False})), 'رد الخدمة لا يؤكد نجاح', 'retry'),
+            (menger.requests.Timeout(), 'تعذر الاتصال بالخدمة', 'retry'),
+        ]
+        with patch.object(m, 'load_products_from_file', return_value=catalog), patch.object(m, 'send_telegram_message', return_value=True) as telegram, patch.object(m, 'save_booking_to_file'), patch.object(m, 'send_text_to_facebook', return_value=True):
+            for index, (result, expected, status) in enumerate(cases):
+                sender = 'api-result-' + str(index)
+                m.get_or_create_customer(m.get_db(), sender, '', 'facebook')
+                kwargs = {'side_effect': result} if isinstance(result, Exception) else {'return_value': result}
+                with patch.object(menger.requests, 'post', **kwargs) as api:
+                    response = self.client.post(f'/api/conversations/{sender}/create_order', json=dict(phone='07701234567', province='بغداد', address='المنصور', items=[dict(product_id='P1', quantity=1)]), headers=self.headers)
+                self.assertEqual(response.status_code, 200, response.get_json())
+                self.assertEqual(api.call_count, 1)
+                self.assertIn(expected, telegram.call_args.args[0])
+                self.assertNotIn('private-test-key', telegram.call_args.args[0])
+                delivery = m.get_db().execute('SELECT status FROM menger_deliveries ORDER BY order_id DESC LIMIT 1').fetchone()
+                self.assertEqual(delivery['status'], status)
 
     def test_conversation_store_cannot_be_overridden_when_booking(self):
         m.get_or_create_customer(m.get_db(), 'own-store', '', 'facebook')

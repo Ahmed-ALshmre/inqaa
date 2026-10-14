@@ -263,7 +263,7 @@ def paid_notes(notes):
     return text if marker in text else '\n'.join(filter(None, [text, marker]))
 
 
-def deliver_due(db, post=None, now=None):
+def deliver_due(db, post=None, now=None, order_id=None):
     post = post or requests.post
     now = time.time() if now is None else now
     shared = connection(db)
@@ -277,7 +277,7 @@ def deliver_due(db, post=None, now=None):
     default = os.environ.get('MENGER_STORE_ID', '').strip()
     if default:
         stores.setdefault('default', default)
-    rows = db.execute("SELECT * FROM menger_deliveries WHERE status IN ('pending','retry','sending') AND next_attempt<=? ORDER BY order_id", (now,)).fetchall()
+    rows = db.execute("SELECT * FROM menger_deliveries WHERE status IN ('pending','retry','sending') AND next_attempt<=? AND (? IS NULL OR order_id=?) ORDER BY order_id", (now, order_id, order_id)).fetchall()
     delivered = 0
     for row in rows:
         if delivered >= 20:

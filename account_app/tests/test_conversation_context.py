@@ -424,7 +424,8 @@ class ConversationContextTests(unittest.TestCase):
         responses = [(CATALOG[1],"image_recognition",{"product_found":True,"product_id":"F2"}),(None,None,{"product_found":False}),(None,None,{"product_found":False})]
         with patch.object(m,"_match_single_product",side_effect=responses) as match:
             product, _, result = m.match_product(self.db,ev,CATALOG)
-        self.assertIsNone(product)
+        self.assertEqual(product['product_id'], 'F2')
+        self.assertTrue(result['partial_match'])
         self.assertEqual(match.call_count,2)
         self.assertEqual({p["product_id"] for p in m.load_customer_products(self.db,self.sender)}, {"F1", "F2"})
 
@@ -634,10 +635,11 @@ class ConversationContextTests(unittest.TestCase):
         self.assertEqual(m.select_customer_context_product('الصورة الأولى', remembered)['product_id'], 'F1')
         self.assertEqual(m.select_customer_context_product('الصورة الثانية', remembered)['product_id'], 'F2')
         with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الصورة الأولى متوفرة والثانية متوفرة', 'create_order': False, 'order': {}}) as model:
-            m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
-        self.assertEqual([r['product_id'] for r in model.call_args.args[6]['images']], ['F1', 'F2'])
-        self.assertIn('image_index', model.call_args.args[7])
-        self.assertNotIn('لا تذكر موديلين إلا', model.call_args.args[7])
+            sent = m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
+        model.assert_not_called()
+        self.assertIn('الصورة الأولى: فستان دانتيل', sent['reply'])
+        self.assertIn('الصورة الثانية: فستان انيقة', sent['reply'])
+        self.assertLess(sent['reply'].index('دانتيل'), sent['reply'].index('انيقة'))
 
     def test_repeated_product_keeps_both_image_positions(self):
         self.settings['enabled'] = False

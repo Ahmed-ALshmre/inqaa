@@ -51,7 +51,8 @@ class RewardTests(unittest.TestCase):
         self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'paid'},headers={'X-CSRF-Token':'test-token'}).status_code,200)
         self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'paid'},headers={'X-CSRF-Token':'test-token'}).status_code,409)
         data=self.client.get('/api/rewards').json['employees'][0]
-        self.assertEqual((data['balance'],data['available'],data['reserved'],data['paid']),(50,0,0,50))
+        self.assertEqual((data['balance'],data['available'],data['reserved'],data['paid']),(0,0,0,50))
+        self.assertEqual((data['total_earned'],data['solved'],len(data['history'])),(50,1,1))
 
     def test_rejected_withdrawal_returns_credit(self):
         self.employee();self.review('return');self.close('return')
@@ -153,3 +154,42 @@ class RewardTests(unittest.TestCase):
         self.assertEqual(self.grant(amount=2000,request_id='test-grant-request-002').status_code,200)
         result=self.client.get('/api/rewards').json['employees'][0]
         self.assertEqual((result['balance'],result['reserved'],result['available']),(3000,1000,2000))
+
+    def test_paid_withdrawal_deducts_net_balance_and_new_grant_remains_withdrawable(self):
+        self.grant();self.employee()
+        self.client.post('/api/rewards/withdraw',json={},headers=self.headers)
+        wid=self.client.get('/api/rewards').json['withdrawals'][0]['id']
+        with self.client.session_transaction() as session:
+            session.pop('staff_id',None)
+        self.assertEqual(self.grant(amount=2000,request_id='test-grant-request-002').status_code,200)
+        self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'paid'},headers=self.headers).status_code,200)
+        owner=self.client.get('/api/rewards').json['employees'][0]
+        self.assertEqual((owner['total_earned'],owner['balance'],owner['available'],owner['paid']),(3000,2000,2000,1000))
+        self.employee()
+        employee=self.client.get('/api/rewards').json
+        self.assertEqual(employee['balance'],owner['balance'])
+        self.assertEqual(self.client.post('/api/rewards/withdraw',json={},headers=self.headers).json['amount'],2000)
+        result=self.client.get('/api/rewards').json
+        self.assertEqual((result['balance'],result['available'],result['reserved']),(2000,0,2000))
+
+    def test_existing_paid_and_pending_records_are_counted_once_and_ledgers_preserved(self):
+        self.grant(amount=15000);self.employee()
+        db=m.get_db();now=datetime.now(rewards.BAGHDAD).isoformat()
+        db.execute("INSERT INTO staff_reward_withdrawals(staff_id,amount,status,created_at,resolved_at) VALUES(?,5000,'paid',?,?)",(self.id,now,now))
+        db.execute("INSERT INTO staff_reward_withdrawals(staff_id,amount,status,created_at) VALUES(?,2000,'pending',?)",(self.id,now))
+        db.commit()
+        result=self.client.get('/api/rewards').json
+        self.assertEqual((result['total_earned'],result['balance'],result['available'],result['reserved'],result['paid']),(15000,10000,8000,2000,5000))
+        self.assertEqual(db.execute('SELECT SUM(amount) FROM staff_reward_grants WHERE staff_id=?',(self.id,)).fetchone()[0],15000)
+        self.assertEqual(db.execute('SELECT COUNT(*) FROM staff_reward_withdrawals WHERE staff_id=?',(self.id,)).fetchone()[0],2)
+
+    def test_rejected_request_keeps_net_balance_after_an_earlier_payment(self):
+        self.grant(amount=1000);self.employee()
+        db=m.get_db();now=datetime.now(rewards.BAGHDAD).isoformat()
+        db.execute("INSERT INTO staff_reward_withdrawals(staff_id,amount,status,created_at) VALUES(?,400,'paid',?)",(self.id,now));db.commit()
+        self.assertEqual(self.client.post('/api/rewards/withdraw',json={},headers=self.headers).json['amount'],600)
+        wid=self.client.get('/api/rewards').json['withdrawals'][0]['id']
+        with self.client.session_transaction() as session:session.pop('staff_id',None)
+        self.assertEqual(self.client.post(f'/api/rewards/withdrawals/{wid}',json={'status':'rejected'},headers=self.headers).status_code,200)
+        result=self.client.get('/api/rewards').json['employees'][0]
+        self.assertEqual((result['balance'],result['available'],result['paid']),(600,600,400))
