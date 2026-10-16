@@ -183,6 +183,16 @@ class ZernioFlowTests(unittest.TestCase):
         self.assertTrue(result['ok'])
         self.assertEqual(self.active(), {'F1', 'F2'})
 
+    def test_reselecting_existing_photo_with_replace_removes_other_products(self):
+        self.turn('شكد سعره؟', ad=True)
+        self.vision_answers = [{'product_found': True, 'product_id': 'F1', 'confidence': 100},
+                               {'product_found': True, 'product_id': 'F2', 'confidence': 100}]
+        self.turn('ضيفي هذا ويا الفستان', ['https://images.test/addition.png'])
+        self.assertEqual(self.active(), {'F1', 'F2'})
+        result, _ = self.turn('مو هذا، أريد هذا بدل السابق', ['https://images.test/reselect.png'])
+        self.assertTrue(result['ok'])
+        self.assertEqual(self.active(), {'F2'})
+
     def test_mixed_album_sends_ordered_separate_answers_without_instruction_leak(self):
         self.catalog[0]['sizes'] = '38 إلى 52. اعتمد الجدول التالي عند الرد على الزبونة'
         self.vision_answers = [{'product_found': True, 'product_id': 'F1', 'confidence': 100},

@@ -6356,7 +6356,7 @@ def match_product(db, ev, products, resume_ai_on_link=True):
         complete_customer_product_link(db, ev.get("sender_id"), product,
             "image_recognition" if from_image else "customer_correction", confidence=100,
             source="image_recognition" if from_image else "unknown", resume_ai=resume_ai_on_link,
-            preserve_existing=(intent == "add" or not new_ids or index > 0))
+            preserve_existing=(intent == "add" or (not new_ids and intent != "replace") or index > 0))
     product_choice_table(db)
     db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev["sender_id"],)); db.commit()
     return recognized[-1], "image_recognition", combined
