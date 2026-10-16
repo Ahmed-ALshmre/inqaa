@@ -5400,13 +5400,16 @@ def select_product_mentioned_in_reply(reply, customer_products, require_name=Fal
     if not normalized_reply or not customer_products:
         return None
 
+    # Full Arabic names tolerate articles (ياخة / الياخة) and suppress a
+    # shorter overlapping name (سوت) when the specific model was mentioned.
+    named = first_message_named_products(reply, customer_products)
+    if require_name and not named:
+        return None
     scored = []
-    for product in customer_products:
+    for product in named or customer_products:
         score = 0
         name = context_text(product.get("product_name") or "")
-        if require_name and (not name or name not in normalized_reply):
-            continue
-        if name and name in normalized_reply:
+        if product in named or (name and name in normalized_reply):
             score += 100
 
         fabric = context_text(product.get("fabric") or "")
@@ -7316,8 +7319,10 @@ def requested_reply_images(result, products, matched, text, reply):
     ids = result.get("image_product_ids")
     if not isinstance(ids, list):
         ids = []
-    named = first_message_named_products(reply, products) if _promises_product_photo(reply) else []
-    selected = [p for p in products if p["product_id"] in ids] or named or ([matched] if matched else [])
+    named = first_message_named_products(reply, products)
+    # The pictured model must agree with the customer-facing description even
+    # when the model emits a conflicting internal image_product_ids value.
+    selected = named or [p for p in products if p["product_id"] in ids] or ([matched] if matched else [])
     price = conversation_quality.budget(text) if conversation_quality.wants_photos(text) else None
     urls = []
     for product in selected:
