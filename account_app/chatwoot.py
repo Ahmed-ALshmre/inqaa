@@ -127,6 +127,8 @@ def install(module):
         except (KeyError, TypeError, ValueError, AttributeError):
             return jsonify(error='Invalid account, conversation, inbox or store'), 400
         module._current_store_id.set(store)
+        if module.zernio.enabled_for_store(store):
+            return jsonify(ok=True, ignored=True, provider='zernio')
         sender_id = f'{store}::cw-{account}-{conversation}'
         platform = {'Channel::Instagram': 'instagram', 'Channel::Whatsapp': 'whatsapp'}.get(data['conversation'].get('channel'), 'facebook')
         attachments = []

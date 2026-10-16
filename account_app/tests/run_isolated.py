@@ -32,6 +32,7 @@ def main():
             BOOKINGS_FILE=str(Path(directory) / "bookings.jsonl"),
             ENABLE_BACKGROUND_JOBS="0",
             DISABLE_CLIP="1",
+            ZERNIO_AL_FATENA_ENABLED="0",
         )
         with patch("requests.sessions.Session.request", side_effect=RuntimeError("Real network calls are disabled in tests")):
             suite = unittest.defaultTestLoader.discover(str(Path(__file__).parent))

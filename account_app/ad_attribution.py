@@ -1,5 +1,6 @@
 """Allowlisted ad referral metadata; never infer ads from customer attachments."""
 import json
+from datetime import datetime
 from urllib.parse import urlsplit
 
 
@@ -18,15 +19,16 @@ def normalize(node):
     if not isinstance(node, dict):
         return {}
     aliases = {
-        'ad_id': ('ad_id', 'adId'), 'ref': ('ref',),
+        'ad_id': ('ad_id', 'adId', 'meta_ad_id'), 'ref': ('ref', 'meta_ad_ref'),
         'source_id': ('source_id', 'sourceId', 'referral_source_id'),
-        'source': ('source',), 'source_type': ('source_type', 'sourceType', 'referral_source_type'),
-        'headline': ('headline', 'ad_title', 'title', 'referral_headline'),
+        'source': ('source', 'meta_ad_source'), 'source_type': ('source_type', 'sourceType', 'referral_source_type', 'meta_ad_type'),
+        'headline': ('headline', 'ad_title', 'title', 'referral_headline', 'meta_ad_title'),
         'body': ('body', 'description', 'referral_body'),
-        'image_url': ('thumbnail_url', 'thumbnailUrl', 'image_url', 'imageUrl', 'photo_url'),
+        'image_url': ('thumbnail_url', 'thumbnailUrl', 'image_url', 'imageUrl', 'photo_url', 'meta_ad_photo_url'),
         'source_url': ('source_url', 'sourceUrl', 'referral_source_url', 'ad_url'),
         'campaign_id': ('campaign_id',), 'campaign_name': ('campaign_name', 'utm_campaign'),
-        'post_id': ('post_id',), 'ctwa_clid': ('ctwa_clid', 'referral_ctwa_clid'),
+        'post_id': ('post_id', 'meta_ad_post_id'), 'ctwa_clid': ('ctwa_clid', 'referral_ctwa_clid'),
+        'captured_at': ('captured_at', 'meta_ad_captured_at'),
     }
     result = {}
     for key, names in aliases.items():
@@ -52,14 +54,17 @@ def extract(payload):
         return {}
     # Only containers explicitly used for attribution are candidates.
     containers = [payload]
-    for key in ('content_attributes', 'additional_attributes', 'custom_attributes'):
+    for key in ('content_attributes', 'additional_attributes', 'custom_attributes', 'metadata'):
         if isinstance(payload.get(key), dict):
             containers.append(payload[key])
     conversation = payload.get('conversation') or {}
     if isinstance(conversation, dict):
-        for key in ('additional_attributes', 'custom_attributes'):
+        for key in ('additional_attributes', 'custom_attributes', 'metadata'):
             if isinstance(conversation.get(key), dict):
                 containers.append(conversation[key])
+    message = payload.get('message')
+    if isinstance(message, dict) and isinstance(message.get('metadata'), dict):
+        containers.append(message['metadata'])
     try:
         event = payload['entry'][0]['messaging'][0]
         containers.extend([event, event.get('message', {}), event.get('postback', {})])
@@ -77,6 +82,10 @@ def extract(payload):
                 result = normalize(merged)
                 if result:
                     return result
+        if container.get('meta_ad_id'):
+            result = normalize({key: value for key, value in container.items() if key.startswith('meta_ad_')})
+            if result:
+                return result
         if any(container.get(key) for key in ('ad_id', 'ref', 'referral_source_id')):
             # Flat payload content/title/image may be the customer's own media.
             allowed = {key: value for key, value in container.items()
@@ -100,6 +109,13 @@ def save(db, sender_id, message_id, payload, ad_id=None, ref=None):
         previous = db.execute('SELECT data FROM conversation_ad_context WHERE sender_id=?', (sender_id,)).fetchone()
         if previous:
             old = json.loads(previous['data'])
+            try:
+                if (old.get('captured_at') and context.get('captured_at')
+                        and datetime.fromisoformat(context['captured_at'].replace('Z', '+00:00'))
+                        < datetime.fromisoformat(old['captured_at'].replace('Z', '+00:00'))):
+                    return
+            except (ValueError, TypeError):
+                pass
             identity = lambda item: next(((key, item[key]) for key in ('ad_id', 'source_id', 'post_id', 'ref') if item.get(key)), None)
             if identity(context) and identity(context) == identity(old):
                 context = {**old, **context}
