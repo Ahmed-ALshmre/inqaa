@@ -19,7 +19,7 @@ COLORS = {
     'فضي': ('فضي', 'silver'), 'خمري': ('خمري', 'عنابي'),
 }
 ALIASES = {alias: color for color, aliases in COLORS.items() for alias in aliases}
-COLOR_RE = re.compile(r'(?<!\w)(?:و?ال|و)?(' + '|'.join(re.escape(x) for x in sorted(ALIASES,key=len,reverse=True)) + r')(?!\w)', re.I)
+COLOR_RE = re.compile(r'(?<!\w)(?:و?ال|و?لل|و?ل|و)?(' + '|'.join(re.escape(x) for x in sorted(ALIASES,key=len,reverse=True)) + r')(?!\w)', re.I)
 SIZE_RE = re.compile(r'(?<!\w)(?:[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',re.I)
 RANGE_RE = re.compile(r'(\d{1,3})\s*(?:كيلو\s*)?(?:الي|[-–—]|لحد)\s*(\d{1,3})')
 
@@ -81,6 +81,13 @@ def requested(question):
     for match in COLOR_RE.finditer(text):
         before=text[max(0,match.start()-22):match.start()]
         if re.search(r'(?:مو|لا|ما)\s*(?:اريد\s*)?(?:اللون\s*)?$',before):
+            continue
+        # "غير لون الأسود متوفر؟" asks for another color. The imperative
+        # "غيري اللون للأسود" still selects black and must not be excluded.
+        if re.search(r'(?<!\w)(?:ب?غير|عدا|باستثناء|سوى)\s*(?:(?:ال)?لون\s*)?$', before):
+            continue
+        after = text[match.end():match.end()+24]
+        if re.match(r'\s+(?:ما\s*اريد(?:ه|ها)?|مو\s+مرغوب)(?:\s|[،,.!?؟]|$)', after):
             continue
         color=ALIASES[match[1]]
         if color not in choices:

@@ -122,7 +122,8 @@ class ConversionGrowthTests(unittest.TestCase):
 
     def test_metrics_use_same_cohort_not_order_count(self):
         for sender in [self.sender,self.sender,'default::outside']:
-            self.db.execute("INSERT INTO orders(sender_id,store_id,created_at,status) VALUES(?,'default',?,'new')",(sender,self.now.isoformat()))
+            # Reports use [start,end); keep these purchases inside the period.
+            self.db.execute("INSERT INTO orders(sender_id,store_id,created_at,status) VALUES(?,'default',?,'new')",(sender,(self.now-timedelta(seconds=1)).isoformat()))
         self.db.commit()
         result=growth.metrics(self.db,'default',self.now.isoformat())
         self.assertEqual((result['people'],result['buyers'],result['orders']),(1,1,3))

@@ -310,7 +310,7 @@ class ConversationContextTests(unittest.TestCase):
                     self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['SK1'])
                 greeting.assert_not_called()
                 self.assertEqual(model.call_args.args[5]['product_id'], 'SK1')
-                self.assertIn('التنورة', result['reply'])
+                self.assertIn(skirt['product_name'], result['reply'])
                 self.assertNotIn('صورة', result['reply'])
                 self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],0)
 
@@ -453,8 +453,10 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,"_call_main_ai_once",return_value={"reply":"دزيلي صورة الموديل"}) as model:
             result=m.call_main_ai(dict(self.ev,text="الفحص شلون؟"),"text",{},[],CATALOG,CATALOG[0],None,"",[])
         self.assertEqual(model.call_count,2)
-        self.assertTrue(result["failed"])
-        self.assertEqual(result["reply"],"")
+        self.assertFalse(result.get("failed"))
+        self.assertNotIn('صورة', result['reply'])
+        self.assertIn('فحص', result['reply'])
+        self.assertFalse(result['create_order'])
 
     def test_collects_text_before_and_after_image_within_burst(self):
         for text,kind,image in [("أريد بس هذا","text",None),("","image","https://images.test/a.jpg"),("قياس 44","text",None)]:
@@ -738,6 +740,9 @@ class ConversationContextTests(unittest.TestCase):
     def test_unknown_compound_question_is_not_hidden_by_price_fallback(self):
         with patch.object(m,'_call_main_ai_once',return_value={'reply':'','requires_human':True,'handoff_reason':'تفصيل غير متوفر'}):
             result=m.call_main_ai(dict(self.ev,text='شكد السعر وشنو الطول'),'text',{},[],CATALOG,CATALOG[0],None,'',[])
-        self.assertTrue(result['failed'])
-        self.assertTrue(result['requires_human'])
+        self.assertFalse(result.get('failed'))
+        self.assertTrue(result['_needs_fact_review'])
+        self.assertIn('16,000', result['reply'])
+        self.assertIn('طول القطعة', result['reply'])
+        self.assertFalse(result['create_order'])
         self.assertFalse(result.get('_catalog_fallback'))

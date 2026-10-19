@@ -28,7 +28,7 @@ try:
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants
+    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers
     from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
@@ -43,7 +43,7 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants
+    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers
     from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
@@ -617,6 +617,12 @@ BAGHDAD_TZ = ZoneInfo("Asia/Baghdad")
 
 def now_baghdad_iso():
     return datetime.now(BAGHDAD_TZ).replace(microsecond=0).isoformat()
+
+
+# New installations use the corrected policy too. Persisted custom facts are
+# retained and the same narrow migration is applied when building a live prompt.
+DEFAULT_MAIN_SYSTEM_PROMPT = sales_strategy.upgrade_legacy_rules(DEFAULT_MAIN_SYSTEM_PROMPT)
+DEFAULT_MAIN_RULES_PROMPT = sales_strategy.upgrade_legacy_rules(DEFAULT_MAIN_RULES_PROMPT)
 
 
 DEFAULT_APP_SETTINGS = {
@@ -6223,6 +6229,8 @@ def resolve_contextual_product_selection(db, ev, products):
 
 
 def customer_declines_purchase(text):
+    if sales_strategy.stop_kind(text) in {'opt_out', 'declined'}:
+        return True
     text = str(text or "").translate(str.maketrans("أإآ", "ااا")).strip(" .!،؟")
     return bool(re.fullmatch(r"(?:(?:حبيبتي|عيني|حبي)\s+)?(?:ما\s*ا+ريد(?:\s+بعد)?|عوفي\s+عيني|خلاص\s+ما\s*اريد)(?:\s+(?:عيني|حبيبتي))?", text))
 
@@ -6248,6 +6256,16 @@ def product_clarification_or_review(db, ev, question):
 
 
 def resolve_product_choice(db, ev, products):
+    # A refusal closes a purchase turn before a model can reinterpret it as
+    # rejecting one of the saved products. Existing orders keep their service path.
+    if customer_declines_purchase(ev.get('text')) and not get_latest_customer_order(db, ev['sender_id']):
+        product_choice_table(db)
+        db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev['sender_id'],))
+        db.commit()
+        cancel_followups_for_sender(db, ev['sender_id'], 'customer_declined')
+        reply = ('حاضر، ما راح نراسلك بعد.' if sales_strategy.stop_kind(ev.get('text')) == 'opt_out'
+                 else 'حاضر، ما راح أثبت أي طلب. إحنا بالخدمة إذا احتجت شي.')
+        return saved_checkout_reply(db, ev, reply, {'purchase_declined': True})
     if sales_recovery.disputed_product_photo(ev.get('text')):
         reason = 'اعتراض الزبون على تطابق صورة الموديل؛ يلزم تأكيد المنتج المطلوب'
         pending = db.execute("SELECT id FROM human_reviews WHERE sender_id=? AND status='pending' AND reason=?",
@@ -6261,12 +6279,6 @@ def resolve_product_choice(db, ev, products):
         return saved_checkout_reply(db, ev,
             'حقج علينا، ما راح أعتمد الصورة اللي ما تطابق طلبج. الموديل يحتاج تأكيد من الموظف، وبقية اختياراتج محفوظة.',
             {'photo_identity_disputed': True, 'human_review_id': review_id})
-    if customer_declines_purchase(ev.get('text')) and not get_latest_customer_order(db, ev['sender_id']):
-        product_choice_table(db)
-        db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev['sender_id'],))
-        db.commit()
-        return saved_checkout_reply(db, ev, "تدللين عيني، ما راح أثبت أي طلب. إذا احتجتي شي إحنا بخدمتج.",
-                                    {'purchase_declined': True})
     semantic_reply = resolve_contextual_product_selection(db, ev, products)
     if semantic_reply or ev.get("_selection_resolved"):
         return semantic_reply
@@ -7481,6 +7493,65 @@ def requested_reply_images(result, products, matched, text, reply):
     return list(dict.fromkeys(urls))
 
 
+def recover_factual_sales_reply(ev, product, *, extra='', order=None):
+    """Keep answerable parts of a mixed turn without inferring buying consent."""
+    if ev.get('_post_order'):
+        return None
+    question = ev.get('text') or ''
+    facts, gaps = sales_answers.product_fragments(question, product)
+    selected = sales_answers.topics(question)
+    if has_app_context():
+        if 'delivery' in selected:
+            province = contact_fields(question).get('province')
+            policy = store_policy_question_reply('شكد التوصيل' + (' إلى ' + province if province else ''), product)
+            if policy:
+                facts.append(policy['reply'])
+            delivery = get_delivery_settings(get_db())
+            if ('price' in selected and product and (province or delivery['baghdad_fee'] == delivery['other_fee'])
+                    and not re.search(r'قطعتين|ثنين|ثلاث|كمية|عدد|\d+\s*قطع', question)):
+                try:
+                    count, _, _ = conversation_quality.terms(product)
+                    quote = price_order([dict(product_id=product['product_id'], quantity=count)], [product],
+                                        delivery_fee_for_province(province, get_db()))
+                    unit = 'للبكج' if count > 1 else 'للقطعة'
+                    facts.append(f"المجموع {unit} ويا التوصيل: {quote['product_total'] + quote['delivery_fee']:,} د.ع.")
+                except (ValueError, TypeError, KeyError):
+                    pass
+        if 'delivery_time' in selected:
+            policy = store_policy_question_reply('متى التوصيل', product)
+            if policy:
+                facts.append(policy['reply'])
+        if 'inspection' in selected:
+            inspection = str(get_delivery_settings(get_db()).get('inspection_message') or '').strip()
+            if inspection and not customer_copy.has_instructions(inspection):
+                facts.append(inspection)
+        if 'payment' in selected:
+            policy = store_policy_question_reply('شلون الدفع', product)
+            if policy:
+                facts.append(policy['reply'])
+    if 'checkout_help' in selected:
+        facts.append('للحجز نحدد تفاصيل القطع والكمية، وبعدها نكمل رقم الموبايل والمحافظة والعنوان.')
+    missing = sales_strategy.missing_fact_reply(question, product)
+    if missing:
+        if sales_strategy.fact_requires_human(question, product):
+            gaps.append(missing)
+        else:
+            facts.append(missing)
+    if not facts and not gaps:
+        return None
+    parts = []
+    for part in facts + gaps + ([extra] if extra else []):
+        if part and not any(sales_strategy.normalized(part).strip(' .') in
+                            sales_strategy.normalized(old).strip(' .') for old in parts):
+            parts.append(part)
+    name = customer_copy.fact((product or {}).get('product_name')).strip()
+    if parts and name and not customer_copy.has_instructions(name) and len(name) < 80:
+        parts[0] = name + ':\n' + parts[0]
+    return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False, 'requires_human': False,
+            'order': order or {}, '_local_reply': True, '_factual_recovery': True,
+            '_needs_fact_review': bool(gaps), '_suppress_product_images': True}
+
+
 def call_main_ai(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
@@ -7558,7 +7629,7 @@ def call_main_ai(
                             [{'product_found':True,'product_id':matched_product['product_id']}])
         return product_albums.response(lookup_positions, products, question)
     missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') else ''
-    if missing_fact and not re.search(r'سعر|بكم|بشكد|توصيل|الوان|ألوان|خصم', question):
+    if missing_fact and sales_answers.isolated_gap(question):
         return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':sales_strategy.fact_requires_human(question, matched_product),'_suppress_product_images':True}
     if matched_product and requests_alternative_photo(question) and len(product_image_urls(matched_product)) <= 1:
         instructions_text += "\nالزبون يطلب تصويراً إضافياً، ولا يوجد لهذا المنتج سوى صورة الكتالوج. وضّح ذلك بطريقتك دون طلب صورته مجدداً أو الوعد بتصوير غير موجود."
@@ -7567,7 +7638,9 @@ def call_main_ai(
         return {'reply': 'تدللين عيني 🌸', 'reply_parts': ['تدللين عيني 🌸'],
                 'create_order': False, 'order': {}, 'intent': 'unknown', '_local_reply': True}
     if sales_strategy.signals(question) == ['refusal']:
-        return {'reply': 'حاضر، ما راح نراسلك بعد.', 'reply_parts': ['حاضر، ما راح نراسلك بعد.'],
+        close = ('حاضر، ما راح نراسلك بعد.' if sales_strategy.stop_kind(question) == 'opt_out'
+                 else 'حاضر، ما راح أثبت أي طلب. إحنا بالخدمة إذا احتجت شي.')
+        return {'reply': close, 'reply_parts': [close],
                 'create_order': False, 'order': {}, 'intent': 'unknown', '_local_reply': True}
     waiting_reply = sales_context.awaiting_image_reply(question)
     if (waiting_reply and message_type == 'text' and not ev.get('image_url')
@@ -7594,10 +7667,11 @@ def call_main_ai(
                  or sales_strategy.decision_error(result, question))
     premature_close = sales_strategy.premature_close(result.get('reply'), question)
     repeated_contact = sales_context.reasks_contact(result.get('reply'), customer or {})
+    missing_answers = sales_answers.missing_answers(result.get('reply'), question, matched_product)
     browse_checkout = continuation and (result.get('create_order') or re.search(r'تم تثبيت|تم حجز|ثبتت|حجزت', str(result.get('reply') or '')))
     lost_context = bool(matched_product and not is_product_objection(question)
                         and reply_reasks_known_product(result.get("reply")))
-    needs_review = (bool(availability_problem) or internal_language or bool(grounding) or browse_checkout or repeated_contact or premature_close or lost_context or result.get("failed") or result.get("requires_human") is True
+    needs_review = (bool(availability_problem) or internal_language or bool(grounding) or bool(missing_answers) or browse_checkout or repeated_contact or premature_close or lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
     if has_app_context():
         for condition, code in [(availability_problem, 'stock_contradiction'), (internal_language, 'internal_language'),
@@ -7630,11 +7704,21 @@ def call_main_ai(
                                           if continuation else " المنتج محدد بالفعل: " + str(matched_product.get("product_name")) + ". أجب عن السؤال الحالي من بياناته؛ لا تطلب اسمه أو صورته مجدداً.")
         if repeated_contact:
             kwargs['fix_instruction'] += ' طلبت معلومة موجودة في ملف الزبون: ' + repeated_contact + '. استخدمها واطلب الناقص فقط، ولا تؤكد الحجز قبل نجاحه.'
+        if missing_answers:
+            kwargs['fix_instruction'] += ' حذفت أجزاء مطلوبة من السؤال المركب: ' + '، '.join(missing_answers) + '. أجب عنها مع بقية الأسئلة دون إعادة سؤال الحجز أو حذف اختيارات السلة.'
         if browse_checkout:
             kwargs['fix_instruction'] += ' هذه موافقة على الصور أو البدائل فقط. أجب عن العرض السابق وأعد create_order=false وorder فارغاً، ولا تؤكد حجزاً.'
         if format_failure:
             kwargs["fix_instruction"] += ' الرد السابق تعذر قراءته. أرجع كائن JSON صالح فقط بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder. لا تؤكد حجزاً دون بيانات مكتملة وموافقة الزبون.'
         result = _call_main_ai_once(*args, **kwargs)
+    if (sales_answers.missing_answers(result.get('reply'), question, matched_product) and not ev.get('_post_order')
+            and not sales_strategy.premature_close(result.get('reply'), question)):
+        recovered = recover_factual_sales_reply(ev, matched_product, order=result.get('order'))
+        if recovered:
+            if result.get('failure_reason'):
+                recovered.update(failure_reason=result['failure_reason'],
+                                 _provider_failure=result['failure_reason'])
+            result = recovered
     if customer_copy.has_instructions(result.get('reply')):
         return {'reply': '', 'create_order': False, 'order': {}, 'failed': True,
                 'requires_human': True, 'failure_reason': 'internal_instructions_in_reply'}
@@ -7661,7 +7745,7 @@ def call_main_ai(
     items = order.get('items') if isinstance(order.get('items'), list) else []
     contact = {key: order.get(key) or (customer or {}).get(key) or ''
                for key in ('phone', 'province', 'address')}
-    if (explicit_checkout and not sales_strategy.purchase_block_reason(question)
+    if (explicit_checkout and not sales_strategy.purchase_block_reason(question) and not result.get('_needs_fact_review')
             and items and not order_line_error(items, products)
             and phone_number(contact['phone']) and contact['province']
             and not invalid_shipping_address(contact['address'])
@@ -7690,8 +7774,12 @@ def call_main_ai(
         return {"reply": "براحتك، ما راح نثبت أي طلب بدون موافقتك.", "create_order": False, "order": {}}
     if sales_strategy.premature_close(result.get('reply'), question) and not result.get('failed'):
         # Do not escalate a style defect or deliver pressure after a price objection.
-        return {'reply': 'أفهم عليك، شنو حدود الميزانية المناسبة إلك ويا التوصيل حتى نختار على أساسها؟',
-                'create_order': False, 'order': result.get('order') or {}, 'intent': 'price'}
+        budget = sales_answers.known_budget(question, context)
+        next_step = ('الميزانية اللي ذكرتها واضحة عندي؛ نحتاج نراجع خيار يناسبها ويا التوصيل.' if budget is not None else
+                     'أفهم عليك، شنو حدود الميزانية المناسبة إلك ويا التوصيل حتى نختار على أساسها؟')
+        recovered = recover_factual_sales_reply(ev, matched_product, extra=next_step, order=result.get('order'))
+        return dict(recovered or {'reply': next_step, 'create_order': False, 'order': result.get('order') or {}},
+                    intent='price', _needs_fact_review=bool(budget is not None or (recovered or {}).get('_needs_fact_review')))
     if matched_product and not ev.get('_post_order') and product_variants.reply_error(result.get('reply'),matched_product,question):
         return product_albums.response(positions or [{'product_found':True,'product_id':matched_product['product_id']}],products,question)
     if (conversation_quality.grounded_error(result.get("reply"), matched_product, products)
@@ -7699,6 +7787,9 @@ def call_main_ai(
         if sales_strategy.signals(question) == ['refusal']:
             return {"reply": "تدلل، شكراً لتواصلك ويانا.", "create_order": False, "order": {}}
         if 'جدول يربط الوزن' in sales_strategy.reply_error(result.get('reply'),question,matched_product):
+            recovered = recover_factual_sales_reply(ev, matched_product, order=result.get('order'))
+            if recovered:
+                return recovered
             return {'reply': 'الوزن وحده ما يكفي لتحديد قياس مضبوط لهالموديل؛ شنو قياس الملابس المعتاد إلك؟', 'create_order': False, 'order': {}}
         return {"reply": "هذه التفاصيل تحتاج تأكيداً من المتجر حتى أنطيج معلومة صحيحة.", "create_order": False,
                 "order": {}, "_needs_fact_review": True, "_suppress_product_images": True}
@@ -7707,6 +7798,9 @@ def call_main_ai(
         factual = known_product_questions_reply(question, matched_product)
         if factual and factual.get('intent') != 'product_photo':
             return dict(factual, _catalog_fallback=True)
+        factual = recover_factual_sales_reply(ev, matched_product, order=result.get('order'))
+        if factual:
+            return dict(factual, _provider_failure=result.get('failure_reason') or '')
     if matched_product and not is_product_objection(question) and reply_reasks_known_product(result.get("reply")):
         return {"reply": "", "failed": True, "failure_reason": "known_product_context_repeatedly_ignored", "requires_human": True}
     if (result.get('failed') or result.get('requires_human') is True) and has_app_context() and not ev.get('_post_order') and not ev.get('_staff_preview'):
@@ -7717,7 +7811,8 @@ def call_main_ai(
     if result.get('requires_human') is True or is_ai_handoff_reply(result.get('reply')):
         missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') else ''
         if missing_fact:
-            return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':sales_strategy.fact_requires_human(question, matched_product),'_suppress_product_images':True}
+            return recover_factual_sales_reply(ev, matched_product, order=result.get('order')) or {
+                'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':sales_strategy.fact_requires_human(question, matched_product),'_suppress_product_images':True}
         return dict(result, reply='', create_order=False, failed=True,
                     failure_reason=result.get('handoff_reason') or 'unresolved_decision_after_context_review')
     if (sales_context.browse_request(question) and not ev.get('_post_order')
@@ -7917,7 +8012,7 @@ def _call_main_ai_once(
 
     rules_text = "\n".join(f"- {r}" for r in rules_list) if rules_list else "- لا توجد قواعد محظورة."
 
-    base_prompt = render_setting_template(db, "prompt_main_system", DEFAULT_MAIN_SYSTEM_PROMPT)
+    base_prompt = sales_strategy.upgrade_legacy_rules(render_setting_template(db, "prompt_main_system", DEFAULT_MAIN_SYSTEM_PROMPT))
     instructions_text = sales_strategy.upgrade_legacy_rules(instructions_text)
     system_prompt = (
         f"{base_prompt}\n\n"
@@ -8582,7 +8677,7 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True):
 
 
 def checkout_requested(db, ev, result):
-    if result.get('_browse_only'):
+    if result.get('_browse_only') or result.get('_needs_fact_review'):
         return False
     if sales_strategy.purchase_block_reason(ev.get('text')):
         return False
@@ -8952,6 +9047,16 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     latest_order = get_latest_customer_order(db, ev["sender_id"])
     if latest_order:
         return handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
+    if customer_declines_purchase(ev.get('text')):
+        return resolve_product_choice(db, ev, products)
+    action = conversation_quality.operational_request(ev.get('text'))
+    if action and action['kind'] == 'cancel':
+        cancel_followups_for_sender(db, ev['sender_id'], 'cancellation_requested')
+        review_id = has_pending_human_review(db, ev['sender_id']) or create_human_review(
+            db, ev, 'طلب إلغاء حجز غير موجود في السجل الحالي؛ يلزم مراجعة الموظف')
+        return saved_checkout_reply(db, ev,
+            'ما راح أثبت أي طلب جديد. الحجز السابق مو ظاهر عندي، وطلب الإلغاء يحتاج مراجعة الموظف حتى نتأكد منه.',
+            {'cancellation_requested': True, 'needs_human': True, 'human_review_id': review_id})
     if sales_recovery.disputed_product_photo(ev.get('text')):
         return resolve_product_choice(db, ev, products)
     ev = zernio.product_event(sys.modules[__name__], db, ev, products)
@@ -12737,36 +12842,9 @@ def api_dashboard_stats():
     scope_params = date_params + ([store_id] if store_id else [])
     message_where = date_where + store_where
     valid_order = " AND LOWER(TRIM(COALESCE(status,'new'))) NOT IN ('cancelled','canceled')"
-    total_orders = db.execute(
-        "SELECT COUNT(*) FROM orders WHERE 1=1" + message_where + valid_order, scope_params
-    ).fetchone()[0]
-    booked_people = db.execute(
-        "SELECT COUNT(DISTINCT COALESCE(NULLIF(store_id,''),'default') || char(31) || sender_id) "
-        "FROM orders WHERE COALESCE(sender_id,'')!=''" + message_where + valid_order, scope_params
-    ).fetchone()[0]
-
-    # A conversation starts at its first incoming message in that store.
-    # Returning customers and repeat messages cannot enlarge this cohort.
-    cohort_sql = """WITH first_contacts AS (
-        SELECT COALESCE(NULLIF(store_id,''),'default') store_id,
-               sender_id, MIN(created_at) first_message
-        FROM messages
-        WHERE direction='incoming' AND COALESCE(sender_id,'')!=''""" + store_where + """
-        GROUP BY COALESCE(NULLIF(store_id,''),'default'), sender_id
-    ), cohort AS (
-        SELECT * FROM first_contacts WHERE 1=1""" + (
-        " AND first_message >= ? AND first_message < ?" if date_from and date_to else ""
-    ) + """
-    ) SELECT COUNT(*) people, COALESCE(SUM(CASE WHEN EXISTS (
-        SELECT 1 FROM orders o WHERE o.sender_id=cohort.sender_id
-          AND COALESCE(NULLIF(o.store_id,''),'default')=cohort.store_id
-          AND o.created_at >= cohort.first_message""" + (
-        " AND o.created_at >= ? AND o.created_at < ?" if date_from and date_to else ""
-    ) + """ AND LOWER(TRIM(COALESCE(o.status,'new'))) NOT IN ('cancelled','canceled')
-    ) THEN 1 ELSE 0 END),0) booked FROM cohort"""
-    cohort_params = ([store_id] if store_id else []) + date_params + date_params
-    cohort = db.execute(cohort_sql, cohort_params).fetchone()
-    total_people, cohort_buyers = cohort["people"], cohort["booked"]
+    cohort = conversion_growth.cohort_metrics(db, date_from, date_to, store_id or None)
+    total_people, cohort_buyers = cohort['people'], cohort['buyers']
+    total_orders, booked_people = cohort['orders'], cohort['orders_booked_people']
     incoming_messages = db.execute(
         "SELECT COUNT(*) FROM messages WHERE direction='incoming'" + message_where, scope_params
     ).fetchone()[0]
@@ -12798,6 +12876,10 @@ def api_dashboard_stats():
         "orders_total":        total_orders,
         "message_to_order_conversion": conversion_rate,
         "conversation_to_order_conversion": conversion_rate,
+        "conversion_definition": cohort['measurement_definition'],
+        "active_contacts": cohort['active_contacts'],
+        "active_booked_people": cohort['active_buyers'],
+        "active_contact_conversion": cohort['active_conversion_rate'],
         "top_products":        _top_ordered_products(db, date_from=date_from, date_to=date_to, store_id=store_id or None, exclude_cancelled=True),
         "ai_enabled":          is_ai_enabled(db),
     })
@@ -12982,41 +13064,40 @@ def calculate_message_to_order_conversion(db, start_date, end_date):
         "SELECT COUNT(*) FROM messages WHERE created_at >= ? AND created_at < ?",
         (start_date, end_date),
     ).fetchone()[0]
-    total_conversations = db.execute(
-        """SELECT COUNT(DISTINCT sender_id) FROM messages
-           WHERE direction='incoming' AND created_at >= ? AND created_at < ?""",
-        (start_date, end_date),
-    ).fetchone()[0]
-    total_orders = db.execute(
-        "SELECT COUNT(*) FROM orders WHERE created_at >= ? AND created_at < ?",
-        (start_date, end_date),
-    ).fetchone()[0]
+    cohort = conversion_growth.cohort_metrics(db, start_date, end_date)
+    total_conversations, total_orders = cohort['people'], cohort['orders']
     return {
         "total_messages": total_messages,
         "total_conversations": total_conversations,
         "total_orders": total_orders,
-        "conversation_conversion_rate": _percent(total_orders, total_conversations),
+        "booked_people": cohort['buyers'],
+        "active_contacts": cohort['active_contacts'],
+        "conversation_conversion_rate": cohort['conversion'],
         "message_conversion_rate": _percent(total_orders, total_messages),
+        "conversion_definition": cohort['measurement_definition'],
     }
 
 
 def get_stage_breakdown(db, start_date, end_date):
     rows = db.execute(
         """SELECT m.sender_id, m.text,
-                  EXISTS(SELECT 1 FROM orders o WHERE o.sender_id=m.sender_id AND o.created_at >= ? AND o.created_at < ?) AS has_order,
-                  EXISTS(SELECT 1 FROM customer_product_interests cpi WHERE cpi.sender_id=m.sender_id AND cpi.status='rejected') AS rejected
+                  EXISTS(SELECT 1 FROM orders o WHERE o.sender_id=m.sender_id
+                    AND COALESCE(NULLIF(o.store_id,''),'default')=COALESCE(NULLIF(m.store_id,''),'default')
+                    AND o.created_at >= ? AND o.created_at < ?
+                    AND LOWER(TRIM(COALESCE(o.status,'new'))) NOT IN ('cancelled','canceled')) AS has_order
            FROM messages m
            JOIN (
              SELECT sender_id, MAX(id) AS max_id
              FROM messages
              WHERE direction='incoming' AND created_at >= ? AND created_at < ?
-             GROUP BY sender_id
+             GROUP BY COALESCE(NULLIF(store_id,''),'default'), sender_id
            ) latest ON latest.max_id=m.id""",
         (start_date, end_date, start_date, end_date),
     ).fetchall()
     counts = Counter()
     for row in rows:
-        counts[_infer_sales_stage(row["text"], bool(row["has_order"]), bool(row["rejected"]))] += 1
+        declined = sales_strategy.stop_kind(row['text']) in {'opt_out', 'declined'}
+        counts[_infer_sales_stage(row["text"], bool(row["has_order"]), declined)] += 1
     total = sum(counts.values())
     return [
         {
@@ -13032,11 +13113,11 @@ def get_stage_breakdown(db, start_date, end_date):
 
 def _stage_suggestion(stage):
     return {
-        "asked_price": "حسن رد السعر بإضافة فحص عند الاستلام وسؤال حجز واضح.",
-        "asked_size": "اختصر إجابة القياس واختم بسؤال يطلب العمر أو تأكيد الحجز.",
-        "price_objection": "أضف رد اعتراض يوضح القيمة والتبديل والفحص بدون إطالة.",
+        "asked_price": "أجب بالسعر الصحيح والتوصيل والمجموع عند إمكان حسابهما؛ اختر خطوة تناسب قرار الزبون.",
+        "asked_size": "استخدم جدول هذا المنتج والقياس المعروف؛ اسأل عن المعلومة الناقصة فقط دون ضمان ملاءمة.",
+        "price_objection": "احترم الميزانية، ووضح ميزة موثقة أو بديلاً مناسباً موجوداً دون خصم أو ضمان مختلق.",
         "waiting_for_customer_info": "اجعل طلب الهاتف والعنوان مباشرًا وبخطوة واحدة.",
-        "conversation": "أضف CTA أوضح في الردود العامة حتى لا تتوقف المحادثة.",
+        "conversation": "عالج السؤال أو العائق الحالي ثم اختر خطوة مفيدة واحدة؛ لا تطلب الحجز في كل رد.",
         "lost": "راجع أسباب الرفض المتكررة قبل تغيير قواعد الرد.",
         "booked": "حافظ على النمط الحالي لأنه وصل إلى طلب.",
     }.get(stage, "راجع الرسائل في هذه المرحلة وأضف خطوة بيع أوضح.")
