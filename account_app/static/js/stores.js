@@ -29,14 +29,26 @@ async function loadStores() {
           <select id="remote-store-${index}" class="form-select" name="store_id" data-saved-name="${adminEsc(config.store_name || '')}">${remoteStoreOptions(config)}</select></div>
         <div class="col-md-6"><label class="form-label" for="telegram-${index}">معرّف محادثة تلغرام للطلبات</label>
           <input id="telegram-${index}" class="form-control" name="telegram_chat_id" dir="ltr" value="${adminEsc(config.telegram_chat_id || '')}" placeholder="-100...">
-          <div class="small text-muted mt-1">يستخدم بوت تلغرام الحالي. اتركه فارغاً لاستخدام محادثة الطلبات العامة.</div></div>
+          <div class="small text-muted mt-1">كروب هذا المتجر فقط. احفظ الآيدي ثم اختبر الإرسال من الخادم. المتجر دون كروب لا يرسل إلى كروب متجر آخر.</div></div>
       </div>
       <p class="small text-muted mt-3">تُرسل طلبات هذا المتجر فقط إلى وجهته المحددة. أدخل اسم كل منتج كما هو في مينجر بحقل «اسم الإرسال» في إعدادات المنتج؛ لا يُنقل الطلب إلى متجر آخر عند اختلاف اسم المنتج.</p>
       <button class="btn btn-primary" type="submit">حفظ بيانات الإرسال</button>
+      <button class="btn btn-outline-primary test-telegram" type="button">إرسال حجز تجريبي إلى الكروب</button>
       <span class="small ms-2" role="status"></span>
     </form>`;
   }).join('') || '<div class="admin-empty">لا توجد متاجر.</div>';
   list.querySelectorAll('.store-delivery-form').forEach(form => {
+    form.querySelector('.test-telegram').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      const status = form.querySelector('[role="status"]');
+      button.disabled = true;
+      status.textContent = 'جارٍ إرسال رسالة اختبار إلى الكروب المحفوظ…';
+      try {
+        const result = await storesRequest(`/api/stores/${encodeURIComponent(form.dataset.store)}/test-telegram`, {method: 'POST', body: '{}'});
+        status.textContent = `وصل الاختبار إلى ${result.chat_id} — رقم الرسالة ${result.message_id}`;
+      } catch (error) { status.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const button = form.querySelector('button[type="submit"]');

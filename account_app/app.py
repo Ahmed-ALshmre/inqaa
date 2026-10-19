@@ -3427,7 +3427,7 @@ def telegram_notifications_chat_id():
     return TELEGRAM_NOTIFICATIONS_CHAT_ID or TELEGRAM_PROBLEMS_CHAT_ID or TELEGRAM_CHAT_ID
 
 
-def send_telegram_message(text, chat_id=None, label="notification"):
+def _telegram_send_result(text, chat_id=None, label="notification"):
     target_chat_id = chat_id or (TELEGRAM_CHAT_ID if label == "order" else telegram_notifications_chat_id())
     text = clean_telegram_text(text)
     if label == "notification":
@@ -3436,8 +3436,7 @@ def send_telegram_message(text, chat_id=None, label="notification"):
             text = f"{header}\n\n{text}"
     if not TELEGRAM_BOT_TOKEN or not target_chat_id:
         print(f"[Telegram] TELEGRAM_BOT_TOKEN/{label} chat_id not configured.", flush=True)
-        print(f"[Telegram] Message would be:\n{text}", flush=True)
-        return False
+        return {"ok": False, "error": "لم يُضبط بوت Telegram أو كروب الاستقبال"}
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
@@ -3448,14 +3447,27 @@ def send_telegram_message(text, chat_id=None, label="notification"):
             },
             timeout=15,
         )
-        if not resp.ok:
-            print(f"[Telegram] Error {resp.status_code}: {resp.text}", flush=True)
-            return False
+        try:
+            payload = resp.json()
+        except ValueError:
+            payload = {}
+        if not resp.ok or payload.get("ok") is not True:
+            error = str(payload.get("description") or f"Telegram HTTP {resp.status_code}")
+            error = error.replace(TELEGRAM_BOT_TOKEN, "[hidden]")[:300]
+            print(f"[Telegram] {label} failed: {error}", flush=True)
+            return {"ok": False, "error": error}
         print(f"[Telegram] Sent {label} message.", flush=True)
-        return True
+        result = payload.get("result") or {}
+        return {"ok": True, "message_id": result.get("message_id"),
+                "chat_id": str((result.get("chat") or {}).get("id") or target_chat_id)}
     except Exception as exc:
-        print(f"[Telegram] Send error: {exc}", flush=True)
-        return False
+        error = "تعذر تأكيد الإرسال إلى Telegram: " + type(exc).__name__
+        print(f"[Telegram] {error}", flush=True)
+        return {"ok": False, "error": error}
+
+
+def send_telegram_message(text, chat_id=None, label="notification"):
+    return _telegram_send_result(text, chat_id, label)["ok"]
 
 
 ORDER_CONFIRMATION_TEXT = DEFAULT_ORDER_CONFIRMATION_TEXT
@@ -3571,8 +3583,11 @@ def send_order_to_telegram(order):
     order = dict(order)
     if has_app_context():
         db = get_db()
-        config = menger.settings(db, order.get("store_id") or current_store_id())
-        chat_id = config.get("telegram_chat_id") or chat_id
+        store_id = order.get("store_id") or current_store_id()
+        config = menger.settings(db, store_id)
+        # A missing store destination must never send its customers to another
+        # store's general chat. Keep the legacy fallback for the default only.
+        chat_id = config.get("telegram_chat_id") or (chat_id if store_id == DEFAULT_STORE_ID else "")
         order_id = order.get("id")
         if order_id:
             try:
@@ -3595,6 +3610,9 @@ def send_order_to_telegram(order):
             except Exception:
                 message = "حدث خطأ أثناء التحقق من إرسال الطلب عبر API؛ لم يتأكد نجاح الإرسال"
             order["api_delivery_message"] = message
+    if not chat_id:
+        print("[Telegram] No order group configured for this store.", flush=True)
+        return False
     return send_telegram_message(
         format_order_for_telegram(order),
         chat_id=chat_id,
@@ -12068,6 +12086,28 @@ def api_update_store(store_id):
     )
     db.commit()
     return jsonify({"ok": True, "store": get_store(db, store_id)})
+
+
+@app.post("/api/stores/<store_id>/test-telegram")
+@_dash_require
+def api_test_store_telegram(store_id):
+    db = get_db()
+    store = get_store(db, store_id)
+    if not store:
+        return jsonify(ok=False, error="المتجر غير موجود"), 404
+    chat_id = menger.settings(db, store_id).get("telegram_chat_id")
+    if not chat_id:
+        return jsonify(ok=False, error="احفظ معرّف كروب الطلبات لهذا المتجر أولاً"), 400
+    sample = dict(store_id=store_id, store_name=store["name"],
+                  customer_name="زبون تجريبي — لا يُجهّز", phone="07XXXXXXXXX",
+                  province="بغداد", address="عنوان تجريبي للاختبار فقط",
+                  total_amount=41000, product_total=36000, delivery_fee=5000,
+                  notes="اختبار الإرسال فقط؛ لا يُسجل كحجز ولا يُجهّز",
+                  items=[dict(product_name="منتج تجريبي", quantity=2,
+                              color="أسود", size="44", unit_price=18000)])
+    text = "🧪 اختبار فقط — ليس حجزاً حقيقياً\n\n" + format_order_for_telegram(sample)
+    result = _telegram_send_result(text, chat_id, label="order_test")
+    return jsonify(**result), 200 if result["ok"] else 502
 
 
 def _product_from_request(data, existing=None):

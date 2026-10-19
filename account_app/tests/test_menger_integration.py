@@ -10,6 +10,56 @@ from account_app import menger
 
 
 class IntegrationTests(unittest.TestCase):
+    def test_live_telegram_test_uses_each_saved_group_without_creating_orders(self):
+        for store_id, chat_id in [('default', '-1004297135495'), ('khuyoot', '-1003722126286')]:
+            menger.save_settings(m.get_db(), store_id, {'telegram_chat_id': chat_id})
+            response = Mock(ok=True, status_code=200, json=Mock(return_value={
+                'ok': True, 'result': {'message_id': 123, 'chat': {'id': int(chat_id)}}}))
+            with patch.object(m, 'TELEGRAM_BOT_TOKEN', 'private-test-token'), patch.object(m.requests, 'post', return_value=response) as post:
+                result = self.client.post(f'/api/stores/{store_id}/test-telegram', json={}, headers=self.headers)
+            self.assertEqual(result.status_code, 200, result.get_json())
+            self.assertEqual(result.get_json()['chat_id'], chat_id)
+            sent = post.call_args.kwargs['json']
+            self.assertEqual(sent['chat_id'], chat_id)
+            for value in ['اختبار فقط', '07XXXXXXXXX', 'اللون: أسود', 'القياس: 44', 'العدد: 2']:
+                self.assertIn(value, sent['text'])
+        self.assertEqual(m.get_db().execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
+        self.assertEqual(m.get_db().execute('SELECT COUNT(*) FROM menger_deliveries').fetchone()[0], 0)
+
+    def test_live_telegram_test_requires_saved_group_and_login(self):
+        with patch.object(m.requests, 'post') as post:
+            result = self.client.post('/api/stores/khuyoot/test-telegram', json={}, headers=self.headers)
+            self.assertEqual(result.status_code, 400)
+            post.assert_not_called()
+            with self.client.session_transaction() as session:
+                session.clear()
+            result = self.client.post('/api/stores/default/test-telegram', json={})
+            self.assertIn(result.status_code, (401, 403))
+            post.assert_not_called()
+
+    def test_store_without_group_never_uses_another_store_general_chat(self):
+        with patch.object(m, 'TELEGRAM_CHAT_ID', '-1009999'), patch.object(m, 'send_telegram_message') as send:
+            self.assertFalse(m.send_order_to_telegram({'store_id': 'khuyoot'}))
+            send.assert_not_called()
+
+    def test_telegram_rejections_and_transport_errors_do_not_expose_token(self):
+        menger.save_settings(m.get_db(), 'default', {'telegram_chat_id': '-10011'})
+        response = Mock(ok=False, status_code=403, json=Mock(return_value={
+            'ok': False, 'description': 'Forbidden: bot is not a member of the supergroup'}))
+        with patch.object(m, 'TELEGRAM_BOT_TOKEN', 'private-test-token'), patch.object(m.requests, 'post', return_value=response):
+            result = self.client.post('/api/stores/default/test-telegram', json={}, headers=self.headers)
+        self.assertEqual(result.status_code, 502)
+        self.assertIn('not a member', result.get_json()['error'])
+        with patch.object(m, 'TELEGRAM_BOT_TOKEN', 'private-test-token'), patch.object(m.requests, 'post', side_effect=m.requests.Timeout('https://api.telegram.org/botprivate-test-token/sendMessage')):
+            result = self.client.post('/api/stores/default/test-telegram', json={}, headers=self.headers)
+        self.assertEqual(result.status_code, 502)
+        self.assertNotIn('private-test-token', result.get_data(as_text=True))
+
+    def test_telegram_http_200_without_api_success_is_not_delivery_success(self):
+        response = Mock(ok=True, status_code=200, json=Mock(return_value={'ok': False, 'description': 'rejected'}))
+        with patch.object(m, 'TELEGRAM_BOT_TOKEN', 'private-test-token'), patch.object(m.requests, 'post', return_value=response):
+            self.assertFalse(m.send_telegram_message('test', chat_id='-10011', label='order'))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.old_path = m.DB_PATH
