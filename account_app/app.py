@@ -3570,6 +3570,7 @@ def format_order_for_telegram(order):
         lines.append("التوصيل: " + str(order["delivery_fee"]) + " د.ع")
     if order.get("customer_name"):
         lines.append("اسم الزبون: " + str(order["customer_name"]))
+    lines.append("موظف الحجز: " + menger.EMPLOYEE_NAME)
     notes = menger.paid_notes(order.get("notes")) if order.get("is_paid") else str(order.get("notes") or "").strip()
     lines.append("ملاحظات: " + (notes or "لا توجد"))
     if order.get("api_delivery_message"):

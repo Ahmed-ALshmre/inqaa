@@ -133,8 +133,11 @@ class IntegrationTests(unittest.TestCase):
                 self.assertEqual([i['product_name'] for i in payload['items']], ['موديل منجر 101','سوت'])
                 self.assertEqual(payload['total_price'], 43000)
                 self.assertEqual(payload['employee_name'], 'صوف')
+                self.assertEqual(payload['delivery_fee'], 5000)
                 self.assertNotIn('اسم الموظف:', payload['notes'])
                 text = telegram.call_args.args[0]
+                self.assertIn('موظف الحجز: صوف', text)
+                self.assertIn('التوصيل: 5000 د.ع', text)
                 self.assertIn('سوت', text)
                 self.assertIn('موديل منجر 101', text)
                 self.assertNotIn('فستان', text)

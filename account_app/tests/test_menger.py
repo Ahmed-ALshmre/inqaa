@@ -179,7 +179,8 @@ class MengerTests(unittest.TestCase):
         payload = json.loads(self.row()['payload'])
         self.assertEqual(payload['total_price'], 41000)
         self.assertEqual(payload['total_amount'], 41000)
-        self.assertNotIn('delivery_fee', payload)
+        # The fee is descriptive metadata; the final total still includes it once.
+        self.assertEqual(payload['delivery_fee'], 5000)
         self.assertEqual(payload['employee_name'], 'صوف')
         self.assertNotIn('اسم الموظف:', payload['notes'])
         self.assertIn('اتصل قبل الوصول', payload['notes'])

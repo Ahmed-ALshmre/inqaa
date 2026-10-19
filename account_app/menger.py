@@ -253,6 +253,8 @@ def enqueue(db, order_id, order, catalog):
     # Older receivers use `total_price or total_amount`; provide both so a paid
     # order's explicit zero never falls back to the nonzero sum of its items.
     payload['total_amount'] = payload['total_price']
+    if order.get('delivery_fee') is not None:
+        payload['delivery_fee'] = int(order['delivery_fee'])
     db.execute('INSERT OR IGNORE INTO menger_deliveries(order_id,local_store,payload) VALUES(?,?,?)',
                (order_id, local_store, json.dumps(payload, ensure_ascii=False)))
 
