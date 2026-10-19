@@ -17,6 +17,17 @@ CATALOG = [
 ]
 
 class ConversationContextTests(unittest.TestCase):
+    def test_checkout_contact_request_preserves_approved_answer_to_inspection_question(self):
+        m.complete_customer_product_link(self.db, self.sender, CATALOG[0], 'manual', source='manual_admin')
+        result = {'reply': 'تكدرين تفحصين القطعة بحضور المندوب قبل الدفع.\nبس دزيلي رقم الموبايل والمحافظة والعنوان.',
+                  'create_order': True, 'order': {'items': [dict(product_id='F1', product_name=CATALOG[0]['product_name'],
+                  color='اسود', size='44', quantity=1)]}}
+        with patch.object(m, '_call_main_ai_once', return_value=result):
+            response = self.event('ثبتي\nزين افحصها كدام المندوب؟')
+        self.assertIn('تفحصين القطعة', response['reply'])
+        self.assertIn('حتى أثبت الطلب أحتاج', response['reply'])
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
+
     def test_september29_short_photo_reply_uses_saved_staff_offer(self):
         m.save_message(self.db, self.sender, 'outgoing', 'text', 'عدنا فستان انيقة. تحبين أدزلج صوره؟', None, None, None, {})
         m.save_message(self.db, self.sender, 'incoming', 'text', 'دزيلي حبيبتي', None, None, None, {})

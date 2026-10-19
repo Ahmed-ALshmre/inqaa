@@ -21,7 +21,7 @@ PROVINCES = {
     "نينوى": ("نينوى", "الموصل", "موصل"), "أربيل": ("اربيل", "هولير"),
     "دهوك": ("دهوك",), "السليمانية": ("السليمانية", "سليمانية", "سليمانيه"),
     "كركوك": ("كركوك",), "الأنبار": ("الانبار", "انبار"),
-    "النجف": ("النجف", "نجف"), "كربلاء": ("كربلاء",),
+    "النجف": ("النجف", "نجف"), "كربلاء": ("كربلاء", "كربلا"),
     "بابل": ("بابل", "الحلة", "حلة", "حله"), "واسط": ("واسط", "الكوت", "كوت"),
     "ميسان": ("ميسان", "العمارة", "عمارة"), "ذي قار": ("ذي قار", "الناصرية", "ناصرية"),
     "المثنى": ("المثنى", "السماوة", "سماوة"), "الديوانية": ("الديوانية", "ديوانية", "القادسية"),
@@ -45,7 +45,7 @@ def invalid_shipping_address(text):
     """Reject known non-address declarations, including saved model guesses."""
     clean = re.sub(r"^محافظ[ةه]\s+", "", normalized(text).strip(" ,،.\n"))
     return (not clean or
-            any(clean == normalized(alias) for aliases in PROVINCES.values() for alias in aliases) or
+            any(clean.replace('ة', 'ه') == normalized(alias).replace('ة', 'ه') for aliases in PROVINCES.values() for alias in aliases) or
             bool(re.search(r"(?:ليش\s+انتو|انتو\s+(?:في|ب)|وين\s+(?:مكانكم|محلكم)|لو\s+خارجها)", clean)))
 
 
@@ -67,7 +67,7 @@ def contact_fields(text, previous=None):
     locality = re.split(r"(?:قرب|مقابل|مقابيل|خلف|يم|مجاور|شارع|مول|جامع|مستشفى)\s", clean, maxsplit=1)[0]
     if declaration or not is_question:
         for canonical, aliases in PROVINCES.items():
-            if any(re.search(r"(?<!\w)(?:بال|ب)?" + re.escape(alias) + r"(?!\w)", locality) for alias in aliases):
+            if any(re.search(r"(?<!\w)(?:بال|ب)?" + re.escape(alias).replace('ة', '[ةه]') + r"(?!\w)", locality) for alias in aliases):
                 province = canonical
                 result["province"] = canonical
                 break
@@ -88,7 +88,7 @@ def contact_fields(text, previous=None):
         address = ""
     # A province on its own is not a delivery address.
     address_words = re.findall(r"\w+", normalized(address))
-    province_only = any(re.sub(r"^محافظ[ةه]\s+", "", normalized(address)) == normalized(alias) for aliases in PROVINCES.values() for alias in aliases)
+    province_only = any(re.sub(r"^محافظ[ةه]\s+", "", normalized(address)).replace('ة', 'ه') == normalized(alias).replace('ة', 'ه') for aliases in PROVINCES.values() for alias in aliases)
     if address and not province_only and not invalid_shipping_address(address) and len(address_words) >= 2 and (location_marker or province or len(address_words) >= 3):
         # A landmark sent in the next bubble supplements the established area.
         previous_address = str(previous.get("address") or "").strip()

@@ -45,3 +45,34 @@ def claims_sent_models(text):
     if re.search(r'(?:ما|لم|مو)\s+(?:دزيت|ارسلت|رسلت|بعثت)', clean):
         return False
     return bool(re.search(r'(?:دزيت\w*|ارسلت\w*|رسلت\w*|بعثت\w*)\s+(?:الموديلات|البدائل|الخيارات|الصور)|شوفي\s+الخاص\s+(?:دزيت|ارسلت)', clean))
+
+
+def checkout_reply(answer, notice, question):
+    """Keep approved answers to open questions when checkout needs more data."""
+    text = normalized(question)
+    if not (re.search(r'[؟?]', text) or re.search(
+            r'شكد|شلون|شوكت|يمته|متى|افحص|الفحص|نوع القماش|خامت|موضوع القياس', text)):
+        return notice
+    kept = []
+    for part in re.split(r'\n+|(?<=[.؟?؛])\s+', str(answer or '')):
+        part = part.strip()
+        clean = normalized(part)
+        if not part or re.search(r'تم\s+(?:تثبيت|حجز)|ثبت(?:ت|نا|نالج)|حجز(?:ت|نا|نالج)', clean):
+            continue
+        # A validated factual answer can precede a checkout request in the same
+        # sentence. Retain that answer, then use the validator's missing fields.
+        request = re.search(r'(?:[،,؛]\s*|\s+بس\s+|\s+حتى\s+)?(?:دز\w*|[أا]رسل\w*|[أا]حتاج|نحتاج|ناقص).{0,80}(?:رقم|موبايل|هاتف|محافظ|عنوان)', part)
+        if request:
+            part = part[:request.start()].strip(' ،,؛')
+        if part and normalized(part) != normalized(notice) and part not in kept:
+            kept.append(part)
+    return '\n'.join(kept + [notice]) if kept else notice
+
+
+def disputed_product_photo(text):
+    clean = normalized(text)
+    if re.search(r'(?:اذا|لو|في حال).{0,80}(?:ارجع|يرجع|نرجع|ترجع|مو نفس|ما طابق)', clean):
+        return False
+    return bool(re.search(r'(?:مو نفس|مش نفس).{0,30}(?:الصور|الصوره|الصورة|موديل)|'
+                          r'(?:ادزلج|ادزلك|دزيت\w*).{0,55}(?:غير موديل|موديل ثاني)|'
+                          r'(?:الصوره|الصورة).{0,30}(?:مو المطلوب|مو الي اريد|غير الي)', clean))

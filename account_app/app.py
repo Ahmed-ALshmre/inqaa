@@ -6248,6 +6248,19 @@ def product_clarification_or_review(db, ev, question):
 
 
 def resolve_product_choice(db, ev, products):
+    if sales_recovery.disputed_product_photo(ev.get('text')):
+        reason = 'اعتراض الزبون على تطابق صورة الموديل؛ يلزم تأكيد المنتج المطلوب'
+        pending = db.execute("SELECT id FROM human_reviews WHERE sender_id=? AND status='pending' AND reason=?",
+                             (ev['sender_id'], reason)).fetchone()
+        if pending:
+            review_id = pending['id']
+        else:
+            reject_current_binding(db, ev['sender_id'], ev.get('text'), allow_any_source=True)
+            review_id = create_human_review(db, ev, reason,
+                build_product_vision_candidates(products, limit=10), notify_telegram=False)
+        return saved_checkout_reply(db, ev,
+            'حقج علينا، ما راح أعتمد الصورة اللي ما تطابق طلبج. الموديل يحتاج تأكيد من الموظف، وبقية اختياراتج محفوظة.',
+            {'photo_identity_disputed': True, 'human_review_id': review_id})
     if customer_declines_purchase(ev.get('text')) and not get_latest_customer_order(db, ev['sender_id']):
         product_choice_table(db)
         db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev['sender_id'],))
@@ -6779,7 +6792,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     if checkout_requested(db, ev, ai_result):
         order_created, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
         if order_reply:
-            reply = order_reply
+            reply = sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
 
@@ -8355,6 +8368,18 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         return None, str(exc)
     error = order_line_error(raw_items, catalog_products)
     if error:
+        known_ids = {p['product_id'] for p in catalog_products}
+        unresolved = [item for item in raw_items if isinstance(item, dict) and item.get('product_id') not in known_ids]
+        if unresolved:
+            names = '، '.join(dict.fromkeys(str(item.get('product_name') or 'القطعة غير المحددة') for item in unresolved))
+            customer_row = db.execute('SELECT page_id,platform FROM customers WHERE sender_id=?', (sender_id,)).fetchone()
+            review_id = create_human_review(db, dict(sender_id=sender_id, text=names,
+                page_id=customer_row['page_id'] if customer_row else '',
+                platform=customer_row['platform'] if customer_row else ''),
+                'تأكيد موديل ناقص في حجز الزبون: ' + names,
+                build_product_vision_candidates(catalog_products, limit=10), notify_telegram=False)
+            ai_result['_checkout_human_review_id'] = review_id
+            return None, f'باقي نتأكد من موديل «{names}» مع الموظف حتى نكمل الطلب؛ بقية اختياراتج محفوظة.'
         return None, error
     if not cart_confirmed:
         customer_messages = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='incoming' AND message_type='text' ORDER BY id DESC LIMIT 60", (sender_id,)).fetchall()
@@ -8927,6 +8952,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     latest_order = get_latest_customer_order(db, ev["sender_id"])
     if latest_order:
         return handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
+    if sales_recovery.disputed_product_photo(ev.get('text')):
+        return resolve_product_choice(db, ev, products)
     ev = zernio.product_event(sys.modules[__name__], db, ev, products)
     if ev.get('_ad_product_unresolved'):
         independent = factual_customer_request(ev, products)
@@ -9651,7 +9678,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             db, ev["sender_id"], ai_result, matched_product
         )
         if order_reply:
-            reply = order_reply
+            reply = sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
             log(13, "ORDER", "Order created and outgoing reply updated", {"reply": reply})
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
@@ -11561,7 +11588,8 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
     created = False
     if checkout_requested(db, ev, result):
         created, reply = create_order_if_valid(db, sender_id, result, product)
-        text = reply or ("طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً." if created else "نحتاج مراجعة تفاصيل الطلب قبل تثبيته.")
+        notice = reply or ("طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً." if created else "نحتاج مراجعة تفاصيل الطلب قبل تثبيته.")
+        text = sales_recovery.checkout_reply(text, notice, ev.get('text'))
     images = requested_reply_images(result, load_active_products(db), product, ev.get('text'), text) if not created and (_promises_product_photo(text) or result.get('image_product_ids')) else []
     if _promises_product_photo(text) and not images:
         text = 'ما عندي صورة مطابقة محفوظة لهذا الطلب حالياً.'
