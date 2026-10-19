@@ -60,6 +60,15 @@ class IntegrationTests(unittest.TestCase):
         with patch.object(m, 'TELEGRAM_BOT_TOKEN', 'private-test-token'), patch.object(m.requests, 'post', return_value=response):
             self.assertFalse(m.send_telegram_message('test', chat_id='-10011', label='order'))
 
+    def test_failed_live_test_identifies_the_actual_server_bot_without_token(self):
+        menger.save_settings(m.get_db(), 'default', {'telegram_chat_id': '-10011'})
+        identity = Mock(json=Mock(return_value={'ok': True, 'result': {'username': 'actual_server_bot'}}))
+        with patch.object(m, 'TELEGRAM_BOT_TOKEN', 'private-test-token'), patch.object(m, '_telegram_send_result', return_value={'ok': False, 'error': 'chat not found'}), patch.object(m.requests, 'get', return_value=identity):
+            result = self.client.post('/api/stores/default/test-telegram', json={}, headers=self.headers)
+        self.assertEqual(result.status_code, 502)
+        self.assertEqual(result.get_json()['bot_username'], 'actual_server_bot')
+        self.assertNotIn('private-test-token', result.get_data(as_text=True))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.old_path = m.DB_PATH

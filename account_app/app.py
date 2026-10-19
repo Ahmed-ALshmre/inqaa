@@ -12107,6 +12107,15 @@ def api_test_store_telegram(store_id):
                               color="أسود", size="44", unit_price=18000)])
     text = "🧪 اختبار فقط — ليس حجزاً حقيقياً\n\n" + format_order_for_telegram(sample)
     result = _telegram_send_result(text, chat_id, label="order_test")
+    if not result["ok"] and TELEGRAM_BOT_TOKEN:
+        try:
+            identity = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMe", timeout=10).json()
+            username = str((identity.get("result") or {}).get("username") or "")
+            if identity.get("ok") is True and re.fullmatch(r"[A-Za-z0-9_]{5,64}", username):
+                result["bot_username"] = username
+                result["error"] += " — البوت المستخدم: @" + username
+        except Exception:
+            pass
     return jsonify(**result), 200 if result["ok"] else 502
 
 
