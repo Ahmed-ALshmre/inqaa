@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
+    from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
@@ -36,6 +36,7 @@ except ImportError:
     import baraah
     import sales_engagement
     import menger
+    import sales_recovery
     import chatwoot
     import zernio
     import ad_attribution
@@ -3029,6 +3030,15 @@ def update_customer_intelligence(db, sender_id, text):
     }
 
 
+def record_response_usage(db, purpose, model, payload):
+    """Diagnostics must never make a valid customer response fail."""
+    try:
+        ai_efficiency.record_usage(db or get_db(), current_store_id(), purpose, model,
+                                  payload, ai_transport.metrics().get('elapsed_ms', 0))
+    except (sqlite3.Error, TypeError, ValueError, AttributeError, RuntimeError):
+        pass
+
+
 def generate_first_message_reply(db, ev, products, instructions_text, rules_list):
     """
     صياغة رد ديناميكي على أول رسالة من الزبون:
@@ -3041,6 +3051,10 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
     detected_context = _detect_model_context(customer_text)
     customer_name = _customer_name_from_db(db, ev["sender_id"])
     customer_gender = _customer_gender_from_db(db, ev["sender_id"])  # 'male' | 'female' | ''
+
+    policy = store_policy_question_reply(customer_text)
+    if policy:
+        return policy['reply'], detected_context
 
     if not OPENROUTER_KEY:
         return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), detected_context
@@ -3117,7 +3131,9 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
             timeout=20,
         )
         resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
+        payload = resp.json()
+        record_response_usage(db, 'first_message', get_ai_model(db, 'main_model', MAIN_MODEL), payload)
+        raw = payload["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         reply = sales_engagement.natural_address((parsed.get("reply") or "").strip())
         gender = infer_explicit_customer_gender(customer_text) or "unknown"
@@ -4044,6 +4060,8 @@ def _requests_product_photo(text):
 
 
 def _promises_product_photo(text):
+    if sales_recovery.claims_sent_models(text):
+        return True
     if re.search(r"(?:دزيلي|ارسلي|أرسلي|ابعثي|ابعثلي).{0,30}(?:صور|صوره|صورة)", str(text or "")):
         return False
     return bool(re.search(r"(?:هذي|هذه|هاي|أدز|ادز|أرسل|ارسل|دزيت|أرفق|ارفق|رفعت|تظهر|توصلج|هذا).{0,35}(?:صور|صوره|صورة)", str(text or "")))
@@ -5483,6 +5501,7 @@ def analyze_image_with_ai(image_url, candidate_products):
         )
         resp.raise_for_status()
         raw = resp.json()["choices"][0]["message"]["content"]
+        record_response_usage(None, 'vision_description', get_ai_model(None, 'vision_model', VISION_MODEL), resp.json())
         print(f"[Vision] {raw}", flush=True)
         return _parse_ai_json(raw)
     except Exception as exc:
@@ -5753,6 +5772,7 @@ def confirm_with_vision(customer_image_url: str, candidates: list) -> dict:
         )
         resp.raise_for_status()
         payload = resp.json()
+        record_response_usage(None, 'vision_match', get_ai_model(None, 'vision_model', VISION_MODEL), payload)
         return ai_efficiency.vision_choice(payload, candidates)
     except Exception as exc:
         return vision_service_failure(exc)
@@ -7260,6 +7280,64 @@ def reply_reasks_known_product(reply):
         r"(?:حددي|حدد).{0,15}(?:الموديل|المنتج)", text))
 
 
+def store_policy_question_reply(text, matched_product=None):
+    intent = sales_recovery.policy_question(text)
+    if not intent or not has_app_context():
+        return None
+    db = get_db()
+    settings = get_delivery_settings(db)
+    if intent == 'delivery_time':
+        timeframe = str(settings.get('delivery_time') or '').strip()
+        reply = ('مدة التوصيل: ' + timeframe if timeframe else
+                 'موعد الوصول الدقيق يحتاج تأكيد المتجر؛ ما عندي موعد مؤكد حالياً.')
+    else:
+        province = contact_fields(text).get('province')
+        if province:
+            fee = delivery_fee_for_province(province, db=db)
+            delivery = f'التوصيل إلى {province}: {fee:,} د.ع.'
+        elif settings['baghdad_fee'] == settings['other_fee']:
+            delivery = f"التوصيل: {settings['other_fee']:,} د.ع لكل المحافظات."
+        else:
+            delivery = f"التوصيل لبغداد {settings['baghdad_fee']:,} د.ع، وبقية المحافظات {settings['other_fee']:,} د.ع."
+        if matched_product:
+            try:
+                priced = price_order([dict(product_id=matched_product['product_id'], quantity=1)],
+                                     [matched_product], settings['other_fee'])
+                if priced['delivery_fee'] == 0:
+                    delivery = 'التوصيل مجاني حسب عرض المنتج.'
+            except ValueError:
+                pass
+        reply = ('الدفع يصير عند الاستلام، وتكدر تفحص القطعة ويا المندوب قبل الدفع. ' + delivery if intent == 'payment' else delivery)
+    return {'reply':reply,'reply_parts':[reply],'create_order':False,'order':{},
+            'requires_human':False,'intent':'delivery','_local_reply':True}
+
+
+def offered_product_photo_reply(ev, products, matched, continuation=None):
+    text = ev.get('text') or ''
+    context = ev.get('_sales_context') or {}
+    explicit = sales_recovery.simple_photo_request(text)
+    consent = continuation and continuation.get('intent') == 'browse' and re.search(r'صور', continuation.get('question') or '')
+    if not (explicit or consent) or ev.get('_post_order') or ev.get('image_url') or ev.get('_image_matches'):
+        return None
+    if requests_alternative_photo(text) or is_product_objection(text):
+        return None
+    named, named_ambiguous = photo_products_named(text, products)
+    offer = '\n'.join(row.get('text') or '' for row in context.get('last_staff_turn') or [])
+    offered, offered_ambiguous = (photo_products_named(offer, products)
+                                 if not context.get('offer_interrupted') else ([], False))
+    if named_ambiguous or (not named and offered_ambiguous):
+        return None
+    selected = named or offered or ([matched] if matched and not context.get('offer_interrupted') else [])
+    selected = [p for p in selected if _stock_state(p) == 'available' and product_image_urls(p)]
+    if not selected:
+        return None
+    result = {'reply':'تدللين، هاي صور ' + '، '.join(p['product_name'] for p in selected),
+              'image_product_ids':[p['product_id'] for p in selected],
+              'create_order':False,'order':{},'requires_human':False,
+              '_browse_only':True,'_catalog_fallback':True}
+    return result if requested_reply_images(result, products, matched, text, result['reply']) else None
+
+
 def factual_customer_request(ev, products, matched_product=None):
     """Answer independent policy/media questions without losing their filters."""
     text = str(ev.get("text") or "")
@@ -7267,6 +7345,9 @@ def factual_customer_request(ev, products, matched_product=None):
     result = {"create_order": False, "order": {}, "requires_human": False}
     if not has_app_context():
         return None
+    policy = store_policy_question_reply(text, matched_product)
+    if policy:
+        return policy
     if re.fullmatch(r"[\s؟?!.]*(?:(?:هلو|مرحبا|السلام عليكم)\s*)?(?:كيفية الدفع(?: والشحن| والتوصيل)?|كيف ادفع|شلون الدفع(?: والشحن| والتوصيل)?|اكو توصيل|هل يوجد توصيل[^؟?]*|(?:شكد|كم|متى|يمتى)\s+(?:توصيل|التوصيل)[^؟?]*|(?:ما هي طريقة التوصيل))[؟?!.\s]*", clean):
         delivery = get_delivery_settings(get_db())
         fee = delivery["other_fee"]
@@ -7312,6 +7393,34 @@ def factual_customer_request(ev, products, matched_product=None):
                 image_product_ids=ids, _catalog_fallback=True)
 
 
+def photo_products_named(text, products, product_ids=None):
+    """Separate models sharing a name by their offered price/fabric, then ids."""
+    groups = {}
+    for product in first_message_named_products(text, products):
+        groups.setdefault(sales_strategy.normalized(product.get('product_name')), []).append(product)
+    selected, ambiguous = [], False
+    for group in groups.values():
+        if len(group) == 1:
+            selected.extend(group)
+            continue
+        resolved = {}
+        for line in str(text or '').splitlines():
+            if not first_message_named_products(line, group):
+                continue
+            chosen = select_product_mentioned_in_reply(line, group, require_name=True)
+            if chosen:
+                resolved[chosen['product_id']] = chosen
+        if resolved:
+            selected.extend(resolved.values())
+            continue
+        exact = [product for product in group if product['product_id'] in (product_ids or [])]
+        if exact:
+            selected.extend(exact)
+        else:
+            ambiguous = True
+    return selected, ambiguous
+
+
 def requested_reply_images(result, products, matched, text, reply):
     """Select images only from catalog ids; apply price filter again at output."""
     if result.get("_suppress_product_images"):
@@ -7319,7 +7428,9 @@ def requested_reply_images(result, products, matched, text, reply):
     ids = result.get("image_product_ids")
     if not isinstance(ids, list):
         ids = []
-    named = first_message_named_products(reply, products)
+    named, ambiguous = photo_products_named(reply, products, ids)
+    if ambiguous:
+        return []
     # The pictured model must agree with the customer-facing description even
     # when the model emits a conflicting internal image_product_ids value.
     selected = named or [p for p in products if p["product_id"] in ids] or ([matched] if matched else [])
@@ -7439,6 +7550,9 @@ def call_main_ai(
     factual = factual_customer_request(ev, products, matched_product)
     if factual:
         return factual
+    photo_reply = offered_product_photo_reply(ev, products, matched_product, continuation)
+    if photo_reply:
+        return photo_reply
     result = _call_main_ai_once(*args, **kwargs)
     availability_problem = product_albums.availability_error(result.get('reply'), matched_product, products, positions)
     internal_language = (customer_copy.has_instructions(result.get('reply')) or bool(re.search(r'بيانات.{0,20}قليل|معلومات.{0,20}قليل|حسب (?:البيانات|الكتالوج)|غير موثق|فيديو حقيقي موثق', str(result.get('reply') or ''))))
@@ -7738,6 +7852,7 @@ def _call_main_ai_once(
             "image_colors" if full else None,
         )
         shortened = {k: prod.get(k) for k in keys if k and prod.get(k) not in (None, "", [])}
+        shortened['has_images'] = bool(product_image_urls(prod))
         if full:
             shortened["image_variants"] = product_image_variants(prod)
         return shortened
@@ -9879,7 +9994,9 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
         args = (fake_body, subscriber_id, platform, outbound_subscriber_id, saved_id)
         if background_after_intake:
             payload = dict(zip(('fake_body', 'subscriber_id', 'platform', 'outbound_subscriber_id', 'saved_id'), args))
-            ai_jobs.enqueue(db, current_store_id(), subscriber_id, 'webhook', payload, str(saved_id), delay=DEBOUNCE_DELAY)
+            delay = (0 if detect_message_type(ev) == 'text' and sales_recovery.policy_question(ev.get('text'))
+                     else DEBOUNCE_DELAY)
+            ai_jobs.enqueue(db, current_store_id(), subscriber_id, 'webhook', payload, str(saved_id), delay=delay)
             if os.environ.get('ENABLE_BACKGROUND_JOBS', '1') == '1':
                 ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
             return

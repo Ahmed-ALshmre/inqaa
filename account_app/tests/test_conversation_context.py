@@ -24,7 +24,10 @@ class ConversationContextTests(unittest.TestCase):
             result = m.call_main_ai(dict(self.ev, text='دزيلي حبيبتي'), 'text', {}, [], CATALOG, CATALOG[0], None, '', [])
         self.assertEqual(result['image_product_ids'], ['F2'])
         self.assertFalse(result['create_order'])
-        self.assertIn('فستان انيقة', str(model.call_args.args[0]['_sales_context']))
+        model.assert_not_called()
+        self.assertEqual(m.requested_reply_images(result, CATALOG, CATALOG[0], 'دزيلي حبيبتي', result['reply']),
+                         ['https://images.test/dress2.jpg'])
+        self.assertIn('فستان انيقة', str(m.sales_context.load(self.db, 'al-fatena', self.sender)))
 
     def test_september29_missing_old_order_keeps_known_phone_and_no_new_sale(self):
         self.db.execute('UPDATE customers SET phone=? WHERE sender_id=?', ('07700000000', self.sender))

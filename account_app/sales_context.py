@@ -168,7 +168,7 @@ def continuation(text, state):
     if state.get('offer_interrupted'):
         return None
     clean = normalized(text).strip(' .!،؟?\n')
-    short = bool(re.fullmatch(r'(?:اي+|ي+|نعم|تمام|اوكي|دزيلي|دزي|ارسلي|اشوف)(?:\s+(?:حبيبتي|عيني|حبي|حياتي|عمري|صورهم|الصور))*', clean))
+    short = bool(re.fullmatch(r'(?:اي+|ي+|نعم|تمام|اوكي|دزيلي|دزي|دزو|دزوا|دزيهن|دزهن|دزهم|ارسلي|ارسلهم|شوفينياهن|اشوفهن|اشوف)(?:\s+(?:حبيبتي|عيني|حبي|حياتي|عمري|صورهم|الصور))*', clean))
     if not short:
         return None
     turn = state.get('last_staff_turn') or []
