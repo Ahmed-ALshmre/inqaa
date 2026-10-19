@@ -147,6 +147,8 @@ def guidance(ev, customer, history):
 
 def reply_error(reply, question, product=None):
     text = normalized(reply)
+    if re.search(r'(?:انا|اني|انيه|وياج|وياك)\s+(?:(?:موظف|موظفه)(?:\s+المبيعات)?|بشر|انسان)|(?:انا|اني)\s+(?:مو|لست|ما)\s*(?:ذكاء|بوت|روبوت)', text):
+        return 'لا تدع أنك موظف بشري؛ أنت المساعد الآلي للمتجر. إذا سُئلت عن هويتك أجب بصدق مع متابعة الإجابة عن السؤال.'
     evidence = normalized(' '.join(str((product or {}).get(k) or '') for k in ('stock','stock_quantity','offer','notes','description','real_photo_notes')))
     if re.search(r'اخر قطع[هة]|باقي قطعتين|راح يخلص|قبل ما يخلص|الكمي[هة] محدود[هة]',text) and not re.search(r'اخر قطع[هة]|باقي قطعتين|كمي[هة] محدود[هة]',evidence):
         return 'احذف الندرة غير الموثقة؛ أقنع بالمعلومة والفائدة الفعلية فقط.'

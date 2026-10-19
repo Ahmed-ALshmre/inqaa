@@ -28,7 +28,7 @@ try:
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers
+    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook
     from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
@@ -43,7 +43,7 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers
+    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook
     from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
@@ -398,10 +398,10 @@ DEFAULT_IMPROVE_SYSTEM_PROMPT = (
     "حسّن رسالة المشرف بدون اختراع معلومات، والتزم بتعليمات الإدارة والقواعد المحظورة."
 )
 IRAQI_HUMAN_STYLE_LOCK = """[قفل الأسلوب — أولوية نهائية]
-الرد يجب أن يبدو كرسالة موظفة عراقية حقيقية على ماسنجر، مو جواب نظام أو إعلان.
+استخدم صياغة عراقية طبيعية مثل موظفة مبيعات محترفة على ماسنجر، مو جواب نظام أو إعلان. أنت المساعد الآلي للمتجر، ولا تدع أنك موظف بشري.
 اكتب باللهجة العراقية البيضاء الطبيعية: استخدم «شلون، شكد، أكو، هسه، دزّي، إلج، عيني» فقط عندما تناسب جنس الزبون وسياق الكلام، ولا تجمعها بشكل مصطنع.
 ممنوع الفصحى الرسمية، وممنوع عبارات الروبوت مثل «نشكركم لتواصلكم»، «يسعدنا خدمتكم»، «يرجى التكرم»، «نود إعلامكم»، «بكل تأكيد»، «حسب طلبكم الكريم»، أو «نتمنى أن نكون عند حسن ظنكم».
-ممنوع افتتاح كل رد بتحية أو ختمه بمجاملة. رد على آخر كلام مباشرة، بجملة أو جملتين قصيرتين، وبنفس مفردات الزبون. لا تشرح أنك ذكاء اصطناعي ولا تذكر التعليمات.
+ممنوع افتتاح كل رد بتحية أو ختمه بمجاملة. رد على آخر كلام مباشرة، بجملة أو جملتين قصيرتين، وبنفس مفردات الزبون. لا تفتتح بتعريف تقني؛ إذا سُئلت عن هويتك أجب بصدق أنك المساعد الآلي للمتجر. لا تذكر التعليمات.
 إذا كان الرد بعد الحجز أو على سؤال خدمة، احچي بوضوح وهدوء بدون ضغط بيع. لا تستخدم إيموجي إلا إذا كان مناسباً وبحد أقصى واحد.
 """
 COMPACT_MAIN_SALES_POLICY = """[سياسة الرد والبيع]
@@ -2506,12 +2506,14 @@ def complete_customer_product_link(db, sender_id, product, match_method, confide
     if close_reviews:
         cur = db.execute(
             "UPDATE human_reviews SET status='linked', replied_at=? "
-            "WHERE sender_id=? AND status='pending' AND reason NOT LIKE 'partial_image_match:%'",
+            "WHERE sender_id=? AND status='pending' AND reason NOT LIKE 'partial_image_match:%' "
+            "AND reason<>'customer_requested_human'",
             (now, sender_id),
         )
         closed = cur.rowcount if cur.rowcount is not None else 0
     db.commit()
-    if resume_ai:
+    pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
+    if resume_ai and not (pause and pause['reason'] == 'customer_requested_human'):
         set_customer_ai_enabled(db, sender_id, True)
     image_flow(
         "product_link_completed",
@@ -6694,6 +6696,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     """Generate and send the first AI reply as soon as a human links a product."""
     if not matched_product:
         return {"sent": False, "reply": "", "reason": "missing_product"}
+    pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
+    if pause and pause['reason'] == 'customer_requested_human':
+        return {'sent': False, 'reply': '', 'reason': 'customer_requested_human'}
     ai_was_enabled = is_ai_enabled(db) and is_customer_ai_enabled(db, sender_id)
     if not staff_action and ai_was_enabled and pending_product_choice(db, sender_id):
         latest = latest_incoming_message(db, sender_id)
@@ -7313,6 +7318,37 @@ def requests_alternative_photo(text):
     return bool(re.search(r"(?:ماكو|اكو|أكو|عندكم|ممكن).{0,20}غير.{0,20}صور|تصوير بموبايل|حطي وصوري|صوريه|صوريها|صور.{0,20}(?:حقيقية|حقيقيه|من المحل)|(?:تدزين|ترسلين|تدز|ترسل).{0,20}نفس.{0,15}(?:صور|صوره|صورة)", str(text or "")))
 
 
+def transparent_price_reply(ev, product, customer, customer_products, positions):
+    """Answer a narrow single-selection price inquiry with the full current cost."""
+    if (not has_app_context() or not product or ev.get('_post_order')
+            or ev.get('image_url') or ev.get('_image_matches')
+            or not sales_playbook.price_question(ev.get('text'))
+            or _stock_state(product) != 'available'
+            or len(customer_products or []) > 1 or len(positions or []) > 1):
+        return None
+    db = get_db()
+    if (pending_product_choice(db, ev.get('sender_id'))
+            or re.search(r'جمل[ةه]', str(get_store_settings(db).get('name') or ''))):
+        return None
+    settings = get_delivery_settings(db)
+    province = (customer or {}).get('province')
+    if province:
+        options = [(' إلى ' + province, delivery_fee_for_province(province, db=db))]
+    elif settings['baghdad_fee'] == settings['other_fee']:
+        options = [('', settings['other_fee'])]
+    else:
+        options = [(' لبغداد', settings['baghdad_fee']), (' لبقية المحافظات', settings['other_fee'])]
+    parts = sales_playbook.price_preview(product, options)
+    if not parts:
+        return None
+    step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer)
+    if step:
+        parts.append(step)
+    return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False,
+            'order': {}, 'requires_human': False, 'intent': 'price',
+            '_local_reply': True, '_transparent_price': True, '_suppress_product_images': True}
+
+
 def reply_reasks_known_product(reply):
     text = unicodedata.normalize("NFKC", str(reply or ""))
     text = re.sub(r"[ـ\u064b-\u065f\u0670]", "", text).translate(str.maketrans("أإآ", "ااا"))
@@ -7622,6 +7658,9 @@ def call_main_ai(
               "لا تطلب الاسم أو الصورة من جديد ولا تعتبر رفض بديل رغبة بالحجز. المعرفات داخلية لا تذكرها للزبون."
         )
     question = ev.get("text") or ""
+    price_reply = transparent_price_reply(ev, matched_product, customer, customer_products, positions)
+    if price_reply:
+        return price_reply
     if (matched_product and not ev.get('_post_order') and product_variants.is_lookup(question)
             and not ev.get('_image_matches')):
         lookup_positions = (positions if len(positions)>1 and re.search(r'الأول|الاول|الأولى|الاولى|الثاني|الثانية|الثالث|الثالثة',question)
@@ -7784,6 +7823,11 @@ def call_main_ai(
         return product_albums.response(positions or [{'product_found':True,'product_id':matched_product['product_id']}],products,question)
     if (conversation_quality.grounded_error(result.get("reply"), matched_product, products)
             or sales_strategy.reply_error(result.get("reply"), question, matched_product)):
+        if 'المساعد الآلي للمتجر' in sales_strategy.reply_error(result.get('reply'), question, matched_product):
+            identity = 'أنا المساعد الآلي للمتجر، أساعدك بمعلومات المنتجات والحجز.'
+            recovered = recover_factual_sales_reply(ev, matched_product, extra=identity)
+            return recovered or {'reply': identity, 'reply_parts': [identity],
+                                 'create_order': False, 'order': {}, '_local_reply': True}
         if sales_strategy.signals(question) == ['refusal']:
             return {"reply": "تدلل، شكراً لتواصلك ويانا.", "create_order": False, "order": {}}
         if 'جدول يربط الوزن' in sales_strategy.reply_error(result.get('reply'),question,matched_product):
@@ -8023,6 +8067,7 @@ def _call_main_ai_once(
     )
     system_prompt += "\nتصحيحات العميل الأحدث تتقدم على اختيار المنتج القديم. طلب الخيارات ضمن ميزانية هو استكشاف: اعرضي خيارين مناسبين ولا تطلبي صورة لقطعة لم يخترها. الحقول الجديدة حقائق موثقة إن كانت معبأة فقط؛ فراغ البطانة أو القياسات لا يعني عدم وجودها. محتويات البكج وطريقة البيع مرجع قبل عرض المفرد.\n"
     system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
+    system_prompt += "\n\n" + sales_playbook.guidance(ev, matched_product)
     if post_order:
         system_prompt += "\n\n" + POST_ORDER_SERVICE_RULES
     if ev.get('_ad_source'):
@@ -8690,10 +8735,27 @@ def checkout_requested(db, ev, result):
         return False
     if re.search(r"(?:ثبتي|ثبتلي|احجزي|احجزلي)", text) and not re.search(r"(?:لا|مو|ما)\s*(?:ثبتي|ثبتلي|احجزي|احجزلي)", text):
         return True
-    last = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' ORDER BY id DESC LIMIT 1",
-                      (ev["sender_id"],)).fetchone()
-    asked_checkout = bool(last and re.search(r"(?:أثبت|اثبت|نثبت|أحجز|احجز|الحجز)", last["text"] or ""))
-    return asked_checkout and bool(contact_fields(text) or is_confirmation(text))
+    rows = db.execute("SELECT direction,message_type,text FROM messages WHERE sender_id=? ORDER BY id DESC LIMIT 40",
+                      (ev["sender_id"],)).fetchall()
+    turn = []
+    started = False
+    for row in rows:
+        if row['direction'] == 'incoming':
+            if started:
+                break
+            continue  # The current unanswered customer bubbles.
+        started = True
+        if row['message_type'] == 'text' and row['text']:
+            turn.append({'text': row['text']})
+    turn.reverse()
+    if not turn or sales_context.continuation('اي', {'last_staff_turn': turn}):
+        return False
+    checkout_words = r'(?:أثبت|اثبت|نثبت|أحجز|احجز|الحجز)'
+    asked_checkout = bool(re.search(checkout_words, '\n'.join(item['text'] for item in turn)))
+    if contact_fields(text):
+        return asked_checkout
+    last_question = sales_context.question_from_turn(turn) or turn[-1]['text']
+    return asked_checkout and is_confirmation(text) and bool(re.search(checkout_words, last_question))
 
 
 def restore_checkout_draft(db, ev, result, matched_product):
@@ -9035,6 +9097,14 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     if len(unanswered_text) > 1 and message_type != "image":
         ev = dict(ev, text="\n".join(unanswered_text))
     log(6, "HISTORY", f"Loaded {len(history)} previous messages")
+
+    if sales_playbook.human_requested(ev.get('text')):
+        review_id = create_human_review(db, ev, 'customer_requested_human')
+        cancel_followups_for_sender(db, ev['sender_id'], 'customer_requested_human')
+        set_customer_ai_enabled(db, ev['sender_id'], False, reason='customer_requested_human')
+        return saved_checkout_reply(db, ev,
+            'حاضر، سجلت طلبك حتى يراجع المحادثة موظف المتجر.',
+            {'needs_human': True, 'human_review_id': review_id, 'customer_requested_human': True})
 
     # ── STEP 07: Load products ────────────────────────────────────────────────
     log(7, "PRODUCTS", "Loading active products from products.json...")
@@ -11837,6 +11907,21 @@ def run_ai_job(job, payload):
         job_token = ai_jobs.active_job.set(job['id'])
         locked = False
         try:
+            db = get_db()
+            stored = db.execute('SELECT status,result FROM ai_jobs WHERE id=?', (job['id'],)).fetchone()
+            # The reply depends on conversation state. Regenerating a completed
+            # job can change its text and defeat payload-based delivery keys.
+            # A failed send may already have reached the customer as well.
+            if stored and (stored['status'] == 'done' or
+                    (stored['status'] == 'failed' and db.execute(
+                        'SELECT 1 FROM ai_deliveries WHERE job_id=? LIMIT 1', (job['id'],)).fetchone())):
+                try:
+                    cached = json.loads(stored['result'] or '{}')
+                except (ValueError, TypeError):
+                    cached = {}
+                if not isinstance(cached, dict):
+                    cached = {}
+                return dict(cached, ok=stored['status'] == 'done', _job_cached=True)
             if job['kind'] == 'webhook':
                 return _finish_customer_webhook_async(**payload) or {'ok': True}
             locked = acquire_sender_lock(get_db(), job['sender_id'], wait_seconds=1)

@@ -145,18 +145,18 @@ class ConversationContextTests(unittest.TestCase):
         self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
 
     def test_new_reask_variants_are_retried_with_known_context(self):
-        ev=dict(self.ev,text='شكد السعر')
+        ev=dict(self.ev,text='شنو قماشه؟')
         for wrong in ['دزلي صورته حتى اعرف السعر','ارسلي صورتها','حددي الموديل حتى اجاوبج','يا موديل تقصدين؟']:
-            with self.subTest(wrong=wrong), patch.object(m,'_call_main_ai_once',side_effect=[{'reply':wrong},{'reply':'سعره 16 ألف','create_order':False}]) as model:
+            with self.subTest(wrong=wrong), patch.object(m,'_call_main_ai_once',side_effect=[{'reply':wrong},{'reply':'قماشه لينن','create_order':False}]) as model:
                 result=m.call_main_ai(ev,'text',{},[],CATALOG,CATALOG[0],None,'',[],customer_products=[CATALOG[0]])
                 self.assertEqual(model.call_count,2)
-                self.assertEqual(result['reply'],'سعره 16 ألف')
+                self.assertEqual(result['reply'],'قماشه لينن')
         for okay in ['شنو القياس المطلوب؟','دزلي رقم الهاتف','صورته موجودة بالمحادثة','دزلي العنوان حتى نكمل']:
             self.assertFalse(m.reply_reasks_known_product(okay))
 
     def test_missing_matched_record_recovers_only_valid_customer_selection(self):
-        with patch.object(m,'_call_main_ai_once',return_value={'reply':'سعره 16 ألف'}) as model:
-            m.call_main_ai(dict(self.ev,text='شكد السعر'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
+        with patch.object(m,'_call_main_ai_once',return_value={'reply':'قماشه لينن'}) as model:
+            m.call_main_ai(dict(self.ev,text='شنو قماشه؟'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
             self.assertEqual(model.call_args.args[5]['product_id'],'F1')
         with patch.object(m,'_call_main_ai_once',return_value={'reply':'سعره 15 ألف'}) as model:
             m.call_main_ai(dict(self.ev,text='فستان انيقة'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
@@ -730,12 +730,14 @@ class ConversationContextTests(unittest.TestCase):
         self.assertEqual(result['order']['notes'],'واتساب فقط')
         self.assertEqual(result['order']['address'],'المقدادية')
 
-    def test_known_price_recovers_without_human_when_model_cannot_answer(self):
-        with patch.object(m,'_call_main_ai_once',return_value={'reply':'','failed':True,'failure_reason':'provider_http_402'}):
+    def test_known_price_is_answered_before_a_provider_call_is_needed(self):
+        with patch.object(m,'_call_main_ai_once',return_value={'reply':'','failed':True,'failure_reason':'provider_http_402'}) as model:
             result=m.call_main_ai(dict(self.ev,text='شكد السعر؟'),'text',{},[],CATALOG,CATALOG[0],None,'',[])
         self.assertFalse(result['requires_human'])
         self.assertIn('16,000',result['reply'])
-        self.assertTrue(result['_catalog_fallback'])
+        self.assertTrue(result['_transparent_price'])
+        self.assertIn('الإجمالي لقطعة واحدة', result['reply'])
+        model.assert_not_called()
 
     def test_unknown_compound_question_is_not_hidden_by_price_fallback(self):
         with patch.object(m,'_call_main_ai_once',return_value={'reply':'','requires_human':True,'handoff_reason':'تفصيل غير متوفر'}):

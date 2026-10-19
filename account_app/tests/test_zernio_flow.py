@@ -232,7 +232,8 @@ class ZernioFlowTests(unittest.TestCase):
         self.assertEqual(self.post(payload).status_code, 200)
         self.assertTrue(self.run_job(job)['ok'])
         count = len(self.deliveries)
-        self.run_job(job)
+        with patch.object(m, '_finish_customer_webhook_async', side_effect=AssertionError('A finished job must not regenerate its reply')):
+            self.assertTrue(self.run_job(job)['_job_cached'])
         self.assertEqual(len(self.deliveries), count)
         with m.app.app_context():
             self.assertEqual(m.get_db().execute('SELECT count(*) FROM ai_jobs').fetchone()[0], 1)
@@ -243,7 +244,8 @@ class ZernioFlowTests(unittest.TestCase):
         job, _ = self.message('شكد سعره؟', ad=True)
         self.assertFalse(self.run_job(job)['ok'])
         self.assertEqual(len(self.deliveries), 1)
-        self.run_job(job)
+        with patch.object(m, '_finish_customer_webhook_async', side_effect=AssertionError('An uncertain delivery must not regenerate its reply')):
+            self.assertTrue(self.run_job(job)['_job_cached'])
         self.assertEqual(len(self.deliveries), 1)
 
     def test_paused_conversation_keeps_message_without_sending(self):

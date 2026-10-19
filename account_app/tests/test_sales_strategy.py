@@ -70,7 +70,8 @@ class SalesReplyPipelineTests(unittest.TestCase):
     customer=fixtures.AuditFixTests.customer
 
     def test_main_prompt_locks_natural_iraqi_style(self):
-        self.assertIn('رسالة موظفة عراقية حقيقية', self.m.IRAQI_HUMAN_STYLE_LOCK)
+        self.assertIn('صياغة عراقية طبيعية', self.m.IRAQI_HUMAN_STYLE_LOCK)
+        self.assertIn('أنت المساعد الآلي للمتجر', self.m.IRAQI_HUMAN_STYLE_LOCK)
         self.assertIn('ممنوع الفصحى الرسمية', self.m.IRAQI_HUMAN_STYLE_LOCK)
 
     def ask(self,text,responses):
