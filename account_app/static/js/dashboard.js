@@ -1618,6 +1618,7 @@ async function loadStats() {
     setText('statTotalOrders', fmtNumber(data.orders_total || 0));
     setText('statBookedPeople', fmtNumber(data.booked_people || 0));
     setText('statConversion', `${Number(data.message_to_order_conversion || 0).toFixed(1)}%`);
+    setText('statConversionSource', data.booking_source_label || 'الحجوزات المحلية');
     setText('statIncoming', fmtNumber(data.incoming_messages || 0));
     setText('statOutgoing', fmtNumber(data.outgoing_messages || 0));
     setText('statPendingReviews', fmtNumber(data.pending_reviews || 0));

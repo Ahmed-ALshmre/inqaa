@@ -3579,6 +3579,11 @@ def format_order_for_telegram(order):
     if order.get("customer_name"):
         lines.append("اسم الزبون: " + str(order["customer_name"]))
     lines.append("موظف الحجز: " + menger.EMPLOYEE_NAME)
+    if order.get('id'):
+        source = menger.connection(get_db()).get('source') if has_app_context() else 'lamsa-project'
+        lines.append(f"مرجع صوف: {source}:{order.get('store_id') or 'default'}:{order['id']}")
+    if order.get('menger_order_id'):
+        lines.append('#حجز_Menger ' + str(order['menger_order_id']))
     notes = menger.paid_notes(order.get("notes")) if order.get("is_paid") else str(order.get("notes") or "").strip()
     lines.append("ملاحظات: " + (notes or "لا توجد"))
     if order.get("api_delivery_message"):
@@ -3601,9 +3606,10 @@ def send_order_to_telegram(order):
         if order_id:
             try:
                 menger.deliver_due(db, order_id=order_id)
-                delivery = db.execute("SELECT status,last_error FROM menger_deliveries WHERE order_id=?", (order_id,)).fetchone()
+                delivery = db.execute("SELECT status,last_error,remote_order_id FROM menger_deliveries WHERE order_id=?", (order_id,)).fetchone()
                 if delivery and delivery['status'] == 'sent':
                     message = "نجح إرسال الطلب عبر API ✅"
+                    order['menger_order_id'] = delivery['remote_order_id']
                 elif delivery and delivery['status'] in {'retry', 'blocked'}:
                     error = delivery['last_error'] or 'خطأ غير معروف'
                     error = error.replace('network_error', 'تعذر الاتصال بالخدمة').replace('invalid_success_response', 'رد الخدمة لا يؤكد نجاح إرسال الطلب')
@@ -6807,6 +6813,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     ai_result.pop("_checkout_proposal", None)
     restore_checkout_draft(db, ev, ai_result, matched_product)
     if checkout_requested(db, ev, ai_result):
+        ai_result['_booking_actor'] = 'staff' if staff_action else 'ai'
         order_created, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
         if order_reply:
             reply = sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
@@ -8593,6 +8600,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         "total_amount": total_amount,
         "status": "new",
         "store_id": current_store_id(),
+        "_booking_actor": ai_result.get('_booking_actor') or 'ai',
     }
 
     items[:] = pricing["items"]
@@ -8685,7 +8693,7 @@ def saved_album_reply(db, ev, images, products, meta):
                 platform=ev.get('platform'), send_image=False, meta=meta)
 
 
-def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True):
+def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, booking_actor='ai'):
     def finish(reply, meta):
         if persist_reply:
             return saved_checkout_reply(db, ev, reply, meta)
@@ -8714,7 +8722,7 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True):
         fee = None
     if current != proposal.get("_catalog_snapshot") or fee != proposal.get("_delivery_fee"):
         return finish("تغيرت بعض تفاصيل المنتجات أو الأسعار؛ نحتاج نراجع ملخص الطلب قبل تثبيته.", {"checkout_changed": True})
-    result = {"order": proposal}
+    result = {"order": proposal, "_booking_actor": booking_actor}
     created, reply = create_order_if_valid(db, ev["sender_id"], result, None, cart_confirmed=True)
     if not reply:
         reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
@@ -11750,12 +11758,13 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
     if payload.get('rewrite_only'):
         return text, {'manual_reply': True, 'ai_generated': True, 'rewrite_only': True}, None
     result = payload["result"]
+    result['_booking_actor'] = 'staff'
     existing = get_latest_customer_order(db, sender_id)
     if existing and (result.get("create_order") or unsupported_order_action(text) or conversation_quality.unsupported_claim(text)):
         return text, {}, "هذا الرد يؤكد حجزاً أو إجراءً على طلب موجود. حدّث الطلب من لوحة الطلبات قبل تأكيد التنفيذ."
     product = find_product_by_id(payload.get("product_id"))
     ev = dict(latest_incoming_message(db, sender_id), sender_id=sender_id)
-    accepted = accept_checkout_proposal(db, ev, [], load_active_products(db), persist_reply=False)
+    accepted = accept_checkout_proposal(db, ev, [], load_active_products(db), persist_reply=False, booking_actor='staff')
     if accepted:
         return accepted["reply"], dict(accepted["meta"], manual_reply=True, ai_generated=True), None
     result.pop("_checkout_proposal", None)
@@ -12859,6 +12868,8 @@ def _top_ordered_products(db, limit=5, date_from=None, date_to=None, store_id=No
                FROM orders
                WHERE (COALESCE(product_id, '') != '' OR COALESCE(product_name, '') != '')"""
     params = []
+    if menger.configured(db):
+        query += ' AND ' + menger.recorded_order_condition('orders')
     if store_id:
         query += " AND COALESCE(store_id,'default') = ?"
         params.append(store_id)
@@ -12927,7 +12938,9 @@ def api_dashboard_stats():
     scope_params = date_params + ([store_id] if store_id else [])
     message_where = date_where + store_where
     valid_order = " AND LOWER(TRIM(COALESCE(status,'new'))) NOT IN ('cancelled','canceled')"
-    cohort = conversion_growth.cohort_metrics(db, date_from, date_to, store_id or None)
+    booking_source = 'menger' if menger.configured(db) else 'local'
+    cohort = conversion_growth.cohort_metrics(db, date_from, date_to, store_id or None, booking_source=booking_source)
+    local_cohort = conversion_growth.cohort_metrics(db, date_from, date_to, store_id or None, booking_source='local')
     total_people, cohort_buyers = cohort['people'], cohort['buyers']
     total_orders, booked_people = cohort['orders'], cohort['orders_booked_people']
     incoming_messages = db.execute(
@@ -12953,7 +12966,7 @@ def api_dashboard_stats():
         "goal_people": goal_people,
         "goal_gap": max(0, goal_people - cohort_buyers),
         "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'" + review_where, review_params).fetchone()[0],
-        "orders_today":        db.execute("SELECT COUNT(*) FROM orders WHERE created_at >= ?" + review_where + valid_order, [today] + review_params).fetchone()[0],
+        "orders_today":        conversion_growth.cohort_metrics(db, today, (datetime.now(BAGHDAD_TZ).date() + timedelta(days=1)).isoformat(), store_id or None, booking_source=booking_source)['orders'],
         "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?" + review_where, [today] + review_params).fetchone()[0],
         "messages_total":      total_people,
         "incoming_messages":   incoming_messages,
@@ -12962,6 +12975,13 @@ def api_dashboard_stats():
         "message_to_order_conversion": conversion_rate,
         "conversation_to_order_conversion": conversion_rate,
         "conversion_definition": cohort['measurement_definition'],
+        "booking_source": booking_source,
+        "booking_source_label": 'الحجوزات المسجلة في منج' if booking_source == 'menger' else 'الحجوزات المحلية — الربط بمنج غير مفعّل',
+        "local_booked_people": local_cohort['buyers'],
+        "local_orders_total": local_cohort['orders'],
+        "menger_delivery_status": menger.delivery_summary(db, store_id or None),
+        "ai_booked_people": cohort['ai_booked_people'],
+        "staff_booked_people": cohort['staff_booked_people'],
         "active_contacts": cohort['active_contacts'],
         "active_booked_people": cohort['active_buyers'],
         "active_contact_conversion": cohort['active_conversion_rate'],
@@ -14897,6 +14917,7 @@ def api_create_order(sender_id):
         "items": items,
         "status": "new",
         "is_paid": is_paid,
+        "_booking_actor": 'staff',
     }
 
     menger.snapshot_prices(order_info, catalog)

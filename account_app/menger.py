@@ -6,6 +6,8 @@ import sqlite3
 import threading
 import time
 import unicodedata
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
 
 import requests
@@ -50,6 +52,14 @@ def init_db(db):
         attempts INTEGER NOT NULL DEFAULT 0, next_attempt REAL NOT NULL DEFAULT 0,
         remote_order_id TEXT, last_error TEXT, synced_at REAL
     )""")
+    columns = {row[1] for row in db.execute('PRAGMA table_info(menger_deliveries)')}
+    for name, definition in {
+        'remote_status': 'TEXT', 'remote_updated_at': 'TEXT', 'status_checked_at': 'REAL',
+        'next_status_check': 'REAL NOT NULL DEFAULT 0', 'status_error': 'TEXT',
+        'booking_actor': "TEXT NOT NULL DEFAULT 'unknown'",
+    }.items():
+        if name not in columns:
+            db.execute(f'ALTER TABLE menger_deliveries ADD COLUMN {name} {definition}')
 
 
 def connection(db, public=False):
@@ -64,6 +74,7 @@ def connection(db, public=False):
 
 def save_connection(db, data):
     current = connection(db)
+    first_activation = not current.get('api_key') and bool(data.get('api_key'))
     for field in ('api_url', 'source'):
         if field in data:
             current[field] = str(data[field] or '').strip()
@@ -86,6 +97,16 @@ def save_connection(db, data):
                tuple(current[k] for k in ('api_url','api_key','source')))
     # The old per-store credential fields are no longer used.
     db.execute("UPDATE menger_store_settings SET api_url='',api_key=''")
+    if first_activation:
+        # Old Telegram imports may already exist in Menger. Do not replay a
+        # historical unlinked backlog merely because a key has been added.
+        for row in db.execute("SELECT order_id,payload FROM menger_deliveries WHERE status IN ('pending','retry','blocked','sending')").fetchall():
+            try:
+                attribution = json.loads(row['payload']).get('attribution') or {}
+            except (TypeError, ValueError):
+                attribution = {}
+            if not attribution.get('conversation_id'):
+                db.execute("UPDATE menger_deliveries SET status='review_required',last_error='legacy_booking_needs_reconciliation' WHERE order_id=?", (row['order_id'],))
 
 
 def settings(db, store, public=False):
@@ -223,6 +244,7 @@ def enqueue(db, order_id, order, catalog):
         items.append(dict(product_name=item.get('order_name') or item['product_name'],
                           quantity=int(item.get('quantity') or 1),
                           color=item.get('color') or '', size=item.get('size') or '',
+                          size_type=item.get('size_type') or 'size', weight=item.get('weight') or '',
                           unit_price=int(price) if price else 0))
     if not items:
         return
@@ -247,6 +269,10 @@ def enqueue(db, order_id, order, catalog):
                                  province=order['province'], address=order['address']),
                    items=items, total_price=int(total), employee_name=EMPLOYEE_NAME,
                    notes='\n'.join(note for note in notes if note))
+    payload['attribution'] = order_attribution(db, order)
+    # Telegram does not deliver one bot's messages to another bot. The API
+    # registers the booking; this project owns the single group notification.
+    payload['telegram_notification_owner'] = 'source'
     if order.get('is_paid'):
         payload['total_price'] = 0
         payload['notes'] = paid_notes(payload['notes'])
@@ -255,8 +281,34 @@ def enqueue(db, order_id, order, catalog):
     payload['total_amount'] = payload['total_price']
     if order.get('delivery_fee') is not None:
         payload['delivery_fee'] = int(order['delivery_fee'])
-    db.execute('INSERT OR IGNORE INTO menger_deliveries(order_id,local_store,payload) VALUES(?,?,?)',
-               (order_id, local_store, json.dumps(payload, ensure_ascii=False)))
+    db.execute('INSERT OR IGNORE INTO menger_deliveries(order_id,local_store,payload,booking_actor) VALUES(?,?,?,?)',
+               (order_id, local_store, json.dumps(payload, ensure_ascii=False), payload['attribution']['booking_actor']))
+
+
+def order_attribution(db, order):
+    """Freeze the real conversation identity, never infer AI credit from a name."""
+    sender = str(order.get('sender_id') or '').strip()
+    store = order.get('store_id') or 'default'
+    actor = order.get('_booking_actor') or 'unknown'
+    actor = actor if actor in {'ai', 'staff', 'unknown'} else 'unknown'
+    result = dict(source_store_id=store, conversation_id=sender, booking_actor=actor,
+                  telegram_chat_id=settings(db, store).get('telegram_chat_id') or '')
+    try:
+        customer = db.execute('SELECT platform FROM customers WHERE sender_id=?', (sender,)).fetchone()
+        if customer:
+            result['platform'] = customer['platform'] or ''
+        moments = []
+        for row in db.execute("SELECT created_at FROM messages WHERE sender_id=? AND COALESCE(store_id,'default')=? AND direction='incoming'", (sender, store)):
+            try:
+                stamp = datetime.fromisoformat(str(row['created_at']).replace('Z', '+00:00'))
+                moments.append(stamp.replace(tzinfo=ZoneInfo('Asia/Baghdad')) if stamp.tzinfo is None else stamp)
+            except (ValueError, TypeError):
+                pass
+        if moments:
+            result['first_contact_at'] = min(moments).astimezone(timezone.utc).isoformat()
+    except sqlite3.OperationalError:
+        pass  # Small standalone delivery databases have no conversation tables.
+    return result
 
 
 def paid_notes(notes):
@@ -351,6 +403,127 @@ def deliver_due(db, post=None, now=None, order_id=None):
         db.commit()
 
 
+def sync_statuses(db, get=None, now=None):
+    """Read the receiver's outcome; never overwrite a local cancellation."""
+    get, now = get or requests.get, time.time() if now is None else now
+    config = connection(db)
+    parsed = urlparse(config.get('api_url') or '')
+    if not config.get('api_key') or parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+        return 0
+    rows = db.execute("""SELECT * FROM menger_deliveries WHERE status='sent'
+        AND COALESCE(remote_order_id,'')!='' AND next_status_check<=? ORDER BY next_status_check,order_id LIMIT 20""", (now,)).fetchall()
+    updated = 0
+    for row in rows:
+        claimed = db.execute("UPDATE menger_deliveries SET next_status_check=? WHERE order_id=? AND next_status_check<=?",
+                             (now + 120, row['order_id'], now)).rowcount
+        db.commit()
+        if not claimed:
+            continue
+        payload = json.loads(row['payload'])
+        params = {k: payload[k] for k in ('source', 'external_order_id', 'store_id', 'store_name') if payload.get(k)}
+        error = None
+        try:
+            response = get(config['api_url'].rstrip('/') + '/status', params=params,
+                           headers={'Authorization': 'Bearer ' + config['api_key'], 'Accept': 'application/json'},
+                           timeout=15, allow_redirects=False)
+            data = response.json()
+            if (response.status_code != 200 or not isinstance(data, dict) or data.get('ok') is not True
+                    or data.get('order_id') != row['remote_order_id']
+                    or data.get('source') != payload['source']
+                    or data.get('external_order_id') != payload['external_order_id']
+                    or not isinstance(data.get('status'), str) or not data['status'].strip()):
+                error = f'invalid_status_response_http_{response.status_code}'
+            else:
+                db.execute('''UPDATE menger_deliveries SET remote_status=?,remote_updated_at=?,status_checked_at=?,
+                    status_error=NULL,next_status_check=? WHERE order_id=?''',
+                    (data['status'], data.get('updated_at'), now, now + 300, row['order_id']))
+                updated += 1
+        except (requests.RequestException, ValueError, TypeError):
+            error = 'status_connection_failed'
+        if error:
+            db.execute('UPDATE menger_deliveries SET status_error=?,next_status_check=? WHERE order_id=?',
+                       (error, now + 300, row['order_id']))
+        db.commit()
+    return updated
+
+
+def configured(db):
+    try:
+        config = connection(db)
+    except sqlite3.OperationalError:
+        return False
+    return bool(config.get('api_url') and config.get('api_key'))
+
+
+def recorded_order_condition(alias='orders'):
+    if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', alias):
+        raise ValueError('Invalid order table alias')
+    return (f"EXISTS (SELECT 1 FROM menger_deliveries md WHERE md.order_id={alias}.id "
+            "AND md.status='sent' AND COALESCE(md.remote_order_id,'')!='' "
+            "AND LOWER(TRIM(COALESCE(md.remote_status,'new'))) NOT IN "
+            "('cancelled','canceled','incomplete_data','draft'))")
+
+
+def reconcile_legacy(db, post=None, now=None):
+    """Link historical bookings only when Menger finds one exact existing order.
+
+    This dedicated endpoint never creates orders or sends group notifications.
+    An older server responds 404, rather than treating this as a new booking.
+    """
+    post, now = post or requests.post, time.time() if now is None else now
+    config = connection(db)
+    parsed = urlparse(config.get('api_url') or '')
+    if not config.get('api_key') or parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+        return 0
+    matched = 0
+    rows = db.execute("SELECT * FROM menger_deliveries WHERE status='review_required' AND next_attempt<=? ORDER BY order_id LIMIT 5", (now,)).fetchall()
+    for row in rows:
+        if not db.execute("UPDATE menger_deliveries SET next_attempt=? WHERE order_id=? AND status='review_required' AND next_attempt<=?", (now+120, row['order_id'], now)).rowcount:
+            continue
+        db.commit()
+        error = 'legacy_booking_needs_reconciliation'
+        try:
+            order = db.execute("SELECT * FROM orders WHERE id=? AND COALESCE(store_id,'default')=?", (row['order_id'], row['local_store'])).fetchone()
+            if not order:
+                raise ValueError('missing_local_order')
+            payload = json.loads(row['payload'])
+            payload['attribution'] = order_attribution(db, dict(order, _booking_actor='unknown'))
+            destination = settings(db, row['local_store'])
+            if not payload.get('store_id') and destination.get('store_id'):
+                payload['store_id'] = destination['store_id']
+            if not payload.get('store_name') and destination.get('store_name'):
+                payload['store_name'] = destination['store_name']
+            response = post(config['api_url'].rstrip('/') + '/reconcile', json=payload,
+                headers={'Authorization': 'Bearer ' + config['api_key'], 'Accept': 'application/json'},
+                timeout=15, allow_redirects=False)
+            result = response.json()
+            if (response.status_code == 200 and isinstance(result, dict) and result.get('ok') is True
+                    and result.get('source') == payload['source']
+                    and result.get('external_order_id') == payload['external_order_id']
+                    and isinstance(result.get('order_id'), str) and result['order_id']):
+                db.execute('''UPDATE menger_deliveries SET status='sent',booking_actor='unknown',remote_order_id=?,remote_status=?,
+                    remote_updated_at=?,status_checked_at=?,next_status_check=?,last_error=NULL,
+                    payload=?,synced_at=? WHERE order_id=?''',
+                    (result['order_id'], result.get('status'), result.get('updated_at'), now, now+300,
+                     json.dumps(payload, ensure_ascii=False), now, row['order_id']))
+                matched += 1
+                error = None
+            else:
+                error = f'legacy_reconciliation_http_{response.status_code}'
+        except (requests.RequestException, sqlite3.OperationalError, ValueError, TypeError, KeyError):
+            error = 'legacy_reconciliation_unavailable'
+        if error:
+            db.execute('UPDATE menger_deliveries SET last_error=?,next_attempt=? WHERE order_id=?', (error, now+3600, row['order_id']))
+        db.commit()
+    return matched
+
+
+def delivery_summary(db, store=None):
+    scope, params = (' WHERE local_store=?', [store]) if store and store != 'all' else ('', [])
+    rows = db.execute('SELECT status,COUNT(*) n FROM menger_deliveries' + scope + ' GROUP BY status', params).fetchall()
+    return {row['status']: row['n'] for row in rows}
+
+
 def start_worker(db_path):
     def loop():
         while True:
@@ -359,6 +532,8 @@ def start_worker(db_path):
                 db = sqlite3.connect(db_path, timeout=30)
                 db.row_factory = sqlite3.Row
                 deliver_due(db)
+                sync_statuses(db)
+                reconcile_legacy(db)
             except Exception:
                 # The durable lease expires so a subsequent cycle can recover.
                 pass

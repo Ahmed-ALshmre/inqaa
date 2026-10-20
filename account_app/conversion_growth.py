@@ -5,8 +5,10 @@ from datetime import timedelta
 
 try:
     from .sales_engagement import timestamp
+    from .menger import configured, recorded_order_condition
 except ImportError:
     from sales_engagement import timestamp
+    from menger import configured, recorded_order_condition
 
 
 def reminder_minutes(text):
@@ -93,7 +95,7 @@ def _period_boundary(value, label):
     return parsed
 
 
-def cohort_metrics(db, start=None, end=None, store_id=None, target=30):
+def cohort_metrics(db, start=None, end=None, store_id=None, target=30, booking_source=None):
     """New contacts who book within the same half-open reporting period.
 
     A person is the pair (store, sender), first contacted at their earliest
@@ -114,6 +116,12 @@ def cohort_metrics(db, start=None, end=None, store_id=None, target=30):
     if not math.isfinite(goal) or not 0 <= goal <= 100:
         raise ValueError('The conversion target must be between 0 and 100')
     store = str(store_id).strip() if store_id is not None else None
+    if booking_source is None:
+        booking_source = 'menger' if configured(db) else 'local'
+    if booking_source not in {'local', 'menger'}:
+        raise ValueError('Invalid booking source')
+    confirmed = ' AND ' + recorded_order_condition('o') if booking_source == 'menger' else ''
+    actor_sql = "(SELECT booking_actor FROM menger_deliveries WHERE order_id=o.id)" if booking_source == 'menger' else "'unknown'"
     store = None if store in (None, '', 'all') else store
     scope = " AND COALESCE(NULLIF(TRIM(store_id),''),'default')=?" if store else ''
     params = [start_at.isoformat() if start_at else None,
@@ -139,9 +147,9 @@ def cohort_metrics(db, start=None, end=None, store_id=None, target=30):
           AND (b.ends_at IS NULL OR i.instant<b.ends_at)
     ), valid_orders AS (
         SELECT COALESCE(NULLIF(TRIM(store_id),''),'default') store_id,
-               sender_id,{_instant_sql('created_at')} instant
-        FROM orders
-        WHERE LOWER(TRIM(COALESCE(status,'new'))) NOT IN ('cancelled','canceled'){scope}
+               sender_id,{_instant_sql('created_at')} instant,{actor_sql} booking_actor
+        FROM orders o
+        WHERE LOWER(TRIM(COALESCE(status,'new'))) NOT IN ('cancelled','canceled'){scope}{confirmed}
     ), period_orders AS (
         SELECT o.* FROM valid_orders o,bounds b
         WHERE o.instant IS NOT NULL
@@ -161,9 +169,15 @@ def cohort_metrics(db, start=None, end=None, store_id=None, target=30):
         (SELECT COUNT(*) FROM active_contacts a JOIN period_buyers p
          ON p.store_id=a.store_id AND p.sender_id=a.sender_id
          JOIN first_contacts f ON f.store_id=a.store_id AND f.sender_id=a.sender_id
-         WHERE p.last_order>=f.first_message) active_buyers"""
+         WHERE p.last_order>=f.first_message) active_buyers,
+        (SELECT COUNT(*) FROM cohort c WHERE EXISTS (SELECT 1 FROM period_orders p
+         WHERE p.store_id=c.store_id AND p.sender_id=c.sender_id AND p.instant>=c.first_message
+         AND p.booking_actor='ai')) ai_buyers,
+        (SELECT COUNT(*) FROM cohort c WHERE EXISTS (SELECT 1 FROM period_orders p
+         WHERE p.store_id=c.store_id AND p.sender_id=c.sender_id AND p.instant>=c.first_message
+         AND p.booking_actor='staff')) staff_buyers"""
     row = db.execute(sql, params).fetchone()
-    people, buyers, orders, period_buyers, active, active_buyers = tuple(row)
+    people, buyers, orders, period_buyers, active, active_buyers, ai_buyers, staff_buyers = tuple(row)
     conversion = round(100 * buyers / people, 2) if people else 0
     needed = math.ceil(people * goal / 100)
     return {
@@ -180,6 +194,9 @@ def cohort_metrics(db, start=None, end=None, store_id=None, target=30):
         'target': target, 'target_buyers': needed,
         'additional_buyers': max(0, needed - buyers),
         'measurement_definition': 'new_store_contacts_to_non_cancelled_booking_in_same_period',
+        'booking_source': booking_source,
+        'ai_booked_people': ai_buyers if booking_source == 'menger' else None,
+        'staff_booked_people': staff_buyers if booking_source == 'menger' else None,
     }
 
 
