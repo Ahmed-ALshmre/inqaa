@@ -3603,7 +3603,9 @@ def send_order_to_telegram(order):
         # store's general chat. Keep the legacy fallback for the default only.
         chat_id = config.get("telegram_chat_id") or (chat_id if store_id == DEFAULT_STORE_ID else "")
         order_id = order.get("id")
-        if order_id:
+        if store_id in menger.TELEGRAM_ONLY_STORES:
+            order['api_delivery_message'] = 'وجهة الحجز: كروب الحجوزات المشترك'
+        elif order_id:
             try:
                 menger.deliver_due(db, order_id=order_id)
                 delivery = db.execute("SELECT status,last_error,remote_order_id FROM menger_deliveries WHERE order_id=?", (order_id,)).fetchone()

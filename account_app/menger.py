@@ -20,6 +20,7 @@ REMOTE_STORE_NAMES = {
     'baraah-kids': 'عالم البراءة لملابس الأطفال',
 }
 EMPLOYEE_NAME = 'صوف'
+TELEGRAM_ONLY_STORES = {'golden-threads'}
 
 try:
     from .pricing import quote as price_order
@@ -60,6 +61,8 @@ def init_db(db):
     }.items():
         if name not in columns:
             db.execute(f'ALTER TABLE menger_deliveries ADD COLUMN {name} {definition}')
+    # Owner selected the shared Telegram group only for this store.
+    db.execute("UPDATE menger_deliveries SET status='telegram_only',last_error=NULL WHERE local_store='golden-threads' AND status NOT IN ('sent','cancelled','telegram_only')")
 
 
 def connection(db, public=False):
@@ -232,6 +235,8 @@ def snapshot_prices(order, catalog):
 
 def enqueue(db, order_id, order, catalog):
     init_db(db)
+    if (order.get('store_id') or 'default') in TELEGRAM_ONLY_STORES:
+        return
     if any('unit_price' not in item for item in order['items']):
         snapshot_prices(order, catalog)
     products = {p['product_id']: p for p in catalog}

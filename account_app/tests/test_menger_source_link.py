@@ -15,6 +15,14 @@ class SourceLinkTests(unittest.TestCase):
     row = delivery_fixtures.MengerTests.row
     response = delivery_fixtures.MengerTests.response
 
+    def test_golden_threads_is_telegram_only(self):
+        self.db.execute('DELETE FROM menger_deliveries')
+        menger.enqueue(self.db, 12, dict(self.order, store_id='golden-threads'), [])
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM menger_deliveries').fetchone()[0], 0)
+        self.db.execute("INSERT INTO menger_deliveries(order_id,local_store,payload,status) VALUES(99,'golden-threads','{}','review_required')")
+        menger.init_db(self.db)
+        self.assertEqual(self.db.execute('SELECT status FROM menger_deliveries WHERE order_id=99').fetchone()[0], 'telegram_only')
+
     def test_frozen_attribution_uses_real_first_contact_and_origin(self):
         self.db.executescript('''CREATE TABLE customers(sender_id TEXT,platform TEXT);
             CREATE TABLE messages(sender_id TEXT,store_id TEXT,direction TEXT,created_at TEXT);''')
