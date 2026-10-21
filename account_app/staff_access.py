@@ -46,7 +46,7 @@ def authenticate(db, username, password, address):
 
 def required_permission(path, method):
     read = method in {'GET', 'HEAD', 'OPTIONS'}
-    if path.startswith(('/static/', '/product_image/', '/catalog_image_file/', '/aud/')) or path in {'/login', '/logout', '/manifest.webmanifest', '/sw.js'}:
+    if path.startswith(('/static/', '/product_image/', '/catalog_image_file/', '/outgoing_audio/', '/aud/')) or path in {'/login', '/logout', '/manifest.webmanifest', '/sw.js'}:
         return 'public'
     if path.startswith(('/api/staff', '/settings/staff', '/api/export/', '/api/import/', '/settings/maintenance')):
         return 'owner'
@@ -54,11 +54,12 @@ def required_permission(path, method):
         return 'read'
     if path.startswith('/api/conversations/'):
         if '/ai_job/' in path and read: return 'reply'
+        if read and '/messages/' in path and '/attachment/' in path: return 'read'
         tail = path.rsplit('/', 1)[-1]
         if read and tail in {'messages', 'instructions'}: return 'read'
         if tail == 'create_order': return 'orders'
         if method == 'DELETE': return 'owner'
-        if tail in {'send', 'ask_ai', 'send_catalog', 'customer', 'gender', 'link_product', 'unlink_product', 'mark_reviewed', 'ai', 'media'}:
+        if tail in {'send', 'send_audio', 'ask_ai', 'send_catalog', 'customer', 'gender', 'link_product', 'unlink_product', 'mark_reviewed', 'ai', 'media'}:
             return 'reply'
         if tail == 'save_instructions': return 'settings'
     if path == '/api/image_library' and read: return 'reply|products'

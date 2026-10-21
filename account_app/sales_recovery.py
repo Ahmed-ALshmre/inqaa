@@ -9,6 +9,7 @@ except ImportError:
 
 def policy_question(text):
     clean = normalized(text).strip(' ؟?!.،\n')
+    clean = re.sub(r'(شكد|اشكد|كم|بشكد)(?=التوصيل|توصيل|الشحن|شحن)', r'\1 ', clean)
     clean = re.sub(r'^(?:السلام عليكم|سلام عليكم|هلو|مرحبا)\s*', '', clean)
     clean = re.sub(r'^و(?=توصيل|التوصيل)', '', clean)
     names = {normalized(name) for aliases in PROVINCES.values() for name in aliases}
@@ -27,8 +28,48 @@ def policy_question(text):
     return ''
 
 
+def independent_policy_questions(text):
+    """Extract explicit store-policy questions from a turn with an unknown photo.
+
+    Do not turn a delivery complaint, a conditional offer or a basket-total
+    question into a generic shipping quote. Other clauses stay with the review.
+    """
+    clean = normalized(text)
+    if re.search(r'مجاني|بلاش|اذا|لو |ليش|تاخر|تأخر|مندوب|استبدال|ارجاع|رفض|وصلني|وصلتني', clean):
+        return []
+    questions = []
+    clauses = re.split(r'\n+|[؟?،,!؛]|\s+و(?=شكد|اشكد|كم|متى|يمتى|شوكت|شلون)', clean)
+    for clause in clauses:
+        clause = clause.strip()
+        if policy_question(clause):
+            questions.append(clause)
+        elif re.fullmatch(r'(?:و)?(?:شكد|اشكد|كم|بشكد)\s*(?:سعر |اجور |تكلفة )?(?:ال)?(?:توصيل|شحن)(?:\s+[^\d]+)?', clause):
+            # A district after the province does not change the province fee.
+            if not re.search(r'سعره|سعرها|قطعه|قطعة|مجموع|ويا|مع |\bو\b', clause):
+                questions.append(clause)
+        elif re.fullmatch(r'(?:و)?(?:كم يوم|متى|يمتى|شوكت)\s+(?:يوصل الطلب|يوصل|التوصيل|توصيل)', clause):
+            questions.append('متى التوصيل')
+    return list(dict.fromkeys(questions))
+
+
+def policy_province(text):
+    """Read a quote destination without capturing a question as an address."""
+    clean = normalized(text)
+    found = []
+    for province, aliases in PROVINCES.items():
+        variants = {normalized(alias) for alias in aliases}
+        variants.update('ل' + alias[2:] for alias in list(variants) if alias.startswith('ال'))
+        if any(re.search(r'(?<!\w)(?:ل|ب|بال)?' + re.escape(alias).replace('ة', '[ةه]') + r'(?!\w)', clean)
+               for alias in variants):
+            found.append(province)
+    return found[0] if len(found) == 1 else None
+
+
 def explicit_photo_followup(text):
     clean = normalized(text).strip(' ؟?!.،\n')
+    clean = ' '.join(clean.split())
+    if re.fullmatch(r'(?:دزي|دزلي|دزيلي|دزو)(?:\s+بله)?\s+خل(?:يني)?\s+اشوف', clean):
+        return True
     return bool(re.fullmatch(r'(?:دزو|دزوا|دزيهن|دزهن|دزهم|ارسلهم|ارسليهن|شوفينياهن|اشوفهن|اشوفها|اشوف صورته|اشوف صورتها)', clean))
 
 

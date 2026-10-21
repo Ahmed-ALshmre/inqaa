@@ -3,8 +3,10 @@ import json
 import re
 
 try:
+    from . import sales_decision
     from .checkout import normalized, phone_number, invalid_shipping_address
 except ImportError:
+    import sales_decision
     from checkout import normalized, phone_number, invalid_shipping_address
 
 PRODUCT_KNOWLEDGE_FIELDS = (
@@ -107,6 +109,7 @@ def advance(state, messages):
     latest = dict(state.get('latest_customer_turn') or {})
     corrections = list(state.get('corrections') or [])
     interrupted = state.get('offer_interrupted', False)
+    open_details = list(state.get('open_details') or [])
     for row in messages:
         row = dict(row)
         if (row.get('direction') == 'incoming' and row.get('id') is not None
@@ -114,6 +117,7 @@ def advance(state, messages):
             continue  # The triggering event may already have been loaded from DB.
         text = str(row.get('text') or '').strip()
         clean = normalized(text)
+        open_details = sales_decision.advance_details(open_details, row.get('direction'), text)
         if row.get('direction') == 'incoming' and text:
             latest = {'text': text[:500], 'message_id': row.get('id')}
             if re.search(r'مو هذا|مو هاي|اقصد|لا.*(?:فستان|سوت|موديل|لون|قياس)|بدل|غيره|غيرها', clean):
@@ -144,14 +148,14 @@ def advance(state, messages):
         # incoming reply, the next staff text must still replace the old turn.
         if row.get('direction') == 'incoming' or text:
             direction = row.get('direction')
-    state.update(evidence=evidence, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, version=4)
+    state.update(evidence=evidence, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, open_details=open_details, version=5)
     return state
 
 
 def load(db, store, sender):
     row = db.execute('SELECT last_message_id,data FROM sales_conversation_context WHERE store_id=? AND sender_id=?', (store, sender)).fetchone()
     cursor, state = (row[0], json.loads(row[1])) if row else (0, {})
-    if state.get('version') != 4:
+    if state.get('version') != 5:
         cursor, state = 0, {}
     rows = db.execute('SELECT id,direction,text,created_at,message_type,image_url FROM messages WHERE store_id=? AND sender_id=? AND id>? ORDER BY id', (store, sender, cursor)).fetchall()
     if rows:

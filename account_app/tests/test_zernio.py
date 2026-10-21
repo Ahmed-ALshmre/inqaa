@@ -461,6 +461,24 @@ class ZernioTests(unittest.TestCase):
             self.assertEqual(zernio.send(m, sender, [{'type': 'image', 'url': 'https://store.example/product_image/../../outside.png'}])['status'], 'invalid_image')
             send.assert_not_called()
 
+    def test_recorded_audio_delivery_uses_audio_attachment(self):
+        self.post()
+        sender = self.sender()
+        folder = Path(self.temp.name) / 'voices'
+        folder.mkdir()
+        name = 'a' * 64 + '.ogg'
+        path = folder / name
+        path.write_bytes(b'OggS123')
+        with m.app.app_context(), patch.object(m, 'PUBLIC_URL', 'https://store.example'), \
+             patch.object(m, 'OUTGOING_AUDIO_DIR', str(folder)), \
+             patch.object(zernio.requests, 'post', return_value=self.response()) as send:
+            result = zernio.send(m, sender, [{'type': 'audio',
+                'url': f'https://store.example/outgoing_audio/{name}',
+                'local_path': str(path), 'mime_type': 'audio/ogg'}])
+            self.assertTrue(result['ok'])
+            self.assertEqual(send.call_args.kwargs['json']['attachmentType'], 'audio')
+            self.assertEqual(send.call_args.kwargs['json']['attachmentUrl'], f'https://store.example/outgoing_audio/{name}')
+
     def test_dashboard_shows_ad_context_and_diagnostics_do_not_leak_secrets(self):
         self.post()
         with self.client.session_transaction() as session:

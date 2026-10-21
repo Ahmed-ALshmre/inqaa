@@ -108,7 +108,7 @@ def deliver(db, identity, payload, send):
 def recover_interrupted(db):
     # Delivery may have succeeded immediately before process death. Never replay
     # an uncertain send automatically. Pure previews are safe to recompute.
-    db.execute("UPDATE ai_jobs SET status='queued',owner=NULL WHERE status='running' AND kind='preview'")
+    db.execute("UPDATE ai_jobs SET status='queued',owner=NULL WHERE status='running' AND kind IN ('preview','media_archive')")
     db.execute("""UPDATE ai_jobs SET status='failed',finished_at=?,result=?
         WHERE status='running'""", (time.time(), json.dumps({
             'ok': False, 'error': 'توقفت المعالجة عند إعادة تشغيل السيرفر؛ تحقق من الإرسال قبل المحاولة مجدداً.',

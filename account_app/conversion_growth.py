@@ -200,6 +200,50 @@ def cohort_metrics(db, start=None, end=None, store_id=None, target=30, booking_s
     }
 
 
+def matured_metrics(db, start, end, as_of, store_id=None, hours=24, target=30, booking_source=None):
+    """Give every new contact the same complete observation window."""
+    starts, ends, observed = (_period_boundary(v, name) for v, name in
+                              ((start, 'start'), (end, 'end'), (as_of, 'as_of')))
+    if None in (starts, ends, observed) or starts >= ends:
+        raise ValueError('A valid half-open contact period is required')
+    if not isinstance(hours, (int, float)) or not math.isfinite(hours) or not 0 < hours <= 168:
+        raise ValueError('Observation hours must be between 0 and 168')
+    goal = float(target)
+    if not math.isfinite(goal) or not 0 <= goal <= 100:
+        raise ValueError('Invalid conversion target')
+    source = booking_source or ('menger' if configured(db) else 'local')
+    if source not in {'local', 'menger'}:
+        raise ValueError('Invalid booking source')
+    store = None if store_id in (None, '', 'all') else str(store_id)
+    scope = " AND COALESCE(NULLIF(TRIM(store_id),''),'default')=?" if store else ''
+    confirmed = ' AND ' + recorded_order_condition('o') if source == 'menger' else ''
+    rows = db.execute(f"""SELECT COALESCE(NULLIF(TRIM(store_id),''),'default'),sender_id,
+        MIN({_instant_sql('created_at')}) FROM messages
+        WHERE direction='incoming' AND COALESCE(TRIM(sender_id),'')!=''{scope}
+        GROUP BY 1,2""", (store,) if store else ()).fetchall()
+    bounds = db.execute('SELECT julianday(?),julianday(?),julianday(?)',
+                        (starts.isoformat(), ends.isoformat(), observed.isoformat())).fetchone()
+    eligible = {(r[0], r[1]): r[2] for r in rows if r[2] is not None
+                and bounds[0] <= r[2] < min(bounds[1], bounds[2])}
+    mature = {k: t for k, t in eligible.items() if t + hours / 24 <= bounds[2]}
+    bought = set()
+    if mature:
+        for r in db.execute(f"""SELECT COALESCE(NULLIF(TRIM(store_id),''),'default'),sender_id,
+                {_instant_sql('created_at')} FROM orders o
+                WHERE LOWER(TRIM(COALESCE(status,'new'))) NOT IN ('cancelled','canceled'){scope}{confirmed}""",
+                (store,) if store else ()):
+            first = mature.get((r[0], r[1]))
+            if first is not None and r[2] is not None and first <= r[2] < first + hours / 24:
+                bought.add((r[0], r[1]))
+    people, buyers = len(mature), len(bought)
+    needed = math.ceil(people * goal / 100)
+    return dict(people=people, buyers=buyers, conversion=round(100 * buyers / people, 2) if people else 0,
+                immature_contacts=len(eligible)-people, observation_hours=hours, booking_source=source,
+                start=starts.isoformat(), end=ends.isoformat(), as_of=observed.isoformat(),
+                target=goal, target_buyers=needed, additional_buyers=max(0, needed-buyers),
+                definition='new_contacts_booked_within_equal_complete_window')
+
+
 def metrics(db, store_id, now, target=30):
     end = _period_boundary(now, 'now')
     if end is None:
@@ -220,6 +264,7 @@ def metrics(db, store_id, now, target=30):
         WHERE COALESCE(c.store_id,'default')=? AND r.status='pending'
         AND NOT EXISTS(SELECT 1 FROM orders o WHERE o.sender_id=c.sender_id)
         GROUP BY c.sender_id ORDER BY contact_ready DESC,c.lead_score DESC,waiting_since LIMIT 20""", (store_id,)).fetchall()
-    return dict(result,
+    return dict(result, matured=matured_metrics(db, (end-timedelta(days=7)).isoformat(),
+                end.isoformat(), end.isoformat(), store_id, target=target),
             followups={r['status']: r['n'] for r in queue}, buyers_after_followup=recovered,
             urgent=[dict(r, waiting_minutes=max(0, int((end-timestamp(r['waiting_since'])).total_seconds()/60))) for r in urgent if timestamp(r['waiting_since'])])

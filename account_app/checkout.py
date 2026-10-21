@@ -174,6 +174,11 @@ def order_line_error(raw_items, catalog):
             quantity = 0
         if not 1 <= quantity <= 20:
             return f"نحتاج كمية صحيحة من {label} قبل التثبيت."
+        weight = normalized(item.get('weight') or (item.get('size') if item.get('size_type') == 'weight' else '')).strip()
+        if weight and (not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?', weight) or float(weight) <= 0):
+            return f'حتى نسجل {label} بصورة صحيحة، شكد الوزن بالكيلو برقم واحد؟ النطاق وحده ما يكفي لتسجيل الطلب.'
+        if item.get('size_type') == 'weight' and not weight:
+            return f'باقي الوزن بالكيلو برقم واحد لـ{label} حتى نكمل تسجيل الطلب.'
         for key, field, name in (("color", "colors", "لون"), ("size", "sizes", "قياس")):
             value = str(item.get(key) or "").strip()
             if product.get(field) and (not value or ambiguous_measurement(value)):

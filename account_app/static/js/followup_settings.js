@@ -49,6 +49,10 @@ const growthFields = [
 
 function renderGrowth(data) {
   const g = data.growth || {};
+  const matured = g.matured || {};
+  const source = matured.booking_source === 'menger' ? 'حجز مثبت في مينجر' : 'حجز محلي';
+  document.getElementById('growthMatured').textContent = `${matured.people || 0} مراسل بمهلة مكتملة · ${matured.buyers || 0} ${source} · تحويل خلال 24 ساعة: ${matured.conversion || 0}%`;
+  document.getElementById('growthMaturedGap').textContent = `الهدف يحتاج ${matured.target_buyers || 0} مشترياً؛ المتبقي ${matured.additional_buyers || 0}. ${matured.immature_contacts || 0} مراسل لم تكتمل مهلتهم بعد.`;
   document.getElementById('growthMetrics').textContent = `${g.people || 0} مراسل · ${g.buyers || 0} صاحب حجز · التحويل ${g.conversion || 0}%`;
   document.getElementById('growthProgress').value = Math.min(g.conversion || 0, 30);
   document.getElementById('growthGap').textContent = g.people ? `هدف 30% يحتاج ${g.target_buyers} صاحب حجز؛ المتبقي ${g.additional_buyers}.` : 'لا توجد رسائل واردة خلال الفترة بعد.';

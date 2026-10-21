@@ -64,7 +64,7 @@ class ConversationContextTests(unittest.TestCase):
         with m.app.app_context(), patch.object(m, 'current_store_id', return_value='default'):
             result = m.factual_customer_request({'text': 'شلون الدفع والتوصيل؟'}, products, products[0])
         self.assertIn('الدفع يصير عند الاستلام', result['reply'])
-        self.assertIn('ويا المندوب', result['reply'])
+        self.assertIn('الفحص عند الاستلام', result['reply'])
         self.assertNotIn('حسب سياسة المتجر', result['reply'])
     @classmethod
     def setUpClass(cls):
@@ -513,12 +513,13 @@ class ConversationContextTests(unittest.TestCase):
         ev = m.collect_unanswered_event(self.db, dict(self.ev, text='شكد سعره'), latest)
         self.assertEqual(ev['image_url'], 'https://images.test/newer.jpg')
 
-    def test_image_pause_does_not_send_canned_shipping_reply(self):
+    def test_image_pause_answers_policy_without_resuming_product_replies(self):
         review = m.create_human_review(self.db, self.ev, 'image unresolved', notify_telegram=False)
         m.set_customer_ai_enabled(self.db, self.sender, False, reason='image_unresolved')
         with patch.object(m, '_call_main_ai_once') as model:
             result = self.event('توصيل اشكد')
-        self.assertEqual(result['reply'], '')
+        self.assertIn('التوصيل', result['reply'])
+        self.assertTrue(result['meta']['partial_policy_reply'])
         self.assertEqual(result['meta']['reason'], 'ai_disabled_for_conversation')
         self.assertFalse(m.is_customer_ai_enabled(self.db, self.sender))
         self.assertTrue(m.has_pending_human_review(self.db, self.sender))

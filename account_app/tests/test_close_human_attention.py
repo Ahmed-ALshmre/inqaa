@@ -35,7 +35,7 @@ class CloseHumanAttentionTests(unittest.TestCase):
         self.assertEqual(response.json['closed_problems'], 2)
         rows = self.client.get('/api/conversations?status=problems').json['conversations']
         self.assertEqual([r['sender_id'] for r in rows], ['other'])
-        self.assertTrue(m.is_customer_ai_enabled(self.db, 'old'))
+        self.assertFalse(m.is_customer_ai_enabled(self.db, 'old'))
 
     def test_bulk_zeroes_filter_without_deleting_records_and_new_issues_reappear(self):
         before = {table: self.db.execute(f'SELECT count(*) FROM {table}').fetchone()[0]
@@ -109,8 +109,8 @@ class CloseHumanAttentionTests(unittest.TestCase):
         with patch.object(m, 'find_product_by_id', return_value=product), patch.object(m, 'auto_reply_after_product_link') as reply:
             response = self.client.post('/api/conversations/old/link_product', json={'product_id': 'P1', 'silent': True})
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json['ai_resumed'])
-        self.assertTrue(m.is_customer_ai_enabled(self.db, 'old'))
+        self.assertFalse(response.json['ai_resumed'])
+        self.assertFalse(m.is_customer_ai_enabled(self.db, 'old'))
         self.assertEqual(self.db.execute("SELECT status FROM human_reviews WHERE sender_id='old'").fetchone()[0], 'linked')
         reply.assert_not_called()
 
@@ -119,7 +119,7 @@ class CloseHumanAttentionTests(unittest.TestCase):
         with patch.object(m, 'find_product_by_id', return_value={'product_id': 'P1', 'product_name': 'فستان'}):
             result = m.handle_human_product_selection(self.db, review_id, 'P1')
         self.assertTrue(result['ok'])
-        self.assertTrue(m.is_customer_ai_enabled(self.db, 'old'))
+        self.assertFalse(m.is_customer_ai_enabled(self.db, 'old'))
 
     def test_failed_link_reply_retains_review_and_pause(self):
         product = {'product_id': 'P1', 'product_name': 'فستان'}

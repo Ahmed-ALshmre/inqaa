@@ -224,7 +224,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
             self.assertEqual(self.m.process_webhook(self.db, {}, use_debounce=False)['reply'], '')
             model.assert_not_called()
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE sender_id='human'").fetchone()[0], 1)
-        self.m.set_customer_ai_enabled(self.db, 'human', True)
+        self.m.set_customer_ai_enabled(self.db, 'human', True, allow_manual_resume=True)
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'human'))
 
     def test_repeated_human_identity_claim_recovers_truth_and_requested_facts(self):

@@ -233,21 +233,30 @@ def send(module, sender_id, messages):
         payload = {'accountId': row['account_id']}
         if message.get('type') == 'text' and str(message.get('text') or '').strip():
             payload['message'] = message['text']
-        elif message.get('type') == 'image':
+        elif message.get('type') in {'image', 'audio'}:
             try:
-                reference = module.build_public_image_url(message.get('url') or '')
+                audio = message.get('type') == 'audio'
+                reference = (message.get('url') or '') if audio else module.build_public_image_url(message.get('url') or '')
                 parsed = urlparse(reference)
                 public = urlparse(module.PUBLIC_URL or '')
                 if (parsed.scheme != 'https' or not parsed.netloc or parsed.netloc != public.netloc
-                        or not parsed.path.startswith('/product_image/') or parsed.username or parsed.password):
-                    return dict(result, status='invalid_image', message='Image must be a public catalog image')
-                path = Path(module._local_image_path_from_reference(reference)).resolve()
-                roots = [Path(module.PRODUCT_IMAGE_DIR).resolve(), Path(module.UPLOADS_DIR).resolve()]
+                        or parsed.username or parsed.password):
+                    return dict(result, status='invalid_audio' if audio else 'invalid_image', message='Attachment must use this public HTTPS host')
+                if audio:
+                    path = Path(message.get('local_path') or '').resolve()
+                    roots = [Path(module.OUTGOING_AUDIO_DIR).resolve()]
+                    if not re.fullmatch(r'/outgoing_audio/[a-f0-9]{64}\.(?:webm|ogg|m4a|mp3)', parsed.path):
+                        return dict(result, status='invalid_audio')
+                else:
+                    path = Path(module._local_image_path_from_reference(reference)).resolve()
+                    roots = [Path(module.PRODUCT_IMAGE_DIR).resolve(), Path(module.UPLOADS_DIR).resolve()]
+                    if not parsed.path.startswith('/product_image/'):
+                        return dict(result, status='invalid_image')
                 if not any(path.is_relative_to(root) for root in roots) or not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
-                    return dict(result, status='invalid_image', message='Image missing or exceeds 8 MB')
+                    return dict(result, status='invalid_audio' if audio else 'invalid_image', message='Attachment missing or exceeds 8 MB')
             except (ValueError, TypeError, OSError):
-                return dict(result, status='invalid_image', message='Invalid catalog image path')
-            payload.update(attachmentUrl=reference, attachmentType='image')
+                return dict(result, status='invalid_audio' if message.get('type') == 'audio' else 'invalid_image', message='Invalid attachment path')
+            payload.update(attachmentUrl=reference, attachmentType='audio' if audio else 'image')
             if message.get('caption'):
                 payload['message'] = message['caption']
         else:

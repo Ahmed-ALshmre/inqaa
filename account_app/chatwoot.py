@@ -50,7 +50,22 @@ def send(module, sender_id, messages):
             kwargs = {'headers': {'api_access_token': token}, 'timeout': 30, 'allow_redirects': False}
             if message.get('type') == 'text':
                 response = requests.post(url, json=payload, **kwargs)
-            elif message.get('type') == 'image':
+            elif message.get('type') in {'image', 'audio'}:
+                if message.get('type') == 'audio':
+                    path = Path(message.get('local_path') or '').resolve()
+                    root = Path(module.OUTGOING_AUDIO_DIR).resolve()
+                    if not path.is_relative_to(root) or not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
+                        return dict(result, status='invalid_audio', message='Audio is missing or exceeds 8 MB')
+                    with path.open('rb') as attachment:
+                        response = requests.post(url, data={'message_type': 'outgoing', 'private': 'false'},
+                            files={'attachments[]': (path.name, attachment, message.get('mime_type') or 'audio/webm')}, **kwargs)
+                    result['status_code'] = response.status_code
+                    if not 200 <= response.status_code < 300:
+                        return dict(result, status='rejected', message=f'Chatwoot HTTP {response.status_code}')
+                    body = response.json()
+                    if not isinstance(body, dict) or not body.get('id') or body.get('status') == 'failed':
+                        return dict(result, status='unconfirmed', message='Chatwoot did not confirm audio')
+                    continue
                 reference = message.get('url', '')
                 # Upload catalog files directly; do not fetch arbitrary customer URLs.
                 if '/product_image/' not in urlparse(reference).path:
@@ -73,7 +88,7 @@ def send(module, sender_id, messages):
             if not isinstance(body, dict) or not body.get('id') or body.get('status') == 'failed':
                 return dict(result, status='unconfirmed', message='Chatwoot did not confirm message creation')
         except (requests.RequestException, ValueError, OSError):
-            return dict(result, status='transport_error', message='Chatwoot request or image upload failed')
+            return dict(result, status='transport_error', message='Chatwoot request or attachment upload failed')
     return dict(result, ok=True, status='success')
 
 

@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.querySelectorAll('[onclick]').forEach(button => {
       const action=button.getAttribute('onclick');
-      let permission = /openOrderModal|createManualOrder|submitOrder/.test(action) ? 'orders' : /deleteConversation|testManyChat/.test(action) ? 'owner' : /toggleGlobalAI|saveInstructions/.test(action) ? 'settings' : /send|askAI|improveMessage|linkProduct|unlinkProduct|saveCustomer|setCustomerGender|toggleConversationAI|imageUpload|markHumanReview|resolveWithAI|hiSend|hiAsk|hiClose/.test(action) ? 'reply' : '';
+      let permission = /openOrderModal|createManualOrder|submitOrder/.test(action) ? 'orders' : /deleteConversation|testManyChat/.test(action) ? 'owner' : /toggleGlobalAI|saveInstructions/.test(action) ? 'settings' : /send|askAI|improveMessage|linkProduct|unlinkProduct|saveCustomer|setCustomerGender|toggleConversationAI|imageUpload|markHumanReview|resolveWithAI|hiSend|hiAsk|hiClose|VoiceRecording|RecordedVoice/.test(action) ? 'reply' : '';
       if(permission && !can(permission)) button.hidden=true;
     });
     if(!can('reply')) {const input=document.getElementById('messageInput'); if(input){input.disabled=true;input.placeholder='هذا الحساب للعرض فقط';}}

@@ -469,7 +469,7 @@ function renderConversations(appendFrom = 0) {
 
 // ══ Select Conversation ════════════════════════════════════════════════════
 async function selectConversation(senderId) {
-  if (currentSenderId !== senderId) clearImage();
+  if (currentSenderId !== senderId) { clearImage(); discardRecordedVoice(); }
   currentSenderId = senderId;
   closeAllPanels();
 
@@ -663,7 +663,7 @@ function messageMarkup(m) {
     if (!url) continue;
     const escaped = esc(url);
     const kind = ['image','audio','video'].includes(item.type) ? item.type : 'file';
-    const failure = `<div class="media-error">تعذر فتح المرفق؛ قد يكون الرابط منتهي الصلاحية.<button type="button" onclick="retryMedia(this)">إعادة المحاولة</button><a href="${escaped}" target="_blank" rel="noopener noreferrer">فتح الرابط</a></div>`;
+    const failure = `<div class="media-error">تعذر استعادة المرفق. إذا انتهت صلاحية رابطه الأصلي، اطلب من الزبون إعادة إرساله.<button type="button" onclick="retryMedia(this)">إعادة المحاولة</button></div>`;
     if (kind === 'image') {
       content += `<div class="message-media image-media is-loading"><span class="media-loading" role="status"><span class="spinner-border spinner-border-sm"></span> تحميل الصورة…</span><img src="${escaped}" data-src="${escaped}" class="msg-image" alt="صورة في المحادثة" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="mediaLoaded(this)" onerror="mediaFailed(this)" onclick="openLightbox(this.dataset.src)">${failure}</div>`;
     } else if (kind === 'audio' || kind === 'video') {
@@ -675,7 +675,10 @@ function messageMarkup(m) {
   }
   if (m.text && !media.some(item => item.url === m.text.trim())) content += `<div class="msg-bubble">${esc(m.text)}</div>`;
   if (!content) content = '<div class="msg-bubble">[رسالة بلا نص أو مرفق متاح]</div>';
-  return content + `<span class="msg-time">${esc(fmtDatetime(m.created_at))}</span>`;
+  const sender = m.direction === 'outgoing'
+    ? (m.sender_type === 'staff' ? (m.ai_assisted ? 'موظف بمساعدة AI' : 'موظف')
+      : m.sender_type === 'ai' ? 'ذكاء اصطناعي' : 'مرسل غير محدد') : '';
+  return content + `<span class="msg-time">${sender ? `<span class="msg-sender" aria-label="مصدر الرد">${esc(sender)}</span> · ` : ''}${esc(fmtDatetime(m.created_at))}</span>`;
 }
 
 const resolvingMedia = new Set();
@@ -1070,6 +1073,106 @@ function openLightbox(url) {
 // ══ Send Message ═══════════════════════════════════════════════════════════
 let _isSending = false;
 let _isAskingAI = false;
+let voiceRecorder = null;
+let voiceStream = null;
+let voiceBlob = null;
+let voiceUrl = '';
+let voiceSender = null;
+let voiceTimer = null;
+let voiceDiscarded = false;
+let voiceSending = false;
+
+function voiceMime() {
+  if (!window.MediaRecorder) return '';
+  return ['audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm']
+    .find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function voiceControls() {
+  const active = voiceRecorder?.state === 'recording';
+  const wrap = document.getElementById('voiceComposer');
+  const button = document.getElementById('voiceRecordBtn');
+  const send = document.getElementById('voiceSendBtn');
+  wrap.hidden = !active && !voiceBlob;
+  button.disabled = voiceSending;
+  button.innerHTML = active ? '<i class="bi bi-stop-fill"></i> إيقاف التسجيل' : '<i class="bi bi-mic"></i> تسجيل صوت';
+  send.hidden = !voiceBlob || active;
+  send.disabled = voiceSending;
+}
+
+function discardRecordedVoice() {
+  voiceDiscarded = true;
+  if (voiceRecorder?.state === 'recording') voiceRecorder.stop();
+  voiceStream?.getTracks().forEach(track => track.stop());
+  clearTimeout(voiceTimer);
+  if (voiceUrl) URL.revokeObjectURL(voiceUrl);
+  voiceRecorder = null; voiceStream = null; voiceBlob = null; voiceUrl = ''; voiceSender = null;
+  const preview = document.getElementById('voicePreview');
+  preview.pause(); preview.removeAttribute('src'); preview.hidden = true;
+  document.getElementById('voiceStatus').textContent = 'التسجيل جاهز';
+  voiceControls();
+}
+
+async function toggleVoiceRecording() {
+  if (voiceRecorder?.state === 'recording') { voiceRecorder.stop(); return; }
+  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
+  const mime = voiceMime();
+  if (!mime || !navigator.mediaDevices?.getUserMedia) {
+    showToast('المتصفح يحتاج إذن الميكروفون واتصالاً آمناً لتسجيل الصوت', 'warning'); return;
+  }
+  discardRecordedVoice();
+  const sender = currentSenderId;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    if (currentSenderId !== sender) { stream.getTracks().forEach(track => track.stop()); return; }
+    const chunks = [];
+    voiceDiscarded = false; voiceStream = stream; voiceSender = sender;
+    voiceRecorder = new MediaRecorder(stream, {mimeType: mime, audioBitsPerSecond: 64000});
+    voiceRecorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
+    voiceRecorder.onstop = () => {
+      stream.getTracks().forEach(track => track.stop());
+      clearTimeout(voiceTimer);
+      voiceStream = null; voiceRecorder = null;
+      if (voiceDiscarded || currentSenderId !== sender) return;
+      const blob = new Blob(chunks, {type: mime.split(';')[0]});
+      if (!blob.size) { discardRecordedVoice(); showToast('التسجيل فارغ', 'warning'); return; }
+      voiceBlob = blob; voiceUrl = URL.createObjectURL(blob);
+      const preview = document.getElementById('voicePreview');
+      preview.src = voiceUrl; preview.hidden = false;
+      document.getElementById('voiceStatus').textContent = 'استمع للتسجيل، ثم أرسله أو احذفه';
+      voiceControls();
+    };
+    voiceRecorder.start(250);
+    voiceTimer = setTimeout(() => { if (voiceRecorder?.state === 'recording') voiceRecorder.stop(); }, 60000);
+    document.getElementById('voiceStatus').textContent = 'جارٍ تسجيل الصوت… الحد الأقصى دقيقة';
+    voiceControls();
+  } catch (error) {
+    voiceStream?.getTracks().forEach(track => track.stop());
+    voiceStream = null; voiceRecorder = null; voiceControls();
+    showToast('تعذر تشغيل الميكروفون: ' + error.message, 'danger');
+  }
+}
+
+async function sendRecordedVoice() {
+  if (!voiceBlob || voiceSending || !voiceSender || voiceSender !== currentSenderId) return;
+  voiceSending = true; voiceControls();
+  try {
+    const type = voiceBlob.type.split(';')[0];
+    const ext = {'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/webm': 'webm'}[type];
+    if (!ext) throw new Error('صيغة التسجيل غير مدعومة');
+    const form = new FormData();
+    form.append('audio', new File([voiceBlob], `voice.${ext}`, {type}));
+    const response = await apiFetch(`/api/conversations/${encodeURIComponent(voiceSender)}/send_audio`,
+      {method: 'POST', body: form});
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'مزود الرسائل لم يؤكد إرسال الصوت');
+    const sentTo = voiceSender;
+    discardRecordedVoice();
+    await loadMessages(sentTo, currentSenderId === sentTo);
+    showToast('تم إرسال التسجيل الصوتي', 'success');
+  } catch (error) { showToast('فشل إرسال الصوت: ' + error.message, 'danger'); }
+  finally { voiceSending = false; voiceControls(); }
+}
 
 function _setSendingState(busy) {
   _isSending = busy;

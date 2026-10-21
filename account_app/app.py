@@ -19,20 +19,20 @@ from collections import Counter
 from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 from functools import wraps
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery
+    from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook
+    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision
     from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
-    import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards
+    import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media
     import baraah
     import sales_engagement
     import menger
@@ -43,7 +43,7 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook
+    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision
     from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
@@ -330,6 +330,8 @@ PRODUCT_IMAGE_DIR = os.path.join(DATA_DIR, "product_image")
 if DATA_DIR != APP_DIR and not os.path.exists(PRODUCT_IMAGE_DIR):
     shutil.copytree(os.path.join(APP_DIR, "product_image"), PRODUCT_IMAGE_DIR)
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", os.path.join(DATA_DIR, "uploads"))
+OUTGOING_AUDIO_DIR = os.environ.get("OUTGOING_AUDIO_DIR", os.path.join(DATA_DIR, "outgoing_audio"))
+INCOMING_MEDIA_DIR = os.environ.get("INCOMING_MEDIA_DIR", os.path.join(DATA_DIR, "incoming_media"))
 CATALOG_IMAGE_DIR = os.environ.get("CATALOG_IMAGE_DIR", os.path.join(DATA_DIR, "catalog"))
 if not os.path.isabs(CATALOG_IMAGE_DIR):
     CATALOG_IMAGE_DIR = os.path.join(APP_DIR, CATALOG_IMAGE_DIR)
@@ -2243,7 +2245,12 @@ def is_customer_ai_enabled(db, sender_id):
     return int(row["enabled"] or 0) == 1
 
 
-def set_customer_ai_enabled(db, sender_id, enabled, reason="manual"):
+def set_customer_ai_enabled(db, sender_id, enabled, reason="manual", allow_manual_resume=False):
+    # A staff handoff or the conversation switch owns this pause. Product
+    # linking, review closure and delayed jobs must never silently undo it.
+    pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
+    if enabled and pause and pause['reason'] in {'manual', 'customer_requested_human'} and not allow_manual_resume:
+        return False
     now = now_baghdad_iso()
     db.execute(
         """INSERT INTO customer_ai_settings (sender_id, enabled, updated_at)
@@ -2257,6 +2264,7 @@ def set_customer_ai_enabled(db, sender_id, enabled, reason="manual"):
                   ON CONFLICT(sender_id) DO UPDATE SET reason=excluded.reason,updated_at=excluded.updated_at""",
                (sender_id, 'enabled' if enabled else reason, now))
     db.commit()
+    return True
 
 
 def find_product_by_id(product_id, include_inactive=False, store_id=None):
@@ -3353,6 +3361,9 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
         f"{render_setting_template(db, 'prompt_followup_system', DEFAULT_FOLLOWUP_SYSTEM_PROMPT)}\n\n"
         f"{sales_engagement.guide(current_store_id())}\n\n"
         f"{sales_engagement.FOLLOWUP_GUIDE}\n\n"
+        'إذا بقي سؤال عن طول القطعة أو البطانة أو الإغلاق فلا تعد لسؤال الحجز أو الوزن. '
+        'استخدم المعلومة الجديدة إن أصبحت متوفرة؛ إذا ما زالت مجهولة اترك reply فارغاً لتُحسم مراجعتها أولاً. '
+        'لا تستخدم مجرد تذكير العميل بما اختاره كدليل أنك أضفت فائدة جديدة.\n'
         "استثناء التأجيل: إذا طلب الزبون صراحة تذكيراً بعد مدة محددة وقد حان الموعد، صغ التذكير المطلوب فقط. الرفض أو طلب إيقاف الرسائل يمنع الإرسال دائماً.\n"
         "اكتب رسالة متابعة لا تشعر الزبون بالملاحقة. الرسالة قصيرة، مخصصة، وباللهجة العراقية.\n"
         "ممنوع ذكر اسم الزبون، وممنوع تكرار تفاصيل المنتج إلا إذا كانت مطلوبة في السياق.\n"
@@ -4143,6 +4154,8 @@ def attach_product_image_payload(final, product, reply, image_urls=None):
 
 
 def send_product_image_if_available(db, sender_id, page_id, platform, product, binding=None):
+    if not is_ai_enabled(db) or not is_customer_ai_enabled(db, sender_id):
+        return False
     settings = get_auto_product_settings(db)
     if not settings.get("send_image") or not product:
         return False
@@ -4155,6 +4168,8 @@ def send_product_image_if_available(db, sender_id, page_id, platform, product, b
 
     sent_any = False
     for image_url in image_urls:
+        if not is_ai_enabled(db) or not is_customer_ai_enabled(db, sender_id):
+            break
         sent = send_image_to_facebook(sender_id, image_url, page_id, platform)
         sent_any = sent_any or sent
         save_message(
@@ -4241,7 +4256,7 @@ def send_catalog_to_customer(db, sender_id, page_id="", platform="facebook"):
     for msg in image_messages:
         save_message(
             db, sender_id, "outgoing", "image", None, msg["url"], None, None,
-            {"catalog": True, "image_url": msg["url"]},
+            {"catalog": True, "manual_reply": True, "image_url": msg["url"]},
         )
     return sent, reply, image_messages
 
@@ -4763,6 +4778,11 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
             finally:
                 memory_db.close()
 
+    if direction == 'outgoing' and isinstance(raw_payload, dict):
+        raw_payload = dict(raw_payload)
+        raw_payload.setdefault('sender_type', 'staff' if (
+            raw_payload.get('manual_reply') or raw_payload.get('manual_order')
+            or raw_payload.get('sent_via') == 'manychat_api') else 'ai')
     media = extract_media(raw_payload if direction == "incoming" else {}, text or "", image_url or "")
     if direction == 'incoming' and any(m['type'] == 'file' for m in media):
         media = resolve_incoming_media({'attachments': media})
@@ -4782,6 +4802,12 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
     if direction == "incoming":
         ad_attribution.save(db, sender_id, cursor.lastrowid, raw_payload, ad_id, ref)
     db.commit()
+    if (direction == 'incoming' and os.environ.get('ENABLE_BACKGROUND_JOBS', '1') == '1'
+            and any(inbound_media.trusted_source(item['url'], os.environ.get('CHATWOOT_BASE_URL', ''))
+                    for item in media)):
+        ai_jobs.enqueue(db, current_store_id(), sender_id, 'media_archive',
+                        {'message_id': cursor.lastrowid}, str(cursor.lastrowid))
+        ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
     return cursor.lastrowid
 
 
@@ -6675,6 +6701,8 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
     if not sender_id:
         print("[WebhookSend] Missing sender_id; cannot send reply to Facebook.", flush=True)
         return False
+    if has_app_context() and (not is_ai_enabled(get_db()) or not is_customer_ai_enabled(get_db(), sender_id)):
+        return False
     if customer_copy.has_instructions(reply):
         print('[WebhookSend] Blocked internal instructions in generated reply.', flush=True)
         if has_app_context():
@@ -6685,6 +6713,8 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
 
     sent = False
     for part in approved_reply_parts(result, reply):
+        if has_app_context() and (not is_ai_enabled(get_db()) or not is_customer_ai_enabled(get_db(), sender_id)):
+            return False
         if not send_text_to_facebook(sender_id, part, page_id, platform):
             return False
         sent = True
@@ -6693,6 +6723,8 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
         img_urls = [result.get("product_image_url")]
     if result.get("send_image"):
         for img_url in img_urls:
+            if has_app_context() and (not is_ai_enabled(get_db()) or not is_customer_ai_enabled(get_db(), sender_id)):
+                return False
             if not send_image_to_facebook(sender_id, img_url, page_id, platform):
                 return False
             sent = True
@@ -6708,6 +6740,8 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     if pause and pause['reason'] == 'customer_requested_human':
         return {'sent': False, 'reply': '', 'reason': 'customer_requested_human'}
     ai_was_enabled = is_ai_enabled(db) and is_customer_ai_enabled(db, sender_id)
+    if not ai_was_enabled:
+        return {"sent": False, "reply": "", "reason": "ai_disabled"}
     if not staff_action and ai_was_enabled and pending_product_choice(db, sender_id):
         latest = latest_incoming_message(db, sender_id)
         choice_ev = dict(latest, sender_id=sender_id)
@@ -6727,8 +6761,6 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
             preserve_existing=True,
             close_reviews=not any(not item.get('product_found') for item in (event or {}).get('_image_matches', [])),
         )
-    if not ai_was_enabled and not staff_action:
-        return {"sent": False, "reply": "", "reason": "ai_disabled"}
 
     customer = get_or_create_customer(db, sender_id, None)
     latest = latest_incoming_message(db, sender_id)
@@ -7380,7 +7412,7 @@ def store_policy_question_reply(text, matched_product=None):
         reply = ('مدة التوصيل: ' + timeframe if timeframe else
                  'موعد الوصول الدقيق يحتاج تأكيد المتجر؛ ما عندي موعد مؤكد حالياً.')
     else:
-        province = contact_fields(text).get('province')
+        province = sales_recovery.policy_province(text)
         if province:
             fee = delivery_fee_for_province(province, db=db)
             delivery = f'التوصيل إلى {province}: {fee:,} د.ع.'
@@ -7396,7 +7428,15 @@ def store_policy_question_reply(text, matched_product=None):
                     delivery = 'التوصيل مجاني حسب عرض المنتج.'
             except ValueError:
                 pass
-        reply = ('الدفع يصير عند الاستلام، وتكدر تفحص القطعة ويا المندوب قبل الدفع. ' + delivery if intent == 'payment' else delivery)
+        if intent == 'payment':
+            inspection = str(settings.get('inspection_message') or '').strip()
+            parts = ['الدفع يصير عند الاستلام.']
+            if inspection and not customer_copy.has_instructions(inspection):
+                parts.append(inspection)
+            parts.append(delivery)
+            reply = ' '.join(parts)
+        else:
+            reply = delivery
     return {'reply':reply,'reply_parts':[reply],'create_order':False,'order':{},
             'requires_human':False,'intent':'delivery','_local_reply':True}
 
@@ -7547,7 +7587,7 @@ def recover_factual_sales_reply(ev, product, *, extra='', order=None):
     selected = sales_answers.topics(question)
     if has_app_context():
         if 'delivery' in selected:
-            province = contact_fields(question).get('province')
+            province = sales_recovery.policy_province(question)
             policy = store_policy_question_reply('شكد التوصيل' + (' إلى ' + province if province else ''), product)
             if policy:
                 facts.append(policy['reply'])
@@ -7667,6 +7707,16 @@ def call_main_ai(
               "لا تطلب الاسم أو الصورة من جديد ولا تعتبر رفض بديل رغبة بالحجز. المعرفات داخلية لا تذكرها للزبون."
         )
     question = ev.get("text") or ""
+    if (matched_product and not ev.get('_post_order') and message_type == 'text'
+            and not ev.get('image_url') and not ev.get('_image_matches')
+            and len(customer_products or []) <= 1 and sales_decision.price_mismatch(question)):
+        discrepancy = recover_factual_sales_reply(
+            dict(ev, text=question + '\nشكد السعر وشكد التوصيل'), matched_product,
+            extra='فرق السعر اللي شفتيه عن السعر الحالي يحتاج تأكيد من المتجر قبل الحجز.')
+        if discrepancy:
+            discrepancy['reply'] = 'حقج تسألين عن فرق السعر.\n' + discrepancy['reply']
+            discrepancy['reply_parts'] = [discrepancy['reply']]
+            return dict(discrepancy, _needs_fact_review=True, create_order=False)
     price_reply = transparent_price_reply(ev, matched_product, customer, customer_products, positions)
     if price_reply:
         return price_reply
@@ -7791,6 +7841,14 @@ def call_main_ai(
     explicit_checkout = bool(re.search(r'ثبت(?:ي|يه|يهن|يهم|لي|ولي)|احجز(?:ي|يلي|ولي)', sales_strategy.normalized(question)))
     order = result.get('order') if isinstance(result.get('order'), dict) else {}
     items = order.get('items') if isinstance(order.get('items'), list) else []
+    unresolved_questions = sales_decision.unresolved_purchase_questions(context, matched_product)
+    if (unresolved_questions and not ev.get('_post_order') and not continuation
+            and len(customer_products or []) <= 1
+            and (explicit_checkout or result.get('create_order'))):
+        recovered = recover_factual_sales_reply(
+            dict(ev, text=question + '\n' + '\n'.join(unresolved_questions)), matched_product, order=order)
+        if recovered:
+            return dict(recovered, _needs_fact_review=True, create_order=False)
     contact = {key: order.get(key) or (customer or {}).get(key) or ''
                for key in ('phone', 'province', 'address')}
     if (explicit_checkout and not sales_strategy.purchase_block_reason(question) and not result.get('_needs_fact_review')
@@ -8056,6 +8114,15 @@ def _call_main_ai_once(
         if p.get("product_name") and sales_strategy.normalized(p["product_name"]) in normalized_question
     ]
     candidate_products = named_products or (sales_context.browse_candidates(question_text, products or []) if wants_options else [])
+    verified_budget_options = None
+    if not post_order and matched_product and re.search(r'ارخص|ميزاني|باقل', normalized_question):
+        fees = get_delivery_settings(db)
+        quote_fee = (delivery_fee_for_province(customer_profile['province'], db)
+                     if customer_profile.get('province') else max(fees['baghdad_fee'], fees['other_fee']))
+        verified_budget_options = sales_decision.budget_alternatives(
+            question_text, ev.get('_sales_context'), products, matched_product, quote_fee)
+        allowed_ids = {item['product_id'] for item in verified_budget_options}
+        candidate_products = [p for p in products if p['product_id'] in allowed_ids]
     products_short = [
         _short_product(p)
         for p in candidate_products
@@ -8077,6 +8144,14 @@ def _call_main_ai_once(
     system_prompt += "\nتصحيحات العميل الأحدث تتقدم على اختيار المنتج القديم. طلب الخيارات ضمن ميزانية هو استكشاف: اعرضي خيارين مناسبين ولا تطلبي صورة لقطعة لم يخترها. الحقول الجديدة حقائق موثقة إن كانت معبأة فقط؛ فراغ البطانة أو القياسات لا يعني عدم وجودها. محتويات البكج وطريقة البيع مرجع قبل عرض المفرد.\n"
     system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
     system_prompt += "\n\n" + sales_playbook.guidance(ev, matched_product)
+    system_prompt += "\n\n" + sales_decision.brief(ev, matched_product)
+    if verified_budget_options is not None:
+        system_prompt += ('\n[بدائل أقل سعراً اجتازت تحقق الشروط الواضحة]\n'
+                          + ai_efficiency.dumps(verified_budget_options)
+                          + '\nاعرض خياراً واحداً أو اثنين فقط من هذه القائمة إن كان مناسباً للسؤال. لا تضفهما للسلة. '
+                            'إذا القائمة فارغة فلا تدع وجود بديل يحقق الشروط؛ وضح القيد أو اسأل سؤالاً واحداً يزيل الغموض. '
+                            'إذا نطاق الميزانية غير واضح فاسأل هل يشمل التوصيل قبل وصفه بأنه ضمن الميزانية. '
+                            'عند غياب المحافظة استُخدم أعلى رسم توصيل بين المناطق؛ اذكر أنه تقدير وحدد الرسم عند معرفة المحافظة.')
     if post_order:
         system_prompt += "\n\n" + POST_ORDER_SERVICE_RULES
     if ev.get('_ad_source'):
@@ -8695,6 +8770,34 @@ def saved_album_reply(db, ev, images, products, meta):
                 platform=ev.get('platform'), send_image=False, meta=meta)
 
 
+def pending_image_policy_reply(db, ev, meta):
+    """Answer independent policy while leaving image identity and its review open."""
+    empty = {"sender_id": ev['sender_id'], "page_id": ev.get('page_id'),
+             "platform": ev.get('platform'), "reply": "", "reply_parts": [],
+             "send_image": False, "meta": meta}
+    # Existing orders need their saved terms and the post-order service flow.
+    if ev.get('_post_order') or db.execute(
+            "SELECT 1 FROM orders WHERE sender_id=? LIMIT 1", (ev['sender_id'],)).fetchone():
+        return empty
+    parts = []
+    for question in sales_recovery.independent_policy_questions(ev.get('text')):
+        intent = sales_recovery.policy_question(question)
+        province = sales_recovery.policy_province(question)
+        canonical = question if intent else 'شكد التوصيل' + (' إلى ' + province if province else '')
+        policy = store_policy_question_reply(canonical)
+        if policy and policy['reply'] not in parts:
+            parts.append(policy['reply'])
+    if not parts:
+        return empty
+    parts.append('هاي سياسة التوصيل العامة؛ عرض القطعة والمجموع نأكدهم بعد تحديد الموديل. تفاصيل الصورة تحتاج تأكيد الموظف.')
+    # A partial policy answer must not mark the image/choices as answered when
+    # a later event collects the still-unresolved customer turn.
+    payload = dict(meta, _partial_policy_reply=True)
+    result = saved_checkout_reply(db, ev, '\n'.join(parts), meta, payload=payload)
+    result['meta'] = dict(meta, partial_policy_reply=True)
+    return result
+
+
 def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, booking_actor='ai'):
     def finish(reply, meta):
         if persist_reply:
@@ -8832,7 +8935,8 @@ def restore_checkout_draft(db, ev, result, matched_product):
 
 def collect_unanswered_event(db, ev, incoming_message_id):
     rows = db.execute("""SELECT * FROM messages WHERE sender_id=? AND direction='incoming'
-        AND id<=? AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'),0)
+        AND id<=? AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'
+        AND COALESCE(raw_payload,'') NOT LIKE '%"_partial_policy_reply": true%'),0)
         ORDER BY id""", (ev["sender_id"], incoming_message_id, ev["sender_id"])).fetchall()
     # An older photo must not be reattached after a later, trusted product link.
     # Keep new photos and unresolved albums: their identity still needs evidence.
@@ -9032,6 +9136,12 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 log(5, "AI DISABLED", f"Created human review #{review_id} so the conversation surfaces for human action")
             except Exception as exc:
                 print(f"[AI DISABLED] Could not create fallback review: {exc}", flush=True)
+        pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (ev['sender_id'],)).fetchone()
+        if (is_ai_enabled(db) and pause and pause['reason'] in {'image_unresolved', 'pending_image_review'}):
+            policy_result = pending_image_policy_reply(db, ev,
+                {'skipped': True, 'reason': reason, 'human_review_id': review_id})
+            if policy_result['reply']:
+                return policy_result
         return {
             "sender_id": ev["sender_id"],
             "page_id": ev["page_id"],
@@ -9092,6 +9202,11 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "meta": {"skipped": True, "reason": "debounced_newer_message"},
             }
         log(5, "DEBOUNCE", "No newer message — proceeding with processing.")
+
+    if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
+        return {"sender_id": ev["sender_id"], "page_id": ev["page_id"],
+                "platform": ev["platform"], "reply": "", "send_image": False,
+                "meta": {"skipped": True, "reason": "ai_disabled_during_processing"}}
 
     # ── STEP 06: Load conversation history ───────────────────────────────────
     log(6, "HISTORY", "Loading latest customer messages...")
@@ -9320,6 +9435,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         first_reply_text, detected_gender = generate_first_message_reply(
             db, ev, products, first_instructions, first_rules,
         )
+        if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
+            return {"sender_id": ev["sender_id"], "page_id": ev["page_id"],
+                    "platform": ev["platform"], "reply": "", "send_image": False,
+                    "meta": {"skipped": True, "reason": "ai_disabled_during_generation"}}
         save_message(
             db, ev["sender_id"], "outgoing", "text",
             first_reply_text, None, None, None,
@@ -9399,9 +9518,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                                          {'ordered_album': True, 'service_error': True})
             review_id = None if (image_result or {}).get('pending') else create_human_review(
                 db, ev, 'Image analysis service failure: ' + str(image_result.get('error_code') or 'service_error'), [])
-            return {'sender_id': ev['sender_id'], 'reply': '', 'send_image': False,
-                    'meta': {'service_error': True, 'human_review_id': review_id,
-                             'reason': 'image_service_unavailable', 'ai_paused': False}}
+            return pending_image_policy_reply(db, ev,
+                    {'service_error': True, 'human_review_id': review_id,
+                     'reason': 'image_service_unavailable', 'ai_paused': False})
         if len((image_result or {}).get('images') or []) > 1:
             review_unresolved_album_images(db, ev, image_result, products)
             return saved_album_reply(db, ev, image_result['images'], products,
@@ -9438,10 +9557,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             candidates,
         )
         reject_current_binding(db, ev["sender_id"], "unmatched_new_customer_image", allow_any_source=True)
-        return {"sender_id": ev["sender_id"], "page_id": ev.get("page_id"), "platform": ev.get("platform"),
-                "reply": "", "reply_parts": [], "send_image": False,
-                "meta": {"human_review_id": review_id, "image_unresolved": True, "ai_paused": True,
-                         "waiting_for_human_action": True, "image_attempts": (image_result or {}).get("images", [])}}
+        return pending_image_policy_reply(db, ev,
+                {"human_review_id": review_id, "image_unresolved": True, "ai_paused": True,
+                 "waiting_for_human_action": True, "image_attempts": (image_result or {}).get("images", [])})
 
     # A prior review must not silence new questions after AI is resumed.
     # Resolve the current explicit choice before falling back to customer memory.
@@ -9621,6 +9739,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         conversation_history=conversation_history,
         catalog_search_context=_search_ctx,
     )
+    if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev['sender_id']):
+        return {'sender_id': ev['sender_id'], 'page_id': ev['page_id'],
+                'platform': ev['platform'], 'reply': '', 'send_image': False,
+                'meta': {'skipped': True, 'reason': 'ai_disabled_during_generation'}}
     log(10, "MAIN AI", f"Model responded in {time.time()-t_ai:.1f}s", {
         "intent"      : ai_result.get("intent"),
         "create_order": ai_result.get("create_order"),
@@ -9900,6 +10022,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         reply = "ما عندي صورة مطابقة جاهزة للإرسال لهذا الموديل أو اللون حالياً. أحتاج أتأكد منها حتى ما أدزلج صورة مختلفة."
 
     # ── STEP 14: Save outgoing reply ─────────────────────────────────────────
+    if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
+        return {"sender_id": ev["sender_id"], "page_id": ev["page_id"],
+                "platform": ev["platform"], "reply": "", "send_image": False,
+                "meta": {"skipped": True, "reason": "ai_disabled_before_reply_save"}}
     log(14, "SAVE REPLY", "Saving outgoing reply to database...")
     reply_parts = approved_reply_parts(ai_result, reply)
     for part in reply_parts:
@@ -9951,6 +10077,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     if send_direct_facebook_images and final.get("send_image"):
         sent_images = []
         for image_url in final.get("product_image_urls") or []:
+            if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
+                break
             img_sent = send_image_to_facebook(ev["sender_id"], image_url, ev["page_id"], ev["platform"])
             sent_images.append({"image_url": image_url, "sent": img_sent})
         log(15, "DIRECT IMAGE", f"Sent {len(sent_images)} images directly", sent_images)
@@ -10303,6 +10431,8 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
         page_id = event.get("page_id") or ""
 
         def deliver(messages):
+            if not is_ai_enabled(db) or not is_customer_ai_enabled(db, subscriber_id):
+                return False
             delivery = _post_manychat_send(recipient, messages, platform=platform,
                                            page_id=page_id, store_id=store_id, label="auto-reply")
             if not delivery.get("ok"):
@@ -10578,7 +10708,7 @@ def reply_human_review(review_id):
     db.commit()
     save_message(
         db, row["sender_id"], "outgoing", "text",
-        reply, None, None, None, {"human_review_id": review_id, "reply": reply},
+        reply, None, None, None, {"human_review_id": review_id, "reply": reply, "sender_type": "staff"},
     )
     sent = send_human_reply_to_customer(row["sender_id"], reply)
     if sent:
@@ -10645,7 +10775,7 @@ def telegram_webhook():
             db.commit()
             save_message(
                 db, row["sender_id"], "outgoing", "text",
-                reply, None, None, None, {"human_review_id": review_id, "reply": reply},
+                reply, None, None, None, {"human_review_id": review_id, "reply": reply, "sender_type": "staff"},
             )
             sent = send_human_reply_to_customer(row["sender_id"], reply)
         return jsonify({"ok": True}), 200
@@ -11198,6 +11328,8 @@ def api_export_full_backup():
         ):
             add_file(bundle, path, name)
         add_directory(bundle, UPLOADS_DIR, "images/uploads")
+        add_directory(bundle, OUTGOING_AUDIO_DIR, "audio/outgoing")
+        add_directory(bundle, INCOMING_MEDIA_DIR, "media/incoming")
         add_directory(bundle, CATALOG_IMAGE_DIR, "images/catalog")
         add_directory(bundle, PRODUCT_IMAGE_DIR, "images/products")
         bundle.writestr("backup-info.json", json.dumps({
@@ -11356,6 +11488,8 @@ def api_import_full_backup():
                 _restore_directory_from_backup(bundle, "images/catalog", CATALOG_IMAGE_DIR),
                 _restore_directory_from_backup(bundle, "images/products", PRODUCT_IMAGE_DIR),
             ))
+            audio_count = _restore_directory_from_backup(bundle, "audio/outgoing", OUTGOING_AUDIO_DIR)
+            incoming_media_count = _restore_directory_from_backup(bundle, "media/incoming", INCOMING_MEDIA_DIR)
             _advisor_sync_memory_file(get_db())
             if os.environ.get('STORAGE_RESTORE_REQUIRED') == '1':
                 with open(os.path.join(DATA_DIR, '.storage-restored'), 'w', encoding='utf-8') as marker:
@@ -11365,6 +11499,8 @@ def api_import_full_backup():
             "message": "تمت استعادة النسخة الكاملة بنجاح",
             "products": restored_products,
             "images": image_count,
+            "audio_files": audio_count,
+            "incoming_media_files": incoming_media_count,
         })
     except TimeoutError as exc:
         return jsonify({"error": str(exc)}), 503
@@ -11576,6 +11712,106 @@ def api_conversations():
     return jsonify({"conversations": [dict(r) for r in rows[:limit]], "has_more": len(rows) > limit})
 
 
+_incoming_media_lock = threading.Lock()
+_incoming_media_filename = re.compile(r'^[a-f0-9]{32}\.(?:jpg|png|gif|webp|avif|mp3|m4a|ogg|aac|wav|amr|mp4|mov|3gp)$')
+
+
+def _incoming_media_entries(row):
+    try:
+        entries = json.loads(row['media_json'] or '[]')
+    except (ValueError, TypeError):
+        entries = []
+    if not isinstance(entries, list) or not entries:
+        entries = message_media(row)
+    return [dict(item) for item in entries if isinstance(item, dict)
+            and isinstance(item.get('url'), str) and item.get('type') in ('image', 'audio', 'video', 'file')]
+
+
+def _archive_incoming_message_media(db, message_id, index=None, store_id=None):
+    """Copy trusted customer attachments into private storage while source links work."""
+    with _incoming_media_lock:
+        store_id = store_id or current_store_id()
+        row = db.execute('SELECT * FROM messages WHERE id=? AND store_id=? AND direction=?',
+                         (message_id, store_id, 'incoming')).fetchone()
+        if not row:
+            return 0
+        entries = _incoming_media_entries(row)
+        archived = 0
+        for position, item in enumerate(entries):
+            if index is not None and position != index:
+                continue
+            filename = str(item.get('local_file') or '')
+            if (_incoming_media_filename.fullmatch(filename)
+                    and os.path.isfile(os.path.join(INCOMING_MEDIA_DIR, filename))):
+                continue
+            if not inbound_media.trusted_source(item['url'], os.environ.get('CHATWOOT_BASE_URL', '')):
+                continue
+            try:
+                downloaded = inbound_media.fetch(item['url'], item['type'], os.environ.get('CHATWOOT_BASE_URL', ''))
+            except Exception as exc:
+                app.logger.warning('Incoming media retrieval failed: %s', type(exc).__name__)
+                continue
+            if not downloaded:
+                continue
+            content, kind, suffix, mime = downloaded
+            os.makedirs(INCOMING_MEDIA_DIR, exist_ok=True)
+            filename = secrets.token_hex(16) + suffix
+            path = os.path.join(INCOMING_MEDIA_DIR, filename)
+            with open(path, 'xb') as output:
+                output.write(content)
+            item.update(type=kind, local_file=filename, mime=mime)
+            archived += 1
+        if archived:
+            db.execute('UPDATE messages SET media_json=? WHERE id=? AND store_id=?',
+                       (json.dumps(entries, ensure_ascii=False), message_id, store_id))
+            db.commit()
+        return archived
+
+
+def _dashboard_message_media(row):
+    if row['direction'] != 'incoming':
+        return message_media(row)
+    entries = _incoming_media_entries(row)
+    for position, item in enumerate(entries):
+        if inbound_media.trusted_source(item['url'], os.environ.get('CHATWOOT_BASE_URL', '')):
+            item['url'] = (f"/api/conversations/{quote(row['sender_id'], safe='')}/messages/"
+                           f"{row['id']}/attachment/{position}?store_id={quote(row['store_id'] or 'default', safe='')}")
+        item.pop('local_file', None)
+        item.pop('mime', None)
+    return entries
+
+
+@app.route('/api/conversations/<sender_id>/messages/<int:message_id>/attachment/<int:index>')
+@_dash_require
+def api_incoming_message_attachment(sender_id, message_id, index):
+    db = get_db()
+    row = db.execute('SELECT * FROM messages WHERE id=? AND sender_id=? AND store_id=? AND direction=?',
+                     (message_id, sender_id, current_store_id(), 'incoming')).fetchone()
+    if not row:
+        return jsonify(error='المرفق غير موجود'), 404
+    entries = _incoming_media_entries(row)
+    if index >= len(entries) or not inbound_media.trusted_source(
+            entries[index]['url'], os.environ.get('CHATWOOT_BASE_URL', '')):
+        return jsonify(error='المرفق غير موجود'), 404
+    item = entries[index]
+    filename = str(item.get('local_file') or '')
+    if not (_incoming_media_filename.fullmatch(filename)
+            and os.path.isfile(os.path.join(INCOMING_MEDIA_DIR, filename))):
+        _archive_incoming_message_media(db, message_id, index)
+        refreshed = db.execute('SELECT * FROM messages WHERE id=? AND store_id=?',
+                               (message_id, current_store_id())).fetchone()
+        entries = _incoming_media_entries(refreshed)
+        item = entries[index]
+        filename = str(item.get('local_file') or '')
+    if not (_incoming_media_filename.fullmatch(filename)
+            and os.path.isfile(os.path.join(INCOMING_MEDIA_DIR, filename))):
+        return jsonify(error='انتهت صلاحية رابط المرفق الأصلي؛ اطلب من الزبون إعادة إرساله.'), 410
+    response = send_from_directory(INCOMING_MEDIA_DIR, filename, mimetype=item.get('mime') or None)
+    response.headers['Cache-Control'] = 'private, max-age=3600'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
 @app.route("/api/conversations/<sender_id>/messages")
 @_dash_require
 def api_conversation_messages(sender_id):
@@ -11598,7 +11834,26 @@ def api_conversation_messages(sender_id):
     messages = []
     for row in rows:
         item = {key: row[key] for key in ("id","direction","message_type","text","image_url","ad_id","created_at")}
-        item["media"] = message_media(row)
+        if row['direction'] == 'outgoing':
+            try:
+                meta = json.loads(row['raw_payload'] or '{}')
+            except (ValueError, TypeError):
+                meta = {}
+            if not isinstance(meta, dict):
+                meta = {}
+            source = meta.get('sender_type')
+            if source not in {'staff', 'ai'}:
+                source = ('staff' if meta.get('manual_reply') or meta.get('manual_order')
+                          or meta.get('sent_via') == 'manychat_api' or meta.get('human_review_id') and 'reply' in meta
+                          else 'ai' if any(key in meta for key in ('automatic_followup', 'auto_after_product_link',
+                               'post_order_followup', 'reply_image', 'checkout_proposal', 'catalog', '_partial_policy_reply'))
+                          else 'unknown')
+            item['sender_type'] = source
+            item['ai_assisted'] = bool(source == 'staff' and meta.get('ai_generated'))
+        item["media"] = _dashboard_message_media(row)
+        if row['direction'] == 'incoming' and item['text'] and any(
+                source['url'] == item['text'].strip() for source in _incoming_media_entries(row)):
+            item['text'] = None
         item["image_url"] = next((m["url"] for m in item["media"] if m["type"] == "image"), None)
         if item["media"] and len({m["type"] for m in item["media"]}) == 1:
             item["message_type"] = item["media"][0]["type"]
@@ -11610,13 +11865,28 @@ def api_conversation_messages(sender_id):
 @_dash_require
 def api_resolve_message_media(sender_id, message_id):
     db = get_db()
-    row = db.execute('SELECT * FROM messages WHERE id=? AND sender_id=?', (message_id, sender_id)).fetchone()
+    row = db.execute('SELECT * FROM messages WHERE id=? AND sender_id=? AND direction=?',
+                     (message_id, sender_id, 'incoming')).fetchone()
     if not row:
         return jsonify({'error': 'message not found'}), 404
-    media = resolve_incoming_media({'attachments': message_media(row)})
+    existing = _incoming_media_entries(row)
+    for index, item in enumerate(existing):
+        if item['type'] == 'file':
+            _archive_incoming_message_media(db, message_id, index, row['store_id'])
+    row = db.execute('SELECT * FROM messages WHERE id=? AND sender_id=?', (message_id, sender_id)).fetchone()
+    existing = _incoming_media_entries(row)
+    resolved = resolve_incoming_media({'attachments': message_media(row)})
+    by_url = {item['url']: item for item in existing}
+    media = [dict(item, **{key: by_url.get(item['url'], {}).get(key)
+                           for key in ('local_file', 'mime') if by_url.get(item['url'], {}).get(key)})
+             for item in resolved]
+    for item in media:
+        if item.get('local_file') and by_url.get(item['url'], {}).get('type') in ('image', 'audio', 'video'):
+            item['type'] = by_url[item['url']]['type']
     db.execute('UPDATE messages SET media_json=? WHERE id=?', (json.dumps(media, ensure_ascii=False), message_id))
     db.commit()
-    return jsonify({'media': media})
+    refreshed = db.execute('SELECT * FROM messages WHERE id=? AND sender_id=?', (message_id, sender_id)).fetchone()
+    return jsonify({'media': _dashboard_message_media(refreshed)})
 
 
 @app.route("/api/conversations/<sender_id>", methods=["DELETE"])
@@ -11884,6 +12154,94 @@ def api_send_message(sender_id):
     })
 
 
+_VOICE_MIME = {'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/mp4': '.m4a',
+               'audio/mpeg': '.mp3'}
+
+
+def _valid_voice_bytes(content, mime):
+    if mime == 'audio/webm':
+        return content.startswith(b'\x1a\x45\xdf\xa3')
+    if mime == 'audio/ogg':
+        return content.startswith(b'OggS')
+    if mime == 'audio/mp4':
+        return len(content) > 12 and content[4:8] == b'ftyp'
+    if mime == 'audio/mpeg':
+        return content.startswith(b'ID3') or content[:2] in {b'\xff\xfb', b'\xff\xf3', b'\xff\xf2'}
+    return False
+
+
+@app.get('/outgoing_audio/<filename>')
+def serve_outgoing_audio(filename):
+    # The random 256-bit name is a bearer URL for messaging providers, which
+    # cannot fetch a dashboard-authenticated attachment. No directory listing.
+    if not re.fullmatch(r'[a-f0-9]{64}\.(?:webm|ogg|m4a|mp3)', filename):
+        return jsonify(error='audio not found'), 404
+    mime = {'webm': 'audio/webm', 'ogg': 'audio/ogg', 'm4a': 'audio/mp4', 'mp3': 'audio/mpeg'}[filename.rsplit('.', 1)[-1]]
+    response = send_from_directory(OUTGOING_AUDIO_DIR, filename, mimetype=mime)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cache-Control'] = 'private, max-age=86400'
+    return response
+
+
+@app.post('/api/conversations/<sender_id>/send_audio')
+@_dash_require
+def api_send_audio(sender_id):
+    db = get_db()
+    customer = db.execute('SELECT store_id,page_id,COALESCE(platform,\'facebook\') platform FROM customers WHERE sender_id=?',
+                          (sender_id,)).fetchone()
+    if not customer or (customer['store_id'] or DEFAULT_STORE_ID) != current_store_id():
+        return jsonify(ok=False, error='المحادثة غير موجودة في هذا المتجر'), 404
+    audio = request.files.get('audio')
+    mime = (audio.mimetype if audio else '').split(';', 1)[0].lower()
+    if mime not in _VOICE_MIME:
+        return jsonify(ok=False, error='صيغة التسجيل غير مدعومة؛ استخدم WebM أو OGG أو M4A أو MP3'), 400
+    content = audio.stream.read(8 * 1024 * 1024 + 1)
+    if not content or len(content) > 8 * 1024 * 1024:
+        return jsonify(ok=False, error='التسجيل فارغ أو يتجاوز 8 ميغابايت'), 400
+    if not _valid_voice_bytes(content, mime):
+        return jsonify(ok=False, error='ملف الصوت لا يطابق الصيغة المعلنة'), 400
+    platform = customer['platform']
+    store = customer['store_id'] or DEFAULT_STORE_ID
+    using_zernio = zernio.enabled_for_store(store)
+    using_chatwoot = chatwoot.enabled() and not using_zernio
+    if not using_zernio and not using_chatwoot and platform != 'facebook':
+        return jsonify(ok=False, error='مزود ManyChat يدعم الصوت هنا على ماسنجر فقط'), 409
+    if using_zernio and platform == 'instagram' and mime != 'audio/mp4':
+        return jsonify(ok=False, error='إنستغرام يحتاج تسجيلاً بصيغة M4A من المتصفح'), 409
+    if not using_chatwoot and (not PUBLIC_URL.startswith('https://') or not urlparse(PUBLIC_URL).netloc):
+        return jsonify(ok=False, error='إرسال الصوت يحتاج PUBLIC_URL آمن HTTPS'), 503
+    os.makedirs(OUTGOING_AUDIO_DIR, exist_ok=True)
+    filename = secrets.token_hex(32) + _VOICE_MIME[mime]
+    path = os.path.join(OUTGOING_AUDIO_DIR, filename)
+    with open(path, 'xb') as stream:
+        stream.write(content)
+    media_path = '/outgoing_audio/' + filename
+    public_url = (PUBLIC_URL or request.url_root.rstrip('/')) + media_path
+    token = _current_store_id.set(store)
+    try:
+        audio_message = {'type': 'audio', 'url': public_url}
+        if using_chatwoot or using_zernio:
+            audio_message.update(local_path=path, mime_type=mime)
+        delivery = send_manychat_messages_detailed(sender_id,
+            [audio_message],
+            platform=platform, page_id=customer['page_id'] or '')
+        if not delivery.get('ok'):
+            if delivery.get('status') in {'unsupported_message', 'unsupported_audio', 'rejected',
+                                           'invalid_audio', 'unmapped_conversation', 'wrong_account'}:
+                os.unlink(path)
+            return jsonify(ok=False, error=delivery.get('message') or 'مزود الرسائل لم يؤكد إرسال الصوت',
+                           status=delivery.get('status')), 502
+        message_id = save_message(db, sender_id, 'outgoing', 'audio', None, None, None, None,
+                                  {'manual_reply': True, 'sender_type': 'staff',
+                                   'voice_recording': True, 'audio_filename': filename})
+        db.execute('UPDATE messages SET media_json=? WHERE id=?',
+                   (json.dumps([{'type': 'audio', 'url': media_path}]), message_id))
+        db.commit()
+        return jsonify(ok=True, message_id=message_id)
+    finally:
+        _current_store_id.reset(token)
+
+
 def queue_dashboard_ai(sender_id, kind, data):
     db = get_db()
     owner = db.execute('SELECT store_id FROM customers WHERE sender_id=?', (sender_id,)).fetchone()
@@ -11933,6 +12291,8 @@ def run_ai_job(job, payload):
                 if not isinstance(cached, dict):
                     cached = {}
                 return dict(cached, ok=stored['status'] == 'done', _job_cached=True)
+            if job['kind'] == 'media_archive':
+                return {'ok': True, 'archived': _archive_incoming_message_media(db, int(payload['message_id']))}
             if job['kind'] == 'webhook':
                 return _finish_customer_webhook_async(**payload) or {'ok': True}
             locked = acquire_sender_lock(get_db(), job['sender_id'], wait_seconds=1)
@@ -14731,8 +15091,14 @@ def api_set_conversation_ai(sender_id):
     data = request.get_json(silent=True) or {}
     enabled = _setting_bool(data.get("enabled"), False)
     db = get_db()
+    owner = db.execute('SELECT store_id FROM customers WHERE sender_id=?', (sender_id,)).fetchone()
+    if not owner or (owner['store_id'] or DEFAULT_STORE_ID) != current_store_id():
+        return jsonify({'ok': False, 'error': 'المحادثة غير موجودة في هذا المتجر'}), 404
     was_enabled = is_customer_ai_enabled(db, sender_id)
-    set_customer_ai_enabled(db, sender_id, enabled)
+    set_customer_ai_enabled(db, sender_id, enabled, allow_manual_resume=True)
+    if not enabled:
+        db.execute("UPDATE followups SET status='cancelled' WHERE sender_id=? AND status='pending'", (sender_id,))
+        db.commit()
     auto_reply = None
     if enabled and not was_enabled and is_ai_enabled(db):
         products = load_customer_products(db, sender_id)

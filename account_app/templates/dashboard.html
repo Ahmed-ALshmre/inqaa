@@ -274,6 +274,12 @@
 
       <!-- Input Area -->
       <div class="input-area">
+        <div id="voiceComposer" class="voice-composer" hidden>
+          <span id="voiceStatus" role="status" aria-live="polite">التسجيل جاهز</span>
+          <audio id="voicePreview" controls preload="metadata" hidden aria-label="استماع إلى التسجيل قبل الإرسال"></audio>
+          <button type="button" id="voiceSendBtn" class="btn btn-sm btn-primary" onclick="sendRecordedVoice()" hidden>إرسال الصوت</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="discardRecordedVoice()">حذف التسجيل</button>
+        </div>
         <div id="imagePreview" class="mb-2 position-relative d-inline-block" style="display:none!important;">
           <img id="previewImg" src="" alt="preview" style="height:72px; border-radius:8px; border:2px solid var(--border);">
           <div id="imageUploadStatus" class="small mt-1" role="status" aria-live="polite"></div>
@@ -283,7 +289,8 @@
         </div>
         <div class="reply-shortcuts" aria-label="اختصارات الرد">
           {% if can('reply') %}<button type="button" onclick="openCatalogDialog()"><i class="bi bi-images"></i> إرسال الكتالوج</button>
-          <button type="button" onclick="openImageDialog()"><i class="bi bi-image"></i> إرسال صورة</button>{% endif %}
+          <button type="button" onclick="openImageDialog()"><i class="bi bi-image"></i> إرسال صورة</button>
+          <button type="button" id="voiceRecordBtn" onclick="toggleVoiceRecording()"><i class="bi bi-mic"></i> تسجيل صوت</button>{% endif %}
           {% if can('orders') %}<button type="button" onclick="openOrderModal()"><i class="bi bi-bag-check"></i> تثبيت طلب</button>{% endif %}
           <button type="button" onclick="toggleControl()"><i class="bi bi-person-lines-fill"></i> بيانات وأدوات</button>
         </div>
