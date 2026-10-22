@@ -82,3 +82,7 @@ class BundlePricingTests(unittest.TestCase):
         self.assertIn('20,000', ' '.join(sales_answers.product_fragments('عرض القطعتين والقماش شنو؟', product)[0]))
         self.assertIn('20,000', ' '.join(sales_playbook.price_preview(product, [('', 5000)])))
         self.assertEqual(sales_answers.missing_answers('العرض 20 الف، القماش قطن', 'سعر القطعتين والقماش؟', dict(product, fabric='قطن')), [])
+        facts, _ = sales_answers.product_fragments('شكد 3 قطع وشنو القماش؟', dict(product, fabric='قطن'))
+        self.assertIn('سعر 3 قطع: 32,000 د.ع.', facts)
+        self.assertIn('مجموع القطع الصحيح', sales_answers.missing_answers(
+            'السعر 36 الف والقماش قطن', 'شكد 3 قطع وشنو القماش؟', dict(product, fabric='قطن')))

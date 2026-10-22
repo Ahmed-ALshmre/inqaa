@@ -4,18 +4,20 @@ import re
 try:
     from . import customer_copy
     from .checkout import normalized
-    from .pricing import terms, offer_tiers
+    from .pricing import terms, offer_tiers, quote
+    from .sales_playbook import requested_quantity
 except ImportError:
     import customer_copy
     from checkout import normalized
-    from pricing import terms, offer_tiers
+    from pricing import terms, offer_tiers, quote
+    from sales_playbook import requested_quantity
 
 
 def topics(question):
     text = normalized(question)
     result = []
     patterns = {
-        'price': r'سعر|بشكد|بكم|بيش|غالي|ميزاني|خصم|تخفيض|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)',
+        'price': r'سعر|بشكد|بكم|بيش|غالي|ميزاني|خصم|تخفيض|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)|(?:شكد|اشكد|كم)\s*(?:ثنين|قطعتين|\d+\s*قطع)',
         'colors': r'الوان|(?<!\w)(?:و?ال)?لون(?:ه|ها)?(?!\w)|الاسود|الابيض|الوردي|الجوزي',
         'sizes': r'قياس|مقاس|سايز',
         'fabric': r'قماش|خام[ةهت]',
@@ -61,7 +63,11 @@ def product_fragments(question, product):
                           else f'سعر الموديل: {price:,} د.ع.'))
             for quantity, amount in offer_tiers(product):
                 facts.append(f'عرض {quantity} قطع: {amount:,} د.ع.')
-        except (ValueError, TypeError):
+            requested = requested_quantity(question)
+            if requested:
+                amount = quote([{'product_id': product['product_id'], 'quantity': requested}], [product], 0)['product_total']
+                facts.append(f'سعر {requested} قطع: {amount:,} د.ع.')
+        except (ValueError, TypeError, KeyError):
             gaps.append('سعر الموديل يحتاج تأكيد من المتجر.')
     fields = [('colors', 'ألوان الموديل'), ('sizes', 'قياسات الموديل'),
               ('fabric', 'القماش'), ('lining', 'البطانة'),
@@ -122,21 +128,19 @@ def missing_answers(reply, question, product):
         return []
     text, clean = normalized(question), normalized(reply)
     missing = []
-    if 'price' in selected and re.search(r'سعر|بكم|بشكد|بيش|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)', text):
+    if 'price' in selected and re.search(r'سعر|بكم|بشكد|بيش|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)|(?:شكد|اشكد|كم)\s*(?:ثنين|قطعتين|\d+\s*قطع)', text):
         try:
             _, price, _ = terms(product)
-            requested_offer = next((amount for quantity, amount in offer_tiers(product)
-                                    if re.search(rf'(?<!\d){quantity}\s*قطع', text)
-                                    or (quantity == 2 and re.search(r'(?:ال)?قطعتين|(?:ال)?قطعتان', text))), None)
-            if requested_offer is not None:
-                price = requested_offer
+            requested = requested_quantity(question)
+            if requested:
+                price = quote([{'product_id': product['product_id'], 'quantity': requested}], [product], 0)['product_total']
             flat = clean.replace(',', '').replace('٬', '')
             values = [r'(?<!\d)' + str(price) + r'(?!\d)']
             if price % 1000 == 0:
                 values.append(r'(?<!\d)' + str(price // 1000) + r'\s*(?:الف|الاف)(?!\w)')
             if not any(re.search(value, flat) for value in values):
-                missing.append('سعر العرض الصحيح' if requested_offer is not None else 'سعر المنتج الصحيح')
-        except (ValueError, TypeError):
+                missing.append('مجموع القطع الصحيح' if requested else 'سعر المنتج الصحيح')
+        except (ValueError, TypeError, KeyError):
             pass
     if 'fabric' in selected:
         value = normalized(customer_copy.fact(product.get('fabric'), 'fabric'))
