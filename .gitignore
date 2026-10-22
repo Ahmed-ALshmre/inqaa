@@ -51,6 +51,8 @@ env/
 # Local customer-data reviews and private media links
 .codex-db-analysis/
 analysis_20261014/
+/outputs/
+/docs/updates/2026-10-21-*.md
 outputs/sales-strengthening-20261014/
 outputs/rewards-balance-fix-20261014/
 outputs/ai-audit-20261019/
