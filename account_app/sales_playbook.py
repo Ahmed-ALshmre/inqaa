@@ -7,10 +7,10 @@ import re
 
 try:
     from . import sales_strategy
-    from .pricing import terms, quote
+    from .pricing import terms, quote, offer_tiers
 except ImportError:
     import sales_strategy
-    from pricing import terms, quote
+    from pricing import terms, quote, offer_tiers
 
 REVIEWED_LESSONS = {
     'cost': (
@@ -82,7 +82,7 @@ def guidance(ev, product=None):
             + '\n'.join(REVIEWED_LESSONS[key] for key in ids))
 
 
-def price_preview(product, delivery_options):
+def price_preview(product, delivery_options, quantity=None):
     """One currently priced retail unit/package; ambiguous wholesale stays AI-led."""
     try:
         size, price, free = terms(product)
@@ -92,15 +92,22 @@ def price_preview(product, delivery_options):
         label = f'البكج ({size} قطع)' if size > 1 else 'الموديل'
         scope = 'لبكج واحد' if size > 1 else 'لقطعة واحدة'
         lines = [f'سعر {label}: {price:,} د.ع.']
+        for offer_quantity, amount in offer_tiers(product):
+            lines.append(f'عرض {offer_quantity} قطع: {amount:,} د.ع.')
+        requested = quantity if isinstance(quantity, int) else None
+        if requested is not None and requested > 0:
+            requested_quote = quote([{'product_id': product['product_id'], 'quantity': requested}], [product], 0)
+            lines.append(f'سعر {requested} قطع: {requested_quote["product_total"]:,} د.ع.')
         totals = []
         for region, fee in delivery_options:
-            priced = quote([{'product_id': product['product_id'], 'quantity': size}], [product], fee)
+            priced = quote([{'product_id': product['product_id'], 'quantity': requested or size}], [product], fee)
             shipping = priced['delivery_fee']
             total = priced['product_total'] + shipping
+            total_scope = f'لـ{requested} قطع' if requested else scope
             if free:
-                return lines + [f'التوصيل مجاني؛ الإجمالي {scope}: {total:,} د.ع.']
+                return lines + [f'التوصيل مجاني؛ الإجمالي {total_scope}: {total:,} د.ع.']
             delivery_text = f'{shipping:,} د.ع' if shipping else 'مجاني'
-            totals.append(f'التوصيل{region}: {delivery_text}؛ الإجمالي {scope}: {total:,} د.ع.')
+            totals.append(f'التوصيل{region}: {delivery_text}؛ الإجمالي {total_scope}: {total:,} د.ع.')
         return lines + totals if totals else None
     except (ValueError, KeyError, TypeError):
         return None
@@ -110,7 +117,16 @@ def price_question(text):
     text = sales_strategy.normalized(text).strip(' ؟?!.،🌸')
     return bool(re.fullmatch(
         r'(?:ممكن\s+)?(?:السعر|سعر|سعره|سعرها|بشكد|بيش|بكم)|'
-        r'(?:شكد|اشكد|بشكد|بيش|كم)\s*(?:سعر|سعره|سعرها|السعر|اسعر|سعر هذا|سعر الموديل)', text))
+        r'(?:شكد|اشكد|بشكد|بيش|كم)\s*(?:سعر|سعره|سعرها|السعر|اسعر|سعر هذا|سعر الموديل)|'
+        r'(?:شكد|اشكد|بشكد|بيش|بكم|سعر|عرض)\s*(?:(?:ال)?قطعتين|ثنين|\d+\s*قطع)', text))
+
+
+def requested_quantity(text):
+    text = sales_strategy.normalized(text)
+    if re.search(r'قطعتين|قطعتان|ثنين', text):
+        return 2
+    match = re.search(r'(?<!\d)(\d+)\s*قطع', text)
+    return int(match[1]) if match and 2 <= int(match[1]) <= 20 else None
 
 
 def price_next_step(product, context, customer=None):

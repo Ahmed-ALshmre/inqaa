@@ -357,6 +357,16 @@ class CheckoutRegressionTests(unittest.TestCase):
             text = self.m.checkout_receipt(self.data(), self.data()["items"], CATALOG, 5000)
         self.assertIn("مدة التوصيل: من يوم إلى يومين", text)
 
+    def test_receipt_shows_promotion_total_without_fabricated_piece_price(self):
+        product = dict(CATALOG[0], price='12000', offer='عرض سعر القطعتين ب 20 الف')
+        items = [dict(product_id='F1', product_name=product['product_name'], quantity=3, color='اسود', size='44')]
+        with patch.object(self.m, "get_delivery_settings", return_value={}):
+            text = self.m.checkout_receipt(self.data(), items, [product], 5000)
+        self.assertIn('عرض 2 قطع ×1 — 20,000 د.ع', text)
+        self.assertIn('قطع مفردة ×1 — 12,000 د.ع', text)
+        self.assertIn('المجموع: 37,000 د.ع', text)
+        self.assertNotIn('10,666', text)
+
     def test_dashboard_ai_suggestion_creates_order_only_on_send(self):
         self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
         self.incoming("ثبتي الطلب")

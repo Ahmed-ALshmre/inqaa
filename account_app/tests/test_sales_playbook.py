@@ -36,10 +36,17 @@ class ReviewedLessonTests(unittest.TestCase):
         self.assertEqual(playbook.guidance({'text': 'شكد سعره', '_post_order': {'id': 1}}, PRODUCT), '')
 
     def test_only_narrow_price_questions_take_the_factual_path(self):
-        for text in ['شكد سعره؟', 'ممكن السعر', 'بشكد', 'كم سعر الموديل']:
+        for text in ['شكد سعره؟', 'ممكن السعر', 'بشكد', 'كم سعر الموديل',
+                     'شكد ثنين', 'سعر القطعتين', 'عرض القطعتين']:
             self.assertTrue(playbook.price_question(text), text)
-        for text in ['غالي شكد آخر سعر', 'شكد ثنين', 'سعره وشنو قماشه', 'ثبتي السعر', 'السعر ويا قياس 44']:
+        for text in ['غالي شكد آخر سعر', 'سعره وشنو قماشه', 'ثبتي السعر', 'السعر ويا قياس 44']:
             self.assertFalse(playbook.price_question(text), text)
+
+    def test_quantity_price_uses_real_offer_and_delivery(self):
+        product = dict(PRODUCT, price='12000', offer='عرض سعر القطعتين ب 20 الف')
+        text = '\n'.join(playbook.price_preview(product, [('', 5000)], 2))
+        self.assertIn('سعر 2 قطع: 20,000', text)
+        self.assertIn('الإجمالي لـ2 قطع: 25,000', text)
 
     def test_free_delivery_package_preserves_unit_and_total(self):
         reply = '\n'.join(playbook.price_preview(BUNDLE, [('', 5000)]))

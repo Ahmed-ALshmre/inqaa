@@ -24,9 +24,10 @@ def money(value):
 
 def terms(product):
     raw = clean(product.get("price"))
-    context = " ".join(clean(product.get(k)) for k in ("price", "offer", "notes"))
-    counts = {int(n) for n in re.findall(r"(?:بكج\s*)?(\d+)\s*قطع", context)}
-    bundle = bool(re.search(r"بكج|باكج", context)) and bool(counts)
+    # The price field defines the sale unit. Notes and offers may describe the
+    # contents of a package or a multi-item discount without changing that unit.
+    counts = {int(n) for n in re.findall(r"(\d+)\s*قطع", raw)}
+    bundle = bool(re.search(r"بكج|باكج", raw)) and bool(counts)
     if bundle and len(counts) != 1:
         raise ValueError("عدد قطع البكج غير واضح؛ راجع بيانات المنتج")
     size = counts.pop() if bundle else 1
@@ -37,6 +38,53 @@ def terms(product):
     shipping = clean(product.get("delivery"))
     free = bool(re.search(r"توصيل\s+مجاني", shipping + " " + clean(product.get("offer"))))
     return size, price, free
+
+
+_OFFER_QUANTITY = re.compile(
+    r"(?<!\w)(?:(\d+)\s*قطع(?:ة)?|(?:ال)?قطعتين|(?:ال)?قطعتان)\s*"
+    r"(?:بسعر\s*|بـ?\s*|سعر(?:ه|ها|هن|هم)?\s*(?:بـ?\s*)?)"
+    r"(\d+(?:[,.٬]\d{3})*(?:\.\d+)?)\s*(الف|الاف|آلاف)?"
+)
+
+
+def offer_tiers(product):
+    """Return explicit quantity/total promotions; never infer a discount."""
+    size, regular, _ = terms(product)
+    if size != 1:
+        return []
+    tiers = {}
+    for key in ("offer", "bundle_contents", "notes"):
+        source = clean(product.get(key)).replace("،", " ")
+        for match in _OFFER_QUANTITY.finditer(source):
+            count = int(match[1]) if match[1] else 2
+            if not 2 <= count <= 20:
+                continue
+            total = money(match[2] + (" الف" if match[3] else ""))
+            if total <= 0 or total >= count * regular:
+                continue
+            if count in tiers and tiers[count] != total:
+                raise ValueError("أسعار العرض متعارضة؛ راجع بيانات المنتج قبل تثبيت الطلب")
+            tiers[count] = total
+    return sorted(tiers.items())
+
+
+def _best_price(count, regular, tiers):
+    """Find the cheapest valid combination of published offers and single units."""
+    choices = [(1, regular)] + tiers
+    best = [(0, [])]
+    for quantity in range(1, count + 1):
+        candidates = [(best[quantity - n][0] + amount,
+                       best[quantity - n][1] + [(n, amount)])
+                      for n, amount in choices if n <= quantity]
+        best.append(min(candidates, key=lambda candidate: candidate[0]))
+    amount, units = best[count]
+    promotions = []
+    for size, total in tiers:
+        bundles = units.count((size, total))
+        if bundles:
+            promotions.append(dict(quantity=size, unit_total=total,
+                                   bundles=bundles, amount=bundles * total))
+    return amount, promotions, units.count((1, regular))
 
 
 def expand_bundles(items, catalog):
@@ -85,10 +133,15 @@ def quote(items, catalog, default_delivery):
         count = sum(int(i.get("quantity") or 1) for i in rows)
         if count % size:
             raise ValueError(f"{products[pid].get('product_name', '')} يباع بكج من {size} قطع؛ اختاري عدد قطع من مضاعفات {size} قبل التثبيت")
-        amount = count // size * price
+        if size == 1:
+            amount, promotions, regular_count = _best_price(count, price, offer_tiers(products[pid]))
+        else:
+            amount, promotions, regular_count = count // size * price, [], 0
         total += amount
         all_free = all_free and free
-        summaries.append(dict(product_id=pid, bundle_size=size, bundles=count // size, amount=amount, items=rows))
+        summaries.append(dict(product_id=pid, bundle_size=size, bundles=count // size,
+                              amount=amount, items=rows, promotions=promotions,
+                              regular_count=regular_count, regular_price=price))
         base, remainder = divmod(amount, count)
         # Integer dinars must add up exactly, even when 25000 / 3 is recurring.
         for row in rows:
@@ -96,7 +149,8 @@ def quote(items, catalog, default_delivery):
             high = min(quantity, remainder)
             for n, unit in ((high, base + 1), (quantity - high, base)):
                 if n:
-                    priced.append(dict(row, quantity=n, unit_price=unit))
+                    basis = "offer_allocation" if promotions else "package_allocation" if size > 1 else "unit"
+                    priced.append(dict(row, quantity=n, unit_price=unit, price_basis=basis))
             remainder -= high
     return dict(items=priced, groups=summaries, product_total=total,
                 delivery_fee=0 if all_free and items else int(default_delivery or 0))

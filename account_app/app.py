@@ -3566,7 +3566,8 @@ def format_order_for_telegram(order):
         if item.get("size") and not is_weight:
             details.append("القياس: " + str(item["size"]))
         if item.get("unit_price") is not None:
-            details.append("سعر القطعة: " + str(item["unit_price"]) + " د.ع")
+            label = "حصة القطعة من العرض" if item.get("price_basis") == "offer_allocation" else ("حصة القطعة من البكج" if item.get("price_basis") == "package_allocation" else "سعر القطعة")
+            details.append(label + ": " + str(item["unit_price"]) + " د.ع")
         if item.get("notes"):
             details.append("ملاحظات القطعة: " + str(item["notes"]))
         lines.append(" | ".join(details))
@@ -7379,7 +7380,7 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
         options = [('', settings['other_fee'])]
     else:
         options = [(' لبغداد', settings['baghdad_fee']), (' لبقية المحافظات', settings['other_fee'])]
-    parts = sales_playbook.price_preview(product, options)
+    parts = sales_playbook.price_preview(product, options, sales_playbook.requested_quantity(ev.get('text')))
     if not parts:
         return None
     step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer)
@@ -8536,10 +8537,14 @@ def checkout_receipt(data, items, catalog, delivery_fee, confirmation=""):
     for group in pricing["groups"]:
         if group["bundle_size"] > 1:
             lines.append(f"{group['items'][0]['product_name']} — بكج {group['bundle_size']} قطع ×{group['bundles']} — {group['amount']:,} د.ع")
+        for offer in group.get("promotions", []):
+            lines.append(f"{group['items'][0]['product_name']} — عرض {offer['quantity']} قطع ×{offer['bundles']} — {offer['amount']:,} د.ع")
+        if group.get("promotions") and group["regular_count"]:
+            lines.append(f"{group['items'][0]['product_name']} — قطع مفردة ×{group['regular_count']} — {group['regular_count'] * group['regular_price']:,} د.ع")
         for item in group["items"]:
             measurement = ("وزن " if item.get("size_type") == "weight" else "قياس ") + str(item.get("size") or "")
             details = " / ".join(str(v) for v in (item.get("color"), measurement if item.get("size") else "") if v)
-            suffix = "" if group["bundle_size"] > 1 else f" — {group['amount'] * item['quantity'] // sum(i['quantity'] for i in group['items']):,} د.ع"
+            suffix = "" if group["bundle_size"] > 1 or group.get("promotions") else f" — {group['regular_price'] * item['quantity']:,} د.ع"
             lines.append(f"{item['product_name']} ×{item['quantity']} — {details}{suffix}")
     fee = pricing["delivery_fee"]
     shipping = "مجاني" if fee == 0 else f"{fee:,} د.ع"
@@ -8652,7 +8657,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
             ai_result["require_cart_confirmation"] = True
         if ai_result.get("require_cart_confirmation") is True:
             proposal = dict(order_data, items=items)
-            proposal["_catalog_snapshot"] = [{k: p.get(k) for k in ("product_id", "product_name", "price", "offer", "notes", "delivery", "colors", "sizes", "stock", "status")}
+            proposal["_catalog_snapshot"] = [{k: p.get(k) for k in ("product_id", "product_name", "price", "offer", "bundle_contents", "notes", "delivery", "colors", "sizes", "stock", "status")}
                                               for p in catalog_products if p.get("product_id") in {i["product_id"] for i in items}]
             proposal["_delivery_fee"] = delivery_fee
             ai_result["_checkout_proposal"] = proposal
@@ -8819,7 +8824,7 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, b
     # A correction or attachment in the same burst invalidates a bare 'yes'.
     if not incoming or not all(r["message_type"] in {"text", "emoji"} and is_confirmation(r["text"]) for r in incoming):
         return None
-    current = [{k: p.get(k) for k in ("product_id", "product_name", "price", "offer", "notes", "delivery", "colors", "sizes", "stock", "status")}
+    current = [{k: p.get(k) for k in ("product_id", "product_name", "price", "offer", "bundle_contents", "notes", "delivery", "colors", "sizes", "stock", "status")}
                for p in products if p.get("product_id") in {i["product_id"] for i in proposal["items"]}]
     try:
         fee = price_order(proposal["items"], products, delivery_fee_for_province(proposal.get("province"), db))["delivery_fee"]

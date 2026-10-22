@@ -1,5 +1,6 @@
 import unittest
-from account_app.pricing import quote, money, expand_bundles
+from account_app.pricing import quote, money, expand_bundles, terms, offer_tiers
+from account_app import sales_answers, sales_playbook
 
 class BundlePricingTests(unittest.TestCase):
     def setUp(self):
@@ -37,3 +38,47 @@ class BundlePricingTests(unittest.TestCase):
                        [self.product, dict(product_id="R", price="18000")], 5000)
         self.assertEqual(result["product_total"], 43000)
         self.assertEqual(result["delivery_fee"], 5000)
+
+    def test_two_piece_offer_from_catalog_formats(self):
+        products = [
+            dict(price='سعر القطعه ب 12000', bundle_contents='بكج قطعتين ب 20 الف سعر القطعه الواحده 12 الف', expected=20000),
+            dict(price='9000', bundle_contents='قطعتين ب 16 الف', expected=16000),
+            dict(price='15000', offer='عرض سعر القطعتين ب 25 الف', expected=25000),
+            dict(price='10000', offer='عرض خاص سعر القطعة ب 10 قطعتين ب 18 الف', expected=18000),
+        ]
+        for index, product in enumerate(products):
+            with self.subTest(index=index):
+                product['product_id'] = 'P'
+                regular = terms(product)[1]
+                self.assertEqual(offer_tiers(product), [(2, product['expected'])])
+                for count, expected in [(1, regular), (2, product['expected']),
+                                        (3, regular + product['expected']), (4, 2 * product['expected'])]:
+                    priced = quote([dict(product_id='P', quantity=count)], [product], 5000)
+                    self.assertEqual(priced['product_total'], expected)
+                    self.assertEqual(sum(i['quantity'] * i['unit_price'] for i in priced['items']), expected)
+
+    def test_numeric_price_for_package_sku_is_one_sale_unit(self):
+        for product in [
+            dict(product_id='P', product_name='بكج برنص', price='65000', notes='بكج 6 قطع برنص عدد 2 ومنشفه وخاولي وكفوف عدد 2'),
+            dict(product_id='P', product_name='بكج ولادي', price='39000', notes='يباع فقط بكج 3قطع لا يباع مفصول', bundle_contents='قمصلة فروه تراك و طقم جينز'),
+        ]:
+            with self.subTest(name=product['product_name']):
+                self.assertEqual(terms(product)[0], 1)
+                self.assertEqual(quote([dict(product_id='P', quantity=1)], [product], 5000)['product_total'], int(product['price']))
+
+    def test_unspecified_offer_does_not_create_discount(self):
+        product = dict(product_id='P', price='15000', offer='عرض بدل 20 الف هسه ب 15 الف فقط')
+        self.assertEqual(offer_tiers(product), [])
+        self.assertEqual(quote([dict(product_id='P', quantity=2)], [product], 5000)['product_total'], 30000)
+
+    def test_conflicting_offer_prices_stop_checkout(self):
+        product = dict(product_id='P', price='15000', offer='قطعتين ب 25 الف',
+                       bundle_contents='قطعتين ب 24 الف')
+        with self.assertRaisesRegex(ValueError, 'متعارضة'):
+            quote([dict(product_id='P', quantity=2)], [product], 5000)
+
+    def test_factual_replies_use_offer_total(self):
+        product = dict(product_id='P', price='12000', offer='عرض سعر القطعتين ب 20 الف')
+        self.assertIn('20,000', ' '.join(sales_answers.product_fragments('عرض القطعتين والقماش شنو؟', product)[0]))
+        self.assertIn('20,000', ' '.join(sales_playbook.price_preview(product, [('', 5000)])))
+        self.assertEqual(sales_answers.missing_answers('العرض 20 الف، القماش قطن', 'سعر القطعتين والقماش؟', dict(product, fabric='قطن')), [])

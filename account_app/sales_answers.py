@@ -4,18 +4,18 @@ import re
 try:
     from . import customer_copy
     from .checkout import normalized
-    from .pricing import terms
+    from .pricing import terms, offer_tiers
 except ImportError:
     import customer_copy
     from checkout import normalized
-    from pricing import terms
+    from pricing import terms, offer_tiers
 
 
 def topics(question):
     text = normalized(question)
     result = []
     patterns = {
-        'price': r'سعر|بشكد|بكم|بيش|غالي|ميزاني|خصم|تخفيض',
+        'price': r'سعر|بشكد|بكم|بيش|غالي|ميزاني|خصم|تخفيض|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)',
         'colors': r'الوان|(?<!\w)(?:و?ال)?لون(?:ه|ها)?(?!\w)|الاسود|الابيض|الوردي|الجوزي',
         'sizes': r'قياس|مقاس|سايز',
         'fabric': r'قماش|خام[ةهت]',
@@ -59,6 +59,8 @@ def product_fragments(question, product):
             count, price, _ = terms(product)
             facts.append((f'سعر البكج من {count} قطع: {price:,} د.ع.' if count > 1
                           else f'سعر الموديل: {price:,} د.ع.'))
+            for quantity, amount in offer_tiers(product):
+                facts.append(f'عرض {quantity} قطع: {amount:,} د.ع.')
         except (ValueError, TypeError):
             gaps.append('سعر الموديل يحتاج تأكيد من المتجر.')
     fields = [('colors', 'ألوان الموديل'), ('sizes', 'قياسات الموديل'),
@@ -120,15 +122,20 @@ def missing_answers(reply, question, product):
         return []
     text, clean = normalized(question), normalized(reply)
     missing = []
-    if 'price' in selected and re.search(r'سعر|بكم|بشكد|بيش', text):
+    if 'price' in selected and re.search(r'سعر|بكم|بشكد|بيش|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)', text):
         try:
             _, price, _ = terms(product)
+            requested_offer = next((amount for quantity, amount in offer_tiers(product)
+                                    if re.search(rf'(?<!\d){quantity}\s*قطع', text)
+                                    or (quantity == 2 and re.search(r'(?:ال)?قطعتين|(?:ال)?قطعتان', text))), None)
+            if requested_offer is not None:
+                price = requested_offer
             flat = clean.replace(',', '').replace('٬', '')
             values = [r'(?<!\d)' + str(price) + r'(?!\d)']
             if price % 1000 == 0:
                 values.append(r'(?<!\d)' + str(price // 1000) + r'\s*(?:الف|الاف)(?!\w)')
             if not any(re.search(value, flat) for value in values):
-                missing.append('سعر المنتج الصحيح')
+                missing.append('سعر العرض الصحيح' if requested_offer is not None else 'سعر المنتج الصحيح')
         except (ValueError, TypeError):
             pass
     if 'fabric' in selected:
