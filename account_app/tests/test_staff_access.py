@@ -46,6 +46,7 @@ class StaffAccessTests(unittest.TestCase):
     def test_orders_permission_separate_from_reply(self):
         self.employee()
         self.assertEqual(self.client.post('/api/conversations/test/create_order',json={},headers=self.headers).status_code,403)
+        self.assertEqual(self.client.post('/api/stores/default/ai',json={'enabled': False},headers=self.headers).status_code,403)
         self.assertEqual(self.client.delete('/api/conversations/test',headers=self.headers).status_code,403)
         self.assertEqual(self.client.get('/api/products').status_code,200)
         for store in self.client.get('/api/stores').get_json()['stores']:

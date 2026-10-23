@@ -2211,6 +2211,12 @@ def send_due_followups(db=None, limit=25):
                     continue
                 db.execute("UPDATE followups SET message_text=? WHERE id=?", (message,row['id']))
                 db.commit()
+                # A store may be paused after generation but before delivery.
+                if not is_ai_enabled(db) or not is_customer_ai_enabled(db, sender_id):
+                    db.execute("UPDATE followups SET status='cancelled',meta_json=? WHERE id=?",
+                        (json.dumps(dict(metadata,cancel_reason='ai_disabled_before_send')),row['id']))
+                    db.commit(); skipped += 1
+                    continue
                 ok = send_reply_via_manychat(sender_id, message, row['platform'], page_id=row['page_id'])
                 delivered_at = now_baghdad_iso()
                 if ok:
@@ -2233,6 +2239,20 @@ def send_due_followups(db=None, limit=25):
 
 def is_ai_enabled(db):
     return get_app_setting("ai_enabled", "1", db) != "0"
+
+
+def set_store_ai_enabled(db, store_id, enabled):
+    """Pause one store's automatic replies and discard its queued followups."""
+    sid = _safe_store_id(store_id)
+    set_store_setting(db, "ai_enabled", "1" if enabled else "0", sid)
+    cancelled = 0
+    if not enabled:
+        cancelled = db.execute("""UPDATE followups SET status='cancelled'
+            WHERE status='pending' AND sender_id IN
+              (SELECT sender_id FROM customers WHERE COALESCE(NULLIF(store_id,''),'default')=?)""",
+            (sid,)).rowcount
+        db.commit()
+    return cancelled
 
 
 def is_customer_ai_enabled(db, sender_id):
@@ -12610,8 +12630,10 @@ def api_stores():
         )
         return jsonify({"ok": True, "store": get_store(db, store_id)}), 201
     stores = list_stores(db)
+    for store in stores:
+        store["ai_enabled"] = get_app_setting("ai_enabled", "1", db, store["store_id"]) != "0"
     if session.get('staff_id') and 'settings' not in (current_dashboard_person() or {}).get('permissions', []):
-        return jsonify(stores=[{key: store.get(key) for key in ('store_id', 'name', 'active')} for store in stores])
+        return jsonify(stores=[{key: store.get(key) for key in ('store_id', 'name', 'active', 'ai_enabled')} for store in stores])
     base_url = PUBLIC_URL or request.url_root.rstrip("/")
     for store in stores:
         store["menger"] = menger.settings(db, store["store_id"], public=True)
@@ -12681,6 +12703,22 @@ def api_update_store(store_id):
     )
     db.commit()
     return jsonify({"ok": True, "store": get_store(db, store_id)})
+
+
+@app.post("/api/stores/<store_id>/ai")
+@_dash_require
+def api_set_store_ai(store_id):
+    db = get_db()
+    store = get_store(db, store_id)
+    if not store or not store.get('active'):
+        return jsonify({"ok": False, "error": "المتجر غير موجود"}), 404
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('enabled'), bool):
+        return jsonify({"ok": False, "error": "حدد حالة تشغيل صحيحة"}), 400
+    enabled = data['enabled']
+    cancelled = set_store_ai_enabled(db, store['store_id'], enabled)
+    return jsonify({"ok": True, "store_id": store['store_id'], "ai_enabled": enabled,
+                    "cancelled_followups": cancelled})
 
 
 @app.post("/api/stores/<store_id>/test-telegram")
@@ -14833,7 +14871,7 @@ def api_set_ai_enabled():
         return jsonify({"ok": False, "error": "اكتب معرف النموذج الكامل من OpenRouter مثل google/gemini-3-flash-preview، وليس اسم العرض.",
                         "fields": invalid_models}), 400
     enabled = bool(data.get("enabled"))
-    set_store_setting(db, "ai_enabled", "1" if enabled else "0", sid)
+    set_store_ai_enabled(db, sid, enabled)
     for feature in ("checker_enabled", "vision_enabled", "catalog_match_enabled"):
         if feature in data:
             set_store_setting(db, feature, "1" if bool(data.get(feature)) else "0", sid)

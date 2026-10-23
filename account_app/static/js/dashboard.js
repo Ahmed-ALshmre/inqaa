@@ -31,6 +31,7 @@ let aiPendingReply    = null;
 let allProducts       = [];
 let productRequestVersion = 0;
 let globalAIEnabled   = true;
+const storeAIStates = new Map();
 let currentConversationAIEnabled = true;
 let audioUnlocked     = false;
 const messageSound    = new Audio('/aud/cheerful-527.mp3');
@@ -341,6 +342,8 @@ async function loadInboxStores() {
     const res = await apiFetch('/api/stores');
     if (!res.ok) throw new Error('stores');
     const data = await res.json();
+    for (const store of data.stores || []) storeAIStates.set(store.store_id, store.ai_enabled !== false);
+    syncActiveStoreAI();
     const select = document.getElementById('conversationStoreFilter');
     const statsSelect = document.getElementById('dashboardStatsStore');
     const options = () => [new Option('كل المتاجر','all'), ...data.stores.map(s => new Option(s.name,s.store_id))];
@@ -493,6 +496,8 @@ async function selectConversation(senderId) {
 
   const conv = allConversations.find(c => c.sender_id === senderId) || {};
   currentCustomer = conv;
+  syncActiveStoreAI();
+  refreshActiveStoreAI().catch(() => {});
   currentConversationAIEnabled = conv.ai_enabled !== 0 && conv.ai_enabled !== false;
   const messagesReady = loadMessages(senderId);
   const productsReady = loadProducts(conv.store_id || 'default');
@@ -1330,6 +1335,7 @@ function resetConversationView() {
   clearImage();
   currentSenderId = null;
   currentCustomer = null;
+  syncActiveStoreAI();
   document.body.classList.remove('mobile-conversation-open');
   if (pollMsgTimer) {
     clearInterval(pollMsgTimer);
@@ -1734,8 +1740,7 @@ async function loadStats() {
     const top = (data.top_products || [])[0];
     setText('statTopProduct', top ? `${top.product_name || top.product_id} (${top.orders})` : 'لا يوجد');
     renderTopProducts(data.top_products || []);
-    globalAIEnabled = data.ai_enabled !== false;
-    renderAIToggle();
+    // Statistics may cover all stores; they never control a selected store.
   } catch (e) {
     if (e.name !== 'AbortError') setText('statsScope', 'تعذر تحديث الإحصائيات. حاول مرة ثانية.');
   } finally {
@@ -1776,21 +1781,41 @@ function renderAIToggle() {
   const btn = document.getElementById('aiToggleBtn');
   const txt = document.getElementById('aiToggleText');
   if (!btn || !txt) return;
+  const storeName = currentCustomer?.store_name || 'هذا المتجر';
+  btn.disabled = !currentSenderId;
   btn.classList.toggle('off', !globalAIEnabled);
-  txt.textContent = globalAIEnabled ? 'AI يعمل' : 'AI متوقف';
-  btn.title = globalAIEnabled ? 'اضغط لإيقاف AI في كل المحادثات' : 'اضغط لتشغيل AI في كل المحادثات';
+  txt.textContent = !currentSenderId ? 'اختر محادثة لتحديد المتجر' : globalAIEnabled ? `AI يعمل في ${storeName}` : `AI متوقف في ${storeName}`;
+  btn.title = !currentSenderId ? 'اختر محادثة أو افتح صفحة المتاجر' : globalAIEnabled ? `إيقاف AI في جميع محادثات ${storeName}` : `تشغيل AI في ${storeName}`;
   renderAskAIButton();
   renderAIActionButtons();
+}
+
+function syncActiveStoreAI() {
+  const storeId = currentCustomer?.store_id;
+  globalAIEnabled = Boolean(storeId && storeAIStates.get(storeId) !== false);
+  renderAIToggle();
+  renderConversationAIToggle();
+}
+
+async function refreshActiveStoreAI() {
+  const storeId = currentCustomer?.store_id;
+  if (!storeId) return;
+  const response = await apiFetch('/api/stores');
+  if (!response.ok) return;
+  const data = await response.json();
+  for (const store of data.stores || []) storeAIStates.set(store.store_id, store.ai_enabled !== false);
+  if (currentCustomer?.store_id === storeId) syncActiveStoreAI();
 }
 
 function renderConversationAIToggle() {
   const btn = document.getElementById('conversationAiBtn');
   const txt = document.getElementById('conversationAiText');
   if (!btn || !txt) return;
+  btn.disabled = !globalAIEnabled;
   btn.classList.toggle('btn-warning', !currentConversationAIEnabled);
   btn.classList.toggle('btn-outline-warning', currentConversationAIEnabled);
-  txt.textContent = currentConversationAIEnabled ? 'AI يعمل هنا' : 'AI متوقف هنا';
-  btn.title = currentConversationAIEnabled
+  txt.textContent = !globalAIEnabled ? 'AI متوقف للمتجر' : currentConversationAIEnabled ? 'AI يعمل هنا' : 'AI متوقف هنا';
+  btn.title = !globalAIEnabled ? 'شغّل AI لهذا المتجر أولاً' : currentConversationAIEnabled
     ? 'إيقاف AI في هذه المحادثة فقط'
     : 'تسليم هذه المحادثة إلى AI';
   renderAskAIButton();
@@ -1838,22 +1863,27 @@ function renderAIActionButtons() {
 }
 
 async function toggleGlobalAI() {
+  const storeId = currentCustomer?.store_id;
+  if (!storeId) { showToast('اختر محادثة من المتجر أولاً', 'warning'); return; }
   const next = !globalAIEnabled;
+  const button = document.getElementById('aiToggleBtn');
+  if (button) button.disabled = true;
   try {
-    const res = await apiFetch('/api/settings/ai', {
+    const res = await apiFetch(`/api/stores/${encodeURIComponent(storeId)}/ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: next }),
     });
     const data = await res.json();
     if (data.ok) {
-      globalAIEnabled = data.ai_enabled;
-      renderAIToggle();
-      showToast(globalAIEnabled ? 'تم تشغيل AI لكل المحادثات' : 'تم إيقاف AI لكل المحادثات', globalAIEnabled ? 'success' : 'warning');
+      storeAIStates.set(storeId, data.ai_enabled);
+      syncActiveStoreAI();
+      showToast(data.ai_enabled ? 'تم تشغيل AI لهذا المتجر' : 'تم إيقاف AI لهذا المتجر وإلغاء متابعاته المعلّقة', data.ai_enabled ? 'success' : 'warning');
     } else {
       showToast('فشل تغيير حالة AI', 'danger');
     }
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
+  finally { syncActiveStoreAI(); }
 }
 
 async function toggleConversationAI() {

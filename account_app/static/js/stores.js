@@ -20,8 +20,15 @@ async function loadStores() {
   const list = document.getElementById('storesList');
   list.innerHTML = (data.stores || []).map((store, index) => {
     const config = store.menger || {};
+    const aiEnabled = store.ai_enabled !== false;
     return `<form class="admin-panel mb-3 store-delivery-form" data-store="${adminEsc(store.store_id)}">
       <h3>${adminEsc(store.name)}</h3>
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <strong class="store-ai-state">${aiEnabled ? 'الرد الآلي يعمل' : 'الرد الآلي متوقف'}</strong>
+        <button class="btn btn-sm ${aiEnabled ? 'btn-outline-warning' : 'btn-outline-success'} store-ai-toggle" type="button" data-enabled="${aiEnabled ? '1' : '0'}">${aiEnabled ? 'إيقاف AI لهذا المتجر' : 'تشغيل AI لهذا المتجر'}</button>
+        <span class="small store-ai-status" aria-live="polite"></span>
+      </div>
+      <p class="small text-muted">الإيقاف يمنع الردود والمتابعات الآلية في جميع محادثات هذا المتجر فقط. يظل رد الموظف اليدوي متاحاً.</p>
       <label class="form-label" for="webhook-${index}">رابط استقبال رسائل المتجر</label>
       <input id="webhook-${index}" class="form-control mb-3" dir="ltr" readonly value="${adminEsc(store.webhook_url)}" onclick="this.select()">
       <div class="row g-3">
@@ -38,6 +45,25 @@ async function loadStores() {
     </form>`;
   }).join('') || '<div class="admin-empty">لا توجد متاجر.</div>';
   list.querySelectorAll('.store-delivery-form').forEach(form => {
+    form.querySelector('.store-ai-toggle').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      const status = form.querySelector('.store-ai-status');
+      const enabled = button.dataset.enabled !== '1';
+      button.disabled = true;
+      status.textContent = 'جارٍ تغيير حالة الرد الآلي…';
+      try {
+        const result = await storesRequest(`/api/stores/${encodeURIComponent(form.dataset.store)}/ai`, {
+          method: 'POST', body: JSON.stringify({enabled})
+        });
+        button.dataset.enabled = result.ai_enabled ? '1' : '0';
+        button.textContent = result.ai_enabled ? 'إيقاف AI لهذا المتجر' : 'تشغيل AI لهذا المتجر';
+        button.classList.toggle('btn-outline-warning', result.ai_enabled);
+        button.classList.toggle('btn-outline-success', !result.ai_enabled);
+        form.querySelector('.store-ai-state').textContent = result.ai_enabled ? 'الرد الآلي يعمل' : 'الرد الآلي متوقف';
+        status.textContent = result.ai_enabled ? 'تم التشغيل لهذا المتجر' : 'تم الإيقاف وإلغاء المتابعات المعلّقة';
+      } catch (error) { status.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
     form.querySelector('.test-telegram').addEventListener('click', async event => {
       const button = event.currentTarget;
       const status = form.querySelector('[role="status"]');
