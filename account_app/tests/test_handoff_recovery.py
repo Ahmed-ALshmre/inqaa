@@ -133,10 +133,10 @@ class HandoffRecoveryTests(unittest.TestCase):
     def test_photo_reply_uses_actual_catalog_availability(self):
         with patch.object(app, 'product_image_urls', return_value=['https://image.test/p']):
             result = app.known_product_question_reply('ارسل صورة', self.product)
-            self.assertIn('هذه صورة', result['reply'])
+            self.assertIn('هاي صورة', result['reply'])
             self.assertFalse(result['requires_human'])
         with patch.object(app, 'product_image_urls', return_value=[]):
-            self.assertIn('لا توجد صورة', app.known_product_question_reply('ارسل صورة', self.product)['reply'])
+            self.assertIn('ما عندي صورة', app.known_product_question_reply('ارسل صورة', self.product)['reply'])
         self.assertIsNone(app.known_product_question_reply('ارسل صورة اللون الأحمر', self.product))
 
     def test_simple_questions_always_reach_ai_with_product_and_history(self):

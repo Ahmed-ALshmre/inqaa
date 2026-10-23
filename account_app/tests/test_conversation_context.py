@@ -737,7 +737,7 @@ class ConversationContextTests(unittest.TestCase):
         self.assertFalse(result['requires_human'])
         self.assertIn('16,000',result['reply'])
         self.assertTrue(result['_transparent_price'])
-        self.assertIn('الإجمالي لقطعة واحدة', result['reply'])
+        self.assertIn('المجموع ويا التوصيل', result['reply'])
         model.assert_not_called()
 
     def test_unknown_compound_question_is_not_hidden_by_price_fallback(self):

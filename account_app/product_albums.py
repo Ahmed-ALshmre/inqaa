@@ -200,12 +200,14 @@ def availability_error(reply, matched, products, images=None):
             targets.append((markers[match.group()], text[match.start():end]))
     if not positions and matched and not targets:
         targets.append((matched, text))
-    negative = r'(?<!\w)(?:(?:غير|مو|ما)\s*(?:متوفر|موجود)|(?:مو|ما)\s*عدنا|مخلص|خلصان|ناف[ذد]|نفذ|خلص)(?!\w)'
+    negative = r'(?<!\w)(?:(?:غير|مو|ما)\s*(?:متوفر[ةه]?|موجود[ةه]?)|(?:مو|ما)\s*(?:عدنا|عندنا)|مخلص[ةه]?|خلصان[ةه]?|ناف[ذد][ةه]?|نف[ذد]ت?|خلصت?)(?!\w)'
     for product, segment in targets:
         # Qualified absence is a missing variant/fact, not whole-product stock.
         clauses = re.split(r'[،,؛]|\b(?:بس|اما)\b', segment)
         for clause in clauses:
-            if re.search(r'فيديو|قياس\s*\d|مقاس\s*\d|لون|الابيض|الاسود|الاحمر|الرصاصي|البيج|الازرق|عمر\s*\d|طول|عرض|بطان', clause):
+            # Color words inside the catalog name do not qualify a stock claim.
+            qualifier = clause.replace(normalize((product or {}).get('product_name')), '') if product else clause
+            if re.search(r'فيديو|قياس\s*\d|مقاس\s*\d|لون|الابيض|الاسود|الاحمر|الرصاصي|البيج|الازرق|عمر\s*\d|طول|عرض|بطان', qualifier):
                 continue
             absent = bool(re.search(negative, clause))
             if not product and absent:

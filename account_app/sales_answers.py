@@ -34,6 +34,8 @@ def topics(question):
         'closure': r'ينفتح|سحاب|سح?اب|اغلاق|ازرار',
         'location': r'وين\s+(?:المحل|محلكم|موقعكم)|عنوان\s+المحل|موقع\s+المحل',
         'checkout_help': r'شلون\s+(?:اطلب|احجز)|كيف\s+(?:اطلب|احجز)|طريقة\s+(?:الطلب|الحجز)',
+        'specifications': r'مواصفات|تفاصيل\s+(?:الموديل|الفستان|القطعة)',
+        'composition': r'هو\s+قطعتين|قطعتين\s+يعني|قطعة\s+وحد[ةه]|(?:فستان|تنور[ةه])\s+لو\s+(?:فستان|تنور[ةه]|قطعتين)',
     }
     for key, pattern in patterns.items():
         if re.search(pattern, text):
@@ -56,6 +58,16 @@ def product_fragments(question, product):
         return [], []
     selected = topics(question)
     facts, gaps = [], []
+    if 'specifications' in selected:
+        selected = list(dict.fromkeys(selected + ['price', 'fabric', 'colors', 'sizes']))
+    if 'composition' in selected or 'specifications' in selected:
+        recorded = normalized(' '.join(customer_copy.fact(product.get(k)) for k in
+                                       ('faq', 'bundle_contents', 'sale_unit', 'description')))
+        if re.search(r'فستان', normalized(product.get('product_name'))) and re.search(
+                r'قطعة\s+وحد[ةه]|قطعه\s+وحد[ةه]', recorded):
+            facts.append('الفستان قطعة وحدة.')
+        elif 'composition' in selected:
+            gaps.append('عدد قطع الموديل يحتاج تأكيد من المتجر.')
     if 'price' in selected:
         try:
             count, price, _ = terms(product)

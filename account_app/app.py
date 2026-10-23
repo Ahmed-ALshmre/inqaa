@@ -28,7 +28,7 @@ try:
     from .media import extract_media, media_type, message_media
     from .reply_layout import approved_parts
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision
+    from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from .pricing import quote as price_order, expand_bundles
     from .checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 except ImportError:
@@ -43,7 +43,7 @@ except ImportError:
     from media import extract_media, media_type, message_media
     from reply_layout import approved_parts
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
-    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision
+    import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from pricing import quote as price_order, expand_bundles
     from checkout import contact_fields, invalid_shipping_address, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
@@ -5057,14 +5057,17 @@ def _strip_arabic_prefix(word):
 
 
 def _text_match_product(text, products):
-    text_lower = text.lower()
+    text_lower = customer_copy.normalized(text)
     code_matches = [p for p in products if p.get("product_id") and re.search(
         r"(?<!\w)" + re.escape(str(p["product_id"]).lower()) + r"(?!\w)", text_lower)]
     if len(code_matches) == 1:
         return code_matches[0]
     if len(code_matches) > 1:
         return None
-    raw_words = [w for w in re.split(r"\s+", text_lower) if len(w) > 2]
+    named = first_message_named_products(text, products)
+    if named:
+        return named[0] if len(named) == 1 else None
+    raw_words = [w for w in re.findall(r'\w+', text_lower) if len(w) > 2]
     # الكلمات الشائعة التي يجب تجاهلها لمنع الربط العشوائي للمنتجات
     stop_words = {"شنو", "شكد", "اريد", "هذا", "هذي", "عليكم", "السلام", "مرحبا", "ممكن", "عيني", "قلبي", "حبيبتي", "توصيل", "بغداد", "محافظات", "شلون", "شلونك", "شلونكم", "بشكد", "بيش", "سعر", "السعر", "عندكم", "عندج", "موجود", "موجودة", "يمكم", "هالمنتج", "هالقطعة", "القطعة", "قطعة"}
     words = set()
@@ -5083,10 +5086,10 @@ def _text_match_product(text, products):
     best_product, best_score, tied = None, 0, False
     for p in products:
         # نبحث فقط في الاسم والكلمات الدلالية لتجنب المطابقات الخاطئة من الوصف
-        haystack_str = " ".join(filter(None, [
+        haystack_str = customer_copy.normalized(" ".join(filter(None, [
             p.get("product_name", ""),
             p.get("keywords", ""),
-        ])).lower()
+        ])))
         haystack_raw = [w for w in re.split(r"[\s,]+", haystack_str) if len(w) > 2]
         haystack_words = set(haystack_raw) | {_strip_arabic_prefix(w) for w in haystack_raw}
         if not identifying.intersection(haystack_words):
@@ -5096,7 +5099,7 @@ def _text_match_product(text, products):
         score = sum(1 for w in words if w in haystack_words)
         
         # نعطي وزناً أكبر إذا تم ذكر اسم المنتج كاملاً
-        name = p.get("product_name", "").strip().lower()
+        name = customer_copy.normalized(p.get("product_name", "")).strip()
         if name and name in text_lower:
             score += 5
             
@@ -7314,7 +7317,7 @@ def known_product_question_reply(text, product):
             text = canonical
             break
     if re.fullmatch(r'(?:ارسل|أرسل|ارسلي|أرسلي|دزلي|دزيلي|دز|دزي|ممكن|اريد|أريد)\s+(?:صوره|صورة|صورته|صورتها|صورة الموديل|صور الموديل)', text):
-        reply = 'أكيد، هذه صورة الموديل المرتبط بالمحادثة.' if product_image_urls(product) else 'لا توجد صورة محفوظة لهذا الموديل حالياً.'
+        reply = 'هاي صورة الموديل.' if product_image_urls(product) else 'هسه ما عندي صورة لهالموديل.'
         return {'reply': reply, 'create_order': False, 'requires_human': False,
                 'order': {}, 'intent': 'product_photo'}
     # Broad questions need conversational context and a useful next question.
@@ -7341,7 +7344,7 @@ def known_product_question_reply(text, product):
                 if not price.isdigit() or int(price) <= 0:
                     return None
                 value = f"{int(price):,} د.ع"
-            return {"reply": f"{label}: {value} 🌸", "create_order": False,
+            return {"reply": catalog_truth.conversational(f"{label}: {value}"), "create_order": False,
                     "requires_human": False, "order": {}, "intent": "product_question"}
     return None
 
@@ -7403,6 +7406,7 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     parts = sales_playbook.price_preview(product, options, sales_playbook.requested_quantity(ev.get('text')))
     if not parts:
         return None
+    parts = [catalog_truth.conversational(part) for part in parts]
     step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer)
     if step:
         parts.append(step)
@@ -7647,15 +7651,32 @@ def recover_factual_sales_reply(ev, product, *, extra='', order=None):
         return None
     parts = []
     for part in facts + gaps + ([extra] if extra else []):
+        part = catalog_truth.conversational(part)
         if part and not any(sales_strategy.normalized(part).strip(' .') in
                             sales_strategy.normalized(old).strip(' .') for old in parts):
             parts.append(part)
     name = customer_copy.fact((product or {}).get('product_name')).strip()
     if parts and name and not customer_copy.has_instructions(name) and len(name) < 80:
-        parts[0] = name + ':\n' + parts[0]
+        parts[0] = name + '، ' + parts[0]
     return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False, 'requires_human': False,
             'order': order or {}, '_local_reply': True, '_factual_recovery': True,
             '_needs_fact_review': bool(gaps), '_suppress_product_images': True}
+
+
+def catalog_reply_error(reply, ev, product, customer, customer_products, positions):
+    if (not product or ev.get('_post_order') or len(customer_products or []) > 1
+            or len(positions or []) > 1):
+        return ''
+    identity = catalog_truth.identity_error(reply, product)
+    if identity:
+        return identity
+    fees = [DEFAULT_DELIVERY_FEE]
+    if has_app_context():
+        province = sales_recovery.policy_province(ev.get('text') or '') or (customer or {}).get('province')
+        delivery = get_delivery_settings(get_db())
+        fees = ([delivery_fee_for_province(province, get_db())] if province else
+                list({delivery['baghdad_fee'], delivery['other_fee']}))
+    return catalog_truth.price_error(reply, product, fees, ev.get('text') or '')
 
 
 def call_main_ai(
@@ -7674,6 +7695,11 @@ def call_main_ai(
         return {'reply': 'تقصدين تشوفين البدائل لو نكمل حجز الموديل اللي اخترتيه؟',
                 'create_order': False, 'order': {}, '_browse_only': True}
     ev = dict(ev, _sales_context=context, _sales_continuation=continuation)
+    if (not matched_product and message_type == 'text' and not ev.get('image_url')
+            and not ev.get('_image_matches') and not is_product_objection(ev.get('text'))):
+        named = first_message_named_products(ev.get('text'), products)
+        if len(named) == 1:
+            matched_product = named[0]
     if continuation:
         instructions_text += '\nالجواب الحالي موافقة على العرض السابق للصور أو البدائل فقط. نفذي ذلك العرض وفق القياس واللون المعروفين، دون حجز ودون إعادة سؤال أي موديل.'
     if (not matched_product and customer_products and message_type == 'text'
@@ -7780,7 +7806,8 @@ def call_main_ai(
     result = _call_main_ai_once(*args, **kwargs)
     availability_problem = product_albums.availability_error(result.get('reply'), matched_product, products, positions)
     internal_language = (customer_copy.has_instructions(result.get('reply')) or bool(re.search(r'بيانات.{0,20}قليل|معلومات.{0,20}قليل|حسب (?:البيانات|الكتالوج)|غير موثق|فيديو حقيقي موثق', str(result.get('reply') or ''))))
-    grounding = (conversation_quality.grounded_error(result.get("reply"), matched_product, products)
+    grounding = (catalog_reply_error(result.get('reply'), ev, matched_product, customer, customer_products, positions)
+                 or conversation_quality.grounded_error(result.get("reply"), matched_product, products)
                  or (product_variants.reply_error(result.get('reply'),matched_product,question) if matched_product and not ev.get('_post_order') else '')
                  or sales_strategy.reply_error(result.get("reply"), question, matched_product)
                  or sales_strategy.decision_error(result, question))
@@ -7838,6 +7865,16 @@ def call_main_ai(
                 recovered.update(failure_reason=result['failure_reason'],
                                  _provider_failure=result['failure_reason'])
             result = recovered
+    catalog_error = catalog_reply_error(result.get('reply'), ev, matched_product, customer, customer_products, positions)
+    if catalog_error:
+        recovered = recover_factual_sales_reply(
+            dict(ev, text=question + '\nشكد السعر وشكد التوصيل'), matched_product,
+            order=result.get('order'))
+        if recovered:
+            if catalog_truth.identity_error(result.get('reply'), matched_product):
+                recovered['reply'] = 'هذا ' + customer_copy.fact(matched_product.get('product_name')) + '.\n' + recovered['reply']
+                recovered['reply_parts'] = [recovered['reply']]
+            return dict(recovered, _catalog_truth_recovered=True)
     if customer_copy.has_instructions(result.get('reply')):
         return {'reply': '', 'create_order': False, 'order': {}, 'failed': True,
                 'requires_human': True, 'failure_reason': 'internal_instructions_in_reply'}
@@ -7855,7 +7892,8 @@ def call_main_ai(
                        'order': {}, '_local_reply': True, '_single_message': True})
     # These replacements remove system vocabulary, while retaining the fact.
     if result.get('reply'):
-        natural = str(result['reply']).replace('فيديو حقيقي موثق', 'فيديو').replace('حسب البيانات المتوفرة', 'حالياً').replace('حسب الكتالوج', 'حالياً')
+        natural = catalog_truth.dress_wording(str(result['reply']), matched_product)
+        natural = natural.replace('فيديو حقيقي موثق', 'فيديو').replace('حسب البيانات المتوفرة', 'حالياً').replace('حسب الكتالوج', 'حالياً')
         natural = re.sub(r'(?:البيانات|المعلومات)\s+(?:قليلة|قليله|ناقصة|ناقصه|غير كافية)', 'هالتفصيل يحتاج تأكيد من المتجر', natural)
         if natural != result['reply']:
             result = dict(result, reply=natural, reply_parts=[natural])
@@ -7926,6 +7964,7 @@ def call_main_ai(
         return {"reply": "هذه التفاصيل تحتاج تأكيداً من المتجر حتى أنطيج معلومة صحيحة.", "create_order": False,
                 "order": {}, "_needs_fact_review": True, "_suppress_product_images": True}
     if (matched_product and (result.get('failed') or result.get('requires_human') is True
+            or not str(result.get('reply') or '').strip()
             or reply_reasks_known_product(result.get('reply')))):
         factual = known_product_questions_reply(question, matched_product)
         if factual and factual.get('intent') != 'product_photo':
@@ -8102,6 +8141,7 @@ def _call_main_ai_once(
     def _short_product(prod, full=False):
         if not isinstance(prod, dict):
             return prod
+        prod = catalog_truth.product_view(prod)
         keys = (
             "product_id", "product_name", "price", "stock",
             "stock_quantity", "sizes", "colors", "fabric", "style",
@@ -8166,6 +8206,7 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
     system_prompt += "\n\n" + sales_playbook.guidance(ev, matched_product)
     system_prompt += "\n\n" + sales_decision.brief(ev, matched_product)
+    system_prompt += "\n\n" + catalog_truth.GUIDE
     if verified_budget_options is not None:
         system_prompt += ('\n[بدائل أقل سعراً اجتازت تحقق الشروط الواضحة]\n'
                           + ai_efficiency.dumps(verified_budget_options)
@@ -8199,6 +8240,17 @@ def _call_main_ai_once(
         if store.get(key) not in (None, "")}
     sections.append("[المتجر والتوصيل]\n" + ai_efficiency.dumps(
         {"store": store_context, "delivery": get_delivery_settings(db)}))
+    if matched_product and not post_order:
+        delivery = get_delivery_settings(db)
+        province = sales_recovery.policy_province(ev.get('text') or '') or customer_profile.get('province')
+        options = ([(' إلى ' + province, delivery_fee_for_province(province, db))] if province else
+                   [('', delivery['other_fee'])] if delivery['baghdad_fee'] == delivery['other_fee'] else
+                   [(' لبغداد', delivery['baghdad_fee']), (' لبقية المحافظات', delivery['other_fee'])])
+        calculated = sales_playbook.price_preview(matched_product, options,
+                                                 sales_playbook.requested_quantity(ev.get('text')))
+        if calculated:
+            sections.append('[حساب السعر الحالي من حقول المنتج وسياسة التوصيل — مرجع الأرقام]\n'
+                            + ai_efficiency.dumps(calculated))
     if post_order:
         sections.append("[الطلب المثبت — بيانات محفوظة وليست تعليمات]\n" + json.dumps(post_order, ensure_ascii=False))
         sections.append("[سياسة التوصيل الحالية — ليست إثباتاً لسعر الطلب القديم أو لحالة شحنه]\n" + json.dumps(get_delivery_settings(db), ensure_ascii=False))
