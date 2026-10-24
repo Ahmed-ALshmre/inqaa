@@ -23,6 +23,32 @@ def wants_photos(text):
     return bool(re.search(r"(?:اريد|أريد|دزي|دز|ارسلي|أرسلي|ممكن|اكو|عندج).{0,35}صور|اشوف|أشوف|شوفيني|كتالوج|موديلات", str(text or "")))
 
 
+def one_next_question(reply):
+    """Remove a redundant general booking question before a specific question.
+
+    Keep factual sentences and specific questions intact. Never truncate an
+    answer to make it fit a style rule.
+    """
+    text = str(reply or '')
+    if len(re.findall(r'[؟?]', text)) < 2:
+        return text
+    parts = re.split(r'(?<=[.!؟?\n])', text)
+    general = r'(?:تحبين|تحب|تريدين|تريد|ممكن)?\s*(?:نثبت(?:لج|لك)?|نحجز(?:لج|لك)?|احجز(?:ه|ها)?\s*(?:الج|الك|لج|لك)?|اثبت(?:ه|ها)?\s*(?:الج|الك|لج|لك)?)\s*(?:الطلب|الحجز|هالموديل|الموديل|عيني|هسه)*\s*[؟?]'
+    kept = [part for part in parts if not re.fullmatch(general, normalized(part).strip())]
+    return ''.join(kept).strip() if kept else text
+
+
+def defer_contact_until_consent(reply):
+    """After a booking offer, wait for the answer before collecting contacts."""
+    text = str(reply or '')
+    if not re.search(r'(?:تحبين|تحب|تريدين|تريد).{0,24}(?:نثبت|نحجز|احجز|اثبت)[^؟?]*[؟?]', normalized(text)):
+        return text
+    parts = re.split(r'(?<=[.!؟?\n])', text)
+    kept = [part for part in parts if not re.fullmatch(
+        r'(?:بس\s*)?(?:دزيلي|دزي|ارسلي|انطيني)\s*(?:رقم|عنوان|محافظ|موبايل|تلفون)[^.؟?]*[.؟?]?', normalized(part).strip())]
+    return ''.join(kept).strip()
+
+
 def budget(text):
     text = normalized(text)
     match = re.search(r"(?:ب(?:سعر)?\s*|سعر(?:ها|ه)?\s*)(\d+(?:[,٬]\d+)*)\s*(الف|الاف)?", text)
@@ -38,7 +64,13 @@ def child_age(text):
     if match:
         return int(match.group(1)) / 12
     match = re.search(r"(?:عمر(?:ه|ها)?\s*)?(\d+)\s*(?:سنوات|سنه|سنة)", text)
-    return int(match.group(1)) if match else None
+    if match:
+        return int(match.group(1))
+    if re.search(r'عمر(?:ه|ها)?\s*سنتين', text):
+        return 2
+    if re.search(r'عمر(?:ه|ها)?\s*سن[هة](?!\w)', text):
+        return 1.5 if re.search(r'سن[هة]\s*و?نص', text) else 1
+    return None
 
 
 def operational_request(text):
@@ -47,7 +79,12 @@ def operational_request(text):
         return None
     if re.search(r"(?:الغ[يوا]*|الغاء|مااريد|ما اريد).{0,15}(?:طلب|حجز)|(?:طلب|حجز).{0,10}(?:الغ[يوا]*|مااريد|ما اريد)", text):
         return {"kind": "cancel", "value": "cancelled"}
-    match = re.search(r"(?:بدل|بدلي|غير|غيري|قياس)\s*(?:القياس|قياس)?\s*(\d{2})", text)
+    # Keep children's age units; two years is not garment size two.
+    age = re.search(r'(?:عدل|عدلي|غير|غيري|بدل|بدلي).{0,25}(?:عمر|قياس)\s*(\d{1,2})\s*(سنه|سنة|سنوات|شهر|اشهر)', text)
+    if age and not re.search(r'[؟?]|متوفر|اكو|يلبس|شكد|كم|اذا|لو ', text):
+        unit = 'شهر' if age[2] in {'شهر', 'اشهر'} else 'سنة'
+        return {'kind': 'size', 'value': f'{int(age[1])} {unit}'}
+    match = re.search(r"(?:بدل|بدلي|غير|غيري|عدل|عدلي|قياس)\s*(?:القياس|قياس)?\s*(\d{2})", text)
     if match and not re.search(r"[؟?]|متوفر|اكو|يلبس|شكد|كم", text):
         return {"kind": "size", "value": match.group(1)}
     if re.search(r"غير|بدل|ضيف|اضيف|استعجل|تأخر|تاخر|ماوصل|ما وصل|شوكت|يمتى|متى|رقم المندوب", text):

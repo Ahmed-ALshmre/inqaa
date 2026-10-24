@@ -67,6 +67,9 @@ def stock_state(product):
     stock = str((product or {}).get('stock') or '').strip().lower()
     if str((product or {}).get('status') or '').lower() in ('inactive', 'disabled'):
         return 'out'
+    quantity = (product or {}).get('stock_quantity')
+    if quantity is not None and str(quantity).strip() and str(quantity).strip().isdigit() and int(str(quantity).strip()) == 0:
+        return 'out'
     if any(word in stock for word in ('نفذ', 'نافذ', 'نافد', 'خلص', 'غير متوفر', 'مو متوفر', 'not available', 'out')):
         return 'out'
     return 'available' if 'متوفر' in stock or 'available' in stock else 'unknown'
@@ -96,30 +99,33 @@ def parts(images, products, question=''):
     catalog={p['product_id']:p for p in products}
     positions=current_positions(images,products)
     for item in positions:
-        ref = reference(item['image_index'])
+        # An ordinal is useful only when the customer is comparing photos.
+        # A known single-model lookup should answer about that model directly.
+        ref = reference(item['image_index']) if len(positions) > 1 else ''
+        prefix = ref + '، ' if ref else ''
         specific=question if len(positions)==1 else image_question(question,item['image_index'])
         if not item['product_found']:
             # No match is the owner's customer-facing availability policy.
             # Keep identity unknown internally, including its pending review.
-            lines.append(ref + '، ' + ('ما گدرت أتأكد من هذا الموديل هسه، خليني أراجعه.'
+            lines.append(prefix + ('ما گدرت أتأكد من هذا الموديل هسه، خليني أراجعه.'
                                    if item.get('service_error') else UNKNOWN_REPLY))
             continue
         name = customer_copy.fact(item.get('product_name')) or 'هذا الموديل'
         state = stock_state(item)
         if state == 'out':
-            lines.append(ref + '، ' + name + ' مو متوفر عدنا حالياً.')
+            lines.append(prefix + name + ' مو متوفر عدنا حالياً.')
             continue
         checks,details=variant_sentences(item,specific)
         blocked=any(c['supported'] is not True for c in checks)
         if state=='available' and not blocked:
             openings=('متوفر عيني','هم عدنا','موجود')
             availability=openings[min(available_count,2)]
-            line=ref+' '+availability+'، '+name
+            line=(ref+' ' if ref else '')+availability+'، '+name
             available_count += 1
         elif state=='unknown':
-            line=ref+'، '+name+' خليني أتأكد من توفره'
+            line=prefix+name+' خليني أتأكد من توفره'
         else:
-            line=ref+'، '+name
+            line=prefix+name
         try:
             count,price,_=terms(catalog[item['product_id']])
         except ValueError:

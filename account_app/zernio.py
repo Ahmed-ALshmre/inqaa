@@ -11,6 +11,10 @@ from urllib.parse import quote, urlparse
 
 import requests
 from flask import jsonify, request
+try:
+    from .delivery_state import ANSWERED_SQL
+except ImportError:
+    from delivery_state import ANSWERED_SQL
 
 STORE_ID = 'al-fatena'
 API_URL = 'https://zernio.com/api/v1'
@@ -145,6 +149,51 @@ def _save_ad(module, sender_id, data, occurred_at):
     db.commit()
 
 
+def _unmapped_referral_belongs_to_image_turn(module, db, sender_id, text, captured):
+    """A late attribution callback cannot erase an already verified photo.
+
+    Bound the attribution to the photo's first completed accepted answer,
+    rather than guessing a time-to-live. A referral captured after that answer
+    remains a new reference; mapped ads and explicit corrections are handled
+    separately by the normal product-selection path.
+    """
+    clean = module.sales_strategy.normalized(text)
+    if re.search(r'اعلان.{0,12}(?:جديد|ثاني|اخر)|(?:جديد|ثاني|غير).{0,12}اعلان|اقصد\s+اعلان', clean):
+        return False
+    binding = module.get_active_product_binding(db, sender_id)
+    if not binding or not ({binding.get('source'), binding.get('match_method')}
+                           & {'image_recognition', 'manual_admin', 'manual', 'telegram_human', 'openrouter_catalog', 'vision_product_id'}):
+        return False
+    urls = {image.get('image_url') for image in module.customer_image_positions(db, sender_id)
+            if image.get('product_found') and image.get('product_id') == binding.get('product_id') and image.get('image_url')}
+    if not urls:
+        return False
+
+    def moment(value):
+        try:
+            value = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+            return value if value.tzinfo else value.replace(tzinfo=module.BAGHDAD_TZ)
+        except (ValueError, TypeError):
+            return None
+
+    photo = next((row for row in db.execute('''SELECT id,created_at,image_url,media_json,raw_payload,direction,message_type
+        FROM messages WHERE sender_id=? AND COALESCE(store_id,'default')=? AND direction='incoming' ORDER BY id DESC''',
+        (sender_id, STORE_ID)) if any(item.get('type') == 'image' and item.get('url') in urls
+                                   for item in module.message_media(row))), None)
+    photo_at = moment(photo['created_at']) if photo else None
+    chosen_at = moment(binding.get('last_seen_at'))
+    if not photo_at or not chosen_at or captured < photo_at:
+        return False
+    for answer in db.execute("SELECT created_at FROM messages WHERE sender_id=? AND COALESCE(store_id,'default')=? AND id>? "
+                             "AND direction='outgoing' AND message_type='text' AND " + ANSWERED_SQL + ' ORDER BY id',
+                             (sender_id, STORE_ID, photo['id'])):
+        answered_at = moment(answer['created_at'])
+        if answered_at and answered_at >= chosen_at:
+            return captured <= answered_at
+    # No accepted answer has closed this verified image turn yet.
+    return True
+
+
 def product_event(module, db, event, products):
     """Use saved attribution once it is newer than the customer's product decisions."""
     sender_id = event.get('sender_id') or ''
@@ -198,6 +247,10 @@ def product_event(module, db, event, products):
                       context.get(key) and str(product.get(key) or '').strip() == str(context[key]).strip()
                       for key in ('ad_id', 'ref'))]
     if len(candidates) != 1:
+        if not candidates and _unmapped_referral_belongs_to_image_turn(module, db, sender_id, text, captured):
+            source['resolution'] = 'historical'
+            source['image_context_preserved'] = True
+            return result
         source['resolution'] = 'ambiguous' if candidates else 'unmapped'
         result['_ad_product_unresolved'] = True
         return result

@@ -1,5 +1,6 @@
 """Bounded concurrent OpenRouter requests with finite transient recovery."""
 import os
+import json
 import threading
 import time
 from contextvars import ContextVar
@@ -59,6 +60,11 @@ def _post(url, **kwargs):
     started = time.monotonic()
     timeout = kwargs.pop('timeout', 30)
     read_timeout = max(READ_TIMEOUT, min(60, float(timeout if isinstance(timeout, (int, float)) else timeout[-1])))
+    # requests also applies the connect socket timeout while uploading a body.
+    # A catalogue batch can be >1 MB; five seconds caused repeatable TLS write
+    # timeouts on the live upload path even though inference itself was healthy.
+    payload_bytes = len(json.dumps(kwargs.get('json') or {}, ensure_ascii=True).encode('utf-8'))
+    connect_timeout = 15 if payload_bytes >= 512_000 else 5
     deadline = started + 130
     metrics = {'queue_ms': 0, 'attempts': 0, 'elapsed_ms': 0}
     _metrics.set(metrics)
@@ -72,9 +78,9 @@ def _post(url, **kwargs):
         try:
             metrics['attempts'] += 1
             remaining = deadline - time.monotonic()
-            if remaining <= 5:
+            if remaining <= connect_timeout:
                 raise requests.Timeout('AI request deadline exceeded')
-            response = requests.post(url, timeout=(5, min(read_timeout, remaining - 5)), **kwargs)
+            response = requests.post(url, timeout=(connect_timeout, min(read_timeout, remaining - connect_timeout)), **kwargs)
             if response.status_code not in TRANSIENT or attempt == 1:
                 return response
         except (requests.Timeout, requests.ConnectionError) as exc:

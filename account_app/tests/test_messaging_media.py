@@ -93,19 +93,34 @@ class MessagingMediaTests(unittest.TestCase):
             ]
             result = self.m.call_main_ai(ev,'image',{},[],[product],product,{'product_found':True},'',[])
         self.assertEqual(post.call_count, 2)
-        self.assertEqual(result['reply'], 'السعر 18000 دينار')
+        # The parsed retry still ignored the customer's size question. Keep the
+        # verified price and acknowledge the missing size fact rather than
+        # accepting a partial answer or inventing a size range.
+        self.assertIn('18,000 د.ع.', result['reply'])
+        self.assertIn('سوت حوامل', result['reply'])
+        self.assertIn('قياسات', result['reply'])
+        self.assertIn('تأكيد', result['reply'])
+        self.assertTrue(result.get('_needs_fact_review'))
+        self.assertNotIn('38', result['reply'])
+        self.assertNotIn('52', result['reply'])
         self.assertFalse(result['create_order'])
         self.assertFalse(result.get('failed'))
 
     def test_both_catalog_sheets_are_sent_for_lamsa(self):
         products = [{'product_id':'P005','product_name':'Suit','image_url':'https://images.test/suit.jpg'}]
-        with patch.object(self.m, 'OPENROUTER_KEY', 'test'), patch.object(self.m, 'is_store_feature_enabled', return_value=True), patch.object(self.m, '_resolve_catalog_image_paths', return_value=['old.png','new.png']), patch.object(self.m, '_file_to_data_url', side_effect=['data:image/png;base64,OLD','data:image/png;base64,NEW']), patch.object(self.m.requests, 'post') as post:
+        import base64, io
+        from PIL import Image
+        references = []
+        for color in ['white', 'black']:
+            output = io.BytesIO(); Image.new('RGB', (12, 12), color).save(output, format='PNG')
+            references.append('data:image/png;base64,' + base64.b64encode(output.getvalue()).decode('ascii'))
+        with patch.object(self.m, 'OPENROUTER_KEY', 'test'), patch.object(self.m, 'is_store_feature_enabled', return_value=True), patch.object(self.m, '_resolve_catalog_image_paths', return_value=['old.png','new.png']), patch.object(self.m, '_file_to_data_url', side_effect=references), patch.object(self.m.requests, 'post') as post:
             post.return_value.json.return_value = {'choices':[{'message':{'content':'P005'}}]}
             result = self.m.match_customer_image_with_catalog('https://images.test/customer.jpg',products)
         self.assertTrue(result['product_found'])
         content = post.call_args.kwargs['json']['messages'][0]['content']
         images = [item['image_url']['url'] for item in content if item['type']=='image_url']
-        self.assertEqual(images, ['https://images.test/customer.jpg','data:image/png;base64,OLD','data:image/png;base64,NEW'])
+        self.assertEqual(images, ['https://images.test/customer.jpg'] + references)
 
     def test_all_images_survive_extraction_storage_and_api(self):
         body=self.body([{'type':'image','payload':{'url':f'https://images.test/{i}.jpg'}} for i in range(3)])
@@ -280,7 +295,7 @@ class MessagingMediaTests(unittest.TestCase):
         result=self.m.normalize_ai_reply_parts({'reply_parts':['القياس متوفر','شنو اللون المطلوب؟']})
         result['sender_id']=self.sender
         self.m.send_webhook_result_to_facebook(result)
-        self.assertEqual([c.args[1] for c in send.call_args_list],['القياس متوفر','شنو اللون المطلوب؟'])
+        self.assertEqual([c.args[1] for c in send.call_args_list],['القياس متوفر\n\nشنو اللون المطلوب؟'])
         self.assertEqual(self.m.approved_reply_parts(result,'جواب مصحح'),['جواب مصحح'])
 
     def test_fatena_missing_key_does_not_use_another_account(self):
@@ -362,10 +377,10 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'",(self.sender,)).fetchone()[0],0)
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='incoming'",(self.sender,)).fetchone()[0],3)
 
-    def test_short_sales_paragraphs_separate_followup_question(self):
+    def test_short_sales_paragraphs_keep_followup_question_with_answer(self):
         parts=['أهلاً بك.','السعر 17000 دينار.','القماش باربي.','أي قياس تحتاج؟']
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
-        expected = ['\n\n'.join(parts[:3]), parts[3]]
+        expected = ['\n\n'.join(parts)]
         self.assertEqual(self.m.approved_reply_parts(result,result['reply']), expected)
         with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
             self.m.send_webhook_result_to_facebook(dict(result,sender_id=self.sender))
@@ -381,7 +396,7 @@ class MessagingMediaTests(unittest.TestCase):
     def test_extra_sales_parts_keep_all_information_under_limit(self):
         parts=['تحية','سعر','قماش','قياس','توصيل','سؤال']
         result=self.m.normalize_ai_reply_parts({'reply_parts':parts})
-        self.assertTrue(1 <= len(result['reply_parts']) <= 5)
+        self.assertTrue(1 <= len(result['reply_parts']) <= 3)
         self.assertEqual(result['reply'],'\n\n'.join(parts))
 
     def test_meaningful_parts_sent_once_in_order_for_every_store(self):
@@ -394,17 +409,17 @@ class MessagingMediaTests(unittest.TestCase):
             token=self.m._current_store_id.set(store)
             try:
                 result={'sender_id':self.sender,'reply':'\n\n'.join(parts),'reply_parts':parts}
-                self.assertEqual(self.m.approved_reply_parts(result,result['reply']),parts)
+                self.assertEqual(self.m.approved_reply_parts(result,result['reply']),[result['reply']])
                 with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
                     self.m.send_webhook_result_to_facebook(result)
-                self.assertEqual([call.args[1] for call in send.call_args_list],parts)
+                self.assertEqual([call.args[1] for call in send.call_args_list],[result['reply']])
                 result['_single_message']=True
                 with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
                     self.m.send_webhook_result_to_facebook(result)
                 self.assertEqual([call.args[1] for call in send.call_args_list],[result['reply']])
             finally:self.m._current_store_id.reset(token)
 
-    def test_manychat_splits_one_long_model_part_into_ordered_messages(self):
+    def test_manychat_keeps_moderate_model_reply_in_one_coherent_message(self):
         parts = ['الفستان متوفر باللون الأسود والأحمر حسب الخيارات المسجلة بالموديل.',
                  'القماش لينن حسب تفاصيل الخامة الموجودة عندنا بالمتجر.',
                  'القياسات متوفرة من 38 إلى 52 حسب الجدول المسجل لهذا الموديل.',
@@ -416,7 +431,7 @@ class MessagingMediaTests(unittest.TestCase):
                 self.m, '_post_manychat_send', return_value={'ok': True}) as send:
             self.m._process_manychat_webhook_async_locked(self.body([], 'مواصفات'), self.sender, 'facebook')
         self.assertEqual([c.args[1] for c in send.call_args_list],
-                         [[{'type': 'text', 'text': part}] for part in parts])
+                         [[{'type': 'text', 'text': reply}]])
 
     def test_delivery_fees_are_separate_by_store_and_destination(self):
         for sid,baghdad,other in [('al-fatena',3000,7000),('khuyoot',0,4500)]:

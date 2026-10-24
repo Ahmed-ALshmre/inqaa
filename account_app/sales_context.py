@@ -5,19 +5,31 @@ import re
 try:
     from . import sales_decision
     from .checkout import normalized, phone_number, invalid_shipping_address
+    from .delivery_state import VISIBLE_SQL
 except ImportError:
     import sales_decision
     from checkout import normalized, phone_number, invalid_shipping_address
+    from delivery_state import VISIBLE_SQL
 
 PRODUCT_KNOWLEDGE_FIELDS = (
     'lining', 'transparency', 'stretch', 'closure', 'measurements', 'fit_notes',
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
 )
+EVIDENCE_VERSION = 1
 
 
 def browse_request(text):
     text = normalized(text)
     return bool(re.search(r'شنو عدكم|شنو عندكم|شنو عندج|اش عدكم|موديلات|خيارات|بدائل|اي موديل|أي موديل|بسعر|سعره? عشرين|بحدود|ميزاني', text))
+
+
+def discovery_request(text):
+    """A described shopping need deserves catalogue help, including on turn one."""
+    clean = normalized(text)
+    return browse_request(clean) or bool(re.search(
+        r'عمر|اشهر|شهور|سنوات|سنتين|ملابس\s*(?:اطفال|بناتي|ولادي)|'
+        r'(?:عدكم|عندكم|عندج).{0,20}(?:بناتي|ولادي|فستان|عبا|سوت)|'
+        r'قياس.{0,25}(?:موجود|متوفر)', clean))
 
 
 def browse_candidates(text, products):
@@ -74,14 +86,14 @@ def question_from_turn(turn):
 
 def context_evidence(text, turn):
     clean = normalized(text)
-    declarations = r'قياس|مقاس|سايز|وزن|عمر|سنوات|سنه|سنة|لون|اسود|ابيض|احمر|ازرق|اخضر|اصفر|رصاصي|جوزي|نيلي|وردي|بيج|بيجي|زيتي|تركواز|بنفسجي|ميزاني|غالي|احجز|حجزت|ما اريد|مو هذا|مو هاي|اقصد|غيره|غيرها|الاول|الثاني|الثالث|قطعتين|قطعه|قطعة'
+    declarations = r'قياس|مقاس|سايز|وزن|عمر|سنوات|سنه|سنة|لون|اسود|ابيض|احمر|ازرق|اخضر|اصفر|رصاصي|جوزي|نيلي|وردي|بيج|بيجي|زيتي|تركواز|بنفسجي|كريمي|ماروني|خمري|عنابي|برتقالي|ذهبي|فضي|ميزاني|غالي|احجز|حجزت|ما اريد|مو هذا|مو هاي|اقصد|غيره|غيرها|الاول|الثاني|الثالث|قطعتين|قطعه|قطعة'
     if re.search(declarations, clean) or re.fullmatch(r'(?:xs|s|m|l|xl|xxl|xxxl|[2-6]xl)', clean):
         return True
     question = question_from_turn(turn)
     # Preserve the raw answer with its question; never turn it into a guessed
     # size/age/quantity. Ignore small-talk and follow-up questions as answers.
     return bool(question and len(clean) <= 80
-                and re.search(r'قياس|مقاس|سايز|وزن|عمر|لون|عدد|كمية|كم قط|شكد قط', normalized(question))
+                and re.search(r'قياس|مقاس|سايز|وزن|عمر|لون|عدد|كمية|كم قط|شكد قط|ميزاني|حدود السعر|سقف السعر', normalized(question))
                 and not re.search(r'[؟?]|\b(?:شكرا|شكراً|تمام|اي|نعم|لا|هلو|مرحبا|شكد|شلون|ليش|متى)\b', clean))
 
 
@@ -148,16 +160,19 @@ def advance(state, messages):
         # incoming reply, the next staff text must still replace the old turn.
         if row.get('direction') == 'incoming' or text:
             direction = row.get('direction')
-    state.update(evidence=evidence, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, open_details=open_details, version=5)
+    state.update(evidence=evidence, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, open_details=open_details, version=5, evidence_version=EVIDENCE_VERSION)
     return state
 
 
 def load(db, store, sender):
     row = db.execute('SELECT last_message_id,data FROM sales_conversation_context WHERE store_id=? AND sender_id=?', (store, sender)).fetchone()
     cursor, state = (row[0], json.loads(row[1])) if row else (0, {})
-    if state.get('version') != 5:
+    if state.get('version') != 5 or state.get('evidence_version') != EVIDENCE_VERSION:
         cursor, state = 0, {}
-    rows = db.execute('SELECT id,direction,text,created_at,message_type,image_url FROM messages WHERE store_id=? AND sender_id=? AND id>? ORDER BY id', (store, sender, cursor)).fetchall()
+    columns = {column[1] for column in db.execute('PRAGMA table_info(messages)')}
+    visible = ' AND ' + VISIBLE_SQL if 'raw_payload' in columns else ''
+    rows = db.execute('SELECT id,direction,text,created_at,message_type,image_url FROM messages WHERE store_id=? AND sender_id=? AND id>?'
+                      + visible + ' ORDER BY id', (store, sender, cursor)).fetchall()
     if rows:
         state = advance(state, rows)
         db.execute('''INSERT INTO sales_conversation_context VALUES(?,?,?,?)

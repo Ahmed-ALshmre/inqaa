@@ -48,8 +48,11 @@ def enqueue(db, store, sender, kind, payload, key, delay=0):
         # A deliberate new request may produce a new draft; pending duplicates coalesce.
         db.execute("UPDATE ai_jobs SET dedupe_key=? WHERE id=? AND status='done'", (old['id'], old['id']))
     elif old and old['status'] == 'failed' and not db.execute(
-            'SELECT 1 FROM ai_deliveries WHERE job_id=? LIMIT 1', (old['id'],)).fetchone():
-        db.execute("UPDATE ai_jobs SET status='queued',result=NULL,available_at=?,owner=NULL WHERE id=? AND status='failed'",
+            "SELECT 1 FROM ai_deliveries WHERE job_id=? AND status<>'rejected' LIMIT 1", (old['id'],)).fetchone():
+        # A known rejection means no customer message was accepted. Retrying
+        # is safe after configuration/rate limits recover; sent or uncertain
+        # partial deliveries still require review instead of replaying work.
+        db.execute("UPDATE ai_jobs SET status='queued',result=NULL,available_at=?,owner=NULL,started_at=NULL,finished_at=NULL WHERE id=? AND status='failed'",
                    (now + delay, old['id']))
     db.execute('''INSERT OR IGNORE INTO ai_jobs
         (id,store_id,sender_id,kind,dedupe_key,payload,created_at,available_at)

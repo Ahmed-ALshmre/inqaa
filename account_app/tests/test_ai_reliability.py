@@ -18,6 +18,12 @@ def response(status=200):
 
 
 class ProviderReliabilityTests(unittest.TestCase):
+    def test_catalog_upload_has_time_to_write_without_extending_small_text_connect(self):
+        with patch.object(ai_transport.requests, 'post', return_value=response()) as post:
+            ai_transport.post('https://example.test', json={'image': 'x' * 600_000})
+            self.assertEqual(post.call_args.kwargs['timeout'][0], 15)
+            ai_transport.post('https://example.test', json={'text': 'hello'})
+            self.assertEqual(post.call_args.kwargs['timeout'][0], 5)
     def test_timeout_then_success_and_billing_not_retried(self):
         with patch.object(ai_transport.requests, 'post', side_effect=[requests.ReadTimeout(), response()]) as post, \
              patch.object(ai_transport.time, 'sleep'):
@@ -219,19 +225,34 @@ class DashboardReliabilityTests(unittest.TestCase):
         self.assertFalse(result['sent']); self.assertEqual(result['reason'], 'conversation_changed'); send.assert_not_called()
 
     def test_partial_delivery_is_not_reported_as_success(self):
-        reply = 'تفاصيل المنتج والسعر حسب البيانات المسجلة لدى المتجر.\n\nشنو القياس المطلوب؟'
-        with patch.object(self.m, 'send_text_to_facebook', side_effect=[True, False]) as send:
-            result = self.m.send_webhook_result_to_facebook({'sender_id': self.sender, 'reply': reply})
-        self.assertFalse(result); self.assertEqual(send.call_count, 2)
+        reply = '\n\n'.join(
+            f'الموديل رقم {index} متوفر باللون الأسود حسب الكتالوج، وقياساته من 38 إلى 52؛ '
+            'تفاصيل الخامة ومقارنة القصات تخص هذا الخيار وحده وتحتاج مراجعتها قبل الاختيار.'
+            for index in range(1, 13))
+        parts = self.m.approved_reply_parts({}, reply)
+        self.assertTrue(2 <= len(parts) <= 3)
+        with patch.object(self.m, 'send_text_to_facebook', side_effect=[True, False]) as send, \
+             patch.object(self.m, 'send_image_to_facebook') as image:
+            result = self.m.send_webhook_result_to_facebook({
+                'sender_id': self.sender, 'reply': reply, 'send_image': True,
+                'image_urls': ['https://images.test/not-after-failure.jpg']})
+        self.assertFalse(result)
+        self.assertEqual([call.args[1] for call in send.call_args_list], parts[:2])
+        image.assert_not_called()
 
     def test_dashboard_sends_real_bubbles_and_records_only_confirmed_parts(self):
-        text = 'القياس متوفر\n\nشنو اللون المطلوب؟'
+        text = '\n\n'.join(
+            f'الموديل رقم {index} متوفر حسب الخيارات المسجلة، وله تفاصيل مستقلة عن باقي الموديلات؛ '
+            'الأسود والأحمر هما اللونان الموجودان وقياساته من 38 إلى 52 حسب الجدول.'
+            for index in range(1, 13))
+        parts = self.m.approved_reply_parts({}, text)
+        self.assertTrue(2 <= len(parts) <= 3)
         with patch.object(self.m, 'send_text_via_manychat_detailed', side_effect=[{'ok': True}, {'ok': False, 'status_code': 400}]) as send:
             result = self.client.post(f'/api/conversations/{self.sender}/send', json={'text': text})
         self.assertFalse(result.json['ok'])
-        self.assertEqual([call.args[1] for call in send.call_args_list], ['القياس متوفر', 'شنو اللون المطلوب؟'])
+        self.assertEqual([call.args[1] for call in send.call_args_list], parts[:2])
         rows = self.db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchall()
-        self.assertEqual([row[0] for row in rows], ['القياس متوفر'])
+        self.assertEqual([row[0] for row in rows], parts[:1])
 
     def test_facebook_batch_is_persisted_and_duplicate_mid_not_requeued(self):
         m = self.m

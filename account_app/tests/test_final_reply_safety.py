@@ -121,8 +121,10 @@ class FinalReplyPipelineTests(unittest.TestCase):
         result,send,model=self.process([{'product_found':True,'product_id':'A'},{'product_found':True,'product_id':'B'}],
                                        'متوفر قياس 54؟')
         payload=send.call_args.args[0]
-        self.assertEqual(len(payload['reply_parts']),2)
-        self.assertTrue(all('قياس 54 مو موجود' in part for part in payload['reply_parts']))
+        self.assertEqual(' '.join(payload['reply_parts']).split(), payload['reply'].split())
+        self.assertTrue(2 <= len(payload['reply_parts']) <= 5)
+        self.assertEqual(payload['reply'].count('قياس 54 مو موجود'),2)
+        self.assertLess(payload['reply'].index('الأول'),payload['reply'].index('الثاني'))
         self.assertNotIn('عجبج',payload['reply'])
         model.assert_not_called()
         self.assertEqual(self.db.execute('select count(*) from orders').fetchone()[0],0)

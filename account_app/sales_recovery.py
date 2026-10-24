@@ -17,7 +17,7 @@ def policy_question(text):
     location = '|'.join(sorted({re.escape(name) for name in names}, key=len, reverse=True))
     clean = re.sub(r'(?:^|\s)(?:ل|الى |لـ)?(?:' + location + r')(?=\s|$)', ' ', clean)
     clean = ' '.join(clean.split())
-    if re.fullmatch(r'(?:متى|يمتى)\s+(?:(?:يتم|يصير)\s+)?(?:التوصيل|توصيل|يوصل الطلب)', clean):
+    if re.fullmatch(r'(?:متى|يمتى|شوكت)\s+(?:(?:يتم|يصير)\s+)?(?:التوصيل|توصيل|التسليم|تسليم|يوصل الطلب)', clean):
         return 'delivery_time'
     if re.fullmatch(r'(?:ما هي طريقة|ماهي طريقة|كيفية|شلون|كيف|شنو طريقة)\s*(?:الدفع|ادفع)(?:\s*(?:و|او)\s*(?:الشحن|التوصيل))?(?: المتاحة)?', clean):
         return 'payment'
@@ -75,6 +75,7 @@ def explicit_photo_followup(text):
 
 def simple_photo_request(text):
     clean = normalized(text).strip(' ؟?!.،\n')
+    clean = re.sub(r'\s+(?:بدون\s+(?:اي\s*)?حجز|بس\s+للمشاهد[هة]|(?:بس\s+)?ما\s*اريد\s*احجز)$', '', clean).strip(' ،')
     clean = re.sub(r'(?:\s+(?:حبيبتي|عيني|حبي|حياتي|بلا زحمة|لو سمحتي))+$', '', clean)
     if explicit_photo_followup(clean):
         return True

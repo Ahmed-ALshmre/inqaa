@@ -193,7 +193,7 @@ class ZernioFlowTests(unittest.TestCase):
         self.assertTrue(result['ok'])
         self.assertEqual(self.active(), {'F2'})
 
-    def test_mixed_album_sends_ordered_separate_answers_without_instruction_leak(self):
+    def test_mixed_album_sends_ordered_answers_together_without_instruction_leak(self):
         self.catalog[0]['sizes'] = '38 إلى 52. اعتمد الجدول التالي عند الرد على الزبونة'
         self.vision_answers = [{'product_found': True, 'product_id': 'F1', 'confidence': 100},
                                {'product_found': True, 'product_id': 'F3', 'confidence': 100},
@@ -201,10 +201,16 @@ class ZernioFlowTests(unittest.TestCase):
         result, sent = self.turn('متوفر؟', [f'https://images.test/album-{i}.png' for i in range(3)])
         self.assertTrue(result['ok'])
         texts = [row['message'] for row in sent if row.get('message')]
-        self.assertEqual(len(texts), 3)
-        self.assertIn('12,000', texts[0])
-        self.assertIn('مو متوفر', texts[1])
-        self.assertNotIn('12,000', texts[2])
+        self.assertTrue(2 <= len(texts) <= 5)
+        combined = '\n\n'.join(texts)
+        first, remaining = combined.split('الثاني', 1)
+        second, third = remaining.split('الثالث', 1)
+        self.assertIn('الأول', first)
+        self.assertIn('12,000', first)
+        self.assertIn('مو متوفر', second)
+        self.assertNotIn('12,000', second)
+        self.assertNotIn('12,000', third)
+        self.assertIn('مو متوفر', third)
         self.assertTrue(all(not m.customer_copy.has_instructions(text) for text in texts))
         self.assertEqual(self.vision.call_count, 3)
 
@@ -213,10 +219,15 @@ class ZernioFlowTests(unittest.TestCase):
                                'reason': 'Fixture outage', 'error_code': 'fixture_outage'}]
         result, sent = self.turn('', ['https://images.test/unavailable-service.png'])
         self.assertFalse(result['ok'])
-        self.assertFalse(sent)
+        self.assertEqual(len(sent), 1)
+        acknowledgement = sent[0].get('message', '')
+        self.assertIn('الصورة وصلت', acknowledgement)
+        self.assertNotRegex(acknowledgement, r'متوفر|خلص|تم تثبيت|تم حجز|\d+[,.]?\d*\s*(?:د\.ع|دينار|ألف|الف)')
+        self.assertNotRegex(acknowledgement, r'(?:دزي|أرسلي|ارسلي).{0,25}(?:صوره|صورة)')
         self.assertEqual(self.vision.call_count, 1)
         with m.app.app_context():
             self.assertGreater(m.get_db().execute("SELECT count(*) FROM human_reviews WHERE status='pending'").fetchone()[0], 0)
+            self.assertEqual(m.get_db().execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
     def test_audio_is_saved_without_image_analysis_or_customer_reply(self):
         job, _ = self.message(media=[{'type': 'audio', 'url': 'https://images.test/voice.ogg'}])

@@ -3,12 +3,253 @@ import json
 import re
 try:
     from .checkout import normalized
+    from . import customer_copy
 except ImportError:
     from checkout import normalized
+    import customer_copy
+
+
+SALES_CUES = {
+    'limited_stock': 'الكمية الباقية قليلة عيني.',
+    'high_demand': 'عليه طلب ما يوكف هالفترة.',
+    'frequent_bookings': 'هاي من القطع اللي تنحجز هواية عندنا.',
+    'many_purchases': 'هالموديل اشتروه هواية من زبائننا.',
+}
+_CLAIMS = {
+    'limited_stock': r'اخر\s*(?:\d+\s*)?قطع|قطع[هة]\s*اخير[هة]|الكمي[هة]\s*الباقي[هة]\s*قليل[هة]|باقي(?:\s+منه|\s+منها)?\s*(?:بس\s*)?(?:\d+|ثلاث|اربع|خمس|ست|سبع|ثمان|تسع|عشر|قطعتين|قطع|قطع[هة]|حبتين)|(?:الكمي[هة]|كمياته|كميتها)\s*(?:صارت\s*)?(?:محدود[هة]|قليل[هة])|راح\s*يخلص|قبل\s*(?:لا\s*|ما\s*)?يخلص',
+    'high_demand': r'عليه\s*طلب|عليها\s*طلب|الطلب.{0,14}(?:عالي|كبير|قوي|هواية|ما يوكف)|مطلوب\s*(?:هواية|كلش)|اكثر\s*(?:موديل\s*)?طلب',
+    'frequent_bookings': r'حجوزات.{0,14}(?:هواية|كثير|قوي)|(?:ينحجز|تنحجز|انحجز|حجزوه|حاجزينه).{0,12}(?:هواية|كثير)|هواية.{0,15}(?:حجزوه|حجزوا|حاجزين)|بعد\s*الحجوزات',
+    'many_purchases': r'(?:اشتروه|اشتروها|اشتروا منه|اشتروا منها|انباع|انبايع).{0,25}(?:هواية|كثير)|(?:هواية|كثير).{0,25}(?:اشتروه|اشتروا|شارينه)|زبائن.{0,18}(?:اشتروا|شارين)|اكثر.{0,10}مبيع',
+    'repeat_purchases': r'اغلب.{0,25}(?:مرتين|يطلبنها|يرجع)|يرجعن.{0,20}يطلبن|تنباع.{0,35}يرجع',
+    'daily_bookings': r'كل\s*يوم.{0,20}حجوزات|حجوزات.{0,20}كل\s*يوم',
+    'offer': r'عليه\s*عرض|عليها\s*عرض|عرض\s*(?:خاص|حصري|اليوم|لفتر[هة])|(?<!\w)(?:خصم|تخفيض)(?!\w)',
+}
+
+
+def _stock_number(product):
+    value = (product or {}).get('stock_quantity')
+    if isinstance(value, bool):
+        return None
+    text = customer_copy.normalized(value).strip()
+    return int(text) if re.fullmatch(r'\d{1,7}', text) else None
+
+
+def _sales_available(product):
+    try:
+        from .product_albums import stock_state
+    except ImportError:
+        from product_albums import stock_state
+    count = _stock_number(product)
+    return bool(product and stock_state(product) != 'out' and count != 0
+                and (stock_state(product) == 'available' or (count is not None and count > 0)))
+
+
+def approved_sales_cues(product):
+    """Only the product editor's explicit approvals are marketing evidence.
+
+    Bookings, completed purchases and demand remain separate claims. Free-form
+    model/staff instructions and conversation examples cannot approve a cue.
+    """
+    values = (product or {}).get('sales_cues')
+    return [key for key in SALES_CUES if isinstance(values, list) and key in values]
+
+
+def _offer_fact(product):
+    value = customer_copy.fact((product or {}).get('offer')).strip()
+    if re.search(r'لا يوجد|ماكو|ما اكو|بدون عرض|منتهي|انتهى|ملغي', normalized(value)):
+        return ''
+    return value
+
+
+def _claim_kinds(text):
+    result = set()
+    for clean in re.split(r'[\n،؛.!؟?]+', normalized(text)):
+        # Only an explicit denial of a sales claim is exempt. "ما عندي فيديو"
+        # must not conceal an unsupported claim later in the same response.
+        if re.match(r'\s*(?:مو|ليس|ماكو|ما اكو|لا يوجد)\s*(?:اخر|باقي|عرض|خصم|تخفيض|عليه طلب|طلب|حجوزات|كمي[هة])', clean):
+            continue
+        result.update(key for key, pattern in _CLAIMS.items() if re.search(pattern, clean))
+    return result
+
+
+def _assistant_texts(history):
+    for item in history or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get('role') != 'assistant' and item.get('direction') != 'outgoing':
+            continue
+        metadata = item.get('raw_payload') or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (ValueError, TypeError):
+                metadata = {}
+        if isinstance(metadata, dict) and metadata.get('_delivery_status', 'accepted') != 'accepted':
+            continue
+        yield str(item.get('content') or item.get('text') or '')
+
+
+def persuasion_used(history):
+    """Caller supplies accepted conversation history, never model drafts."""
+    return any(_claim_kinds(clause) for text in _assistant_texts(history)
+               for clause in re.split(r'[\n،؛.!؟?]+', text))
+
+
+def persuasion_cue(product, history=()):
+    """One nonnumeric approved reason to act; availability still takes priority."""
+    if not _sales_available(product) or persuasion_used(history):
+        return None
+    available = approved_sales_cues(product)
+    count = _stock_number(product)
+    stock = customer_copy.fact((product or {}).get('stock'))
+    if ((count is not None and 1 <= count <= 5)
+            or re.search(r'اخر\s*قطع|قطع\s*قليل|كمي[هة]\s*(?:قليل[هة]|محدود[هة])', normalized(stock))):
+        available = ['limited_stock', *available]
+    for key in SALES_CUES:
+        if key in available:
+            return {'kind': key, 'text': SALES_CUES[key]}
+    offer = _offer_fact(product)
+    if offer:
+        return {'kind': 'offer', 'text': 'عليه عرض: ' + offer}
+    return None
+
+
+def persuasion_guidance(product, history=(), question=''):
+    if explicit_pause(question) or _courtesy_only(question):
+        return '[الإقناع الحالي]\nاحترم طلب المهلة أو الرفض؛ لا تضف ندرة أو دعوة حجز.'
+    cue = persuasion_cue(product, history)
+    if not cue:
+        reason = 'سبق استعمال التشجيع في رد مقبول الإرسال؛ لا تكرره.' if persuasion_used(history) else 'لا توجد عبارة ندرة أو طلب أو شراء معتمدة ومتاحة لهذا الموديل.'
+        return '[الإقناع الحالي]\n' + reason + ' اجعل الدفء بفهم اختياره وفائدة حقيقية وخطوة مناسبة، دون طلب دليل من الزبون.'
+    return ('[الإقناع الحالي — معلومة إدارية معتمدة لهذا الموديل، وليست إحصائية]\n'
+            + json.dumps(cue, ensure_ascii=False)
+            + '\nيمكن استخدام معنى هذه العبارة مرة واحدة عند اهتمام واضح وبعد جواب السؤال، مع سؤال اختيار أو حجز يناسب المرحلة. '
+            'لا تحوّلها إلى عدد أو خصم أو موعد نفاد أو رأي زبون. كثرة الحجوزات لا تعني أن الزبائن اشتروا أو استلموا. '
+            'لا تجمع أسباباً أخرى معها ولا تتحدث عن المورد أو طريقة توريد البضاعة. إذا التردد بالقياس أو السعر عالجه أولاً؛ عبارة الطلب ليست جواباً عن مخاوفه.')
+
+
+def persuasion_error(reply, product, history=None, question=''):
+    kinds = _claim_kinds(reply)
+    if not kinds:
+        return ''
+    if explicit_pause(question) or _courtesy_only(question):
+        return 'احترم التحية أو الشكر أو طلب المهلة؛ احذف التشجيع بالندرة والطلب والعروض، وأجب الطلب الحالي بلطف.'
+    if not _sales_available(product):
+        return 'احذف التشجيع بالندرة أو الطلب أو العرض؛ توفر الموديل غير مؤكد حالياً. احتفظ بالسعر والجواب الصحيح.'
+    if history is not None and persuasion_used(history):
+        return 'سبق استعمال التشجيع البيعي؛ لا تكرر الندرة أو الطلب أو العرض. احتفظ بالجواب وخطوة القرار المناسبة.'
+    allowed = set(approved_sales_cues(product))
+    count = _stock_number(product)
+    stock = normalized(customer_copy.fact((product or {}).get('stock')))
+    if (count is not None and 1 <= count <= 5) or re.search(r'اخر\s*قطع|قطع\s*قليل|كمي[هة]\s*(?:قليل[هة]|محدود[هة])', stock):
+        allowed.add('limited_stock')
+    offer = _offer_fact(product)
+    if offer:
+        allowed.add('offer')
+    if kinds - allowed:
+        return 'احذف الندرة أو الطلب أو الشراء أو العرض غير المعتمد لهذا المنتج؛ لا تحول الحجوزات إلى مشتريات. احتفظ بالسعر والفائدة الصحيحة.'
+    if len(kinds) > 1:
+        return 'استخدم سبب إقناع واحداً فقط، لا تجمع الندرة وكثرة الطلب والحجوزات والمشتريات والعرض.'
+    clean = normalized(reply)
+    prefix = r'باقي(?:\s+منه|\s+منها)?\s*(?:بس\s*)?'
+    claimed_count = re.search(r'(?:' + prefix + r'|اخر\s*)(\d+)\s*(?:قطع|حب)', clean)
+    expected = int(claimed_count[1]) if claimed_count else (2 if re.search(r'(?:' + prefix + r'|اخر\s*)(?:قطعتين|حبتين)', clean)
+                else 1 if re.search(r'اخر\s*قطع[هة](?!\w)|قطع[هة]\s*اخير[هة]|' + prefix + r'قطع[هة](?:\s+وحد[هة])?(?!\w)', clean) else None)
+    for word, number in [('ثلاث', 3), ('اربع', 4), ('خمس', 5), ('ست', 6), ('سبع', 7), ('ثمان', 8), ('تسع', 9), ('عشر', 10)]:
+        if re.search(prefix + word + r'[هة]?\s*قطع', clean):
+            expected = number
+    if expected is not None and count != expected:
+        return 'لا تخترع العدد المتبقي أو آخر قطعة؛ استخدم عبارة الكمية القليلة المعتمدة دون رقم، واحتفظ ببقية الجواب.'
+    if ('limited_stock' in kinds and re.search(r'(?:قياس\s*\d+|اللون\s*\S+).{0,15}(?:باقي|اخر)|(?:باقي|اخر).{0,25}(?:قياس\s*\d+|اللون\s*\S+)', clean)):
+        return 'الكمية تخص الموديل كله؛ لا تنسب الندرة لقياس أو لون محدد دون مخزون منفصل معتمد.'
+    if kinds & {'high_demand', 'frequent_bookings', 'many_purchases'} and re.search(r'\d+\s*(?:زبون|زبائن|حجز|طلب|مبيع)|كل\s*الزبائن|اكثر.{0,15}(?:مبيع|طلب)', clean):
+        return 'استخدم تشجيع الطلب المعتمد بصياغة طبيعية؛ لا تضف أرقام مبيعات أو ادعاء الجميع أو الأكثر مبيعاً.'
+    if 'offer' in kinds and re.search(r'خصم|تخفيض', clean) and not re.search(r'خصم|تخفيض', normalized(offer)):
+        return 'العرض المعتمد لا يثبت خصماً؛ اذكر شروط العرض نفسها دون اختراع تخفيض.'
+    for match in re.finditer(r'اليوم\s*فقط|اخر\s*يوم|(?:ينتهي|ينفد|راح يخلص)\s+[^.،؟?\n]{1,25}', clean):
+        if match[0] not in normalized(offer):
+            return 'لا تخترع موعد نفاد أو نهاية عرض؛ احتفظ بالعبارة المعتمدة دون موعد وبالجواب الصحيح.'
+    return ''
+
+
+def repair_persuasion_reply(reply, product, history=None, question=''):
+    """Drop only unsupported marketing clauses, preserving factual answers.
+
+    No substitute facts are generated here. An empty return asks the caller to
+    use its catalog-backed recovery, rather than escalate a copy defect.
+    """
+    parts = re.split(r'(?<=[.!؟?؛])\s+|\n+|،|(?<!\d),(?!\d)|\s+(?=و(?:آخر|اخر|باقي|عليه طلب|عليها طلب|الكمية))', str(reply or ''))
+    kept = []
+    used = bool(explicit_pause(question) or _courtesy_only(question)
+                or (persuasion_used(history) if history is not None else False))
+    for part in parts:
+        part = part.strip(' ،؛')
+        if not part:
+            continue
+        kinds = _claim_kinds(part.lstrip('و'))
+        if kinds:
+            if used or persuasion_error(part, product):
+                continue
+            used = True
+        kept.append(part)
+    return ' '.join(kept).strip()
+
+
+def inspection_claim_error(reply, policy):
+    """Detect return or try-on promises beyond the current inspection policy."""
+    text = normalized(reply)
+    allowed = normalized(policy)
+    if re.search(r'تجرب(?:ين|ي|ون)?|تلبس(?:ين|ي|ون)?\s+(?:القطعه|الفستان)', text) and not re.search(r'تجرب|تلبس', allowed):
+        return 'سياسة الفحص لا تذكر تجربة القطعة؛ احذف وعد التجربة.'
+    if re.search(r'يرجع|ترجع|نرجع|ارجاع|بدون\s+(?:ما\s+)?تدفع|بدون\s+دفع|مجانا', text) and not re.search(r'يرجع|ترجع|ارجاع|بدون\s+دفع|مجانا', allowed):
+        return 'سياسة الفحص الحالية لا تتضمن وعد الإرجاع أو عدم الدفع؛ اذكر الفحص المعتمد فقط.'
+    return ''
+
+
+def repair_inspection_reply(reply, policy):
+    """Remove an unsupported return/try-on clause, preserving other facts."""
+    if not inspection_claim_error(reply, policy):
+        return str(reply or '')
+    allowed = normalized(policy)
+    parts = re.split(r'(?<=[.!؟?؛])\s+|\n+|،', str(reply or ''))
+    kept = []
+    for part in parts:
+        clean = normalized(part)
+        if not part.strip():
+            continue
+        if (not re.search(r'تجرب|تلبس', allowed)
+                and re.search(r'تجرب(?:ين|ي|ون)?|تلبس(?:ين|ي|ون)?\s+(?:القطعه|الفستان)', clean)):
+            continue
+        if (not re.search(r'يرجع|ترجع|ارجاع|بدون\s+دفع|مجانا', allowed)
+                and re.search(r'يرجع|ترجع|نرجع|ارجاع|بدون\s+(?:ما\s+)?تدفع|بدون\s+دفع|مجانا', clean)):
+            continue
+        kept.append(part.strip())
+    return '، '.join(kept).strip(' ،')
+
+
+def explicit_pause(question):
+    """Immediate dialogue interpretation; does not change follow-up eligibility."""
+    text = normalized(question)
+    return bool(_opted_out(text) or _declined(text) or re.search(
+        r'خل(?:ي|يني).{0,20}(?:افكر|استلم الراتب)|بعدين اطلب|مو هس[هة]|بعد الشهر|'
+        r'(?:افكر|اشاور|اسال).{0,18}(?:ارجع|اردل|بعدين)|ذكرني|ذكريني|'
+        r'(?:لا|مو|ما)\s*(?:تثبت\w*|ثبتي|تحجز\w*|احجزي)|بدون.{0,12}(?:تثبيت|تثبت|حجز)|'
+        r'(?:لا|ما)\s*(?:اريد\s*)?(?:اطلب|احجز|اشتري)\s*(?:هسه|هسة)', text))
+
+
+def _courtesy_only(question):
+    text = re.sub(r'[^\w\s]', '', normalized(question)).strip()
+    return bool(re.fullmatch(r'(?:السلام عليكم|وعليكم السلام|مرحبا|هلو|هلا|شكرا|تسلمين|تسلم|مشكور[هة]?|ممنون[هة]?)(?:\s+(?:عيني|حبيبتي|حبي|شكرا|جزيلا))*', text))
+
+
+def soft_indecision(question):
+    text = normalized(question)
+    return bool(not explicit_pause(text) and not _explicit_purchase(text)
+                and re.search(r'افكر|محتار|متردد|ما قررت|مو متاكد|مو متاكده', text))
 
 
 METHODS = {
-    'price': 'اعتراض السعر: اعترف بالميزانية بجملة قصيرة، ثم اربط ميزة موثقة واحدة بحاجة ذكرها الزبون. وضّح الكلفة الكلية والتوصيل. لا تستخدم الفحص كبديل لجواب السعر، ولا تخترع خصماً أو تقارن جودة المنافس بلا دليل. إن بقي خارج ميزانيته اعرض بديلاً واحداً مناسباً موجوداً فعلاً أو اسأل عن سقف الميزانية مرة واحدة.',
+    'price': 'اعتراض السعر: ابدأ بتفهم لطيف مثل «أفهمج، يهمج يكون السعر مناسب». اربط ميزة موثقة واحدة بحاجة ذكرها الزبون ووضّح الكلفة الكلية والتوصيل. لا تجادله ولا تقل «رخيص» ولا تستخدم الفحص كبديل لجواب السعر. إذا يريد الأرخص اقترح بديلاً مناسباً مرتبطاً بالموديل بسعره؛ لا تسأل عن الميزانية إذا ذكرها. إذا لا يوجد بديل والميزانية مجهولة اسأل عن سقفها مرة واحدة. إذا وافق على السعر وطلب الحجز أكمل الناقص ولا تعد للإقناع.',
     'trust': 'بناء الثقة: جاوب مصدر القلق تحديداً. عند الشك بالصورة اعرض تصويراً حقيقياً فقط إذا مرفق ومثبت، وإلا صرّح بأن الفيديو غير متوفر واطلب المعلومة من الموظف إذا لازمة للقرار. اشرح سياسة الفحص كما هي دون ضمان التطابق التام أو أن الفحص يسمح بالتجربة إلا إذا مصرح بذلك. لا تطلب العنوان قبل حسم السؤال.',
     'fit': 'ملاءمة القياس: فرّق بين وزن الزبون ومقاسه وبين أبعاد القطعة. اعتمد المقاس الصريح الذي اختاره ولا تعده بمقاس مضمون من الوزن. إن المقاس مقترح سابقاً اسأل عن اعتماده بصيغة محددة بدل إعادة السؤال. لا تستخدم طول جسم الزبون لإجابة طول القميص. عند غياب قياس بالسنتيمتر قل ما ينقص بالضبط.',
     'comparison': 'المقارنة: قارن خيارين موجودين فقط بمعايير طلبها الزبون: اللون أو القياس أو السعر أو القماش. اذكر الفرق العملي الموثق لكل خيار، ثم سؤال اختيار واحد. لا تعرض جميع الموديلات ولا تذم المنافس أو تدعي أن الأغلى أفضل دون دليل.',
@@ -17,6 +258,7 @@ METHODS = {
     'quantity_uncertain': 'العدد غير محسوم: اسأل عن العدد أولاً بسؤال واحد يميز المجموع عن عدد لون محدد؛ مثال «المطلوب ثلاث قطع بالمجموع لو ثلاث من الكريمي؟». لا تفترض أن ثلاث تخص لوناً معيناً ولا تضف سؤال القياس قبل حسم العدد ولا تنشئ الطلب.',
     'ready': 'إغلاق البيع: عند اختيار واضح وموافقة شراء انتقل مباشرة لإكمال الناقص فقط. اجمع الهاتف والمحافظة والعنوان في طلب قصير إذا جميعها ناقصة؛ لا تطلب الاسم إجبارياً. إذا اكتمل كل شيء ضع create_order=true وorder.items كاملة، ولا تقل تم التثبيت قبل نجاح النظام. لا تعاود عرض بدائل أو البيع الإضافي في هذه المرحلة.',
     'deferred': 'تأجيل القرار: احترم التوقيت ولا تستغل الراتب أو الضيق المالي للضغط. إذا طلب تذكيراً صريحاً بمدة محددة فلا تعد بأنه جُدول ما لم ينجح النظام؛ التأجيل وحده ليس موافقة على الملاحقة. بعد الشكر اختم بلا سؤال حجز جديد.',
+    'undecided': 'حيرة وليست طلب مهلة: اعترف بها بود مثل «أكيد عيني، أهم شي تكونين مرتاحة باختيارج». إذا السبب ظاهر عالجه مباشرة؛ وإلا اسأل مرة واحدة «التردد من القياس لو من السعر؟». لا تكرر السؤال إذا سبق توضيحه، ولا تعتبر الحيرة موافقة حجز. عند طلب مهلة صريح توقف عن الإقناع.',
     'refusal': 'رفض الشراء أو إيقاف التواصل: اختم بلطف بلا أسئلة بيع وبلا عروض إضافية وبلا إنشاء طلب. رفض لون أو موديل واحد ليس رفض التواصل كله؛ اعرض البديل فقط عندما يطلبه أو يوضح حاجته.',
     'discovery': 'اكتشاف الحاجة: أجب المعلومات المتاحة أولاً، واسأل فقط عن العامل الناقص الذي يحدد الاختيار. سؤال واحد سهل أفضل من استجواب. لا تسأل عن سبب الشراء أو المناسبة إذا لا يفيد القرار الحالي. لا تعرض فائدة لا ترتبط بحاجة صرح بها الزبون.',
 }
@@ -25,6 +267,8 @@ METHODS = {
 def upgrade_legacy_rules(text):
     """Replace only known obsolete built-in advice; retain custom store facts."""
     replacements = {
+        "الرد يجب أن يكون قصيراً جداً (جملة إلى جملتين، لا يتجاوز 30 كلمة).": "اكتب رداً عراقياً دافئاً ومختصراً يجيب جميع الأسئلة، دون سقف كلمات يحذف معلومة مفيدة.",
+        "لا تنهي رسالتك بنقطة أبداً، اختميها دائماً بسؤال (قياس، محافظة، أو حجز) لتبقى الزبونة متفاعلة.": "اختم بخطوة واحدة مفيدة فقط عند الحاجة، وبعد الرفض أو التأجيل أو الشكر اختم بلطف دون سؤال بيع.",
         "طول الرد إلزامي: من جملة إلى جملتين قصيرتين فقط (≤ 25 كلمة). ممنوع الإطالة.": "اجعل الرد مختصراً، لكن أجب جميع الأسئلة المهمة دون حد كلمات يحذف جواباً أو سعراً.",
         "إذا اكتملت بيانات الحجز (موبايل واضح + عنوان + منتج متوفر) اجعل create_order=true.": "إذا وافق الزبون صراحة واكتملت القطع وخياراتها والتكلفة وبيانات التوصيل اجعل create_order=true.",
         "لا تختم بسؤال عام مثل 'شنو تحبين تعرفين عنه؟' — اختم بسؤال بيع واضح يجلب الخطوة التالية مثل 'أحجزه إلج؟' أو 'دزّيلي العنوان والموبايل وأحجزه؟'.": "اختر خطوة تناسب قرار الزبون: أجب الاعتراض أولاً، ثم سؤال اختيار أو معلومة ناقصة. لا تطلب الحجز قبل إشارة شراء ولا بعد الرفض أو الشكر.",
@@ -60,7 +304,12 @@ def _declined(text):
     if negative and re.fullmatch(polite, plain[:negative.start()].strip()) and re.fullmatch(polite, plain[negative.end():].strip()):
         return True
     if re.search(r'(?:بس|لكن).{0,35}(?:شكد|شنو|سعر|صور|متوفر|اريد)', text):
-        return False
+        tail = re.split(r'(?:بس|لكن)', text)[-1]
+        # "شكراً بس ما أريد أحجز" ends the purchase; the negated
+        # "أريد" is not a new positive request. A real question still wins.
+        if (not re.search(r'(?:ما\s*ا+ريد|ماريد)\s*(?:اطلب|احجز|اشتري)', tail)
+                or re.search(r'شكد|شنو|سعر|صور|متوفر', tail)):
+            return False
     if re.search(r'ما\s*ا+ريد\s+(?:اطلب|احجز|اشتري)', text):
         return True
     if re.search(r'لا\s+شكرا(?:\s|[،.!؟?]|$)', text) and not re.search(r'اريد\s+(?:ال|بديل|غير)|خلي(?:ها|ه)?\s', text):
@@ -111,10 +360,18 @@ def signals(text):
     for key, pattern in patterns.items():
         if re.search(pattern,text):
             result.append(key)
+    if soft_indecision(text):
+        result = [key for key in result if key != 'deferred']
+        result.append('undecided')
     if re.search(r'ثنين|اثنين|ثلاث|اربع|\d+\s*قطع',text) and re.search(r'\b(?:لو|او)\b|محتار',text):
         result.append('quantity_uncertain')
     if _declined(text):
         return ['refusal']
+    # Mentioning a salary already received does not postpone a current order.
+    if ('deferred' in result and _explicit_purchase(text)
+            and not purchase_block_reason(text)
+            and not re.search(r'ذكرني|ذكريني', text)):
+        result.remove('deferred')
     # Negation must not be interpreted as purchase intent.
     if re.search(r'(?:لا|مو|ما)\s*(?:تثبت|ثبتي|احجز|اريد)',text) and 'ready' in result:
         result.remove('ready')
@@ -137,7 +394,7 @@ def guidance(ev, customer, history):
             'العمر أو الوزن نطاق تقريبي فقط، وجدول المنتج المحدد هو المرجع؛ إذا ذكر قياس ملابسه أو اختار قياساً صراحة لا تعاود طلبه بسبب ذكر الوزن. '
             'سؤال التوصيل قد يقصد المدة أو الرسم أو المنطقة: أجب المقصود أولاً. إذا الرسوم ثابتة لكل المحافظات فلا تطلب المحافظة لحساب رسم معروف. '
             'عند وجود اختيار سابق لا تعيد سؤال الموديل؛ عند الموافقة أكمل الحقول الناقصة وثبت الطلب بعد التحقق. '
-            'لا تكرر طلب الحجز بعد كل جملة؛ سؤال الخطوة التالية اختياري بعد جواب مكتمل، والرفض أو التأجيل أو الشكر لا يحتاج سؤال بيع. لا تستخدم ندرة أو تقييمات أو ضمانات أو هدايا غير موثقة. '
+            'لا تكرر طلب الحجز بعد كل جملة؛ اجعل سؤال الخطوة التالية مفيداً بعد جواب مكتمل. الحيرة تسمح بمساعدة واحدة، أما الرفض أو طلب المهلة الصريح أو الشكر فلا يحتاج سؤال بيع. لا تستخدم ندرة أو تقييمات أو ضمانات أو هدايا غير معتمدة. '
             'عند شرط شراء لم يحسم مثل وصول باجر أو عرض بالسنتيمتر، احسمه أو وضح حاجته للتأكيد قبل طلب البيانات؛ رقم الهاتف وحده لا يلغي الشرط.\n'
             + '\n'.join(METHODS[key] for key in selected)
             + '\nحقول التواصل الناقصة من الملف (قد تكون وصلت بالرسالة الحالية؛ اقرأها قبل السؤال): '
@@ -150,8 +407,9 @@ def reply_error(reply, question, product=None):
     if re.search(r'(?:انا|اني|انيه|وياج|وياك)\s+(?:(?:موظف|موظفه)(?:\s+المبيعات)?|بشر|انسان)|(?:انا|اني)\s+(?:مو|لست|ما)\s*(?:ذكاء|بوت|روبوت)', text):
         return 'لا تدع أنك موظف بشري؛ أنت المساعد الآلي للمتجر. إذا سُئلت عن هويتك أجب بصدق مع متابعة الإجابة عن السؤال.'
     evidence = normalized(' '.join(str((product or {}).get(k) or '') for k in ('stock','stock_quantity','offer','notes','description','real_photo_notes')))
-    if re.search(r'اخر قطع[هة]|باقي قطعتين|راح يخلص|قبل ما يخلص|الكمي[هة] محدود[هة]',text) and not re.search(r'اخر قطع[هة]|باقي قطعتين|كمي[هة] محدود[هة]',evidence):
-        return 'احذف الندرة غير الموثقة؛ أقنع بالمعلومة والفائدة الفعلية فقط.'
+    marketing_error = persuasion_error(reply, product, question=question)
+    if marketing_error:
+        return marketing_error
     if re.search(r'نفس الصور[ةه] بالضبط|مضمون.{0,12}(?:قياس|يلبس)|يناسب.{0,10}100%',text):
         return 'لا تضمن تطابق الصورة أو ملاءمة القياس؛ وضح البيانات وسياسة الفحص دون ضمان مختلق.'
     if re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',text) and not re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',evidence) and not re.search(r'ما عندي|ما متوفر|غير متوفر|لا يوجد|لا املك|مو متوفر',text):
@@ -189,11 +447,16 @@ def purchase_block_reason(question):
         return 'not_authorized'
     if kind == 'deferred':
         return 'deferred'
+    if soft_indecision(text):
+        return 'undecided'
     return ''
 
 
 def decision_error(result, question):
-    if purchase_block_reason(question) and (result.get('create_order') or re.search(r'تم تثبيت|تم حجز|ثبتنا|ثبتنالج',str(result.get('reply') or ''))):
+    reply = normalized(result.get('reply'))
+    confirmed = any(not re.search(r'(?:ما|لم|مو)\s*(?:يتم\s*)?$', reply[max(0, hit.start()-18):hit.start()])
+                    for hit in re.finditer(r'تم تثبيت|تم حجز|ثبتنا|ثبتنالج', reply))
+    if purchase_block_reason(question) and (result.get('create_order') or confirmed):
         return 'الرسالة الحالية تمنع الحجز أو تؤجل القرار. create_order=false ولا تؤكد تثبيتاً؛ أجب الاستفسار فقط واحترم الاختيار.'
     return ''
 
@@ -212,25 +475,41 @@ def _has_weight_size_table(product):
 
 def _declared_size(question):
     text = normalized(question)
-    return bool(re.search(r'(?:قياسي|مقاسي|البس)\s*\d{2}|اريد(?:ه|ها)?\s*(?:قياس|مقاس)\s*\d{2}', text))
+    return bool(re.search(r'(?:قياسي|مقاسي|البس|قياس|مقاس|سايز)\s*(?:\d{2}(?!\d)|[2-6]?xl|xxl|xxxl|[sml])(?!\w)|اريد(?:ه|ها)?\s*(?:[2-6]?xl|xxl|xxxl|xs|[sml])(?!\w)', text))
+
+
+def measurement_fact(product, kind):
+    """A labelled numerical garment measurement, never a staff instruction."""
+    labels = {'width': r'عرض(?:ه|ها)?|تحت الابط|محيط الصدر',
+              'length': r'طول(?:ه|ها)?|الطول'}
+    if kind not in labels:
+        return ''
+    for key in ('measurements', 'notes', 'description', 'fit_notes'):
+        value = customer_copy.fact((product or {}).get(key)).strip()
+        for clause in re.split(r'[\n؛;]+|(?<=[.!؟?])\s+', value):
+            clean = normalized(clause)
+            if (len(clause) <= 220 and not customer_copy.has_instructions(clause)
+                    and not re.search(r'يحتاج|تاكيد|ما عندي|غير معروف|[؟?]', clean)
+                    and re.search(r'(?:' + labels[kind] + r').{0,35}?\d{1,3}(?:[.,]\d+)?\s*(?:سم|سانتي|سنتيمتر|cm)(?!\w)', clean)):
+                return clause
+    return ''
 
 
 def missing_fact_reply(question, product):
     if not product:
         return ''
     text=normalized(question)
-    product_measurements = normalized(' '.join(str(product.get(k) or '')
-                                      for k in ('sizes', 'notes', 'description', 'measurements', 'fit_notes')))
     if (re.search(r'وزن|وزني|كيلو|كغم', text)
             and not _has_weight_size_table(product) and not _declared_size(question)):
         return 'الوزن وحده ما يكفي أحدد قياس مضبوط لهالموديل؛ شنو قياس الملابس المعتاد؟'
     if 'فيديو' in text and not product.get('video_url'):
         return 'هسه ما عندي فيديو لهالموديل، المتوفر صوره.'
-    if re.search(r'عرض(?:ه|ها)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not re.search(r'عرض|ابط|محيط الصدر',product_measurements):
+    if re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not measurement_fact(product, 'width'):
         return 'عرض القطعة بالسنتيمتر يحتاج قياس من المتجر حتى نتأكد من الرقم الصحيح.'
     return ''
 
 
 def fact_requires_human(question, product):
     text = normalized(question)
-    return bool(re.search(r'عرض|تحت الابط|محيط الصدر', text)) and bool(missing_fact_reply(question, product))
+    return (bool(product) and bool(re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر', text))
+            and not measurement_fact(product, 'width'))

@@ -1,10 +1,27 @@
-"""Group approved text into 1–5 meaningful bubbles without rewriting facts."""
-import re
+"""Keep approved replies coherent and limit customer notifications.
 
-MAX_PARTS = 5
-TARGET_LENGTH = 220
+The approved ``reply`` is authoritative. Model-proposed parts are only layout
+hints: they cannot replace, omit or resurrect facts after a reply correction.
+"""
+import re
+import math
+
+MAX_PARTS = 3
+# Most sales replies fit comfortably in one bubble, including the next question.
+# This is a grouping target, never a hard cut or permission to truncate a fact.
+TARGET_LENGTH = 600
+MAX_SALES_MESSAGES = 5
+SALES_TARGET_LENGTH = 230
 LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)\-])\s+")
-NEXT_QUESTION = r"(?:شنو|شكد|يا قياس|أي قياس|اي قياس|تحبين|تفضلين|تفضلينه|من يا محافظة)\b"
+
+
+def polish_surface_punctuation(reply):
+    """Remove adjacent punctuation artifacts without changing approved facts."""
+    if not isinstance(reply, str):
+        return reply
+    reply = re.sub(r'([.!؟?؛])\s*[،؛]', r'\1', reply)
+    reply = re.sub(r'،\s*،', '،', reply)
+    return reply
 
 
 def semantic_units(text):
@@ -37,22 +54,9 @@ def semantic_units(text):
             sentences.append(block[start:left].strip())
             start = right
         sentences.append(block[start:].strip())
-        for sentence in sentences:
-            # Iraqi replies often separate independent ideas with commas only.
-            boundaries = list(re.finditer(
-                r"(?<=[،,])\s+(?=(?:و?(?:السعر|سعره|سعرها|القماش|قماشه|قماشها|التوصيل|الفحص|القياسات|الألوان)\b|"
-                + NEXT_QUESTION + r"))|\s+(?=" + NEXT_QUESTION + r")", sentence))
-            start = 0
-            for boundary in boundaries:
-                left = sentence[start:boundary.start()].strip()
-                right = sentence[boundary.end():].strip()
-                question = bool(re.match(NEXT_QUESTION, right) and re.search(r"[؟?]$", right))
-                changed_topic = bool(topic(left) and topic(right) and topic(left) != topic(right))
-                if len(compact(left)) >= 45 and (question or changed_topic or len(left) > TARGET_LENGTH):
-                    units.append(left)
-                    start = boundary.end()
-            if sentence[start:].strip():
-                units.append(sentence[start:].strip())
+        # A comma or a change of subject is not a message boundary. In
+        # particular, keep price + delivery + total and answer + question intact.
+        units.extend(sentence for sentence in sentences if sentence)
     return units
 
 
@@ -85,62 +89,202 @@ def receipt(text):
 
 def cost_detail(text):
     return bool(re.search(r"سعر|السعر|المجموع|الإجمالي|الاجمالي", text)
+                or re.search(r"\d[\d,.٬]*\s*(?:د\.\s*ع\.?|دينار|ألف|الف)", text)
                 or (re.search(r"توصيل|شحن", text) and re.search(r"\d|مجاني", text)))
 
 
 def approved_parts(result, reply):
-    if not reply or not reply.strip():
+    if result.get('_sales_bubble_plan'):
+        return plan_sales_bubbles(result, reply)['reply_parts']
+    if not isinstance(reply, str) or not reply.strip():
         return []
+    reply = reply.strip()
     if result.get("_single_message") or receipt(reply):
         return [reply]
     proposed = result.get('reply_parts')
-    if (result.get('_ordered_album') and isinstance(proposed, list) and proposed
-            and all(isinstance(p, str) and p.strip() for p in proposed)
-            and compact(' '.join(proposed)) == compact(reply)):
-        # One customer photo per bubble, even for albums larger than five.
-        return [p.strip() for p in proposed]
-    # Short answers and courtesies do not benefit from extra message bubbles.
-    if len(compact(reply)) <= 100 and not re.search(r'\n\s*\n', reply):
-        return [reply]
-    proposed = result.get("reply_parts")
     valid = (isinstance(proposed, list) and proposed
              and all(isinstance(p, str) and p.strip() for p in proposed)
              and compact(" ".join(proposed)) == compact(reply))
-    if valid:
-        # A model-proposed single wall of text still needs semantic layout.
-        parts = [unit for p in proposed for unit in semantic_units(p)]
-    else:
-        # Never resurrect unchecked model parts after a checker replaced reply.
-        parts = semantic_units(reply)
-
-    grouped = []
+    # Blank paragraphs and model hints must not turn a short, connected answer
+    # into a stream of notifications, even when each sentence has a new topic.
+    if len(compact(reply)) <= TARGET_LENGTH:
+        return [reply]
+    album = bool(result.get('_ordered_album') and valid)
+    # An album item is indivisible, but several photo descriptions can share one
+    # bubble. For ordinary replies derive boundaries from the approved text so
+    # the same reply has the same delivery plan despite arbitrary model parts.
+    parts = [p.strip() for p in proposed] if album else semantic_units(reply)
+    units = []
     for part in parts:
-        if grouped:
-            previous = grouped[-1]
-            same_topic = bool(topic(previous) and topic(previous) == topic(part))
-            previous_fragment = (len(compact(previous)) < 30 and not re.search(r"[؟?]$", previous))
-            continuation = bool(re.match(r"^(?:لأن|لان|وإذا|واذا|يعني)\s", part))
-            separate_question = bool(re.search(r"[؟?]$", part) and not re.search(r"[؟?]$", previous))
-            combined_length = len(compact(previous)) + len(compact(part))
+        if units and not album:
+            previous = units[-1]
+            continuation = bool(re.match(r"^(?:لأن|لان|و?إذا|و?اذا|يعني|بس|لكن|و?بشرط|و?حتى|أو|او)\s", part))
             contact_fields = topic(previous) == topic(part) == "contact"
             price_total = cost_detail(previous) and cost_detail(part)
-            # Keep related explanations, contact fields and greeting+answer together.
-            if (is_greeting(previous) or contact_fields
-                    or (not separate_question and (price_total or continuation
-                        or ((previous_fragment or same_topic) and combined_length <= TARGET_LENGTH)))):
-                grouped[-1] = previous + "\n\n" + part
+            question = bool(re.search(r"[؟?]$", part))
+            # A soft line wrap cannot split a sentence or a conditional clause.
+            fragment = (not re.search(r"[.!؟?؛:]$", previous)
+                        or (len(compact(previous)) < 30 and not re.search(r"[؟?]$", previous)))
+            if is_greeting(previous) or fragment or contact_fields or price_total or continuation or question:
+                units[-1] = previous + "\n\n" + part
                 continue
-        grouped.append(part)
-
-    if len(grouped) > 1 and len(compact(grouped[-1])) < 20 and not re.search(r"[؟?]$", grouped[-1]):
+        units.append(part)
+    if len(units) < 2:
+        return [reply]
+    grouped = []
+    for unit in units:
+        if grouped and len(compact(grouped[-1] + " " + unit)) <= TARGET_LENGTH:
+            grouped[-1] += "\n\n" + unit
+        else:
+            grouped.append(unit)
+    # Do not send a tiny final fragment as another notification.
+    if len(grouped) > 1 and len(compact(grouped[-1])) < 100:
         grouped[-2:] = ["\n\n".join(grouped[-2:])]
     while len(grouped) > MAX_PARTS:
-        # Merge adjacent related/short sections; retain order and every fact.
+        # Merge whole adjacent sections; retain order and every approved fact.
         def cost(index):
             left, right = grouped[index:index + 2]
             related = bool(topic(left) and topic(left) == topic(right))
-            final_question = index + 1 == len(grouped) - 1 and re.search(r"[؟?]$", right)
-            return (bool(final_question), not related, len(left) + len(right))
+            return (not related, len(left) + len(right))
         index = min(range(len(grouped) - 1), key=cost)
         grouped[index:index + 2] = ["\n\n".join(grouped[index:index + 2])]
     return grouped
+
+
+def _single_sales_kind(result, reply):
+    """System-owned phase markers outrank sales grouping."""
+    meta = result.get('meta') or {}
+    phase = str(result.get('_response_kind') or result.get('intent') or '').lower()
+    if receipt(reply) or phase in {'confirmation', 'order_confirmation'}:
+        return 'confirmation'
+    if (result.get('_service_reply') or result.get('_post_order') or meta.get('post_order_followup')
+            or phase in {'service', 'post_order', 'post_order_followup', 'complaint', 'support'}):
+        return 'service'
+    clean = compact(reply).strip(' .!،🌸🌷✨💐❤️🤍')
+    if re.fullmatch(r'(?:شكرا|شكراً|تسلمين|مشكورة|تدللين|تدلل|العفو|بالخدمة)(?:\s+(?:عيني|حبيبتي|عمري|دائماً|دائما|كلبي))*', clean):
+        return 'thanks'
+    if (phase in {'optout', 'opt_out', 'refusal', 'decline', 'thanks', 'thank_you'}
+            or (len(clean) <= 180 and not cost_detail(clean) and not re.search(r'[؟?]', clean)
+                and re.search(r'ما\s+راح\s+(?:نراسل|أ?ثبت|نثبت)|براحت[جك]|بدون ضغط', clean))):
+        return 'optout'
+    return ''
+
+
+def _sales_units(reply):
+    """Recognize independent sales functions, keeping every approved character."""
+    markers = (r'(?:و?(?:السعر|سعره|سعرها|القماش|قماشه|قماشها|الخامة|القياسات|قياساته|'
+               r'الألوان|الالوان|ألوانه|التوصيل|الفحص|المجموع|الإجمالي|الاجمالي)\b|'
+               r'شنو\b|شكد\b|تحبين\b|تحب\b|تكدرين\b|تقدرين\b|ممكن\b|بس\s+(?:كوليلي|كليلي|قوليلي)\b|(?:و?إذا|و?اذا)\s+(?:تحبين|تكليلي|تكليني|تكدرين|تقدرين)\b|أي قياس\b|اي قياس\b)')
+    pieces = []
+    for unit in semantic_units(reply):
+        if '\n' in unit or LIST_ITEM.match(unit):
+            pieces.append(unit)
+            continue
+        # A comma can separate a full fact from the next sales function, but a
+        # number/currency, URL, arbitrary word count or soft wrap cannot.
+        cuts = list(re.finditer(r'(?<=[،,.!?؟؛])\s+(?=' + markers + r')', unit))
+        start = 0
+        for cut in cuts:
+            pieces.append(unit[start:cut.start()].strip())
+            start = cut.end()
+        pieces.append(unit[start:].strip())
+    atomic = []
+    for piece in pieces:
+        if not piece:
+            continue
+        if atomic:
+            previous = atomic[-1]
+            question = bool(re.search(r'[؟?]$', piece))
+            costs = (cost_detail(previous) and (cost_detail(piece) or topic(piece) == 'delivery'))
+            contact_fields = topic(previous) == topic(piece) == 'contact'
+            fit_explanation = topic(previous) == topic(piece) == 'fit' and not question
+            continuation = bool(re.match(r'^(?:لأن|لان|و?إذا|و?اذا|يعني|بس|لكن|و?بشرط|أو|او)\s', piece))
+            if question and (re.match(r'^بس\s+(?:حتى\s+(?:أ?ساعدج|نساعدج)|كوليلي|كليلي|قوليلي)', piece)
+                             or re.match(r'^(?:و?إذا|و?اذا)\s+(?:تحبين|تكليلي|تكليني|تكدرين|تقدرين)', piece)):
+                continuation = False  # A new decision request is its own useful bubble.
+            fresh_function = bool(re.match(
+                r'^(?:و?(?:السعر|سعره|سعرها|القماش|قماشه|قماشها|الخامة|القياسات|قياساته|'
+                r'الألوان|الالوان|ألوانه|التوصيل|الفحص|المجموع|الإجمالي|الاجمالي)\b|'
+                r'شنو\b|شكد\b|تحبين\b|تحب\b|تكدرين\b|تقدرين\b|ممكن\b|حتى نكمل\b)', piece))
+            unfinished = not re.search(r'[.!؟?؛:،,]$', previous) and not fresh_function
+            if is_greeting(previous) or costs or contact_fields or fit_explanation or continuation or unfinished:
+                atomic[-1] = previous + '\n\n' + piece
+                continue
+        atomic.append(piece)
+    # If model prose interleaved another fact with quoted cost components,
+    # preserve its order while keeping the complete quote in one bubble.
+    cost_indices = [index for index, unit in enumerate(atomic) if cost_detail(unit)]
+    if len(cost_indices) > 1:
+        first, last = cost_indices[0], cost_indices[-1]
+        atomic[first:last + 1] = ['\n\n'.join(atomic[first:last + 1])]
+    return atomic
+
+
+def plan_sales_bubbles(result, reply, image_urls=None):
+    """Plan 2–5 visible sales messages, counting photos in the same budget.
+
+    The caller must persist and send this exact plan. ``needs_rewrite`` is a
+    validation failure, never permission to pad the reply, silently remove
+    facts, or claim deferred photos have been sent. This function has no I/O.
+    Exceptions keep one text bubble; media that would exceed a one-message
+    exception need a caption-capable sender or a corrected response upstream.
+    """
+    result = result or {}
+    reply = reply.strip() if isinstance(reply, str) else ''
+    if image_urls is None:
+        image_urls = (result.get('product_image_urls') or result.get('image_urls')
+                      or ([result['product_image_url']] if result.get('product_image_url') else []))
+        if not result.get('send_image'):
+            image_urls = []
+    if isinstance(image_urls, str):
+        image_urls = [image_urls]
+    images = list(dict.fromkeys(value.strip() for value in image_urls or []
+                                if isinstance(value, str) and value.strip()))
+    kind = _single_sales_kind(result, reply)
+    # Reserve a text slot whenever a validated reply exists. An image-only
+    # response can use all five slots without inventing a caption.
+    image_cap = MAX_SALES_MESSAGES - bool(reply)
+    selected, deferred = images[:image_cap], images[image_cap:]
+    limit = max(1, MAX_SALES_MESSAGES - len(selected))
+    reasons = []
+    proposed = result.get('reply_parts')
+    valid = (isinstance(proposed, list) and proposed
+             and all(isinstance(part, str) and part.strip() for part in proposed)
+             and compact(' '.join(proposed)) == compact(reply))
+    if kind or result.get('_single_message'):
+        parts = [reply] if reply else []
+    else:
+        # Album descriptions are atomic. A model's arbitrary parts never alter
+        # the approved text or override semantic protection of cost/conditions.
+        units = ([part.strip() for part in proposed] if result.get('_ordered_album') and valid
+                 else _sales_units(reply))
+        duplicate_units = semantic_units(reply)
+        if (len({compact(unit) for unit in units}) < len(units)
+                or len({compact(unit) for unit in duplicate_units}) < len(duplicate_units)):
+            reasons.append('duplicate_sales_content')
+        parts = list(units)
+        desired = min(limit, max(2, math.ceil(len(compact(reply)) / SALES_TARGET_LENGTH)))
+        while len(parts) > desired:
+            def merge_cost(index):
+                left, right = parts[index:index + 2]
+                final_question = index + 1 == len(parts) - 1 and bool(re.search(r'[؟?]$', right))
+                related = bool(topic(left) and topic(left) == topic(right))
+                return (final_question, not related, len(left) + len(right))
+            index = min(range(len(parts) - 1), key=merge_cost)
+            parts[index:index + 2] = ['\n\n'.join(parts[index:index + 2])]
+        if not parts and reply:
+            parts = [reply]
+        elif len(parts) == 1:
+            parts = [reply]
+    total = len(parts) + len(selected)
+    if deferred:
+        reasons.append('deferred_images_require_pagination')
+    if kind and total > 1:
+        reasons.append('exception_requires_one_visible_message')
+    elif not kind and total and total < 2:
+        reasons.append('insufficient_distinct_sales_messages')
+    if parts and compact(' '.join(parts)) != compact(reply):
+        raise ValueError('Sales layout changed the approved reply')
+    return {'reply': reply, 'reply_parts': parts, 'image_urls': selected,
+            'deferred_image_urls': deferred, 'total_messages': total,
+            'exception': kind or None, 'needs_rewrite': bool(reasons), 'rewrite_reasons': reasons}

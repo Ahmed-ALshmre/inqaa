@@ -2,12 +2,12 @@
 import re
 
 try:
-    from . import customer_copy
+    from . import customer_copy, sales_strategy, product_variants
     from .checkout import normalized
     from .pricing import terms, offer_tiers, quote
     from .sales_playbook import requested_quantity
 except ImportError:
-    import customer_copy
+    import customer_copy, sales_strategy, product_variants
     from checkout import normalized
     from pricing import terms, offer_tiers, quote
     from sales_playbook import requested_quantity
@@ -27,15 +27,15 @@ def topics(question):
         'inspection': r'فحص|افحص|ارجع|يرجع',
         'video': r'فيديو',
         'weight_fit': r'وزن|كيلو|كغم',
-        'width': r'عرض(?:ه|ها)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',
+        'width': r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',
         'length': r'طول(?:ه|ها)|(?<!\w)الطول(?!\w)|طول (?:القطعة|الفستان|القميص|الموديل|البنطرون|البنطلون|الكيلوت|اكيلوت|التنورة|العباءة)',
         'lining': r'بطان|مبطن',
         'stretch': r'مطاط|ليكرا|يتمدد',
-        'closure': r'ينفتح|سحاب|سح?اب|اغلاق|ازرار',
+        'closure': r'ينفتح|سحاب|سح?اب|اغلاق|ازرار|زرار|كبس',
         'location': r'وين\s+(?:المحل|محلكم|موقعكم)|عنوان\s+المحل|موقع\s+المحل',
         'checkout_help': r'شلون\s+(?:اطلب|احجز)|كيف\s+(?:اطلب|احجز)|طريقة\s+(?:الطلب|الحجز)',
         'specifications': r'مواصفات|تفاصيل\s+(?:الموديل|الفستان|القطعة)',
-        'composition': r'هو\s+قطعتين|قطعتين\s+يعني|قطعة\s+وحد[ةه]|(?:فستان|تنور[ةه])\s+لو\s+(?:فستان|تنور[ةه]|قطعتين)',
+        'composition': r'هو\s+قطعتين|قطعتين\s+يعني|(?:هو|هي|الموديل|الفستان)\s+قطعة\s+وحد[ةه]|(?:فستان|تنور[ةه])\s+لو\s+(?:فستان|تنور[ةه]|قطعتين)',
     }
     for key, pattern in patterns.items():
         if re.search(pattern, text):
@@ -93,13 +93,12 @@ def product_fragments(question, product):
             facts.append(f'{label}: {value}.')
         else:
             gaps.append(f'{label} يحتاج تأكيد من المتجر.')
-    measurements = customer_copy.fact(product.get('measurements')).strip()
-    for key, label, pattern in [('width', 'عرض القطعة بالسنتيمتر', r'عرض|ابط|محيط الصدر'),
-                                ('length', 'طول القطعة', r'طول')]:
+    for key, label in [('width', 'عرض القطعة بالسنتيمتر'), ('length', 'طول القطعة')]:
         if key in selected:
-            if measurements and len(measurements) <= 220 and re.search(pattern, normalized(measurements)):
-                if measurements not in facts:
-                    facts.append(measurements)
+            measurement = sales_strategy.measurement_fact(product, key)
+            if measurement:
+                if measurement not in facts:
+                    facts.append(measurement)
             else:
                 gaps.append(f'{label} يحتاج قياس من المتجر حتى نتأكد من الرقم الصحيح.')
     if 'video' in selected and not product.get('video_url'):
@@ -116,9 +115,27 @@ def product_fragments(question, product):
     return list(dict.fromkeys(facts)), list(dict.fromkeys(gaps))
 
 
+def evidence_text(item):
+    """Interpret a short answer only when the saved question establishes its unit."""
+    value = str(item.get('text') or '')
+    question = normalized(item.get('in_reply_to'))
+    clean = normalized(value).strip(' .!،؟?')
+    if (re.search(r'ميزاني|حدود السعر|سقف السعر', question)
+            and re.fullmatch(r'\d{1,7}\s*(?:الف|الاف)?(?:\s+(?:ويا|مع)\s+التوصيل)?', clean)):
+        return 'ميزانيتي ' + clean
+    if re.fullmatch(r'\d{1,3}|[2-6]?xl|xxl|xxxl|xs|[sml]', clean):
+        # Several different numeric slots in one question are ambiguous.
+        if re.search(r'قياس|مقاس|سايز', question) and not re.search(r'عمر|وزن|عدد|كمية|كم قط|شكد قط', question):
+            return 'قياس ' + clean
+        if (re.search(r'عمر', question) and re.search(r'بالسنوات|سنوات|سنين|سنة|سنه', question)
+                and not re.search(r'شهر|اشهر|قياس|مقاس|وزن|عدد|كمية', question)):
+            return 'عمر ' + clean + ' سنوات'
+    return value
+
+
 def known_budget(question, context=None):
     """Read the latest explicit user budget, never an assistant's offered price."""
-    sources = [item.get('text') or '' for item in (context or {}).get('evidence') or []]
+    sources = [evidence_text(item) for item in (context or {}).get('evidence') or []]
     sources.append(question)
     for value in reversed(sources):
         text = normalized(value).replace(',', '').replace('٬', '')
@@ -162,4 +179,34 @@ def missing_answers(reply, question, product):
         missing.append('عدم توفر فيديو حالياً')
     if 'delivery' in selected and not re.search(r'توصيل|شحن|مجاني', clean):
         missing.append('التوصيل')
+    # Check coverage separately from factual accuracy. A fee alone does not
+    # answer an arrival question, and a price cannot replace a lining answer.
+    coverage = {
+        'delivery_time': ('مدة الوصول', r'يوم|ايام|اسبوع|باجر|باكر|خلال|مد[ةه]|وقت.{0,16}(?:وصول|توصيل)|موعد.{0,16}(?:تاكيد|مضمون)'),
+        'payment': ('طريقة الدفع', r'دفع|ادفع|استلام|كاش|نقد|بطاق|تحويل'),
+        'inspection': ('الفحص والإرجاع', r'فحص|افحص|ارجاع|يرجع|ترجع|استبدال'),
+        'lining': ('البطانة', r'بطان|مبطن'),
+        'stretch': ('المطاط', r'مطاط|ليكرا|يتمدد|تمدد'),
+        'closure': ('الإغلاق', r'سحاب|كبس|ازرار|زرار|اغلاق|ينفتح'),
+        'width': ('عرض القطعة', r'عرض|ابط|محيط الصدر'),
+        'length': ('طول القطعة', r'طول'),
+        'location': ('عنوان المحل', r'محل|عنوان|موقع|شارع|منطق[ةه]'),
+        'checkout_help': ('طريقة الحجز', r'حجز|طلب|نحدد|رقم|عنوان'),
+        'weight_fit': ('ملاءمة القياس', r'وزن|كيلو|كغم|قياس|مقاس|سايز|جدول'),
+        'composition': ('محتويات الموديل', r'قطعتين|قطع[ةه]|طقم|مكون|محتو'),
+    }
+    for key, (label, pattern) in coverage.items():
+        if key == 'weight_fit' and sales_strategy._declared_size(question):
+            continue
+        if key in selected and not re.search(pattern, clean):
+            missing.append(label)
+    # A declared choice ("الأسود قياس 44، شنو قماشه؟") is not a second
+    # question. Require an actual options/availability question here.
+    if ('colors' in selected and re.search(r'الوان|(?:لون|الاسود|الابيض|الوردي|الجوزي).{0,16}(?:متوفر|موجود)|(?:متوفر|موجود).{0,16}(?:لون|الاسود|الابيض|الوردي|الجوزي)', text)
+            and not product_variants.colors(clean) and not re.search(r'لون|الوان', clean)):
+        missing.append('الألوان')
+    if ('sizes' in selected and re.search(r'قياسات|مقاسات|(?:شنو|شكد|كم).{0,12}(?:قياس|مقاس)|(?:قياس|مقاس)(?:ه|ها)\s*(?:شكد|شنو)|(?:قياس|مقاس)\s*\d+\s*(?:متوفر|موجود)', text)
+            and not re.search(r'قياس|مقاس|سايز', clean)
+            and not product_variants.size_data(clean)['known']):
+        missing.append('القياسات')
     return missing

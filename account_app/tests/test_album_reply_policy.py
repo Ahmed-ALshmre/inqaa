@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from account_app import customer_copy, product_albums
-from account_app.reply_layout import approved_parts
+from account_app.reply_layout import approved_parts, compact
 from account_app.tests import test_ordered_sales_learning as fixtures
 
 GUIDANCE = ('قياسات هذا المنتج من 38 إلى 52، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو. '
@@ -17,7 +17,7 @@ class AlbumCopyTests(unittest.TestCase):
         products[0].update(sizes=GUIDANCE)
         images = [{'product_found':False}, {'product_found':True,'product_id':'A'}]
         result = product_albums.response(images, products, 'مرحبا متوفر قياس 38')
-        self.assertEqual(len(approved_parts(result, result['reply'])), 2)
+        self.assertEqual(approved_parts(result, result['reply']), [result['reply']])
         self.assertIn('مو متوفر عدنا حالياً', result['reply_parts'][0])
         self.assertIn('17,000', result['reply_parts'][1])
         self.assertIn('قياس 38 موجود ضمن قياساته', result['reply_parts'][1])
@@ -39,16 +39,35 @@ class AlbumCopyTests(unittest.TestCase):
         self.assertIn('مو متوفر',reply)
         self.assertNotIn('17,000',reply)
 
-    def test_more_than_five_photos_stay_in_separate_bubbles_through_delivery(self):
+    def test_seven_photo_answers_share_coherent_bubbles_without_losing_order_or_facts(self):
         from account_app import app as m
         images = [{'product_found':True,'product_id':'A'} for _ in range(7)]
         result = dict(product_albums.response(images, fixtures.CATALOG), sender_id='offline-album')
         with patch.object(m,'send_text_to_facebook',return_value=True) as send:
             self.assertTrue(m.send_webhook_result_to_facebook(result))
         delivered = [call.args[1] for call in send.call_args_list]
-        self.assertEqual(delivered, result['reply_parts'])
-        self.assertEqual(len(delivered),7)
-        self.assertTrue(all(part.startswith(product_albums.reference(i)) for i,part in enumerate(delivered,1)))
+        self.assertEqual(delivered, [result['reply']])
+        self.assertTrue(1 <= len(delivered) <= 3)
+        self.assertEqual(compact(' '.join(delivered)), compact(result['reply']))
+        for original in result['reply_parts']:
+            self.assertEqual(result['reply'].count(original), 1)
+            self.assertTrue(any(original in part for part in delivered))
+        positions = [result['reply'].index(product_albums.reference(index)) for index in range(1, 8)]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(result['reply'].count('17,000'), 7)
+
+    def test_single_model_answers_use_model_name_without_an_unrelated_first_photo_label(self):
+        for images, question, expected in [
+            ([{'product_found': True, 'product_id': 'A'}], '', 'متوفر عيني، كيلوت بـ17,000'),
+            ([{'product_found': True, 'product_id': 'A'}], 'متوفر قياس 54؟', 'كيلوت، قياس 54 مو موجود'),
+            ([{'product_found': True, 'product_id': 'C'}], '', 'قميص مو متوفر'),
+            ([{'product_found': False}], '', product_albums.UNKNOWN_REPLY),
+        ]:
+            with self.subTest(question=question, expected=expected):
+                result = product_albums.response(images, fixtures.CATALOG, question)
+                self.assertTrue(result['reply'].startswith(expected), result['reply'])
+                self.assertNotIn('الأول', result['reply'])
+                self.assertFalse(result['create_order'])
 
     def test_replaced_reply_does_not_resurrect_old_album_parts(self):
         result = product_albums.response([{'product_found':True,'product_id':'A'}]*2, fixtures.CATALOG)
@@ -71,15 +90,21 @@ class AlbumPipelineTests(unittest.TestCase):
     event = fixtures.OrderedSalesPipelineTests.event
     process = fixtures.OrderedSalesPipelineTests.process
 
-    def test_partial_album_sent_as_three_bubbles_and_saved_without_internal_text(self):
+    def test_partial_album_answers_stay_ordered_in_one_bubble_and_saved_without_internal_text(self):
         catalog = copy.deepcopy(fixtures.CATALOG)
         catalog[0]['sizes'] = GUIDANCE
         with patch.object(fixtures,'CATALOG',catalog):
             result,send,model = self.process([{'product_found':True,'product_id':'A'},
                                              {'product_found':False}, {'product_found':True,'product_id':'B'}], 'متوفر قياس 38؟')
         sent = send.call_args.args[0]
-        self.assertEqual(len(sent['reply_parts']),3)
-        self.assertEqual(approved_parts(sent,sent['reply']),sent['reply_parts'])
+        self.assertEqual(' '.join(sent['reply_parts']).split(), sent['reply'].split())
+        self.assertTrue(2 <= len(sent['reply_parts']) <= 5)
+        self.assertEqual(sent['_planned_sales_layout']['parts'], sent['reply_parts'])
+        self.assertEqual(sent['reply'].count('قياس 38 موجود ضمن قياساته'), 2)
+        self.assertIn('17,000', sent['reply'])
+        self.assertIn('12,000', sent['reply'])
+        self.assertLess(sent['reply'].index('الأول'), sent['reply'].index('الثاني'))
+        self.assertLess(sent['reply'].index('الثاني'), sent['reply'].index('الثالث'))
         rows = self.db.execute("SELECT text FROM messages WHERE direction='outgoing' ORDER BY id").fetchall()
         self.assertEqual([r[0] for r in rows],sent['reply_parts'])
         self.assertFalse(customer_copy.has_instructions(sent['reply']))

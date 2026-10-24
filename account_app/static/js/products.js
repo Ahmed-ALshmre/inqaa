@@ -2,6 +2,7 @@ const DASH_KEY = new URLSearchParams(window.location.search).get('key') || '';
 let allProducts = [];
 let currentProductId = null;
 let productImageColors = {};
+let relatedProductIds = new Set();
 
 const fields = {
   product_id: 'productId',
@@ -42,6 +43,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initProductsStoreSelector();
   loadProducts();
   document.getElementById('productImages').addEventListener('input', renderImagePreview);
+  document.getElementById('relatedProductsSearch').addEventListener('input', renderRelatedProducts);
+  document.getElementById('productId').addEventListener('input', renderRelatedProducts);
 });
 
 function apiFetch(url, opts = {}) {
@@ -85,6 +88,7 @@ async function loadProducts() {
     allProducts = data.products || [];
     renderProducts();
     if (!currentProductId) newProduct(false);
+    else renderRelatedProducts();
   } catch (err) {
     showToast(err.message || 'فشل تحميل المنتجات', 'danger');
   }
@@ -125,12 +129,14 @@ function renderProducts() {
 function newProduct(rerender = true) {
   currentProductId = null;
   productImageColors = {};
+  relatedProductIds = new Set();
   document.getElementById('productForm').reset();
   document.getElementById('productStatus').value = 'active';
   document.getElementById('productId').disabled = false;
   document.getElementById('formTitle').textContent = 'إضافة منتج';
   document.getElementById('deleteProductBtn').style.display = 'none';
   renderImagePreview();
+  renderRelatedProducts();
   if (rerender) renderProducts();
 }
 
@@ -138,16 +144,80 @@ function editProduct(productId) {
   const product = allProducts.find(p => p.product_id === productId);
   if (!product) return;
   currentProductId = productId;
+  relatedProductIds = new Set(Array.isArray(product.related_product_ids)
+    ? product.related_product_ids.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim()) : []);
   for (const [key, id] of Object.entries(fields)) {
-    document.getElementById(id).value = product[key] || '';
+    document.getElementById(id).value = String(product[key] ?? '');
   }
   document.getElementById('productImages').value = imageText(product.image_url);
   productImageColors = normalizeImageColors(product.image_colors, imageLines());
+  document.getElementById('relatedProductsSearch').value = '';
+  for (const checkbox of document.querySelectorAll('#productSalesCues input[name="sales_cues"]')) {
+    checkbox.checked = Array.isArray(product.sales_cues) && product.sales_cues.includes(checkbox.value);
+  }
   document.getElementById('productId').disabled = true;
   document.getElementById('formTitle').textContent = `تعديل ${product.product_name || product.product_id}`;
   document.getElementById('deleteProductBtn').style.display = '';
   renderImagePreview();
   renderProducts();
+  renderRelatedProducts();
+}
+
+function relatedProductCandidates() {
+  const storeId = new URLSearchParams(window.location.search).get('store_id') || 'default';
+  const sourceId = currentProductId || document.getElementById('productId').value.trim();
+  return allProducts.filter(product => (product.store_id || 'default') === storeId && product.product_id !== sourceId);
+}
+
+function renderRelatedProducts() {
+  const options = document.getElementById('relatedProductsOptions');
+  const selected = document.getElementById('relatedProductsSelected');
+  const candidates = relatedProductCandidates();
+  const sourceId = currentProductId || document.getElementById('productId').value.trim();
+  relatedProductIds.delete(sourceId);
+  const query = document.getElementById('relatedProductsSearch').value.trim().toLocaleLowerCase('ar');
+  const visible = candidates.filter(product => !query || ['product_id', 'product_name', 'category', 'sizes', 'keywords']
+    .some(field => String(product[field] || '').toLocaleLowerCase('ar').includes(query)));
+  options.replaceChildren();
+  selected.replaceChildren();
+  for (const id of relatedProductIds) {
+    const product = candidates.find(item => item.product_id === id);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm btn-outline-secondary';
+    const name = product ? (product.product_name || id) : `${id} — غير موجود في هذا المتجر`;
+    button.textContent = `${name} ×`;
+    button.setAttribute('aria-label', `إزالة ربط ${name}`);
+    button.addEventListener('click', () => { relatedProductIds.delete(id); renderRelatedProducts(); });
+    selected.append(button);
+  }
+  visible.forEach((product, index) => {
+    const label = document.createElement('label');
+    label.className = 'd-flex gap-2 align-items-start py-2 border-bottom';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'form-check-input flex-shrink-0';
+    checkbox.id = `relatedProductOption${index}`;
+    checkbox.checked = relatedProductIds.has(product.product_id);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) relatedProductIds.add(product.product_id);
+      else relatedProductIds.delete(product.product_id);
+      renderRelatedProducts();
+    });
+    const text = document.createElement('span');
+    text.className = 'small';
+    text.textContent = [product.product_name || product.product_id, product.product_id, product.category,
+      product.sizes, product.status !== 'active' ? 'مخفي — لن يقترحه المساعد' : product.stock].filter(Boolean).join(' · ');
+    label.append(checkbox, text);
+    options.append(label);
+  });
+  if (!visible.length) {
+    const empty = document.createElement('p');
+    empty.className = 'small text-muted mb-0';
+    empty.textContent = candidates.length ? 'لا توجد منتجات تطابق البحث.' : 'أضيفي موديلًا آخر إلى هذا المتجر حتى تربطيه.';
+    options.append(empty);
+  }
+  document.getElementById('relatedProductsCount').textContent = `المختار: ${relatedProductIds.size} · نتائج البحث: ${visible.length}`;
 }
 
 async function saveProduct(event) {
@@ -263,6 +333,8 @@ function collectPayload() {
   }
   payload.image_url = imageLines();
   payload.image_colors = normalizeImageColors(productImageColors, payload.image_url);
+  payload.related_product_ids = [...relatedProductIds];
+  payload.sales_cues = Array.from(document.querySelectorAll('#productSalesCues input[name="sales_cues"]:checked'), checkbox => checkbox.value);
   return payload;
 }
 

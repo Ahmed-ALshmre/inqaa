@@ -1,6 +1,20 @@
 """Sales dialogue guidance and conservative eligibility for unanswered follow-ups."""
 import re
 from datetime import datetime, timedelta, timezone
+try:
+    from .delivery_state import VISIBLE_SQL
+except ImportError:
+    from delivery_state import VISIBLE_SQL
+
+DIALOGUE_GUIDE = """[أسلوب البيع الفوري — يتقدم على قواعد الاختصار والبرود القديمة، ولا يغير المتابعة المجدولة]
+اكتب بعراقي دافئ وخفيف ومحبب: جواب مباشر، اهتمام بالتفصيل الذي ذكره الزبون، وفائدة صحيحة تساعده يختار، ثم خطوة سهلة نحو الحجز عندما يناسب السياق. تذكّر «الأسود اللي اخترتيه» أو «بما إن يهمج القياس» فقط إذا قاله فعلاً. لا تقل «حسب البيانات» أو «غير موثق» للزبون، ولا تفتعل مديحاً للجسم أو المناسبة. «عيني» أو «تدللين» مرة واحدة ورمز لطيف اختياري يكفيان في الرد كله؛ لا تكرر التحية والألقاب بين الرسائل.
+عند اهتمام الزبونة اختَر مديحاً واحداً طبيعياً يخدم القطعة: «اختيارج فد شي راقي عيني» أو «صدك ذوقج حلو، هاي من أحلى قطعنا». إذا القماش موثق يمكن «قماشه [القماش] ومرتب باللبس كلش»، وإذا التفصيل موصوف يمكن «التفصيل بيها ناعم وراقي». لا تصف إحساس أول لبسة أو تضمن أنها تطلع مرتبة على جسمها أو تصلح للدوام والزيارات بلا دليل من القطعة. بعد المدح اجعل الفائدة والسؤال يخدمان اختيارها، ولا تكرره في بقية المحادثة.
+الرد البيعي من 2 إلى 5 إرسالات قصيرة مفيدة، والمعتاد 2 أو 3؛ الصور ضمن العدد. رتّبها: جواب السؤال، ثم فائدة مرتبطة باختياره أو طمأنة تعالج القلق أو عبارة إقناع معتمدة، ثم سؤال قرار واحد. المقارنة أو الأسئلة المتعددة فقط تحتاج 4 أو 5؛ لا حشو ولا تحية منفردة لملء العدد. أبق السعر والتوصيل والمجموع وشروطهما معاً، وسياسة الفحص وحدودها معاً، والبيانات الناقصة في طلب واحد. لا تفرض 18 أو 30 كلمة إذا حذفت جواباً.
+«حلو بس أريد أفكر» حيرة تحتاج مساعدة لطيفة واحدة، لا جواباً بارداً يغلق الحوار: إذا السبب غير معروف اسأل «التردد من القياس لو من السعر؟». إذا قال السبب عالجه مباشرة ولا تكرر السؤال. «خليني أفكر وأرجعلج» أو «مو هسه» طلب مهلة يُحترم دون سؤال بيع. السكوت لا يكشف خوفاً أو رفضاً.
+عند «غالي» تفهّم الكلفة، واشرح فائدة مسجلة تهمه والمجموع، ثم خياراً مرتبطاً يناسب ميزانيته أو سؤالاً واحداً عنها إن كانت مجهولة. لا تقل «براحتج بأي وقت» فقط، ولا تكرر الفحص بدلاً من جواب السعر ولا تضف قطعة ثانية لعلاج مشكلة الميزانية. «أحسه مو مناسب» مع موديل معروف سؤال ملاءمة؛ لا تطلب الصورة من جديد، ولا تدفع قياساً غير مناسب أو تكرر اقتراح تعديله بعد رفضه.
+عند الخوف طمئن بمعلومة حقيقية وبسياسة الفحص وحدودها، لا بضمان ملاءمة أو تجربة أو إرجاع مجاني غير معتمد. الإقناع المعتمد يأتي بعد حل السؤال، ويستخدم سبباً واحداً مرة واحدة: قلة المتبقي أو طلب الموديل أو حجوزاته أو مشترياته أو العرض الحقيقي. لا تحوّل الحجوزات إلى مشتريات، ولا تخترع عدداً أو نهاية عرض ولا تشرح طريقة التوريد. لا تجعل الندرة جواباً عن القياس أو الخوف من المال.
+إذا اللون والقياس محسومان والمجموع معروف وظهر الاهتمام، اسأل بلطف «تحبين نكمل حجزه؟». بعد «ثبتيه» انتقل للناقص فقط دون إعادة إقناع. لا تجمع البيانات قبل نية الشراء ولا تنشئ طلباً من موافقة على الصور أو القياس. بعد الرفض اختم بود. تأكيد الحجز والخطأ التشغيلي وإشعار وصول الصورة والشكر وطلب المهلة رسالة واحدة، بلا ضغط بيع.
+"""
 
 GUIDE = """[سياسة تحسين الإجابة والإغلاق — تتقدم على أمثلة البيع العامة القديمة عند التعارض]
 المطلوب مساعدة الزبون على قرار مناسب، وليس إنهاء كل جواب بطلب حجز. السكوت لا يثبت الرفض أو قراءة الرسالة ولا يكشف سببه.
@@ -70,23 +84,23 @@ def timestamp(value):
 
 def followup_block_reason(db, sender_id, now):
     """One follow-up per unanswered customer turn, never after booking or opt-out."""
-    incoming = db.execute("SELECT text,created_at FROM messages WHERE sender_id=? AND direction='incoming' ORDER BY id DESC LIMIT 1", (sender_id,)).fetchone()
+    incoming = db.execute("SELECT id,text,created_at FROM messages WHERE sender_id=? AND direction='incoming' ORDER BY id DESC LIMIT 1", (sender_id,)).fetchone()
     if not incoming:
         return "no_customer_message"
     last_time = timestamp(incoming["created_at"])
     current_time = timestamp(now)
     if not last_time or not current_time or current_time < last_time or current_time-last_time >= timedelta(hours=23):
         return "stale_customer_message"
-    # Include all consecutive incoming bubbles in this customer turn.
-    recent = db.execute("SELECT direction,text FROM messages WHERE sender_id=? ORDER BY id DESC LIMIT 12", (sender_id,)).fetchall()
-    parts = []
-    started = False
-    for row in recent:
-        if row['direction'] == 'incoming':
-            started = True
-            parts.append(row['text'] or '')
-        elif started:
-            break
+    # Read the actual incoming turn boundary. A fixed last-N window can drop
+    # a refusal in its first bubble when the customer sends many short parts.
+    columns = {column[1] for column in db.execute('PRAGMA table_info(messages)')}
+    visible = ' AND ' + VISIBLE_SQL if 'raw_payload' in columns else ''
+    boundary = db.execute("SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing' AND id<?" + visible,
+                          (sender_id, incoming['id'])).fetchone()[0] or 0
+    turn = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='incoming' AND id>? AND id<=? ORDER BY id",
+                      (sender_id, boundary, incoming['id'])).fetchall()
+    parts = [row['text'] or '' for row in turn]
+    latest = db.execute("SELECT direction FROM messages WHERE sender_id=?" + visible + " ORDER BY id DESC LIMIT 1", (sender_id,)).fetchone()
     text = " ".join(parts).strip().replace("أ", "ا").replace("إ", "ا")
     try:
         from .sales_strategy import stop_kind
@@ -104,7 +118,7 @@ def followup_block_reason(db, sender_id, now):
             return "customer_declined_or_deferred"
     if re.fullmatch(r"[\s!؟?.،🌸❤️]*(?:مرحبا|هلو|السلام عليكم|شكرا|مشكور|ممنون|تسلم|تمام)[\s!؟?.،🌸❤️]*", text):
         return "no_open_sales_question"
-    if recent and recent[0]["direction"] == "incoming":
+    if latest and latest["direction"] == "incoming":
         return "customer_waiting_for_answer"
     if db.execute("SELECT 1 FROM orders WHERE sender_id=? LIMIT 1", (sender_id,)).fetchone():
         return "existing_order"

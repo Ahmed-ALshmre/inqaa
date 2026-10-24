@@ -444,14 +444,20 @@ class CheckoutRegressionTests(unittest.TestCase):
         ai.assert_called_once()
         self.assertEqual(response["reply"], "أي موديل تقصدين؟")
 
-    def test_unmatched_image_pauses_silently_for_human(self):
+    def assert_image_received_without_product_guess(self, reply):
+        self.assertRegex(reply, r'الصورة.{0,20}وصلت|وصلت.{0,20}الصورة')
+        self.assertNotRegex(reply, r'(?:دزي|أرسلي|ارسلي).{0,25}(?:صوره|صورة)|تم تثبيت|تم حجز|متوفر|خلص')
+        self.assertNotRegex(reply, r'\d+[,.]?\d*\s*(?:د\.ع|دينار|ألف|الف)')
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+
+    def test_unmatched_image_acknowledges_receipt_while_waiting_for_human(self):
         self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source="manual_admin")
         self.ev.update(text="", image_url="https://example.test/new.jpg")
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "match_product", return_value=(None, None, {})), patch.object(self.m, "create_human_review", return_value=77):
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
         self.assertFalse(self.m.is_customer_ai_enabled(self.db, self.sender))
         self.assertTrue(response["meta"]["ai_paused"])
-        self.assertEqual(response["reply"], "")
+        self.assert_image_received_without_product_guess(response['reply'])
         self.assertIsNone(self.m.get_active_product_binding(self.db, self.sender))
 
     def test_dashboard_send_accepts_confirmed_cart_once(self):
@@ -479,12 +485,13 @@ class CheckoutRegressionTests(unittest.TestCase):
         selected = CATALOG[product_index]
         self.ev.update(text="بس هذا" if product_index else "", image_url="https://images.test/customer-model.jpg", ad_id="old-ad")
         recognized = {"product_found": True, "product_id": selected["product_id"], "confidence": 100}
-        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "match_customer_image_with_catalog", return_value={"product_found": False} if fallback else recognized), patch.object(self.m, "confirm_with_vision", return_value=recognized) as vision, patch.object(self.m, "call_main_ai", return_value={"reply": "الموديل متوفر، شنو القياس المطلوب؟", "create_order": False}) as ai, patch.object(self.m, "send_webhook_result_to_facebook", return_value=True) as send, patch.object(self.m, "create_human_review") as review:
+        with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "match_customer_image_with_catalog", return_value={"product_found": False} if fallback else recognized), patch.object(self.m, "confirm_with_vision", return_value=recognized) as vision, patch.object(self.m, "call_main_ai", return_value={"reply": "الموديل متوفر، شنو القياس المطلوب؟", "create_order": False}) as ai, patch.object(self.m, "send_webhook_result_to_facebook", return_value=True) as send, patch.object(self.m, "create_human_review", return_value=77) as review:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
         if fallback:
             ai.assert_not_called()
             vision.assert_not_called()
             review.assert_called_once()
+            self.assert_image_received_without_product_guess(response['reply'])
             self.assertEqual(self.m.load_customer_products(self.db, self.sender), [])
             return
         self.assertEqual(ai.call_args.args[5]["product_id"], selected["product_id"])
@@ -568,16 +575,16 @@ class CheckoutRegressionTests(unittest.TestCase):
         import requests
         response = requests.Response(); response.status_code = 401
         with patch.object(self.m, "OPENROUTER_KEY", "test"), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m.requests, "post", side_effect=requests.HTTPError(response=response)):
-            result = self.m.confirm_with_vision("https://example.test/customer.jpg", [])
+            result = self.m.confirm_with_vision("https://example.test/customer.jpg", [dict(CATALOG[0], image_url="https://images.test/product.jpg")])
         self.assertTrue(result["service_error"])
         self.assertEqual(result["error_code"], "authentication")
         self.assertEqual(result["http_status"], 401)
 
-    def test_image_service_failure_is_silent(self):
+    def test_image_service_failure_acknowledges_receipt_without_guessing_stock(self):
         self.ev.update(text="", image_url="https://example.test/customer.jpg")
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "match_product", return_value=(None, None, {"service_error": True, "error_code": "authentication"})), patch.object(self.m, "create_human_review", return_value=88) as review:
             response = self.m.process_webhook(self.db, {}, use_debounce=False)
-        self.assertEqual(response["reply"], "")
+        self.assert_image_received_without_product_guess(response['reply'])
         self.assertFalse(response["meta"]["ai_paused"])
         self.assertTrue(response["meta"]["service_error"])
         self.assertIn("authentication", review.call_args.args[2])
@@ -594,7 +601,11 @@ class CheckoutRegressionTests(unittest.TestCase):
             self.assertEqual(result["product_id"], "F1")
 
     def test_catalog_also_receives_general_image_matching_guidance(self):
-        with patch.object(self.m, "OPENROUTER_KEY", "test"), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "_resolve_catalog_image_paths", return_value=["catalog.png"]), patch.object(self.m, "_file_to_data_url", return_value="data:image/png;base64,TEST"), patch.object(self.m.requests, "post") as post:
+        import base64, io
+        from PIL import Image
+        picture = io.BytesIO(); Image.new('RGB', (12, 12), 'white').save(picture, format='PNG')
+        reference = 'data:image/png;base64,' + base64.b64encode(picture.getvalue()).decode('ascii')
+        with patch.object(self.m, "OPENROUTER_KEY", "test"), patch.object(self.m, "is_store_feature_enabled", return_value=True), patch.object(self.m, "_resolve_catalog_image_paths", return_value=["catalog.png"]), patch.object(self.m, "_file_to_data_url", return_value=reference), patch.object(self.m.requests, "post") as post:
             post.return_value.json.return_value = {"choices": [{"message": {"content": "F1"}}]}
             result = self.m.match_customer_image_with_catalog("https://images.test/plain.jpg", CATALOG)
         content = post.call_args.kwargs["json"]["messages"][0]["content"]
@@ -611,16 +622,16 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertEqual(len(result["images"][0]["attempts"]), 1)
         review.assert_not_called()
 
-    def test_image_one_failure_then_silent_handoff(self):
+    def test_image_one_failure_acknowledges_receipt_and_retains_review(self):
         self.ev.update(text="", image_url="https://example.test/customer.jpg")
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "_match_single_product", return_value=(None, None, {"product_found": False})) as match, patch.object(self.m, "create_human_review", return_value=99) as review, patch.object(self.m, "call_main_ai") as ai:
             result = self.m.process_webhook(self.db, {}, use_debounce=False)
         self.assertEqual(match.call_count, 1)
         review.assert_called_once()
         ai.assert_not_called()
-        self.assertEqual(result["reply"], "")
+        self.assert_image_received_without_product_guess(result['reply'])
         self.assertTrue(result["meta"]["ai_paused"])
-        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 0)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 1)
 
 
 if __name__ == "__main__":

@@ -107,7 +107,8 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         self.assertEqual({x[0] for x in active}, {'A', 'B'})
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
         self.assertTrue(result['meta']['auto_reply']['sent'])
-        self.assertEqual(len(send.call_args.args[0]['reply_parts']), 3)
+        self.assertEqual(' '.join(send.call_args.args[0]['reply_parts']).split(), reply.split())
+        self.assertTrue(2 <= len(send.call_args.args[0]['reply_parts']) <= 5)
         self.assertTrue(send.call_args.args[0]['_ordered_album'])
         self.assertFalse(send.call_args.args[0]['_single_message'])
 
@@ -126,7 +127,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         self.assertIn('الثالث', result['reply'])
         self.assertNotIn('غير متوفر', result['reply'])
         self.assertEqual(result['reply'].count('مو متوفر عدنا حالياً'), 3)
-        self.assertEqual(len(result['reply_parts']), 3)
+        self.assertEqual(result['reply_parts'], [result['reply']])
         self.assertNotIn('دزي لقطة', result['reply'])
         self.assertTrue(all(not item['product_found'] for item in self.m.customer_image_positions(self.db, 'album-customer')))
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'album-customer'))

@@ -1,5 +1,28 @@
 """Durable after-sales requests; closing a review is not executing a change."""
 import json
+import re
+try:
+    from .checkout import normalized
+except ImportError:
+    from checkout import normalized
+
+
+def size_key(value):
+    text = normalized(value).strip()
+    text = re.sub(r'^(?:عمر|قياس)\s*', '', text)
+    text = {'سنتين': '2 سنة', 'سنه': '1 سنة', 'سنة': '1 سنة',
+            'سنتان': '2 سنة', 'شهرين': '2 شهر', 'شهر': '1 شهر'}.get(text, text)
+    return re.sub(r'سنه|سنوات|سنين', 'سنة', re.sub(r'اشهر|شهور', 'شهر', text))
+
+
+def single_size(order):
+    try:
+        items = json.loads(order.get('order_items') or '[]')
+    except (ValueError, TypeError):
+        return ''
+    if not isinstance(items, list) or len(items) > 1:
+        return ''
+    return (items[0].get('size') or '') if items and isinstance(items[0], dict) else order.get('size') or ''
 
 
 def init(db):
@@ -12,7 +35,12 @@ def init(db):
 
 def record(db, sender, order_id, action, now):
     init(db)
-    db.execute("INSERT INTO order_action_requests(sender_id,order_id,kind,value,created_at) VALUES(?,?,?,?,?) ON CONFLICT(order_id,kind,value) DO NOTHING",
+    # The same size/cancellation may be requested again after another change.
+    # Keep pending duplicates idempotent, but never let a previously resolved
+    # request make the new instruction disappear from the staff review queue.
+    db.execute("""INSERT INTO order_action_requests(sender_id,order_id,kind,value,created_at) VALUES(?,?,?,?,?)
+        ON CONFLICT(order_id,kind,value) DO UPDATE SET status='pending',resolved_at=NULL,created_at=excluded.created_at
+        WHERE order_action_requests.status<>'pending' AND order_action_requests.sender_id=excluded.sender_id""",
                (sender, order_id, action['kind'], action['value'], now))
     db.commit()
     return db.execute("SELECT id FROM order_action_requests WHERE order_id=? AND kind=? AND value=?", (order_id,action['kind'],action['value'])).fetchone()[0]
@@ -50,8 +78,8 @@ def resolve_applied(db, order, now):
             except (ValueError, TypeError):
                 items = []
             if isinstance(items, list):
-                applied = len(items) == 1 and isinstance(items[0], dict) and str(items[0].get('size', '')).strip() == row['value'].strip()
+                applied = len(items) == 1 and isinstance(items[0], dict) and size_key(items[0].get('size', '')) == size_key(row['value'])
                 if not items:
-                    applied = str(order.get('size') or '').strip() == row['value'].strip()
+                    applied = size_key(order.get('size') or '') == size_key(row['value'])
         if applied:
             db.execute("UPDATE order_action_requests SET status='applied',resolved_at=? WHERE id=?", (now,row['id']))

@@ -7,6 +7,7 @@ import threading
 import time
 import unicodedata
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
 
@@ -322,6 +323,25 @@ def paid_notes(notes):
     return text if marker in text else '\n'.join(filter(None, [text, marker]))
 
 
+def retry_after_seconds(response, now):
+    """Read a finite server delay, bounded to one hour for the durable queue."""
+    headers = getattr(response, 'headers', None)
+    value = headers.get('Retry-After') if hasattr(headers, 'get') else None
+    if not isinstance(value, str) or not value.strip():
+        return 0
+    try:
+        delay = int(value.strip())
+    except ValueError:
+        try:
+            date = parsedate_to_datetime(value)
+            if date.tzinfo is None:
+                date = date.replace(tzinfo=timezone.utc)
+            delay = date.timestamp() - now
+        except (ValueError, TypeError, OverflowError):
+            return 0
+    return max(0, min(3600, delay))
+
+
 def deliver_due(db, post=None, now=None, order_id=None):
     post = post or requests.post
     now = time.time() if now is None else now
@@ -373,7 +393,7 @@ def deliver_due(db, post=None, now=None, order_id=None):
         db.commit()
         if not claim.rowcount:
             continue
-        status, remote, error = 'retry', None, 'network_error'
+        status, remote, error, server_delay = 'retry', None, 'network_error', 0
         try:
             response = post(target_url, json=payload, headers={'Authorization': f'Bearer {target_key}',
                             'Content-Type': 'application/json', 'Accept': 'application/json'}, timeout=20, allow_redirects=False)
@@ -387,7 +407,12 @@ def deliver_due(db, post=None, now=None, order_id=None):
                 else:
                     error = 'invalid_success_response'
             else:
-                status = 'retry' if 500 <= response.status_code < 600 else 'blocked'
+                # The receiver contract deduplicates source + external_order_id
+                # + store. The frozen payload retains all three across retries,
+                # including a timeout after a possibly accepted request.
+                status = 'retry' if response.status_code in (408, 429) or 500 <= response.status_code < 600 else 'blocked'
+                if status == 'retry':
+                    server_delay = retry_after_seconds(response, now)
                 error = f'http_{response.status_code}'
                 try:
                     detail = response.json()
@@ -402,7 +427,7 @@ def deliver_due(db, post=None, now=None, order_id=None):
                     pass
         except requests.RequestException:
             pass
-        delay = min(3600, 60 * 2 ** min(row['attempts'], 6))
+        delay = max(server_delay, min(3600, 60 * 2 ** min(row['attempts'], 6)))
         db.execute('UPDATE menger_deliveries SET status=?,remote_order_id=?,last_error=?,next_attempt=?,synced_at=? WHERE order_id=?',
                    (status, remote, error, now + delay, now if status == 'sent' else None, row['order_id']))
         db.commit()

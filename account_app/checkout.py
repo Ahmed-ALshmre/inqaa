@@ -108,6 +108,53 @@ def is_confirmation(text):
     return bool(re.fullmatch(affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*", normalized(text).strip()))
 
 
+def unresolved_purchase_terms(text):
+    """Do not treat price questions or conditional terms as purchase consent.
+
+    An unconditional instruction can still ask about documented inspection at
+    delivery. This guard targets unresolved payment/shipping conditions rather
+    than blocking every question mark or every occurrence of "if".
+    """
+    clean = normalized(text)
+    if re.search(
+            r'(?:شكد|كم|بشكد|بيش|شنو).{0,22}(?:سعر|المجموع|توصيل|تحسب|يطلع)|'
+            r'(?:سعر|توصيل|المجموع).{0,16}(?:شكد|كم|بيش)|'
+            r'(?:شكد|بشكد|بيش)(?:\s+(?:هذا|هاي|هذ|الموديل|الحجز|حساب))?\s*[؟?]', clean):
+        return 'unanswered_price_or_shipping'
+    if re.search(
+            r'(?<!\w)(?:اذا|لو|بشرط|شرط)(?!\w)[^.!؟?\n]{0,65}'
+            r'(?:توصيل|سعر|مجاني|خصم|تخفيض|تحسب|يوصل|يلحق|اليوم|باجر|غدا|ساعه|ساعة|يومين|اسبوع)', clean):
+        return 'conditional_purchase_terms'
+    return ''
+
+
+def unresolved_condition(history, text=''):
+    """Customer conditions survive contact-only turns until explicitly waived.
+
+    Assistant language cannot establish that an arrival/discount condition was
+    fulfilled. Ordinary price questions do not become a persistent condition.
+    """
+    pending = None
+    entries = [row.get('text') or row.get('content') or '' for row in history or []
+               if row.get('direction') == 'incoming' or row.get('role') == 'user']
+    if text and (not entries or entries[-1] != text):
+        entries.append(text)
+    for entry in entries:
+        clean = normalized(entry)
+        if re.search(r'بدون\s*(?:اي\s*)?شرط|الغ[يى]\s*الشرط|مو\s*شرط|'
+                     r'(?:عادي|موافق[هة]?|ما\s*عندي\s*مانع).{0,30}(?:المد[هة]|يومين|ثلاث|التوصيل|السعر|موعد)|'
+                     r'(?:المد[هة]|السعر|الموعد).{0,20}(?:عادي|موافق|يناسبني)', clean):
+            pending = None
+        elif unresolved_purchase_terms(entry) == 'conditional_purchase_terms':
+            kind = ('arrival' if re.search(r'يوصل|يلحق|باجر|غدا|اليوم|ساع[هة]|يومين|اسبوع', clean)
+                    else 'free_delivery' if re.search(r'توصيل.{0,18}مجاني|مجاني.{0,18}توصيل', clean)
+                    else 'price')
+            pending = {'kind': kind, 'text': str(entry)}
+        elif re.fullmatch(r'(?:لا\s*شكرا\s*)?(?:ما\s*اريد|ماريد|بطلت)(?:\s*(?:احجز|اطلب|اشتري|هسه|شكرا))*[ .!،]*', clean):
+            pending = None
+    return pending
+
+
 def is_existing_order_followup(text):
     clean = normalized(text)
     if re.search(r'(?:شوكت|يمتى|يمته|متى|وين).{0,35}(?:طلبي|طلبيه|طلبية|الطلب|حجزي)|(?:طلبي|الطلب|طلبية|طلبيه|حجزي).{0,35}(?:شوكت|يمتى|يمته|متى|يوصل)', clean) and not re.search(r'اذا|لو احجز|لو اطلب|اريد احجز|اريد اطلب', clean):

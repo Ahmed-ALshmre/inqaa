@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 import account_app.app as m
 REAL_MAIN_AI_ONCE = m._call_main_ai_once
+REAL_SEND = m.send_webhook_result_to_facebook
 
 CATALOG = [
     dict(product_id="F1", product_name="فستان دانتيل", category="فستان", colors="اسود", sizes="38 إلى 52", price="16000", fabric="لينن", stock="متوفر", status="active", image_url="https://images.test/dress1.jpg"),
@@ -102,8 +103,14 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, "extract_facebook_event", return_value=ev):
             if model_reply is not None:
                 with patch.object(m, "_call_main_ai_once", return_value={"reply": model_reply, "order": {}, "create_order": False}):
-                    return m.process_webhook(self.db, {}, use_debounce=False)
-            return m.process_webhook(self.db, {}, use_debounce=False)
+                    result = m.process_webhook(self.db, {}, use_debounce=False)
+            else:
+                result = m.process_webhook(self.db, {}, use_debounce=False)
+        # A later customer turn in this fixture presumes the previous answer
+        # was accepted. Run the real receipt bookkeeping, faking only adapters.
+        with patch.object(m, 'send_text_to_facebook', return_value=True), patch.object(m, 'send_image_to_facebook', return_value=True):
+            REAL_SEND(result, self.sender)
+        return result
     def test_opening_duplicate_name_uses_existing_manual_binding(self):
         catalog = [dict(p, product_name='فستان') for p in CATALOG]
         with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
@@ -564,7 +571,9 @@ class ConversationContextTests(unittest.TestCase):
                                     with patch.object(m,"_match_single_product",return_value=(None,None,{"product_found":False})) as match:
                                         result=self.event("",image="https://images.test/fail.jpg")
                                     self.assertEqual(match.call_count,1)
-                                    self.assertEqual(result["reply"],"")
+                                    self.assertIn('الصورة وصلت', result['reply'])
+                                    self.assertNotRegex(result['reply'], r'(?:دزي|أرسلي|ارسلي).{0,25}(?:صوره|صورة)|متوفر|تم تثبيت')
+                                    self.assertNotRegex(result['reply'], r'\d+[,.]?\d*\s*(?:د\.ع|دينار|ألف|الف)')
                                     self.assertFalse(m.is_customer_ai_enabled(self.db,self.sender))
                                 else:
                                     caption={"same":"","replace":"بس هذا","add":"ضيفيه ويا السابق","ask":""}[mode]
@@ -636,7 +645,9 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,"_call_main_ai_once",return_value={"reply":"تم تثبيت الطلب","create_order":True,"order":{}}):
             result=m.call_main_ai(dict(self.ev,text="اي"),"text",{},[],CATALOG,CATALOG[1],None,"",[])
         self.assertFalse(result["create_order"])
-        self.assertIn("أثبتلج",result["reply"])
+        self.assertFalse(m.claims_order_created(result['reply']))
+        self.assertIn('نحدد القطعة', result['reply'])
+        self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
 
     def test_album_links_both_products_and_preserves_image_order_in_reply(self):
         self.settings['enabled'] = False
