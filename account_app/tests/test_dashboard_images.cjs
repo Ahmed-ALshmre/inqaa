@@ -29,11 +29,12 @@ function batchContext(send) {
   const requests = [];
   const composer = {value: 'UNSENT CUSTOMER DRAFT'};
   const sendContext = vm.createContext({currentSenderId: 'customer-A', _isSending: false,
+    imageUploadGeneration: 0, imageUploadPromise: null,
     document: {getElementById: () => composer}, uploadedImageUrl: 'draft.jpg',
     showToast: () => {}, _setSendingState: () => {}, clearImage: () => {throw Error('Draft cleared');},
     loadMessages: async () => {}, apiFetch: async (url, options) => {
       requests.push({url, body: JSON.parse(options.body)});
-      return {json: async () => ({ok: true})};
+      return {ok: true, json: async () => ({ok: true})};
     }
   });
   vm.runInContext(sendCode, sendContext);

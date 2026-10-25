@@ -75,53 +75,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.hidden || inboxRequest) return;
     loadConversations(false);
   }, 12000);
-  if (INITIAL_SENDER_ID && window.innerWidth <= 768) {
+  if (INITIAL_SENDER_ID && (document.documentElement.classList.contains('app-handheld') || window.innerWidth <= 768)) {
     history.replaceState({...(history.state || {}), dashboardConversation: INITIAL_SENDER_ID}, '', location.href);
   }
 });
 
 window.addEventListener('popstate', () => {
-  if (window.innerWidth > 768) return;
+  if ((!document.documentElement.classList.contains('app-handheld') && window.innerWidth > 768)) return;
   const historySender = history.state?.dashboardConversation || '';
   if (historySender && historySender !== currentSenderId) selectConversation(historySender);
   else if (currentSenderId && !historySender) closeMobileConversation(true);
 });
 
-// ══ PWA Install ═══════════════════════════════════════════════════════════
-let _pwaDeferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  _pwaDeferredPrompt = e;
-  const btn = document.getElementById('pwaInstallBtn');
-  if (btn) btn.style.display = '';
-});
-window.addEventListener('appinstalled', () => {
-  _pwaDeferredPrompt = null;
-  const btn = document.getElementById('pwaInstallBtn');
-  if (btn) btn.style.display = 'none';
-  showToast('تم تثبيت التطبيق', 'success');
-});
-
-async function installPWA() {
-  if (!_pwaDeferredPrompt) {
-    showToast('التثبيت غير متاح. افتح القائمة في المتصفح واختر "إضافة إلى الشاشة الرئيسية".', 'info');
-    return;
-  }
-  _pwaDeferredPrompt.prompt();
-  try {
-    const { outcome } = await _pwaDeferredPrompt.userChoice;
-    if (outcome === 'accepted') showToast('سيتم التثبيت', 'success');
-  } catch (e) {
-  } finally {
-    _pwaDeferredPrompt = null;
-    const btn = document.getElementById('pwaInstallBtn');
-    if (btn) btn.style.display = 'none';
-  }
-}
+// Installation is shared by all pages in mobile_app.js.
 
 // ══ Mobile Panels ══════════════════════════════════════════════════════════
 function toggleSidebar() {
-  if (window.innerWidth <= 768) { toggleDashboardDrawer(); return; }
+  if ((document.documentElement.classList.contains('app-handheld') || window.innerWidth <= 768)) { toggleDashboardDrawer(); return; }
   const sb = document.getElementById('sidebarPanel');
   const ov = document.getElementById('mobileOverlay');
   const cp = document.getElementById('controlPanel');
@@ -476,7 +446,7 @@ async function selectConversation(senderId) {
   currentSenderId = senderId;
   closeAllPanels();
 
-  if (window.innerWidth <= 768) {
+  if ((document.documentElement.classList.contains('app-handheld') || window.innerWidth <= 768)) {
     document.body.classList.add('mobile-conversation-open');
     if (history.state?.dashboardConversation !== senderId) {
       const url = new URL(location.href);
@@ -1350,7 +1320,7 @@ function resetConversationView() {
 }
 
 function closeMobileConversation(fromPopState = false) {
-  if (window.innerWidth > 768) return;
+  if ((!document.documentElement.classList.contains('app-handheld') && window.innerWidth > 768)) return;
   if (!fromPopState && history.state?.dashboardConversationPushed) {
     history.back();
     return;
@@ -2037,7 +2007,7 @@ async function deleteConversation() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حذف المحادثة');
     resetConversationView();
-    if (window.innerWidth <= 768 && history.state?.dashboardConversation) {
+    if ((document.documentElement.classList.contains('app-handheld') || window.innerWidth <= 768) && history.state?.dashboardConversation) {
       const cleanUrl = new URL(location.href);
       cleanUrl.searchParams.delete('sender_id');
       const cleanState = {...(history.state || {})};

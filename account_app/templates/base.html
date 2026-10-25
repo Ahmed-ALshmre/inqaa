@@ -6,10 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <script>window.workspacePerson = {{ staff_person|tojson }};</script>
   <script src="/static/js/workspace.js?v=1"></script>
-  <meta name="theme-color" content="#33243f">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="صوف">
+  <meta name="theme-color" content="#123b45">
   <title>{% block title %}صوف{% endblock %}</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=7">
@@ -25,6 +22,7 @@
   <link rel="stylesheet" href="/static/css/theme.css?v=1">
   <link rel="stylesheet" href="/static/css/ui.css?v=1">
   <script defer src="/static/js/ui.js?v=1"></script>
+  {% include "_mobile_head.html" %}
 </head>
 <body class="admin-shell">
   <nav class="admin-topbar">
@@ -59,6 +57,7 @@
     <a href="/advisor"><i class="bi bi-chat-square-heart"></i> مستشار صوف</a>
     <a href="/settings"><i class="bi bi-gear"></i> الإعدادات</a>
     {% if staff_person and staff_person.owner %}<a href="/settings/staff"><i class="bi bi-people"></i> الموظفون والصلاحيات</a>{% endif %}
+    <a href="/logout"><i class="bi bi-box-arrow-left"></i> تسجيل الخروج</a>
   </aside>
 
   <main class="admin-main">
@@ -69,7 +68,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/static/js/admin_pages.js?v=6"></script>
-  <script src="/static/js/mobile_app.js?v=3"></script>
   {% block scripts %}{% endblock %}
+  {% include "_mobile_shell.html" %}
 </body>
 </html>

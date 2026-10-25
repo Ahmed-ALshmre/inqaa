@@ -1,0 +1,18 @@
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="صوف">
+<meta name="color-scheme" content="light">
+<script>
+  // Classify the device once: rotation, a keyboard or a desktop-site request
+  // must never switch a phone to the desktop workspace.
+  (function () {
+    var touch = navigator.maxTouchPoints > 0;
+    var handheld = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (touch && (/MacIntel/.test(navigator.platform) ||
+        (matchMedia('(any-pointer:coarse)').matches && Math.min(screen.width, screen.height) <= 900)));
+    document.documentElement.classList.add(handheld ? 'app-handheld' : 'app-desktop');
+  })();
+</script>
+<link rel="stylesheet" href="/static/css/mobile_app.css?v=1">
+<script defer src="/static/js/mobile_app.js?v=4"></script>

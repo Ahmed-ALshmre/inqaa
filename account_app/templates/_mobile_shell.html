@@ -1,0 +1,33 @@
+<section class="app-device-gate" aria-labelledby="appDeviceTitle">
+  <div class="app-gate-card">
+    <img src="/static/icons/soof-mascot-wave.png?v=1" alt="صوف" width="88" height="88">
+    <span class="app-eyebrow">صوف · معك بكل خطوة</span>
+    <h1 id="appDeviceTitle">مكان صوف على موبايلك</h1>
+    <p>افتح هذا الرابط من هاتفك لإدارة المحادثات والطلبات. هذا التطبيق مخصص للموبايل ولا يدعم عرض سطح المكتب.</p>
+    <button type="button" class="app-primary-action" data-app-copy-link><i class="bi bi-link-45deg" aria-hidden="true"></i> نسخ رابط التطبيق</button>
+    <p class="app-gate-status" data-app-copy-status role="status"></p>
+  </div>
+</section>
+<section class="app-orientation-gate" aria-labelledby="appOrientationTitle">
+  <div class="app-gate-card">
+    <i class="bi bi-phone app-portrait-icon" aria-hidden="true"></i>
+    <span class="app-eyebrow">تجربة موبايل عمودية</span>
+    <h2 id="appOrientationTitle">خلّي الموبايل بالطول</h2>
+    <p>أعد الهاتف للوضع العمودي للمتابعة. تبقى محادثتك ومسودتك محفوظتين في الصفحة.</p>
+  </div>
+</section>
+<dialog id="appInstallDialog" class="app-install-dialog" aria-labelledby="appInstallTitle">
+  <div class="app-sheet-handle" aria-hidden="true"></div>
+  <button class="app-sheet-close" type="button" data-app-close-install aria-label="إغلاق"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+  <img src="/static/icons/icon-192.png?v=7" width="72" height="72" alt="أيقونة صوف">
+  <span class="app-eyebrow">خطوة واحدة، وصوف وياك</span>
+  <h2 id="appInstallTitle">صوف على شاشتك الرئيسية</h2>
+  <p>وصول أسرع للمحادثات والطلبات، في نافذة مستقلة على موبايلك.</p>
+  <ol data-app-install-steps></ol>
+  <p class="app-install-status" data-app-install-status role="status"></p>
+  <button class="app-primary-action" type="button" data-app-native-install hidden>تثبيت صوف الآن <i class="bi bi-download" aria-hidden="true"></i></button>
+  <button class="app-secondary-action" type="button" data-app-close-install>فهمت</button>
+</dialog>
+{% if staff_person %}
+  {% include '_mobile_nav.html' %}
+{% endif %}

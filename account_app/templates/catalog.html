@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#33243f">
+  <meta name="theme-color" content="#123b45">
   <title>إعدادات الكتالوج — صوف</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=7">
@@ -114,6 +114,7 @@
   <link rel="stylesheet" href="/static/css/theme.css?v=1">
   <link rel="stylesheet" href="/static/css/ui.css?v=1">
   <script defer src="/static/js/ui.js?v=1"></script>
+  {% include "_mobile_head.html" %}
 </head>
 <body class="catalog-page">
   <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
@@ -326,7 +327,6 @@
 
   loadCatalogImages();
   </script>
-
-  <script src="/static/js/mobile_app.js?v=2"></script>
+  {% include "_mobile_shell.html" %}
 </body>
 </html>

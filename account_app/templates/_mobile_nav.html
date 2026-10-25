@@ -1,1 +1,7 @@
-{# Bottom navigation removed from all pages. #}
+<nav class="app-tabbar" aria-label="التنقل الرئيسي">
+  <a href="/dashboard" data-app-tab="/dashboard"><i class="bi bi-chat-heart" aria-hidden="true"></i><span>المحادثات</span></a>
+  {% if can('orders') %}<a href="/orders" data-app-tab="/orders"><i class="bi bi-bag-check" aria-hidden="true"></i><span>الطلبات</span></a>{% endif %}
+  <a href="/products" data-app-tab="/products"><i class="bi bi-grid" aria-hidden="true"></i><span>المنتجات</span></a>
+  {% if can('advisor') %}<a href="/advisor" data-app-tab="/advisor"><i class="bi bi-stars" aria-hidden="true"></i><span>المستشار</span></a>{% endif %}
+  {% if can('settings') %}<a href="/settings" data-app-tab="/settings"><i class="bi bi-sliders2" aria-hidden="true"></i><span>الإعدادات</span></a>{% endif %}
+</nav>

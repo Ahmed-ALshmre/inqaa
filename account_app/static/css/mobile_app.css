@@ -1,0 +1,279 @@
+/* Phone application shell. Loaded last on every screen. */
+:root {
+  --primary:#137c72; --primary-hover:#0c625a; --primary-dark:#0c625a;
+  --primary-light:#63b5a8; --primary-soft:#e4f3ed; --accent:#dfad61;
+  --bg:#f3f6f4; --surface:#fff; --surface-2:#f6f9f7;
+  --text:#213c40; --text-muted:#6d8182; --border:#e0e9e5;
+  --chat-bg:#f1f6f3; --sidebar-bg:#fff; --control-bg:#fff;
+  --msg-out:#137c72; --msg-out-text:#fff; --navbar-bg:#123b45;
+  --workspace-border:var(--border); --workspace-ink:var(--text);
+  --workspace-accent:var(--primary); --workspace-surface:var(--bg);
+  --shadow:0 6px 24px #183f3606;
+  --bs-primary:#137c72; --bs-primary-rgb:19,124,114;
+  --bs-link-color:#137c72; --bs-link-hover-color:#0c625a;
+  --app-top:calc(64px + env(safe-area-inset-top,0px));
+  --app-dock:calc(76px + env(safe-area-inset-bottom,0px));
+  --navbar-h:var(--app-top); --ui-ring:0 0 0 4px #137c7216;
+}
+[hidden] { display:none!important; }
+.app-device-gate,.app-orientation-gate { display:none; }
+.app-desktop body> :not(.app-device-gate),
+.app-landscape body> :not(.app-orientation-gate) { display:none!important; }
+.app-desktop body,.app-landscape body {
+  margin:0!important; padding:0!important; height:100dvh!important;
+  overflow:hidden!important; background:#f3f6f4!important;
+}
+.app-desktop .app-device-gate,.app-handheld.app-landscape .app-orientation-gate {
+  position:fixed; inset:0; display:grid; place-items:center;
+  z-index:99999; padding:24px; overflow:auto;
+  background:radial-gradient(ellipse at 20% 10%,#d9efe4,transparent 58%),#f3f6f4;
+}
+.app-gate-card { width:min(100%,420px); text-align:center; color:var(--text); }
+.app-gate-card>img { object-fit:contain; margin-bottom:20px; }
+.app-eyebrow { display:block; margin:12px 0 8px; color:var(--primary); font-size:11px; font-weight:700; }
+.app-gate-card h1,.app-gate-card h2 { font-size:27px; font-weight:800; line-height:1.7; }
+.app-gate-card p { color:var(--text-muted); font-size:14px; line-height:2; }
+.app-gate-status { overflow-wrap:anywhere; min-height:28px; }
+.app-portrait-icon { display:block; font-size:64px; color:var(--primary); }
+.app-primary-action,.app-secondary-action {
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  width:100%; min-height:50px; border:0; border-radius:16px;
+  padding:12px 16px; font:700 14px 'Noto Sans Arabic',sans-serif; cursor:pointer;
+}
+.app-primary-action { background:var(--primary); color:#fff; box-shadow:0 6px 16px #137c7220; }
+.app-primary-action:disabled { opacity:.6; }
+.app-secondary-action { background:var(--surface-2); color:var(--text); margin-top:10px; }
+.app-install-dialog {
+  color:var(--text); background:#fff; border:1px solid var(--border);
+  width:min(100% - 24px,460px); max-height:calc(100dvh - 28px);
+  overflow-y:auto; overscroll-behavior:contain; padding:28px 24px 24px;
+  border-radius:28px; text-align:center; box-shadow:0 24px 100px #123b4530;
+}
+.app-install-dialog::backdrop { background:#102f3a80; backdrop-filter:blur(6px); }
+.app-install-dialog>img { border-radius:20px; object-fit:contain; margin:12px auto; }
+.app-install-dialog h2 { font-size:22px; font-weight:800; line-height:1.7; }
+.app-install-dialog p { font-size:13px; line-height:1.9; color:var(--text-muted); }
+.app-install-dialog ol { text-align:start; padding-inline-start:24px; margin:20px 0; }
+.app-install-dialog li { padding-inline-start:6px; margin-bottom:14px; font-size:13px; line-height:1.9; }
+.app-install-dialog li::marker { color:var(--primary); font-weight:800; }
+.app-sheet-handle { width:36px; height:4px; border-radius:8px; background:#dbe6e1; margin:-12px auto 18px; }
+.app-sheet-close { position:absolute; top:18px; inset-inline-end:14px; width:44px; height:44px; border:0; border-radius:50%; background:var(--surface-2); color:var(--text-muted); }
+.app-install-status:empty { display:none; }
+.app-handheld { overflow-x:clip; scroll-padding-top:var(--app-top); scroll-padding-bottom:var(--app-dock); }
+.app-handheld body {
+  /* Page-specific legacy variables must not override the app palette. */
+  --primary:#137c72; --primary-hover:#0c625a; --primary-dark:#0c625a;
+  --primary-soft:#e4f3ed; --text:#213c40; --text-muted:#6d8182;
+  --border:#e0e9e5; --surface:#fff; --surface-2:#f6f9f7;
+  --chat-bg:#f1f6f3; --sidebar-bg:#fff; --msg-out:#137c72;
+  -webkit-text-size-adjust:100%; font-family:'Noto Sans Arabic',sans-serif;
+}
+.app-handheld :where(button,a,input,select,textarea) { touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.app-handheld :where(button,a,input,select,textarea):focus-visible { outline:3px solid #69bca9; outline-offset:3px; }
+.app-handheld .btn { min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:5px; border-radius:13px; }
+.app-handheld .btn-primary,.app-handheld .login-submit { background:var(--primary)!important; border-color:var(--primary)!important; box-shadow:0 5px 12px #137c721a; }
+.app-handheld .btn-primary:hover { background:var(--primary-hover)!important; }
+.app-handheld .btn-outline-primary { color:var(--primary); border-color:#acd5c8; }
+.app-handheld .btn-outline-primary:hover { color:#fff; background:var(--primary); }
+.app-handheld :where(.form-control,.form-select) { min-height:46px; border-radius:13px; font-size:16px; background-color:var(--surface-2); }
+.app-handheld :where(.form-control,.form-select,.input-textarea):focus { border-color:#67af9e!important; box-shadow:var(--ui-ring)!important; }
+.app-handheld .navbar-custom,.app-handheld .admin-topbar {
+  position:fixed!important; top:0; right:0; left:0; z-index:1030;
+  height:var(--app-top)!important; min-height:var(--app-top)!important;
+  padding:env(safe-area-inset-top,0px) 12px 0!important;
+  display:flex!important; align-items:center; flex-wrap:nowrap; gap:8px;
+  background:linear-gradient(110deg,#123b45,#1b5557)!important;
+  border:0; border-radius:0 0 22px 22px; box-shadow:0 5px 18px #123b4512!important;
+}
+.app-handheld .navbar-custom .nav-main { flex:1; min-width:0; }
+.app-handheld .admin-brand,.app-handheld .navbar-brand { font-size:17px!important; color:#fff; white-space:nowrap; }
+.app-handheld .app-brand-logo { width:36px; height:36px; border:0; background:#ffffff12; border-radius:12px; }
+.app-handheld .admin-menu-btn,.app-handheld .mobile-toggle,.app-handheld .app-back-btn,
+.app-install-topbar,.app-page-more {
+  display:inline-flex!important; align-items:center; justify-content:center;
+  flex-shrink:0; min-width:44px; min-height:44px; border:1px solid #ffffff20;
+  border-radius:14px!important; background:#ffffff0c; color:#fff; font-size:20px;
+}
+.app-handheld .admin-floating-menu,.app-handheld .dashboard-drawer-toggle { display:none!important; }
+.app-handheld .admin-topbar-actions { margin-inline-start:auto; gap:4px; }
+.app-handheld .admin-topbar-actions .btn { min-width:36px; min-height:44px; border:0; background:transparent; }
+.app-handheld .admin-topbar-actions,
+.app-handheld .admin-topbar .credit-bar { display:none!important; }
+.app-handheld .admin-brand { margin-inline-end:auto; }
+.app-handheld .credit-bar { margin:0 auto 0 0; min-width:0; padding:5px 8px; border-radius:14px; }
+.app-handheld .credit-goal,.app-handheld .credit-caption { display:none; }
+.app-handheld .credit-bar [data-credit-balance] { max-width:52px; overflow:hidden; text-overflow:ellipsis; }
+.app-install-topbar { min-width:58px; gap:4px; font:600 11px 'Noto Sans Arabic',sans-serif; border-color:#a5dac650; background:#a5dac61a; color:#d7f4e6; }
+.app-install-topbar i { font-size:18px; }
+.app-install-topbar[hidden] { display:none!important; }
+.app-tabbar {
+  position:fixed; z-index:1025; bottom:0; inset-inline:0;
+  display:flex; align-items:center; gap:4px; height:var(--app-dock);
+  padding:8px max(10px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));
+  background:#ffffffed; border-top:1px solid #e0e9e5; border-radius:24px 24px 0 0;
+  box-shadow:0 -6px 28px #123b4508; backdrop-filter:blur(16px);
+  transition:transform .2s ease,opacity .2s ease;
+}
+.app-tabbar a {
+  flex:1; min-width:0; min-height:54px; display:flex; align-items:center; justify-content:center;
+  flex-direction:column; gap:3px; border-radius:16px; color:#788c89;
+  text-decoration:none; font-size:10px; font-weight:600; line-height:1.6;
+}
+.app-tabbar a i { font-size:21px; line-height:1.2; }
+.app-tabbar a[aria-current=page] { color:var(--primary-dark); background:var(--primary-soft); font-weight:800; }
+.app-tabbar a:active { background:#e9f2ed; }
+.mobile-conversation-open .app-tabbar,.app-keyboard-open .app-tabbar {
+  transform:translateY(110%); visibility:hidden; opacity:0; pointer-events:none;
+}
+.app-install-card {
+  display:flex; align-items:center; flex-shrink:0; gap:10px; margin:12px 0 18px;
+  padding:14px 12px; border:1px solid #c9e4d7; border-radius:18px;
+  background:linear-gradient(110deg,#e5f4ec,#f3faf5); color:var(--text);
+}
+.app-install-card>div { flex:1; min-width:0; }
+.app-install-card strong { font-size:12px; font-weight:800; }
+.app-install-card p { font-size:10px; color:#608174; margin:4px 0 0; line-height:1.7; }
+.app-install-symbol { width:36px; height:42px; display:grid; place-items:center; flex-shrink:0; font-size:25px; color:var(--primary); }
+.app-install-cta { min-height:44px; display:flex; align-items:center; gap:7px; border:0; border-radius:12px; background:var(--primary); color:#fff; padding:8px 12px; font:700 12px 'Noto Sans Arabic',sans-serif; }
+.app-install-dismiss { align-self:stretch; min-width:32px; min-height:44px; margin-inline-end:-4px; border:0; background:transparent; color:#6c8b7e; font-size:22px; border-radius:10px; }
+.app-handheld .admin-main {
+  margin:0!important; width:100%; min-height:100dvh; height:auto;
+  padding:calc(var(--app-top) + 18px) 16px calc(var(--app-dock) + 24px)!important;
+}
+.app-handheld .admin-page-head { padding:22px!important; border-radius:22px; background:linear-gradient(120deg,#fff,#f3f9f5)!important; }
+.app-handheld .admin-page-head::after { background:linear-gradient(#137c72,#a8d6bc); }
+.app-handheld .admin-kicker { font-size:11px!important; }
+.app-handheld .admin-page-head h1 { font-size:25px; letter-spacing:-.8px; }
+.app-handheld .admin-card-grid { display:grid; grid-template-columns:1fr; gap:12px; }
+.app-handheld .admin-link-card { grid-template-columns:48px minmax(0,1fr); gap:5px 14px; padding:20px!important; border-radius:20px!important; }
+.app-handheld .admin-link-card>i { width:48px; height:48px; border-radius:16px; background:var(--primary-soft)!important; color:var(--primary)!important; }
+.app-handheld .admin-panel { padding:18px; border-radius:20px!important; }
+.app-handheld .admin-actions-row { flex-wrap:wrap; gap:8px; }
+.app-handheld .admin-sidebar,.app-handheld .dashboard-drawer {
+  top:var(--app-top)!important; bottom:0!important; height:auto!important;
+  max-width:calc(100vw - 36px); width:320px; z-index:1050;
+  border-radius:24px 0 0 0; padding-bottom:calc(28px + env(safe-area-inset-bottom));
+}
+.app-handheld .admin-sidebar { transform:translateX(105%); }
+.app-handheld .admin-sidebar.open { transform:translateX(0); }
+.app-handheld .admin-sidebar:not(.open),.app-handheld .dashboard-drawer:not(.open) { visibility:hidden; box-shadow:none!important; }
+.app-handheld .admin-sidebar a,.app-handheld .drawer-link,.app-handheld .drawer-action { min-height:48px; border-radius:14px; }
+.app-handheld .admin-sidebar a[aria-current=page] { background:var(--primary-soft)!important; box-shadow:inset -3px 0 var(--primary); }
+.app-handheld .admin-sidebar a[aria-current=page] i { background:#d4eadd; }
+.app-handheld .admin-overlay,.app-handheld .mobile-overlay { z-index:1040; }
+/* Always one phone column. A wider physical screen cannot reveal desktop panels. */
+.app-handheld body.messenger-page { height:var(--app-viewport-height,100dvh)!important; overflow:hidden!important; padding-top:var(--app-top)!important; }
+.app-handheld .messenger-page .main-container {
+  height:calc(var(--app-viewport-height,100dvh) - var(--app-top) - var(--app-dock))!important;
+  padding:0!important; margin:0!important; gap:0!important; width:100%;
+}
+.app-handheld .messenger-page .sidebar { width:100%!important; min-width:0!important; border:0; border-radius:0; }
+.app-handheld .messenger-page:not(.mobile-conversation-open) .sidebar { position:relative!important; inset:auto!important; display:flex!important; transform:none!important; height:100%!important; max-width:none!important; z-index:1; }
+.app-handheld .messenger-page:not(.mobile-conversation-open) .chat-panel { display:none!important; }
+.app-handheld .messenger-page.mobile-conversation-open .sidebar { display:none!important; }
+.app-handheld .messenger-page.mobile-conversation-open .chat-panel { display:flex!important; width:100%!important; border:0; border-radius:0; }
+.app-handheld .messenger-page.mobile-conversation-open .main-container,
+.app-handheld .messenger-page.app-keyboard-open .main-container { height:calc(var(--app-viewport-height,100dvh) - var(--app-top))!important; }
+.app-handheld .messenger-page .inbox-heading { padding:24px 18px 14px; gap:10px; }
+.app-handheld .messenger-page .inbox-heading h1 { font-size:27px; letter-spacing:-1px; }
+.app-handheld .ui-inbox-symbol { width:48px; height:48px; border-radius:17px; background:var(--primary-soft); color:var(--primary); }
+.app-handheld .messenger-page .app-install-card { margin:0 14px 12px; padding:10px; }
+.app-handheld .messenger-page .sidebar .input-group { background:#f1f6f3; border-radius:14px; min-height:48px; }
+.app-handheld .messenger-page #conversationFilters { display:flex!important; overflow-x:auto; justify-content:flex-start; flex-wrap:nowrap; gap:7px; padding:10px 4px; scrollbar-width:none; }
+.app-handheld .messenger-page #conversationFilters button { flex:0 0 auto; min-height:44px; padding:8px 14px; border:0; border-radius:14px!important; background:#f0f5f2; color:#667e74; font-size:11px; }
+.app-handheld .messenger-page #conversationFilters button.active { background:var(--primary)!important; color:#fff; box-shadow:0 4px 10px #137c721a; }
+.app-handheld .messenger-page .customer-item { margin:4px 10px; padding:16px 12px; border-radius:18px; border-bottom:1px solid #edf2ee; }
+.app-handheld .messenger-page .customer-item.active { background:var(--primary-soft)!important; border-right-color:var(--primary)!important; }
+.app-handheld .messenger-page .cust-avatar { width:48px; height:48px; border-radius:17px; background:#e7f1ea!important; color:#3b7e68!important; }
+.app-handheld .messenger-page .cust-name { font-size:14px; }
+.app-handheld .messenger-page .cust-preview { font-size:12px; color:var(--text-muted); }
+.app-handheld .messenger-page .conversation-store-badge { color:#628072; background:#edf5ef; }
+.app-handheld .messenger-page .avatar-circle { background:var(--primary)!important; }
+.app-handheld .messenger-page .chat-header { padding:10px 12px!important; min-height:70px; }
+.app-handheld .messenger-page .messages-area { padding:18px 12px!important; background:radial-gradient(#b6cfc333 .7px,transparent .7px),#f1f6f3!important; background-size:20px 20px!important; }
+.app-handheld .messenger-page .msg-wrapper.outgoing .msg-bubble { background:linear-gradient(120deg,#137c72,#278c78)!important; box-shadow:0 4px 14px #137c7210!important; }
+.app-handheld .messenger-page .input-area { padding:10px 12px max(10px,env(safe-area-inset-bottom))!important; border-radius:22px 22px 0 0; }
+.app-handheld .messenger-page .input-row { display:grid!important; grid-template-columns:1fr!important; gap:8px; }
+.app-handheld .messenger-page .input-textarea { min-height:64px!important; font-size:16px; padding:12px!important; background:#f4f8f5!important; border-radius:16px!important; }
+.app-handheld .messenger-page .input-actions { display:grid!important; grid-template-columns:repeat(4,minmax(0,1fr))!important; gap:7px!important; }
+.app-handheld .messenger-page .input-actions .input-btn { flex-direction:row!important; min-height:48px!important; min-width:0; padding:8px 4px; border-radius:14px!important; font-size:11px!important; }
+.app-handheld .messenger-page .input-actions .send-btn { background:var(--primary)!important; border-color:var(--primary)!important; box-shadow:0 4px 12px #137c7220; }
+.app-handheld .messenger-page .input-actions .ai-btn { background:#e4f3ed!important; color:#126553!important; border-color:#c6e3d5!important; }
+.app-handheld .messenger-page .input-actions .improve-btn { background:#fff5e3!important; color:#916829!important; border-color:#f0dfb9!important; }
+.app-handheld .messenger-page .reply-shortcuts button { color:#557869; background:#f4f8f5; min-height:44px; border-color:var(--border); }
+.app-handheld .ui-composer-hint { display:none; }
+.app-handheld .mobile-chat-back { display:inline-flex!important; align-items:center; justify-content:center; min-width:44px; min-height:44px; }
+/* The action tray replaces the duplicate page navigation; all tools stay reachable. */
+.app-handheld .orders-page .navbar-custom .nav-actions,
+.app-handheld .products-page .navbar-custom .nav-actions {
+  display:none!important; position:absolute!important; top:calc(var(--app-top) + 8px)!important;
+  inset-inline:12px!important; bottom:auto!important; width:auto!important; height:auto!important;
+  min-height:0!important; max-height:65dvh; overflow-y:auto; transform:none!important;
+  padding:14px!important; border:1px solid var(--border); border-radius:20px!important;
+  box-shadow:0 16px 45px #123b4520; background:#fff!important; z-index:1045;
+}
+.app-handheld .orders-page .navbar-custom .nav-actions.app-actions-open,
+.app-handheld .products-page .navbar-custom .nav-actions.app-actions-open { display:flex!important; flex-wrap:wrap; gap:8px!important; }
+.app-handheld :is(.orders-page,.products-page) .nav-actions a,
+.app-handheld :is(.orders-page,.products-page) .nav-actions button {
+  display:inline-flex!important; align-items:center; justify-content:center;
+  flex:1 1 auto; min-height:44px; width:auto!important; padding:10px!important;
+  background:#f3f8f5!important; color:var(--text)!important; border:1px solid var(--border)!important;
+}
+.app-handheld :is(.orders-page,.products-page) .nav-actions .data-tools { display:flex!important; flex-wrap:wrap; gap:6px; width:100%; }
+.app-handheld :is(.orders-page,.products-page) .nav-actions :is(.mobile-optional,button) { display:inline-flex!important; }
+.app-handheld :is(.orders-page,.products-page) .nav-actions .btn span { display:inline!important; }
+.app-handheld :is(.orders-page,.products-page) .nav-actions .btn i { font-size:16px; color:var(--primary)!important; }
+.app-handheld body.orders-page,.app-handheld body.products-page { padding:0!important; height:auto!important; min-height:100dvh; overflow:visible!important; }
+.app-handheld .orders-page .orders-layout,.app-handheld .products-page .products-layout {
+  margin:0!important; width:100%; max-width:none; height:auto; overflow:visible;
+  padding:calc(var(--app-top) + 18px) 14px calc(var(--app-dock) + 24px)!important;
+  background:var(--bg);
+}
+.app-handheld .products-layout { display:flex; flex-direction:column; gap:16px; }
+.app-handheld .product-form-panel,.app-handheld .products-list-panel { width:100%; min-width:0; border-radius:22px!important; }
+.app-handheld .orders-header { display:block; padding:20px; margin-bottom:16px; border-radius:22px; background:linear-gradient(120deg,#fff,#f2f9f5); }
+.app-handheld .orders-stats { width:100%; margin-top:18px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.app-handheld .orders-stat { min-width:0; border:0; background:#f1f7f3; border-radius:16px; padding:14px; }
+.app-handheld .orders-stat>span { color:var(--primary); font-size:26px; }
+.app-handheld .orders-toolbar { padding:16px; border-radius:20px!important; margin-bottom:16px; }
+.app-handheld .catalog-layout { padding-top:calc(var(--app-top) + 18px); padding-bottom:calc(var(--app-dock) + 24px); }
+.app-handheld body.advisor-workspace { padding:0!important; height:var(--app-viewport-height,100dvh)!important; overflow:hidden!important; }
+.app-handheld .advisor-workspace .admin-main {
+  position:fixed; top:var(--app-top)!important; inset-inline:0; min-height:0;
+  height:calc(var(--app-viewport-height,100dvh) - var(--app-top) - var(--app-dock))!important;
+  padding:12px!important; display:flex; flex-direction:column;
+}
+.app-handheld .advisor-workspace.app-keyboard-open .admin-main { height:calc(var(--app-viewport-height,100dvh) - var(--app-top))!important; }
+.app-handheld .advisor-toolbar { overflow-x:auto; gap:8px; flex-shrink:0; }
+.app-handheld .advisor-toolbar strong { display:none; }
+.app-handheld .advisor-toolbar button { flex:0 0 auto; min-height:44px; padding:9px 14px; }
+.app-handheld .advisor-workspace .advisor-chat-card { border-radius:22px; }
+.app-handheld .advisor-workspace .advisor-compose-actions>button { background:var(--primary); }
+.app-handheld .advisor-workspace .advisor-message.owner { color:var(--text); background:var(--primary-soft); }
+.app-handheld .advisor-workspace .advisor-message.owner .advisor-message-content { color:var(--text); background:transparent; }
+.app-handheld .login-shell { padding:28px 18px calc(28px + env(safe-area-inset-bottom)); min-height:100dvh; }
+.app-handheld .login-card { width:100%; max-width:440px; padding:28px 24px; border-radius:30px; box-shadow:0 18px 60px #123b4510; }
+.app-handheld .login-brand-mark { background:#e4f3ed; box-shadow:none; }
+.app-handheld .login-card h1 { color:#123b45; }
+.app-handheld .login-form .form-control,.app-handheld .login-password-wrap { background:#f5f9f6!important; }
+.app-handheld .login-page { background:radial-gradient(ellipse at 10% 5%,#d9ece0,transparent 55%),#f3f6f4!important; }
+.app-handheld .login-card .app-install-card { text-align:start; margin:0 0 22px; padding:10px; gap:5px; }
+.app-handheld .login-card .app-install-symbol { display:none; }
+.app-handheld .workspace-dialog,.app-handheld .modal-content { border-radius:26px; }
+@media(max-width:370px) {
+  .app-handheld .credit-bar { display:none; }
+  .app-handheld .admin-topbar { gap:5px; }
+  .app-handheld .admin-brand { margin-inline-end:auto; }
+  .app-tabbar { gap:2px; padding-inline:6px; }
+  .app-tabbar a { font-size:9px; }
+  .app-install-card { gap:6px; padding:10px; }
+  .app-install-cta { padding-inline:10px; }
+  .app-install-symbol { width:28px; }
+}
+@media(max-width:600px) {
+  .app-install-dialog { width:100%; max-width:none; max-height:88dvh; margin:auto 0 0; border-radius:28px 28px 0 0; padding-bottom:calc(24px + env(safe-area-inset-bottom)); border:0; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .app-tabbar { transition:none; }
+}
