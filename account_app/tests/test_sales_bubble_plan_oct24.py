@@ -39,6 +39,14 @@ class SalesBubblePlanOct24Tests(unittest.TestCase):
         self.assertEqual(plan['reply_parts'][1], 'شنو قياسج؟')
         self.assertFalse(plan['needs_rewrite'])
 
+    def test_live_style_price_reply_does_not_send_a_lone_vocative_or_soft_wraps(self):
+        reply = ('عيني،\nالسعر 16,000 د.ع.\nوقماشه لينن مريح.\n'
+                 'التوصيل 5,000 د.ع؛ المجموع 21,000 د.ع.\nشنو قياسج؟')
+        plan = self.plan(reply)
+        self.assertNotEqual(plan['reply_parts'][0], 'عيني،')
+        self.assertTrue(all('\n' not in part for part in plan['reply_parts']))
+        self.assertIn('السعر', plan['reply_parts'][0])
+
     def test_fit_explanation_and_condition_remain_whole_before_next_step(self):
         reply = ('القياسات من 38 إلى 52. قياس 44 موجود حسب الجدول. '
                  'إذا تحبينه واسع لازم نقارن قياس القطعة بملابسج قبل الاختيار. شنو اللون اللي تفضلينه؟')
@@ -76,6 +84,22 @@ class SalesBubblePlanOct24Tests(unittest.TestCase):
         self.assertEqual(len(plan['reply_parts']), 2)
         self.assertFalse(plan['needs_rewrite'])
         self.assertIn('التردد من القياس', plan['reply_parts'][1])
+
+    def test_complete_fit_caution_does_not_join_product_answer_into_one_long_bubble(self):
+        reply = ('إي عيني هو نفسه الموديل بالصورة، فستان دانتيل وقماشه لينن مريح ومرتب، '
+                 'متوفر باللون الأسود بسعر 16 ألف. بس أصغر قياس بي 38، ونحتاج نقارن قياسج المعتاد '
+                 'بجدول القطعة قبل ما نختاره.')
+        plan = self.plan(reply)
+        self.assertEqual(len(plan['reply_parts']), 2)
+        self.assertLess(max(map(len, plan['reply_parts'])), 155)
+
+    def test_price_and_shipping_without_total_do_not_swallow_interleaved_fit_fact(self):
+        reply = ('فستان دانتيل متوفر وقماشه لينن، سعره 16 ألف. '
+                 'قياساته من 38 لحد 52 ونختار المناسب من الجدول. '
+                 'والتوصيل 5 آلاف لكل المحافظات مع الفحص عند الاستلام.')
+        plan = self.plan(reply)
+        self.assertGreaterEqual(len(plan['reply_parts']), 2)
+        self.assertLess(max(map(len, plan['reply_parts'])), 155)
 
     def test_comma_only_reply_can_separate_complete_sales_functions(self):
         reply = 'الموديل متوفر بالأسود، القماش قطن، شنو قياسج؟'

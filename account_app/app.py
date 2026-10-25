@@ -3792,6 +3792,7 @@ def notification_problem_summary(reason):
         (("readtimeout", "timeout", "timed out"), "انتهت مهلة رد الذكاء الاصطناعي", "راجع المحادثة وأعد المحاولة."),
         (("provider_http_429",), "ضغط على خدمة الذكاء الاصطناعي", "أعد المحاولة بعد قليل."),
         (("image analysis service failure", "image_unavailable"), "تعذر تحليل صورة الزبون", "راجع الصورة وحدد المنتج يدوياً."),
+        (("ad product unresolved",), "لم يتحدد موديل الإعلان", "اربط الإعلان بالمنتج ورد على الزبون."),
         (("confidently match customer image", "image_unresolved"), "لم يُحدد المنتج من الصورة", "افتح المراجعة وحدد المنتج."),
         (("invalid_ai_response", "could not produce a reply"), "تعذر توليد رد مناسب", "راجع المحادثة وأرسل الرد."),
     ):
@@ -3819,7 +3820,7 @@ def is_technical_handoff(reason):
         'exception:', 'provider_http_', 'image analysis service failure:',
         'invalid_ai_response', 'empty_reply', 'could not produce a reply',
         'timeout', 'timed out', 'payment required', 'insufficient credit',
-        'send_failed', 'delivery_uncertain',
+        'send_failed', 'delivery_uncertain', 'ad product unresolved',
     )) and 'unresolved_product_decision' not in text
 
 
@@ -9380,24 +9381,194 @@ def pending_image_policy_reply(db, ev, meta):
         "SELECT 1 FROM messages WHERE sender_id=? AND direction='incoming' AND "
         "(message_type='image' OR COALESCE(image_url,'')<>'') LIMIT 1", (ev['sender_id'],)).fetchone())
     if received:
-        acknowledgement = ('الصورة وصلت عندي وموجودة، ما يحتاج تعيدين إرسالها. '
-                           'باقي أتأكد من الموديل حتى أنطيج السعر والقياس الصحيحين.')
+        acknowledgement = ('اختيارج حلو عيني 🌷 الصورة وصلت، خلينا نتأكد من الموديل '
+                           'حتى أنطيج سعره ومقاساته الصح.')
         if parts:
             parts.insert(0, acknowledgement)
         else:
             parts = [acknowledgement]
-            if not meta.get('service_error') and meta.get('ai_paused') is not False:
-                parts.append('إذا تعرفين اسم الموديل أو وصفه اكتبيه إلي حتى نحدد القطعة الصح.')
     if not parts:
         return empty
     if len(parts) > 1 and sales_recovery.independent_policy_questions(ev.get('text')):
         parts.append('هاي سياسة التوصيل العامة؛ عرض القطعة والمجموع نأكدهم بعد تحديد الموديل.')
     # A partial policy answer must not mark the image/choices as answered when
     # a later event collects the still-unresolved customer turn.
-    payload = dict(meta, _partial_policy_reply=True)
+    # A provider/billing failure has already been handed to a person. Mark
+    # this turn answered so the same archived image is not reprocessed for
+    # every new text and the customer does not receive this status repeatedly.
+    payload = dict(meta, pending_image_reply=True,
+                   _partial_policy_reply=not bool(meta.get('service_error')))
     result = saved_checkout_reply(db, ev, '\n'.join(parts), meta, payload=payload)
-    result['meta'] = dict(meta, partial_policy_reply=True)
+    result['meta'] = dict(meta, partial_policy_reply=payload['_partial_policy_reply'])
     return result
+
+
+def pending_image_service_followup(db, ev, products):
+    """Keep an image outage in human review without replaying the old photo."""
+    if ev.get('image_url') or any(item['type'] == 'image' for item in
+                                   extract_media({'attachments': ev.get('attachments', [])})):
+        return None
+    review = db.execute('''SELECT id,message_text,image_url,created_at FROM human_reviews
+        WHERE sender_id=? AND status='pending' AND COALESCE(image_url,'')<>''
+        AND reason LIKE 'Image analysis service failure:%'
+        ORDER BY id DESC LIMIT 1''', (ev['sender_id'],)).fetchone()
+    if not review:
+        return None
+    question = str(ev.get('text') or '').strip()
+    if (sales_strategy.stop_kind(question) or customer_product_target(question, products)
+            or first_message_named_products(question, products)):
+        return None
+    # A billing or provider outage can clear while the customer is waiting.
+    # Retry the archived photo on a later question, never on each immediate
+    # message. recognize_once also limits retries of a failed image to 5 min.
+    try:
+        last_attempt = datetime.fromisoformat(str(review['created_at']))
+        if last_attempt.tzinfo is None:
+            last_attempt = last_attempt.replace(tzinfo=BAGHDAD_TZ)
+        retry_due = datetime.now(BAGHDAD_TZ) - last_attempt >= timedelta(minutes=5)
+    except (ValueError, TypeError):
+        retry_due = False
+    if retry_due and review['image_url'] and products:
+        db.execute('UPDATE human_reviews SET created_at=? WHERE id=?',
+                   (now_baghdad_iso(), review['id']))
+        db.commit()
+        archived = dict(ev, image_url=review['image_url'], attachments=[], text='',
+                        ad_id=None, ref=None)
+        recovered, _, _ = match_product(db, archived, products)
+        if recovered:
+            return None  # Continue this new question with the restored binding.
+    if question and question not in str(review['message_text'] or ''):
+        db.execute('UPDATE human_reviews SET message_text=?,created_at=? WHERE id=?',
+                   ((str(review['message_text'] or '') + '\n' + question).strip()[-1000:],
+                    now_baghdad_iso(), review['id']))
+        db.commit()
+    policy = store_policy_question_reply(question)
+    if policy:
+        return saved_checkout_reply(db, ev, policy['reply'],
+                                    {'pending_image_review': True, 'human_review_id': review['id']})
+    previous = db.execute('''SELECT 1 FROM messages WHERE sender_id=? AND direction='outgoing'
+        AND raw_payload LIKE '%"pending_image_service_followup": true%'
+        AND ''' + delivery_state.VISIBLE_SQL + ' LIMIT 1', (ev['sender_id'],)).fetchone()
+    if previous:
+        return {'sender_id': ev['sender_id'], 'page_id': ev.get('page_id'),
+                'platform': ev.get('platform'), 'reply': '', 'send_image': False,
+                'meta': {'skipped': True, 'reason': 'human_image_review_pending',
+                         'human_review_id': review['id']}}
+    reply = ('حقج عليّ عيني 🌷 الصورة عندي، بس ما أريد أعطيج سعر أو قياس لموديل غلط. '
+             'طلبت من الفريق يتأكد من نفس القطعة، وما يحتاج تدزينها مرة ثانية.')
+    return saved_checkout_reply(db, ev, reply,
+                                {'pending_image_service_followup': True,
+                                 'human_review_id': review['id'], 'needs_human': True})
+
+
+def ad_creative_product(db, ev, products):
+    """Try the ad's own direct photo before asking a shopper to identify it."""
+    context = ad_attribution.load(db, ev['sender_id']) or {}
+    creative = ad_attribution.safe_url(context.get('image_url'))
+    host = (urlparse(creative).hostname or '').lower()
+    if not creative or not (host.endswith('.fbcdn.net') or host.endswith('.fbsbx.com')):
+        return None, {}, creative
+    synthetic = dict(ev, text='', image_url=creative, attachments=[], ad_id=None, ref=None)
+    matched, _, analysis = match_product(db, synthetic, products)
+    return matched, analysis or {}, creative
+
+
+def historical_ad_candidate(db, ev, products):
+    """Suggest, never silently bind, a model supported by recent image matches."""
+    source = ev.get('_ad_source') or {}
+    ad_id = str(source.get('ad_id') or '').strip()
+    if not ad_id:
+        return None
+    try:
+        votes = db.execute('''SELECT i.product_id,COUNT(DISTINCT i.sender_id) AS n
+            FROM conversation_ad_context c
+            JOIN customer_product_interests i ON i.sender_id=c.sender_id
+            WHERE json_valid(c.data) AND json_extract(c.data,'$.ad_id')=?
+              AND c.sender_id LIKE ? AND c.sender_id<>?
+              AND i.status='active' AND i.match_method='image_recognition'
+              AND julianday(i.last_seen_at)>=julianday(json_extract(c.data,'$.captured_at'))
+              AND julianday(i.last_seen_at)<=julianday(json_extract(c.data,'$.captured_at'))+10.0/1440
+            GROUP BY i.product_id ORDER BY n DESC''',
+            (ad_id, current_store_id() + '::%', ev['sender_id'])).fetchall()
+    except sqlite3.Error:
+        return None
+    total = sum(int(row['n']) for row in votes)
+    if not votes or total < 5 or int(votes[0]['n']) < 5 or int(votes[0]['n']) * 5 < total * 4:
+        return None
+    candidate = next((p for p in products if p.get('product_id') == votes[0]['product_id']
+                      and _stock_state(p) == 'available' and product_image_urls(p)), None)
+    if not candidate:
+        return None
+    rejected = db.execute('''SELECT 1 FROM customer_product_interests
+        WHERE sender_id=? AND product_id=? AND status='rejected' LIMIT 1''',
+        (ev['sender_id'], candidate['product_id'])).fetchone()
+    return None if rejected else candidate
+
+
+def saved_ad_candidate_reply(db, ev, product):
+    """Show the likely ad model for a yes/no check, without claiming identity."""
+    name = customer_copy.fact(product.get('product_name')).strip()
+    images = product_image_urls(product)
+    if not name or not images:
+        return None
+    price_phrase = ''
+    try:
+        count, price, _ = conversation_quality.terms(product)
+        if count == 1:
+            price_phrase = f' إذا هو نفسه، سعره {price:,} د.ع.'
+    except (ValueError, TypeError, KeyError):
+        pass
+    reply = f'من الإعلان غالباً تقصدين {name} عيني 🌷{price_phrase} هاي صورته؛ هو اللي عجبج؟'
+    meta = {'ad_candidate_product_id': product['product_id'], 'ad_candidate_unconfirmed': True}
+    save_message(db, ev['sender_id'], 'outgoing', 'text', reply, None, None, None, meta)
+    save_conversation_message(db, ev['sender_id'], 'assistant', reply)
+    save_message(db, ev['sender_id'], 'outgoing', 'image', None, images[0], None, None, meta)
+    return {'sender_id': ev['sender_id'], 'page_id': ev.get('page_id'),
+            'platform': ev.get('platform'), 'reply': reply, 'reply_parts': [reply],
+            'send_image': True, 'image_urls': [images[0]], 'create_order': False,
+            'meta': {'ad_candidate_unconfirmed': True}}
+
+
+def ad_candidate_confirmation(db, ev, products):
+    """A yes to a suggested ad photo selects only that model, never a booking."""
+    clean = sales_strategy.normalized(ev.get('text')).strip(' ،.!؟?')
+    yes = bool(re.fullmatch(r'(?:اي|نعم|ايوه|هذا|هاي|هو|هي|نفسه|نفسها|هذا هو|هاي هي|اي هو|اي هي|اي هذا|اي هاي)', clean))
+    no = bool(re.fullmatch(r'(?:لا|لا مو هذا|مو هذا|مو هي|غيره|غيرها)', clean))
+    if not (yes or no) or ev.get('image_url'):
+        return None
+    last = db.execute('''SELECT id,raw_payload FROM messages WHERE sender_id=?
+        AND direction='outgoing' AND raw_payload LIKE '%"ad_candidate_product_id"%'
+        AND ''' + delivery_state.VISIBLE_SQL +
+        ' ORDER BY id DESC LIMIT 1', (ev['sender_id'],)).fetchone()
+    if not last:
+        return None
+    resolved = db.execute('''SELECT 1 FROM messages WHERE sender_id=? AND direction='outgoing'
+        AND id>? AND (raw_payload LIKE '%"ad_candidate_confirmed": true%'
+        OR raw_payload LIKE '%"ad_candidate_rejected": true%') LIMIT 1''',
+        (ev['sender_id'], last['id'])).fetchone()
+    if resolved:
+        return None
+    try:
+        product_id = json.loads(last['raw_payload'] or '{}').get('ad_candidate_product_id')
+    except (TypeError, ValueError):
+        return None
+    candidate = next((p for p in products if p.get('product_id') == product_id), None)
+    if not candidate:
+        return None
+    if no:
+        remember_customer_product(db, ev['sender_id'], candidate,
+                                  'ad_candidate_rejected', confidence=0,
+                                  source='customer_rejection', status='rejected')
+        create_human_review(db, ev, 'Ad product unresolved: customer rejected suggested model')
+        return saved_checkout_reply(db, ev,
+            'تمام عيني، مو هذا الموديل. خليت إعلانج للمراجعة حتى نحدد القطعة الصح، وما يحتاج تدزين الصورة.',
+            {'ad_candidate_rejected': True, 'needs_human': True})
+    complete_customer_product_link(db, ev['sender_id'], candidate, 'ad_candidate_confirmed',
+                                   confidence=100, source='customer_confirmation')
+    name = customer_copy.fact(candidate.get('product_name')).strip()
+    reply = f'إي عيني، هذا {name} 🌷 شنو قياسج حتى أتأكدلج من المناسب؟'
+    return saved_checkout_reply(db, ev, reply,
+                                {'ad_candidate_confirmed': True, 'product_id': candidate['product_id']})
 
 
 def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, booking_actor='ai'):
@@ -9883,6 +10054,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     latest_order = get_latest_customer_order(db, ev["sender_id"])
     if latest_order:
         return handle_post_order_message(db, ev, customer, history, products, customer_products, latest_order, conversation_history)
+    ad_choice = ad_candidate_confirmation(db, ev, products)
+    if ad_choice:
+        return ad_choice
     if customer_declines_purchase(ev.get('text')):
         return resolve_product_choice(db, ev, products)
     action = conversation_quality.operational_request(ev.get('text'))
@@ -9895,13 +10069,55 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             {'cancellation_requested': True, 'needs_human': True, 'human_review_id': review_id})
     if sales_recovery.disputed_product_photo(ev.get('text')):
         return resolve_product_choice(db, ev, products)
+    pending_service_reply = pending_image_service_followup(db, ev, products)
+    if pending_service_reply:
+        return pending_service_reply
     ev = zernio.product_event(sys.modules[__name__], db, ev, products)
     if ev.get('_ad_product_unresolved'):
         independent = factual_customer_request(ev, products)
-        return saved_checkout_reply(
-            db, ev, (independent['reply'] if independent and not independent.get('image_product_ids')
-                     else 'تدللين، دزيلي صورة الموديل اللي ظهر بالإعلان حتى أتأكد إلج من سعره وتوفره.'),
-            {'ad_product_unresolved': True, 'reason': ev['_ad_source']['resolution']})
+        if independent and not independent.get('image_product_ids'):
+            return saved_checkout_reply(db, ev, independent['reply'],
+                                        {'ad_product_unresolved': True,
+                                         'reason': ev['_ad_source']['resolution']})
+        pending = db.execute('''SELECT id FROM messages WHERE sender_id=? AND direction='outgoing'
+            AND raw_payload LIKE '%"ad_candidate_product_id"%' AND ''' + delivery_state.VISIBLE_SQL +
+            ' ORDER BY id DESC LIMIT 1', (ev['sender_id'],)).fetchone()
+        if pending:
+            resolved = db.execute('''SELECT 1 FROM messages WHERE sender_id=? AND direction='outgoing'
+                AND id>? AND (raw_payload LIKE '%"ad_candidate_confirmed": true%'
+                OR raw_payload LIKE '%"ad_candidate_rejected": true%') LIMIT 1''',
+                (ev['sender_id'], pending['id'])).fetchone()
+            if not resolved:
+                return saved_checkout_reply(db, ev,
+                    'عيني، الصورة اللي دزيتها هي نفس الموديل اللي تقصدينه؟ 🌷',
+                    {'ad_candidate_waiting_confirmation': True})
+        likely = historical_ad_candidate(db, ev, products)
+        if likely:
+            suggested = saved_ad_candidate_reply(db, ev, likely)
+            if suggested:
+                return suggested
+        ad_product, ad_analysis, creative = ad_creative_product(db, ev, products)
+        if ad_product:
+            complete_customer_product_link(db, ev['sender_id'], ad_product,
+                                           'ad_creative_recognition', confidence=100,
+                                           source='ad_creative_recognition')
+            customer_products = load_customer_products(db, ev['sender_id'])
+            ev['_first_message_product_id'] = ad_product['product_id']
+            ev['_ad_product_unresolved'] = False
+            ev['_ad_source']['resolution'] = 'creative_matched'
+        else:
+            reason = ('Image analysis service failure: ' + str(ad_analysis.get('error_code') or 'service_error')
+                      + '; ad product unresolved' if ad_analysis.get('service_error')
+                      else 'Ad product unresolved: no reliable catalog match for referral')
+            review_id = create_human_review(db, dict(ev, image_url=creative), reason,
+                                            build_product_vision_candidates(products, limit=20))
+            reply = ('يا هلا عيني 🌷 الإعلان اللي جيتي منه وصلني. خليت الموديل للمراجعة '
+                     'حتى نطيج سعره الصحيح، وما يحتاج تدزين صورته.')
+            return saved_checkout_reply(db, ev, reply,
+                                        {'ad_product_unresolved': True,
+                                         'human_review_id': review_id,
+                                         'reason': ev['_ad_source']['resolution'],
+                                         'needs_human': True})
     if not latest_order and message_type != "image":
         choice_reply = resolve_product_choice(db, ev, products)
         if choice_reply:

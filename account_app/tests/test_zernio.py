@@ -191,7 +191,9 @@ class ZernioTests(unittest.TestCase):
             with self.subTest(catalog=catalog):
                 result = self.process_latest(catalog)
                 self.assertTrue(result['meta']['ad_product_unresolved'])
-                self.assertIn('صورة الموديل', result['reply'])
+                self.assertIn('الإعلان', result['reply'])
+                self.assertNotRegex(result['reply'], r'دزيلي|أرسلي|ارسلي')
+                self.assertTrue(result['meta']['human_review_id'])
                 self.assertNotIn('غير متوفر', result['reply'])
                 self.assertNotIn('12,000', result['reply'])
         with m.app.app_context():
@@ -245,6 +247,67 @@ class ZernioTests(unittest.TestCase):
         result = self.process_latest(self.catalog()[:1])
         self.assertIn('عند الاستلام', result['reply'])
         self.assertNotIn('صورة الموديل', result['reply'])
+
+    def test_direct_ad_creative_can_identify_catalog_product_without_customer_photo(self):
+        self.payload['metadata']['referral']['ad_id'] = 'synthetic-unmapped'
+        self.payload['metadata']['referral']['ads_context_data']['photo_url'] = (
+            'https://scontent.xx.fbcdn.net/synthetic-creative.jpg')
+        self.referral()
+        self.incoming('شكد سعره؟')
+        catalog = self.catalog()
+        with patch.object(m, 'ad_creative_product', return_value=(
+                catalog[1], {'product_found': True, 'product_id': 'F2'},
+                'https://scontent.xx.fbcdn.net/synthetic-creative.jpg')) as recognition:
+            result = self.process_latest(catalog)
+        self.assertIn('16,000', result['reply'])
+        self.assertNotIn('دزيلي صورة', result['reply'])
+        recognition.assert_called_once()
+        with m.app.app_context():
+            binding = m.get_db().execute("SELECT product_id FROM customer_product_interests WHERE status='active'").fetchone()
+            self.assertEqual(binding['product_id'], 'F2')
+
+    def test_consistent_recent_image_evidence_suggests_ad_model_then_yes_selects_only_model(self):
+        self.referral()
+        self.incoming('شكد سعره؟')
+        catalog = self.catalog()
+        catalog[1]['image_url'] = 'https://images.test/f2.jpg'
+        with m.app.app_context(), patch.object(m, 'current_store_id', return_value='al-fatena'):
+            db = m.get_db()
+            for index in range(6):
+                sender = f'al-fatena::historical-{index}'
+                db.execute('INSERT INTO conversation_ad_context(sender_id,message_id,data) VALUES(?,?,?)',
+                           (sender, 1, json.dumps({'ad_id': 'synthetic-unmapped',
+                              'captured_at': '2026-10-16T14:00:00+00:00'})))
+                db.execute('''INSERT INTO customer_product_interests
+                    (sender_id,product_id,product_name,match_method,confidence,last_seen_at,source,status)
+                    VALUES(?,?,?,?,?,?,?,?)''',
+                    (sender, 'F2', 'فستان دانتيل', 'image_recognition', 100,
+                     '2026-10-16T14:05:00+00:00', 'image_recognition', 'active'))
+            db.commit()
+            event = {'sender_id': self.sender(), '_ad_source': {'ad_id': 'synthetic-unmapped'},
+                     'page_id': 'test', 'platform': 'facebook'}
+            candidate = m.historical_ad_candidate(db, event, catalog)
+            self.assertEqual(candidate['product_id'], 'F2')
+            suggestion = m.saved_ad_candidate_reply(db, event, candidate)
+            self.assertIn('إذا هو نفسه', suggestion['reply'])
+            self.assertNotRegex(suggestion['reply'], r'دزيلي صورة|أرسلي صورة')
+            self.assertEqual(suggestion['image_urls'], ['https://images.test/f2.jpg'])
+            self.assertFalse(db.execute('SELECT 1 FROM orders WHERE sender_id=?', (self.sender(),)).fetchone())
+            with patch.object(m, 'is_ai_enabled', return_value=True), \
+                 patch.object(m, 'is_customer_ai_enabled', return_value=True), \
+                 patch.object(m, 'send_text_to_facebook', return_value=True) as text_send, \
+                 patch.object(m, 'send_image_to_facebook', return_value=True) as photo_send:
+                self.assertTrue(m.send_webhook_result_to_facebook(suggestion))
+            text_send.assert_called_once()
+            photo_send.assert_called_once()
+            self.assertEqual(photo_send.call_args.args[1], 'https://images.test/f2.jpg')
+            confirmed = m.ad_candidate_confirmation(db, dict(event, text='إي هذا'), catalog)
+            self.assertTrue(confirmed['meta']['ad_candidate_confirmed'])
+            binding = db.execute('''SELECT product_id FROM customer_product_interests
+                WHERE sender_id=? AND status='active' ORDER BY id DESC LIMIT 1''',
+                (self.sender(),)).fetchone()
+            self.assertEqual(binding['product_id'], 'F2')
+            self.assertFalse(db.execute('SELECT 1 FROM orders WHERE sender_id=?', (self.sender(),)).fetchone())
 
     def test_model_receives_ad_as_data_without_ad_photo_or_ad_prices(self):
         self.referral()

@@ -8,6 +8,7 @@ import base64
 from contextlib import ExitStack
 import io
 import json
+import time
 from pathlib import Path
 import uuid
 from unittest.mock import patch
@@ -138,12 +139,50 @@ class ImageContinuityOct24Tests(unittest.TestCase):
             first = self.process(self.body(image=True))
             self.assertTrue(first['meta'].get('service_error'))
             self.assertFalse(first['meta'].get('image_unresolved', False))
+            self.assertFalse(first['meta'].get('partial_policy_reply'))
             model.return_value = {'reply': 'أرسلي صورة الموديل حتى أعرف سعره.', 'create_order': False, 'order': {}}
             second = self.process(self.body('شكد سعره؟'))
             self.assert_received_without_reasking(second.get('reply'))
             self.assertNotIn('مو متوفر', second['reply'])
+            self.assertNotEqual(first['reply'], second['reply'])
             self.assertIsNone(self.m.get_active_product_binding(self.db, self.sender))
             self.assertEqual(recognize.call_count, 1)
+
+    def test_billing_failure_then_what_question_is_clarified_once_without_reanalysis(self):
+        stack, send, download, recognize, model = self.integration(dict(
+            product_found=False, service_error=True, error_code='billing',
+            reason='Synthetic provider billing failure'))
+        with stack:
+            first = self.process(self.body(image=True))
+            self.assertIn('الصورة وصلت', first['reply'])
+            second = self.process(self.body('شنو؟'))
+            self.assertIn('الصورة عندي', second['reply'])
+            self.assertNotEqual(first['reply'], second['reply'])
+            third = self.process(self.body('زين شكد السعر؟'))
+            self.assertEqual(third['reply'], '')
+            self.assertEqual(third['meta']['reason'], 'human_image_review_pending')
+            self.assertEqual(recognize.call_count, 1)
+
+    def test_old_billing_failure_retries_archived_photo_after_credit_recovers(self):
+        stack, send, download, recognize, model = self.integration(dict(
+            product_found=False, service_error=True, error_code='billing',
+            reason='Synthetic provider billing failure'))
+        with stack:
+            first = self.process(self.body(image=True))
+            self.assertTrue(first['meta']['service_error'])
+            self.db.execute("UPDATE human_reviews SET created_at='2026-10-01T00:00:00+03:00' WHERE sender_id=?",
+                            (self.sender,))
+            self.db.execute('UPDATE image_recognition_attempts SET updated_epoch=? WHERE sender_id=?',
+                            (time.time() - 360, self.sender))
+            self.db.commit()
+            recognize.return_value = dict(product_found=True, product_id=self.product['product_id'], confidence=100)
+            second = self.process(self.body('شكد سعره؟'))
+            self.assertIn('17,000', second['reply'])
+            self.assertEqual(recognize.call_count, 2)
+            self.assertEqual(self.m.get_active_product_binding(self.db, self.sender)['product_id'],
+                             self.product['product_id'])
+            self.assertFalse(self.db.execute("SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending'",
+                                             (self.sender,)).fetchone())
 
     def test_archived_photo_recovers_successful_cache_when_remote_signed_url_expires(self):
         message_id, row, entry = self.archived_photo()
