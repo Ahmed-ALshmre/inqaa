@@ -1,9 +1,15 @@
 import unittest
 
-from account_app.reply_layout import approved_parts, compact
+from account_app.reply_layout import approved_parts, compact, plan_sales_bubbles
 
 
 class ReplyLayoutTests(unittest.TestCase):
+    def test_product_answer_after_greeting_is_not_mistaken_for_greeting_only(self):
+        reply = 'تدللين عيني 🌷 إي متوفر باللون الأسود.\nاللون الأسود مناسبج؟'
+        plan = plan_sales_bubbles({'intent': 'product_question', 'reply_parts': reply.splitlines()}, reply)
+        self.assertEqual(plan['reply_parts'], [
+            'تدللين عيني 🌷 إي متوفر باللون الأسود.', 'اللون الأسود مناسبج؟'])
+
     def test_explicit_short_paragraph_and_followup_share_one_bubble(self):
         self.assertEqual(approved_parts({}, 'القياس متوفر\n\nشنو اللون المطلوب؟'),
                          ['القياس متوفر\n\nشنو اللون المطلوب؟'])

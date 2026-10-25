@@ -117,7 +117,7 @@ class ConversationContextTests(unittest.TestCase):
             m.complete_customer_product_link(self.db,self.sender,catalog[1],'manual',source='manual_admin')
             result=self.event('ما هي مواصفات الفستان؟')
             self.assertNotIn('first_message_name_ambiguous',result.get('meta',{}))
-            self.assertIn('15,000',result['reply'])
+            self.assertIn('15 ألف',result['reply'])
             self.assertFalse(m.reply_reasks_known_product(result['reply']))
             self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
 
@@ -145,7 +145,7 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
             result=self.event('ما هي مواصفات الفستان؟')
             self.assertNotIn('first_message_name_ambiguous',result.get('meta',{}))
-            self.assertIn('15,000',result['reply'])
+            self.assertIn('15 ألف',result['reply'])
 
     def test_fresh_ad_takes_precedence_over_previous_binding(self):
         catalog = [dict(p,product_name='فستان',ad_id=str(i+100)) for i,p in enumerate(CATALOG)]
@@ -153,7 +153,7 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog):
             m.complete_customer_product_link(self.db,self.sender,catalog[0],'manual',source='manual_admin')
             result=self.event('ما هي مواصفات الفستان؟')
-            self.assertIn('15,000',result['reply'])
+            self.assertIn('15 ألف',result['reply'])
             self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
 
     def test_ambiguous_opening_without_binding_still_asks(self):
@@ -170,7 +170,7 @@ class ConversationContextTests(unittest.TestCase):
         self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
 
     def test_new_reask_variants_are_retried_with_known_context(self):
-        ev=dict(self.ev,text='شنو قماشه؟')
+        ev=dict(self.ev,text='قماشه لينن لو باربي؟')
         for wrong in ['دزلي صورته حتى اعرف السعر','ارسلي صورتها','حددي الموديل حتى اجاوبج','يا موديل تقصدين؟']:
             with self.subTest(wrong=wrong), patch.object(m,'_call_main_ai_once',side_effect=[{'reply':wrong},{'reply':'قماشه لينن','create_order':False}]) as model:
                 result=m.call_main_ai(ev,'text',{},[],CATALOG,CATALOG[0],None,'',[],customer_products=[CATALOG[0]])
@@ -181,7 +181,7 @@ class ConversationContextTests(unittest.TestCase):
 
     def test_missing_matched_record_recovers_only_valid_customer_selection(self):
         with patch.object(m,'_call_main_ai_once',return_value={'reply':'قماشه لينن'}) as model:
-            m.call_main_ai(dict(self.ev,text='شنو قماشه؟'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
+            m.call_main_ai(dict(self.ev,text='قماشه لينن لو باربي؟'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
             self.assertEqual(model.call_args.args[5]['product_id'],'F1')
         with patch.object(m,'_call_main_ai_once',return_value={'reply':'سعره 15 ألف'}) as model:
             m.call_main_ai(dict(self.ev,text='فستان انيقة'),'text',{},[],CATALOG,None,None,'',[],customer_products=[CATALOG[0]])
@@ -378,12 +378,13 @@ class ConversationContextTests(unittest.TestCase):
     def test_specs_use_conversation_instead_of_dumping_internal_size_notes(self):
         product = dict(CATALOG[0], sizes="قياسات هذا المنتج من 38 إلى 52. اعتمد الجدول التالي عند الرد على الزبونة: وزن 55–60 كيلو = قياس 38")
         self.settings["product"] = product
-        expected = "الفستان دانتيل أسود وقماشه لينن، سعره 16,000 د.ع. شنو القياس اللي تلبسينه؟"
-        with patch.object(m, "_call_main_ai_once", return_value={"reply": expected, "order": {}, "create_order": False}) as model:
+        with patch.object(m, "_call_main_ai_once") as model:
             result = self.event("ما هي مواصفات الفستان؟")
-        model.assert_called_once()
-        self.assertEqual(result["reply"], expected)
+        model.assert_not_called()
+        self.assertIn('16 ألف', result['reply'])
+        self.assertIn('شنو قياس الملابس', result['reply'])
         self.assertNotIn("اعتمد الجدول", result["reply"])
+        self.assertNotIn('38 إلى 52', result['reply'])
         self.assertIsNone(m.known_product_question_reply("شنو القياسات؟", product))
         self.assertIsNone(m.known_product_question_reply("ما هي مواصفات الفستان؟", product))
 

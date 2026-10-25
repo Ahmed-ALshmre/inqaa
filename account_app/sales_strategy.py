@@ -505,22 +505,25 @@ def missing_fact_reply(question, product):
     text=normalized(question)
     if (re.search(r'وزن|وزني|كيلو|كغم', text)
             and not _has_weight_size_table(product) and not _declared_size(question)):
-        return 'الوزن وحده ما يكفي أحدد قياس مضبوط لهالموديل؛ شنو قياس الملابس المعتاد؟'
+        return 'حتى أضبط لج الاختيار عيني، شنو قياس الملابس اللي ترتاحين بيه عادة؟'
     if 'فيديو' in text and not product.get('video_url'):
         return 'هسه ما عندي فيديو لهالموديل، المتوفر صوره.'
     if re.search(r'لاستيك|استيك|دگم|دكم', text) and not re.search(
             r'لاستيك|استيك|دگم|دكم', normalized(' '.join(
                 customer_copy.fact(product.get(key)) for key in
                 ('closure', 'stretch', 'description', 'faq', 'notes')))):
-        return ('تدللين عيني 🌷 تفصيل القطعة إذا لاستيك لو دگم يحتاج أتأكد منه من نفس الموديل. '
-                'خليت الموظفة تراجعه حتى تختارين وإنتِ مرتاحة.')
+        return ('حقج تسألين عيني 🌷 ما أريد أخمّن عليج إذا لاستيك لو دگم.\n'
+                'أخلّي البنية تشيّكه من القطعة نفسها وترد عليج بجواب مضبوط.')
     if re.search(r'عريض|واسع|ضيق', text) and re.search(r'\d{2}', text) and not measurement_fact(product, 'width'):
-        size = re.search(r'(?<!\d)([3-6]\d)\s*(?:يناسب|يجي|يلبس)', text)
-        chosen = f'قياس {size[1]}' if size else 'القياس اللي ذكرتيه'
+        size = re.search(r'(?:قياسي|مقاسي|قياس|مقاس)\s*([3-6]\d)(?!\d)|(?<!\d)([3-6]\d)\s*(?:يناسب|يجي|يلبس)', text)
+        chosen = f'قياس {size[1] or size[2]}' if size else 'القياس اللي ترتاحين بيه'
         name = customer_copy.fact(product.get('product_name')).strip() or 'القطعة'
-        part = f'القميص بهال{name}' if 'قميص' in text and 'سوت' in normalized(name) else name
-        return (f'عيني، {chosen} وعرض {part} يحتاجن قياس بالسنتيمتر حتى أتأكد إذا يجيج مريح؛ '
-                'الوزن وحده ما يكفي. خليت الموظفة تتأكدلج من نفس الموديل 🌷')
+        part = 'قميص السوت' if 'قميص' in text and 'سوت' in normalized(name) else name
+        if size:
+            return (f'إي فهمتج عيني 🌷 يهمج تعرفين إذا {part} ب{chosen} يطلع واسع.\n'
+                    'أخلّي البنية تشيّك عرضه من القطعة نفسها. تحبينه واسع شوي لو هواية؟')
+        return (f'فهمتج عيني، تريدين {part} يطلع واسع ومريح 🌷.\n'
+                'شنو قياس الملابس اللي ترتاحين بيه عادة؟')
     if re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not measurement_fact(product, 'width'):
         return 'عرض القطعة بالسنتيمتر يحتاج قياس من المتجر حتى نتأكد من الرقم الصحيح.'
     return ''

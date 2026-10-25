@@ -7637,17 +7637,123 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     if not parts:
         return None
     parts = [catalog_truth.conversational(part) for part in parts]
-    parts[0] = 'عيني، ' + parts[0]
+    accepted = accepted_sales_history(db, ev['sender_id']) if ev.get('sender_id') else []
+    compliment_used = any(re.search(r'اختيارج|ذوقج|اختيارك|ذوقك', item.get('text') or '') for item in accepted)
+    parts[0] = ('تدللين، ' if compliment_used else 'اختيارج حلو عيني، ') + parts[0]
     fabric = customer_copy.fact(product.get('fabric'), 'fabric').strip(' .،')
     fabric = re.sub(r'^(?:القماش|قماش(?:ه|ها)?)\s*[:：]?\s*', '', fabric)
     if fabric and len(fabric) <= 60 and not customer_copy.has_instructions(fabric):
         parts[0] += ' وقماشه ' + fabric + '.'
-    step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer)
+    cue = (None if sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
+           else sales_strategy.persuasion_cue(product, accepted))
+    if cue:
+        parts.append(sales_playbook.cue_line(cue))
+    step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer, accepted)
     if step:
         parts.append(step)
     return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False,
             'order': {}, 'requires_human': False, 'intent': 'price',
             '_local_reply': True, '_transparent_price': True, '_suppress_product_images': True}
+
+
+def guided_product_interest_reply(ev, product, customer, customer_products, positions):
+    """Keep narrow fabric/availability replies warm without an unsolicited size list."""
+    if (not product or ev.get('_post_order') or ev.get('image_url') or ev.get('_image_matches')
+            or len(customer_products or []) > 1 or len(positions or []) > 1
+            or _stock_state(product) != 'available'):
+        return None
+    text = sales_strategy.normalized(ev.get('text')).strip(' ؟?!.،')
+    greeting = bool(re.match(r'^(?:السلام عليكم|سلام عليكم)\b', text))
+    text = re.sub(r'^(?:السلام عليكم|سلام عليكم|هلو|مرحبا|صباح الخير|مساء الخير)\s*[،,]?\s*', '', text)
+    fabric_question = bool(re.fullmatch(
+        r'(?:شنو|شنهو|شنهي|ما هو|ما نوع)\s*(?:نوع\s*)?(?:القماش|قماشه|قماشها|الخام[هة]|خامته|خامتها)|'
+        r'(?:قماشه|قماشها|القماش)\s*شنو', text))
+    availability_question = bool(re.fullmatch(r'(?:(?:هذا|هاي|الموديل)\s*)?(?:متوفر[هة]?|موجود[هة]?)', text))
+    if not (fabric_question or availability_question):
+        return None
+    if availability_question and sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer):
+        return None  # Answer the customer's actual unavailable choice through the full context path.
+    fabric = customer_copy.fact(product.get('fabric'), 'fabric').strip(' .،')
+    fabric = re.sub(r'^(?:القماش|قماش(?:ه|ها)?)\s*[:：]?\s*', '', fabric)
+    if fabric_question and (not fabric or len(fabric) > 100 or customer_copy.has_instructions(fabric)):
+        return None
+    accepted = accepted_sales_history(get_db(), ev['sender_id']) if has_app_context() and ev.get('sender_id') else []
+    praised = any(re.search(r'اختيارج|ذوقج|اختيارك|ذوقك', item.get('text') or '') for item in accepted)
+    opening = 'وعليكم السلام عيني 🌷 ' if greeting else 'تدللين عيني 🌷 '
+    if not praised:
+        opening += 'اختيارج فد شي حلو، '
+    if fabric_question:
+        answer = 'قماشه ' + fabric + '.'
+    else:
+        colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
+        answer = 'إي متوفر' + (' باللون ال' + colors[0] if len(colors) == 1 else '') + '.'
+    parts = [opening + answer]
+    context = ev.get('_sales_context') or {}
+    if not sales_playbook.selection_conflicts(product, context, customer) and not context.get('open_details'):
+        cue = sales_strategy.persuasion_cue(product, accepted)
+        if cue:
+            parts.append(sales_playbook.cue_line(cue))
+    step = sales_playbook.price_next_step(product, context, customer, accepted)
+    if fabric_question and step == 'شكد العمر المطلوب؟' and 'فستان' in sales_strategy.normalized(product.get('product_name')):
+        step = 'شكد عمر البنية حتى أشوفلج قياسها؟'
+    if step:
+        parts.append(step)
+    return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False,
+            'order': {}, 'requires_human': False, 'intent': 'product_question',
+            '_local_reply': True, '_suppress_product_images': True}
+
+
+def guided_specification_reply(ev, product, customer, customer_products, positions):
+    """Answer a general product-description question without a catalog dump."""
+    if (not product or ev.get('_post_order') or ev.get('image_url') or ev.get('_image_matches')
+            or len(customer_products or []) > 1 or len(positions or []) > 1
+            or _stock_state(product) != 'available'):
+        return None
+    question = sales_strategy.normalized(ev.get('text')).strip(' ؟?!.،')
+    if not re.fullmatch(r'(?:ما هي|شنو|شنهي)?\s*(?:مواصفات|تفاصيل)\s*(?:(?:هذا|هاذا|هال)?(?:الفستان|الموديل|القطعة))?', question):
+        return None
+    name = customer_copy.fact(product.get('product_name'), 'product_name').strip()
+    fabric = customer_copy.fact(product.get('fabric'), 'fabric').strip(' .،')
+    fabric = re.sub(r'^(?:القماش|قماش(?:ه|ها)?)\s*[:：]?\s*', '', fabric)
+    if not name or not fabric or customer_copy.has_instructions(name + ' ' + fabric):
+        return None
+    accepted = accepted_sales_history(get_db(), ev['sender_id']) if has_app_context() and ev.get('sender_id') else []
+    praised = any(re.search(r'اختيارج|ذوقج|اختيارك|ذوقك', item.get('text') or '') for item in accepted)
+    if 'فستان' in sales_strategy.normalized(name):
+        named = re.match(r'^فستان\s+(.+)$', name)
+        suffix = named.group(1).strip() if named else ''
+        item = 'هالفستان' + ((' ' + suffix) if suffix.startswith('ال') else (' ال' + suffix if suffix else ''))
+    else:
+        item = name
+    intro = item if praised else 'اختيارج فد شي حلو عيني 🌷 ' + item
+    description = customer_copy.fact(product.get('description'), 'description')
+    match = re.search(r'(?:الموديل|الفستان|القطعة)\s+([^.;]{8,125})\.', description)
+    detail = match.group(1).strip(' ،') if match else ''
+    composition = sales_strategy.normalized(' '.join(
+        customer_copy.fact(product.get(key), key) for key in ('faq', 'bundle_contents', 'sale_unit')))
+    if 'فستان' in sales_strategy.normalized(name) and re.search(r'قطعة\s+وحد[ةه]', composition):
+        detail = 'قطعة وحدة، ' + detail if detail else 'قطعة وحدة'
+    if detail and not re.search(r'سعر|قياس|وزن|توصيل|عرض|مدة|فحص|حجز|اللون|قماش', detail):
+        first = intro + ' ' + detail + '.'
+    else:
+        first = intro + '.'
+    parts = [first, 'وقماشه ' + fabric + '.']
+    try:
+        count, price, _ = conversation_quality.terms(product)
+        if count == 1:
+            amount = f'{price // 1000} ألف' if price % 1000 == 0 else f'{price:,} دينار'
+            cue = (None if sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
+                   else sales_strategy.persuasion_cue(product, accepted))
+            offer = sales_playbook.cue_line(cue).rstrip('.') + '، ' if cue else ''
+            parts[1] += ' ' + offer + 'سعره ' + amount + '.'
+    except (ValueError, TypeError, KeyError):
+        pass
+    step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer, accepted)
+    if step:
+        parts.append(step)
+    return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False,
+            'order': {}, 'requires_human': False, 'intent': 'product_question',
+            '_local_reply': True, '_suppress_product_images': True}
 
 
 def reply_reasks_known_product(reply):
@@ -8130,16 +8236,27 @@ def call_main_ai(
     if (current_store_id() == baraah.STORE_ID and age is not None and years
             and not ev.get('_post_order') and not ev.get('_image_matches')
             and not re.search(r'سعر|توصيل|قماش|فيديو|ثبت|احجز|اطلب|بطان', sales_strategy.normalized(question))):
-        range_text = ' أو '.join(f'{lo} إلى {hi} سنوات' for lo, hi in years)
         if not any(lo <= age <= hi for lo, hi in years):
-            reply = f'عيني، قياسات هالموديل من {range_text}؛ العمر اللي ذكرتيه خارج القياسات المتوفرة، حتى ما أدزلج قياس مو مناسب.'
+            low, high = min(lo for lo, hi in years), max(hi for lo, hi in years)
+            piece = 'هالفستان' if 'فستان' in sales_strategy.normalized(matched_product.get('product_name')) else 'هالموديل'
+            age_label = 'سنتين' if age == 2 else f'{age:g} سنة'
+            boundary = (f'{piece} ما بيه عمر {age_label}، يبدي من {low:g} سنوات' if age < low else
+                        f'{piece} آخر عمر بيه {high:g} سنة')
+            if low <= age <= high:
+                boundary = 'العمر المطلوب مو ضمن الأعمار المتوفرة بهالموديل'
+            parts = ['عيني، ' + boundary + '.']
+            parts.append(f'أشيّك لج قياس {age_label} بأي موديل ثاني يعجبج، عندج واحد ببالج؟' if age < low else
+                         'ما أحب أخاطر عليج بقياس أصغر. عندج موديل ثاني ببالج؟')
         else:
-            reply = f'تمام عيني، هالعمر ضمن نطاق قياسات الموديل ({range_text}).'
-            colors_known = any(product_variants.requested(sales_answers.evidence_text(item))['colors']
-                               for item in context.get('evidence', []))
-            if not colors_known and matched_product.get('colors'):
-                reply += ' شنو اللون اللي يعجبج؟'
-        return dict(reply=reply, reply_parts=[reply], create_order=False, order={}, _local_reply=True)
+            parts = ['إي عيني، هالعمر موجود ضمن قياسات هالموديل 🌷.']
+            cue = sales_strategy.persuasion_cue(matched_product,
+                accepted_sales_history(get_db(), ev['sender_id']) if has_app_context() and ev.get('sender_id') else [])
+            if cue:
+                parts.append(sales_playbook.cue_line(cue))
+            step = sales_playbook.price_next_step(matched_product, context, customer)
+            if step:
+                parts.append(step)
+        return dict(reply='\n'.join(parts), reply_parts=parts, create_order=False, order={}, _local_reply=True)
     pending_condition = unresolved_condition(history, question) if not ev.get('_post_order') else None
     if pending_condition and not post_order_acknowledgement_reply(question) and not customer_declines_purchase(question):
         kind = pending_condition['kind']
@@ -8173,6 +8290,12 @@ def call_main_ai(
     price_reply = transparent_price_reply(ev, matched_product, customer, customer_products, positions)
     if price_reply:
         return price_reply
+    specification_reply = guided_specification_reply(ev, matched_product, customer, customer_products, positions)
+    if specification_reply:
+        return specification_reply
+    interest_reply = guided_product_interest_reply(ev, matched_product, customer, customer_products, positions)
+    if interest_reply:
+        return interest_reply
     if (matched_product and not ev.get('_post_order') and product_variants.is_lookup(question)
             and not ev.get('_image_matches')):
         lookup_positions = (positions if len(positions)>1 and re.search(r'الأول|الاول|الأولى|الاولى|الثاني|الثانية|الثالث|الثالثة',question)
@@ -8461,6 +8584,14 @@ def call_main_ai(
             result = dict(result, reply=warm + '\n' + question_help,
                           reply_parts=[warm, question_help], create_order=False,
                           order={}, _local_reply=True)
+    if matched_product and not ev.get('_post_order') and not result.get('create_order'):
+        natural = sales_playbook.naturalize_last_quantity_reply(result.get('reply'), matched_product)
+        if natural != result.get('reply'):
+            result = dict(result, reply=natural, reply_parts=[], _naturalized_scarcity=True)
+    if not ev.get('_post_order'):
+        personal = sales_playbook.personalize_specifications(result.get('reply'), question)
+        if personal != result.get('reply'):
+            result = dict(result, reply=personal, reply_parts=[], _personalized_specifications=True)
     single_step = conversation_quality.one_next_question(result.get('reply'))
     if has_app_context() and ev.get('sender_id') and not checkout_requested(get_db(), ev, result):
         single_step = conversation_quality.defer_contact_until_consent(single_step)
@@ -8677,6 +8808,8 @@ def _call_main_ai_once(
     system_prompt += "\nتصحيحات العميل الأحدث تتقدم على اختيار المنتج القديم. طلب الخيارات ضمن ميزانية هو استكشاف: اعرضي خيارين مناسبين ولا تطلبي صورة لقطعة لم يخترها. الحقول الجديدة حقائق موثقة إن كانت معبأة فقط؛ فراغ البطانة أو القياسات لا يعني عدم وجودها. محتويات البكج وطريقة البيع مرجع قبل عرض المفرد.\n"
     system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
     system_prompt += "\n\n" + sales_playbook.guidance(ev, matched_product)
+    if not post_order:
+        system_prompt += "\n\n" + sales_playbook.selection_guidance(matched_product, ev.get('_sales_context'), customer)
     system_prompt += "\n\n" + sales_decision.brief(ev, matched_product)
     system_prompt += "\n\n" + sales_engagement.DIALOGUE_GUIDE
     system_prompt += "\n\n" + catalog_truth.GUIDE

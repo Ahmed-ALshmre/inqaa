@@ -134,8 +134,9 @@ class CatalogTruthPipelineTests(unittest.TestCase):
     def test_fallback_answers_known_specifications_without_generic_gap(self):
         result = self.run_reply('ما هي مواصفات الفستان؟', '')
         self.assertIn('قطعة وحدة', result['reply'])
-        for fact in ['16,000', 'لينن', 'أسود', '38 إلى 52']:
+        for fact in ['16 ألف', 'لينن', 'طويل', 'شنو قياس الملابس']:
             self.assertIn(fact, result['reply'])
+        self.assertNotIn('38 إلى 52', result['reply'])
         self.assertNotIn('بقية التفاصيل', result['reply'])
         self.assertFalse(result.get('_needs_fact_review'))
 

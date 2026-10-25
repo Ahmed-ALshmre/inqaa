@@ -105,8 +105,10 @@ class LiveFindingsPipelineTests(unittest.TestCase):
                 outside = self.m.call_main_ai(dict(sender_id=self.sender,text='يناسب عمر سنة؟'), 'text', {}, [], [product], product, None, '', [])
                 corrected = self.m.call_main_ai(dict(sender_id=self.sender,text='اقصد عمر سنتين'), 'text', {}, [], [product], product, None, '', [])
             provider.assert_not_called()
-            self.assertIn('خارج القياسات', outside['reply'])
-            self.assertIn('ضمن نطاق', corrected['reply'])
+            self.assertIn('ما بيه عمر 1 سنة، يبدي من 2', outside['reply'])
+            self.assertIn('موديل ثاني', outside['reply'])
+            self.assertIn('هالعمر موجود ضمن قياسات', corrected['reply'])
+            self.assertNotIn('شنو العمر', corrected['reply'])
             self.assertNotIn('يناسبها تمام', corrected['reply'])
         finally:
             self.m._current_store_id.reset(token)

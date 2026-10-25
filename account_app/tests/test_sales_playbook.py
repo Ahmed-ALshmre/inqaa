@@ -36,7 +36,7 @@ class ReviewedLessonTests(unittest.TestCase):
         self.assertEqual(playbook.guidance({'text': 'شكد سعره', '_post_order': {'id': 1}}, PRODUCT), '')
 
     def test_only_narrow_price_questions_take_the_factual_path(self):
-        for text in ['شكد سعره؟', 'ممكن السعر', 'بشكد', 'كم سعر الموديل',
+        for text in ['شكد سعره؟', 'ممكن السعر', 'بشكد', 'وشنو سعره', 'كم سعر الموديل',
                      'شكد ثنين', 'سعر القطعتين', 'عرض القطعتين']:
             self.assertTrue(playbook.price_question(text), text)
         for text in ['غالي شكد آخر سعر', 'سعره وشنو قماشه', 'ثبتي السعر', 'السعر ويا قياس 44']:
@@ -62,18 +62,80 @@ class ReviewedLessonTests(unittest.TestCase):
         self.assertIn('22,000', reply)
 
     def test_price_reply_uses_one_relevant_selection_step(self):
-        self.assertIn('القياس المطلوب', playbook.price_next_step(PRODUCT, {}))
+        self.assertIn('شنو قياس الملابس', playbook.price_next_step(PRODUCT, {}))
         self.assertIn('العمر المطلوب', playbook.price_next_step(dict(PRODUCT, sizes='من سنة إلى 3 سنوات'), {}))
-        self.assertEqual(playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}), '')
+        self.assertIn('شنو قياس الملابس', playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}))
 
-    def test_known_fit_or_previous_fit_question_is_not_repeated_after_price(self):
-        for context in [
-            {'evidence': [{'text': '44', 'in_reply_to': 'شنو قياسك؟'}]},
-            {'evidence': [{'text': 'وزني 80'}]},
-            {'last_staff_turn': [{'text': 'شنو العمر المطلوب؟'}]},
+    def test_customer_size_advances_to_color_but_staff_question_is_not_an_answer(self):
+        context = {'evidence': [{'text': '44', 'in_reply_to': 'شنو قياسك؟'}]}
+        self.assertIn('اللون', playbook.price_next_step(PRODUCT, context))
+        self.assertIn('اللون', playbook.price_next_step(PRODUCT, {}, {'size': '44'}))
+        for context in [{'evidence': [{'text': 'وزني 80'}]},
+                        {'last_staff_turn': [{'text': 'شنو قياسج؟'}]},
+                        {'evidence': [{'text': 'سعره', 'in_reply_to': 'شنو قياسج؟'}]}]:
+            self.assertIn('شنو قياس الملابس', playbook.price_next_step(PRODUCT, context))
+
+    def test_no_booking_step_for_unknown_or_unsupported_size_or_unresolved_fact(self):
+        for product, context, customer in [
+            (PRODUCT, {}, {'size': '56', 'color': 'أسود'}),
+            (dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}, {'size': '44', 'color': 'أسود'}),
+            (PRODUCT, {'open_details': ['width']}, {'size': '44', 'color': 'أسود'}),
         ]:
-            self.assertEqual(playbook.price_next_step(PRODUCT, context), '')
-        self.assertEqual(playbook.price_next_step(PRODUCT, {}, {'size': '44'}), '')
+            self.assertEqual(playbook.price_next_step(product, context, customer), '')
+        self.assertIn('نكمل حجزه', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود'}))
+
+    def test_next_question_can_be_answered_with_a_number_without_confusing_age_and_size(self):
+        from account_app import sales_context
+        for product, answer, field, expected in [
+            (PRODUCT, '44', 'size', '44'),
+            (dict(PRODUCT, sizes='من 3 إلى 7 سنوات'), '5', 'age', 5),
+        ]:
+            question = playbook.price_next_step(product, {})
+            state = sales_context.advance({}, [
+                {'direction': 'outgoing', 'text': question},
+                {'direction': 'incoming', 'text': answer}])
+            self.assertEqual(playbook.customer_selection(state)[field], expected)
+            self.assertNotEqual(playbook.price_next_step(product, state), question)
+
+    def test_general_specifications_personalize_fit_without_hiding_requested_sizes_or_price(self):
+        reply = 'قماشه لينن، قياساته من 38 لحد 52. سعره 16 ألف وعليه عرض خاص. شنو قياسج؟'
+        cleaned = playbook.personalize_specifications(reply, 'ما هي مواصفات الفستان؟')
+        for fact in ['لينن', '16 ألف', 'عرض خاص', 'شنو قياسج؟']:
+            self.assertIn(fact, cleaned)
+        self.assertNotIn('38', cleaned)
+        self.assertEqual(playbook.personalize_specifications(reply, 'مواصفاته وشنو القياسات؟'), reply)
+        self.assertEqual(playbook.personalize_specifications(reply, 'قياس 38 متوفر؟'), reply)
+
+    def test_comparison_and_rejected_choices_cannot_become_a_booking_step(self):
+        for text in ['قياس 42 لو 44', 'مو قياس 44', 'غير لون الأسود', 'الأسود لو الكريمي']:
+            state = {'evidence': [{'text': text}]}
+            self.assertNotIn('حجز', playbook.price_next_step(PRODUCT, state, {'size': '44', 'color': 'أسود'}))
+        selected = playbook.customer_selection({'evidence': [{'text': 'مو قياس 44، قياس 46'}]})
+        self.assertEqual(selected['size'], '46')
+
+    def test_stock_cue_uses_colloquial_remaining_quantity_only_when_supported(self):
+        from account_app import sales_strategy
+        last_batch = dict(PRODUCT, offer='عرض خاص لفترة محدودة على اخر الكمية')
+        message = playbook.cue_line(sales_strategy.persuasion_cue(last_batch))
+        self.assertIn('تره الكمية الباقية قليلة كلش، كم قطعة بس', message)
+        self.assertIn('عرض خاص لفترة محدودة', message)
+        limited_offer = dict(PRODUCT, offer='عرض خاص الكمية محدودة')
+        message = playbook.cue_line(sales_strategy.persuasion_cue(limited_offer))
+        self.assertIn('الكمية محدودة هسه', message)
+        self.assertNotIn('الباقية قليلة', message)
+        self.assertFalse(sales_strategy.persuasion_error(
+            playbook.cue_line(sales_strategy.persuasion_cue(last_batch)), last_batch))
+        original = 'سعره 18 ألف. عليه عرض خاص لفترة محدودة على آخر الكمية.'
+        natural = playbook.naturalize_last_quantity_reply(original, last_batch)
+        self.assertIn('تره الكمية الباقية قليلة كلش، كم قطعة بس', natural)
+        self.assertFalse(sales_strategy.persuasion_error(natural, last_batch))
+        self.assertEqual(playbook.naturalize_last_quantity_reply(original, limited_offer), original)
+
+    def test_ignored_size_question_switches_to_a_different_easy_step(self):
+        size_asked = [{'direction': 'outgoing', 'text': 'شنو قياس الملابس اللي ترتاحين بيه عادة؟'}]
+        self.assertEqual(playbook.price_next_step(PRODUCT, {}, history=size_asked), 'يا لون يعجبج؟')
+        color_asked = size_asked + [{'direction': 'outgoing', 'text': 'يا لون يعجبج؟'}]
+        self.assertIn('أساعدج نتأكد', playbook.price_next_step(PRODUCT, {}, history=color_asked))
 
     def test_human_request_is_distinct_from_request_for_real_product_photos(self):
         for text in ['ماريد ذكاء يرد', 'ما اريد ذكاء يرد', 'اريد احجي ويا موظف',
@@ -124,6 +186,66 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.assertEqual(result['order'], {})
         self.assertNotIn('احجز', result['reply'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
+
+    def test_price_uses_recorded_scarcity_once_and_rotates_unanswered_size_question(self):
+        product = dict(PRODUCT, offer='عرض خاص الكمية محدودة')
+        self.customer('guided')
+        self.message('guided', 'outgoing', 'شنو قياسج؟')
+        context = self.m.sales_context.load(self.db, 'default', 'guided')
+        ev = dict(sender_id='guided', text='سعره', _sales_context=context)
+        result = self.m.transparent_price_reply(ev, product, {}, [product], [])
+        self.assertIn('اختيارج حلو', result['reply'])
+        self.assertIn('الكمية محدودة', result['reply'])
+        self.assertIn('يا لون يعجبج', result['reply'])
+        self.assertNotIn('شنو قياس', result['reply'])
+        self.assertNotIn('38', result['reply'])
+        plan = self.m.plan_sales_bubbles(result, result['reply'])
+        self.assertGreaterEqual(plan['total_messages'], 2)
+        self.assertLessEqual(plan['total_messages'], 5)
+        self.message('guided', 'outgoing', result['reply'])
+        repeated = self.m.transparent_price_reply(ev, product, {}, [product], [])
+        self.assertNotIn('الكمية محدودة', repeated['reply'])
+        self.assertNotIn('اختيارج حلو', repeated['reply'])
+
+    def test_known_incompatible_size_does_not_get_scarcity_or_booking_pressure(self):
+        product = dict(PRODUCT, offer='عرض خاص الكمية محدودة')
+        result, _ = self.ask('سعره', product=product, customer={'size': '56'})
+        self.assertIn('15,000', result['reply'])
+        self.assertNotIn('الكمية محدودة', result['reply'])
+        self.assertNotIn('نكمل حجزه', result['reply'])
+
+    def test_narrow_interest_uses_actual_fabric_and_offer_then_asks_customer_size(self):
+        product = dict(PRODUCT, fabric='القماش تركي', offer='عرض خاص الكمية محدودة')
+        result, model = self.ask('سلام عليكم شنهو نوع القماش', product=product)
+        model.assert_not_called()
+        for value in ['وعليكم السلام', 'اختيارج فد شي حلو', 'قماشه تركي', 'الكمية محدودة', 'شنو قياس الملابس']:
+            self.assertIn(value, result['reply'])
+        for value in ['ممتازة', 'درجة أولى', '38', '52', 'آخر قطعة']:
+            self.assertNotIn(value, result['reply'])
+        self.assertEqual(result['reply'].count('؟'), 1)
+
+    def test_general_specifications_stay_warm_when_provider_times_out(self):
+        product = dict(PRODUCT, product_name='فستان دانتيل', fabric='لينن، خامة مريحة وعملية',
+                       price='16000', offer='عرض خاص',
+                       description='الموديل طويل، محتشم، وخصره محدد وتنورته واسعة. قياساته 38 إلى 52.')
+        result, model = self.ask('ما هي مواصفات الفستان؟', product=product)
+        model.assert_not_called()
+        for value in ['اختيارج فد شي حلو', 'طويل', 'خصره محدد', 'لينن', '16 ألف', 'عرض خاص', 'شنو قياس الملابس']:
+            self.assertIn(value, result['reply'])
+        self.assertNotIn('38 إلى 52', result['reply'])
+        self.assertEqual(result['reply'].count('؟'), 1)
+
+    def test_availability_does_not_dump_range_or_erase_a_specific_question(self):
+        result, model = self.ask('متوفر')
+        model.assert_not_called()
+        self.assertNotIn('38', result['reply'])
+        self.assertIn('شنو قياس الملابس', result['reply'])
+        for question in ['القماش ثقيل لو خفيف؟', 'قماشه تركي لو صيني؟',
+                         'متوفر قياس 44؟', 'شنو قماشه وسعره؟', 'شنو القياسات المتوفرة؟']:
+            self.assertIsNone(self.m.guided_product_interest_reply(
+                {'sender_id': 'reply', 'text': question}, PRODUCT, {}, [PRODUCT], []))
+        self.assertIsNone(self.m.guided_product_interest_reply(
+            {'sender_id': 'reply', 'text': 'متوفر'}, PRODUCT, {'size': '56'}, [PRODUCT], []))
 
     def test_region_price_does_not_ask_for_known_province(self):
         self.customer('region')

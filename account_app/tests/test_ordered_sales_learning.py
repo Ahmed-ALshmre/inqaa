@@ -137,7 +137,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         self.customer('stock-customer')
         bad = dict(reply='هذا الموديل غير متوفر', create_order=False)
         with patch.object(self.m, '_call_main_ai_once', side_effect=[bad, bad]) as model:
-            result = self.m.call_main_ai(dict(sender_id='stock-customer', text='متوفر؟'), 'text', {}, [],
+            result = self.m.call_main_ai(dict(sender_id='stock-customer', text='شنو المتوفر من هالموديل؟'), 'text', {}, [],
                                          CATALOG, CATALOG[0], None, '', [])
         self.assertNotIn('غير متوفر', result['reply'])
         self.assertEqual(model.call_count, 2)

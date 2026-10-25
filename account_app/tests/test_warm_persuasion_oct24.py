@@ -19,11 +19,15 @@ class WarmPersuasionTests(unittest.TestCase):
         self.assertTrue(strategy.fact_requires_human(question, product))
 
     def test_numeric_fit_concern_does_not_guarantee_unknown_width(self):
-        product = dict(PRODUCT, sizes='من 55 كيلو الى 130 قياسات خاصة متوفر', measurements='')
+        product = dict(PRODUCT, product_name='سوت', sizes='من 55 كيلو الى 130 قياسات خاصة متوفر', measurements='')
         question = '٧٥ بس اذا القميص عريض ٤٢ يناسبني'
         reply = strategy.missing_fact_reply(question, product)
         self.assertIn('قياس 42', reply)
-        self.assertIn('الوزن وحده ما يكفي', reply)
+        self.assertIn('قميص السوت بقياس 42 يطلع واسع', reply)
+        self.assertIn('تشيّك عرضه من القطعة نفسها', reply)
+        self.assertIn('تحبينه واسع شوي لو هواية؟', reply)
+        self.assertNotIn('الوزن وحده', reply)
+        self.assertNotIn('شنو قياس', reply)
         self.assertTrue(strategy.fact_requires_human(question, product))
 
     def test_admin_approvals_allow_only_their_own_claim(self):

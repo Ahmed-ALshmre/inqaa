@@ -11,7 +11,7 @@ MAX_PARTS = 3
 # This is a grouping target, never a hard cut or permission to truncate a fact.
 TARGET_LENGTH = 600
 MAX_SALES_MESSAGES = 5
-SALES_TARGET_LENGTH = 95
+SALES_TARGET_LENGTH = 80
 LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)\-])\s+")
 
 
@@ -78,7 +78,8 @@ def topic(text):
 
 def is_greeting(text):
     return bool(re.fullmatch(
-        r"(?:أهلا|اهلا|هلا|مرحبا|مراحب|وعليكم السلام|السلام عليكم|من عيوني|تدللين|تدلل|يا هلا)[^؟?\d]{0,32}[.!،🌸✨\s]*",
+        r"(?:أهلا|اهلا|هلا|مرحبا|مراحب|وعليكم السلام|السلام عليكم|من عيوني|تدللين|تدلل|يا هلا)"
+        r"(?:\s+(?:عيني|حبيبتي|عمري|كلبي))*[.!،🌸🌷✨\s]*",
         compact(text),
     ))
 
