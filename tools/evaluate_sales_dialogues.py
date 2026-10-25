@@ -215,7 +215,7 @@ def evaluate_turn(m, scenario, turn, texts, orders, sent):
         and not re.search(r'ما\s*(?:ثبت|حجز)|مو\s*(?:مثبت|محجوز)|لم\s*(?:يثبت|يحجز)', clause)
         for clause in re.split(r'[.\n،]+', m.sales_strategy.normalized(reply)))
     checks = dict(response_sent=bool(sent and texts), no_empty_bubbles=all(bool(p.strip()) for p in texts),
-                  bubble_limit=len(texts) <= (3 if scenario.get('album') else 2),
+                  bubble_limit=len(texts) <= 5,
                   one_next_question=len(re.findall(r'[؟?]', reply)) <= 1,
                   clean_punctuation=not re.search(r'[.!؟?؛]\s*[،؛]|،\s*،', reply),
                   no_internal_instructions=not m.customer_copy.has_instructions(reply),

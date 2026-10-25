@@ -97,6 +97,19 @@ class WarmPersuasionTests(unittest.TestCase):
         self.assertTrue(strategy.persuasion_error('عليه عرض خاص.', PRODUCT))
         self.assertIsNone(strategy.persuasion_cue(dict(PRODUCT, offer='العرض انتهى')))
 
+    def test_product_offer_itself_can_approve_gentle_scarcity(self):
+        product = dict(PRODUCT, offer='عرض خاص الكمية محدودة')
+        self.assertEqual(strategy.persuasion_cue(product),
+                         {'kind': 'offer', 'text': 'عرض خاص الكمية محدودة'})
+        self.assertEqual(strategy.persuasion_error(
+            'اختيارج حلو عيني، عليه عرض خاص والكمية محدودة. شنو قياسج؟', product), '')
+        self.assertTrue(strategy.persuasion_error('العرض راح يخلص باجر.', product))
+        self.assertTrue(strategy.persuasion_error('آخر قطعة وعليه عرض خاص.', product))
+        self.assertTrue(strategy.persuasion_error('عليه عرض خاص والكمية محدودة.',
+                                                  dict(PRODUCT, offer='عرض خاص')))
+        last_batch = dict(PRODUCT, offer='عرض خاص لفترة محدودة على اخر الكمية')
+        self.assertEqual(strategy.persuasion_error('العرض على آخر الكمية.', last_batch), '')
+
     def test_multiple_approvals_do_not_allow_stacking(self):
         product = dict(PRODUCT, sales_cues=list(strategy.SALES_CUES))
         self.assertEqual(strategy.persuasion_cue(product)['kind'], 'limited_stock')
