@@ -95,9 +95,22 @@ def persuasion_used(history):
                for clause in re.split(r'[\n،؛.!؟?]+', text))
 
 
+def used_sales_claims(history):
+    return set().union(*(_claim_kinds(text) for text in _assistant_texts(history)))
+
+
+def separate_scarcity_available(product, history):
+    return (used_sales_claims(history) == {'offer'}
+            and 'limited_stock' in _claim_kinds(_offer_fact(product)))
+
+
 def persuasion_cue(product, history=()):
     """One nonnumeric approved reason to act; availability still takes priority."""
-    if not _sales_available(product) or persuasion_used(history):
+    if not _sales_available(product):
+        return None
+    if persuasion_used(history):
+        if separate_scarcity_available(product, history):
+            return {'kind': 'limited_stock', 'text': SALES_CUES['limited_stock']}
         return None
     available = approved_sales_cues(product)
     count = _stock_number(product)
@@ -124,7 +137,7 @@ def persuasion_guidance(product, history=(), question=''):
     return ('[الإقناع الحالي — معلومة إدارية معتمدة لهذا الموديل، وليست إحصائية]\n'
             + json.dumps(cue, ensure_ascii=False)
             + '\nعند اهتمام واضح بالقطعة، اذكر معنى هذه المعلومة مرة واحدة بعد جواب السؤال، مع سؤال اختيار أو حجز يناسب المرحلة. '
-            'إذا العرض نفسه يذكر أن الكمية محدودة، تقدر تذكر العرض والندرة معاً بلطف مرة واحدة. '
+            'اذكر العرض وحده في رسالة، واحتفظ بقلة الكمية الموثقة لفرصة أخرى في رسالة مستقلة؛ لا تجمعهما في جملة واحدة. '
             'لا تحوّلها إلى عدد أو خصم أو موعد نفاد أو رأي زبون. كثرة الحجوزات لا تعني أن الزبائن اشتروا أو استلموا. '
             'لا تجمع أسباباً أخرى معها ولا تتحدث عن المورد أو طريقة توريد البضاعة. إذا التردد بالقياس أو السعر عالجه أولاً؛ عبارة الطلب ليست جواباً عن مخاوفه.')
 
@@ -137,7 +150,8 @@ def persuasion_error(reply, product, history=None, question=''):
         return 'احترم التحية أو الشكر أو طلب المهلة؛ احذف التشجيع بالندرة والطلب والعروض، وأجب الطلب الحالي بلطف.'
     if not _sales_available(product):
         return 'احذف التشجيع بالندرة أو الطلب أو العرض؛ توفر الموديل غير مؤكد حالياً. احتفظ بالسعر والجواب الصحيح.'
-    if history is not None and persuasion_used(history):
+    if (history is not None and persuasion_used(history)
+            and not (kinds == {'limited_stock'} and separate_scarcity_available(product, history))):
         return 'سبق استعمال التشجيع البيعي؛ لا تكرر الندرة أو الطلب أو العرض. احتفظ بالجواب وخطوة القرار المناسبة.'
     allowed = set(approved_sales_cues(product))
     count = _stock_number(product)
@@ -184,15 +198,14 @@ def repair_persuasion_reply(reply, product, history=None, question=''):
     """
     parts = re.split(r'(?<=[.!؟?؛])\s+|\n+|،|(?<!\d),(?!\d)|\s+(?=و(?:آخر|اخر|باقي|عليه طلب|عليها طلب|الكمية))', str(reply or ''))
     kept = []
-    used = bool(explicit_pause(question) or _courtesy_only(question)
-                or (persuasion_used(history) if history is not None else False))
+    used = bool(explicit_pause(question) or _courtesy_only(question))
     for part in parts:
         part = part.strip(' ،؛')
         if not part:
             continue
         kinds = _claim_kinds(part.lstrip('و'))
         if kinds:
-            if used or persuasion_error(part, product):
+            if used or persuasion_error(part, product, history, question):
                 continue
             used = True
         kept.append(part)
@@ -499,13 +512,33 @@ def measurement_fact(product, kind):
     return ''
 
 
+def detail_fact(product, kind):
+    """Read a construction answer, never turn the question's wording into a fact."""
+    if kind in {'width', 'length'}:
+        return measurement_fact(product, kind)
+    patterns = {'closure': r'لاستيك|استيك|دگم|دكم|ازرار|أزرار|سحاب|كبس',
+                'lining': r'بطان|مبطن', 'stretch': r'مطاط|ليكرا|يتمدد'}
+    if kind not in patterns:
+        return ''
+    for key in (kind, 'faq', 'notes', 'description'):
+        value = customer_copy.fact((product or {}).get(key), key)
+        for clause in re.split(r'[.؟?\n؛]+', value):
+            clean = normalized(clause).strip()
+            if (not clean or len(clause) > 160 or customer_copy.has_instructions(clause)
+                    or re.search(r'يحتاج|تاكيد|غير معروف|هل |لو |حسب الطلب|حسب الموديل', clean)):
+                continue
+            if (key == kind or re.search(patterns[kind], clean)):
+                return clause.strip(' ،')
+    return ''
+
+
 def missing_fact_reply(question, product):
     if not product:
         return ''
     text=normalized(question)
     if (re.search(r'وزن|وزني|كيلو|كغم', text)
             and not _has_weight_size_table(product) and not _declared_size(question)):
-        return 'حتى أضبط لج الاختيار عيني، شنو قياس الملابس اللي ترتاحين بيه عادة؟'
+        return 'حتى أضبط لج القياس، شكد قياس تلبسين؟'
     if 'فيديو' in text and not product.get('video_url'):
         return 'هسه ما عندي فيديو لهالموديل، المتوفر صوره.'
     if re.search(r'لاستيك|استيك|دگم|دكم', text) and not re.search(

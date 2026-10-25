@@ -112,7 +112,7 @@ class ImageContinuityOct24Tests(unittest.TestCase):
             before_calls = download.call_count
             model.return_value = {'reply': 'دزيلي صورة الموديل حتى أعرف سعره.', 'create_order': False, 'order': {}}
             second = self.process(self.body('شكد سعره؟'))
-            self.assertIn('17,000', second['reply'])
+            self.assertIn('17 ألف', second['reply'])
             self.assertFalse(self.m.reply_reasks_known_product(second['reply']))
             self.assertNotRegex(second['reply'], r'دزي|أرسلي|ارسلي')
             self.assertEqual(download.call_count, before_calls)
@@ -177,7 +177,7 @@ class ImageContinuityOct24Tests(unittest.TestCase):
             self.db.commit()
             recognize.return_value = dict(product_found=True, product_id=self.product['product_id'], confidence=100)
             second = self.process(self.body('شكد سعره؟'))
-            self.assertIn('17,000', second['reply'])
+            self.assertIn('17 ألف', second['reply'])
             self.assertEqual(recognize.call_count, 2)
             self.assertEqual(self.m.get_active_product_binding(self.db, self.sender)['product_id'],
                              self.product['product_id'])

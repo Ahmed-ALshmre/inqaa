@@ -62,9 +62,9 @@ class ReviewedLessonTests(unittest.TestCase):
         self.assertIn('22,000', reply)
 
     def test_price_reply_uses_one_relevant_selection_step(self):
-        self.assertIn('شنو قياس الملابس', playbook.price_next_step(PRODUCT, {}))
+        self.assertIn('شكد قياس تلبسين', playbook.price_next_step(PRODUCT, {}))
         self.assertIn('العمر المطلوب', playbook.price_next_step(dict(PRODUCT, sizes='من سنة إلى 3 سنوات'), {}))
-        self.assertIn('شنو قياس الملابس', playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}))
+        self.assertIn('شكد قياس تلبسين', playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}))
 
     def test_customer_size_advances_to_color_but_staff_question_is_not_an_answer(self):
         context = {'evidence': [{'text': '44', 'in_reply_to': 'شنو قياسك؟'}]}
@@ -73,7 +73,7 @@ class ReviewedLessonTests(unittest.TestCase):
         for context in [{'evidence': [{'text': 'وزني 80'}]},
                         {'last_staff_turn': [{'text': 'شنو قياسج؟'}]},
                         {'evidence': [{'text': 'سعره', 'in_reply_to': 'شنو قياسج؟'}]}]:
-            self.assertIn('شنو قياس الملابس', playbook.price_next_step(PRODUCT, context))
+            self.assertIn('شكد قياس تلبسين', playbook.price_next_step(PRODUCT, context))
 
     def test_no_booking_step_for_unknown_or_unsupported_size_or_unresolved_fact(self):
         for product, context, customer in [
@@ -82,7 +82,8 @@ class ReviewedLessonTests(unittest.TestCase):
             (PRODUCT, {'open_details': ['width']}, {'size': '44', 'color': 'أسود'}),
         ]:
             self.assertEqual(playbook.price_next_step(product, context, customer), '')
-        self.assertIn('نكمل حجزه', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود'}))
+        self.assertIn('أثبتلج حجز', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود'}))
+        self.assertIn('أثبتلج حجز', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود', 'province': 'بغداد'}))
 
     def test_next_question_can_be_answered_with_a_number_without_confusing_age_and_size(self):
         from account_app import sales_context
@@ -133,9 +134,9 @@ class ReviewedLessonTests(unittest.TestCase):
 
     def test_ignored_size_question_switches_to_a_different_easy_step(self):
         size_asked = [{'direction': 'outgoing', 'text': 'شنو قياس الملابس اللي ترتاحين بيه عادة؟'}]
-        self.assertEqual(playbook.price_next_step(PRODUCT, {}, history=size_asked), 'يا لون يعجبج؟')
-        color_asked = size_asked + [{'direction': 'outgoing', 'text': 'يا لون يعجبج؟'}]
-        self.assertIn('أساعدج نتأكد', playbook.price_next_step(PRODUCT, {}, history=color_asked))
+        self.assertIn('مضبوط لو واسع', playbook.price_next_step(PRODUCT, {}, history=size_asked))
+        fit_asked = size_asked + [{'direction': 'outgoing', 'text': 'تحبينه يطلع مضبوط لو واسع؟'}]
+        self.assertEqual(playbook.price_next_step(PRODUCT, {}, history=fit_asked), 'شنو القياس اللي يناسبج؟')
 
     def test_human_request_is_distinct_from_request_for_real_product_photos(self):
         for text in ['ماريد ذكاء يرد', 'ما اريد ذكاء يرد', 'اريد احجي ويا موظف',
@@ -162,11 +163,11 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.addCleanup(module._current_store_id.reset, token)
         fixtures.AuditFixTests.setUp(self)
 
-    def ask(self, text, product=None, customer=None, positions=None, remembered=None):
-        self.customer('reply')
+    def ask(self, text, product=None, customer=None, positions=None, remembered=None, sender='reply'):
+        self.customer(sender)
         self.m.save_delivery_settings(self.db, {'baghdad_fee': 5000, 'other_fee': 5000})
         product = product or PRODUCT
-        event = {'sender_id': 'reply', 'text': text}
+        event = {'sender_id': sender, 'text': text}
         if positions:
             event['_image_matches'] = positions
         with patch.object(self.m, '_call_main_ai_once', return_value={'reply': 'جواب من النموذج', 'order': {}}) as model:
@@ -180,7 +181,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
     def test_price_includes_shipping_and_total_without_checkout_pressure(self):
         result, model = self.ask('شكد سعره؟')
         model.assert_not_called()
-        for value in ['15,000', '5,000', '20,000']:
+        for value in ['15 ألف', '5 آلاف', '20 ألف']:
             self.assertIn(value, result['reply'])
         self.assertFalse(result['create_order'])
         self.assertEqual(result['order'], {})
@@ -194,9 +195,10 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         context = self.m.sales_context.load(self.db, 'default', 'guided')
         ev = dict(sender_id='guided', text='سعره', _sales_context=context)
         result = self.m.transparent_price_reply(ev, product, {}, [product], [])
-        self.assertIn('اختيارج حلو', result['reply'])
-        self.assertIn('الكمية محدودة', result['reply'])
-        self.assertIn('يا لون يعجبج', result['reply'])
+        self.assertNotIn('ذوقج حلو', result['reply'])
+        self.assertIn('عرض هالفترة', result['reply'])
+        self.assertNotIn('الكمية محدودة', result['reply'])
+        self.assertIn('مضبوط لو واسع', result['reply'])
         self.assertNotIn('شنو قياس', result['reply'])
         self.assertNotIn('38', result['reply'])
         plan = self.m.plan_sales_bubbles(result, result['reply'])
@@ -204,13 +206,14 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.assertLessEqual(plan['total_messages'], 5)
         self.message('guided', 'outgoing', result['reply'])
         repeated = self.m.transparent_price_reply(ev, product, {}, [product], [])
-        self.assertNotIn('الكمية محدودة', repeated['reply'])
-        self.assertNotIn('اختيارج حلو', repeated['reply'])
+        self.assertIn('الكمية محدودة', repeated['reply'])
+        self.assertNotIn('عرض', repeated['reply'])
+        self.assertNotIn('ذوقج حلو', repeated['reply'])
 
     def test_known_incompatible_size_does_not_get_scarcity_or_booking_pressure(self):
         product = dict(PRODUCT, offer='عرض خاص الكمية محدودة')
         result, _ = self.ask('سعره', product=product, customer={'size': '56'})
-        self.assertIn('15,000', result['reply'])
+        self.assertIn('15 ألف', result['reply'])
         self.assertNotIn('الكمية محدودة', result['reply'])
         self.assertNotIn('نكمل حجزه', result['reply'])
 
@@ -218,7 +221,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         product = dict(PRODUCT, fabric='القماش تركي', offer='عرض خاص الكمية محدودة')
         result, model = self.ask('سلام عليكم شنهو نوع القماش', product=product)
         model.assert_not_called()
-        for value in ['وعليكم السلام', 'اختيارج فد شي حلو', 'قماشه تركي', 'الكمية محدودة', 'شنو قياس الملابس']:
+        for value in ['وعليكم السلام', 'هلا بيج', 'قماشه تركي', 'عرض هالفترة', 'شكد قياس تلبسين']:
             self.assertIn(value, result['reply'])
         for value in ['ممتازة', 'درجة أولى', '38', '52', 'آخر قطعة']:
             self.assertNotIn(value, result['reply'])
@@ -230,8 +233,10 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
                        description='الموديل طويل، محتشم، وخصره محدد وتنورته واسعة. قياساته 38 إلى 52.')
         result, model = self.ask('ما هي مواصفات الفستان؟', product=product)
         model.assert_not_called()
-        for value in ['اختيارج فد شي حلو', 'طويل', 'خصره محدد', 'لينن', '16 ألف', 'عرض خاص', 'شنو قياس الملابس']:
+        for value in ['طويل', 'لينن', '16 ألف', 'عرض هالفترة', 'شكد قياس تلبسين']:
             self.assertIn(value, result['reply'])
+        self.assertNotIn('تنورته', result['reply'])
+        self.assertNotIn('خصره', result['reply'])
         self.assertNotIn('38 إلى 52', result['reply'])
         self.assertEqual(result['reply'].count('؟'), 1)
 
@@ -239,7 +244,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         result, model = self.ask('متوفر')
         model.assert_not_called()
         self.assertNotIn('38', result['reply'])
-        self.assertIn('شنو قياس الملابس', result['reply'])
+        self.assertIn('شكد قياس تلبسين', result['reply'])
         for question in ['القماش ثقيل لو خفيف؟', 'قماشه تركي لو صيني؟',
                          'متوفر قياس 44؟', 'شنو قماشه وسعره؟', 'شنو القياسات المتوفرة؟']:
             self.assertIsNone(self.m.guided_product_interest_reply(
@@ -252,7 +257,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.m.save_delivery_settings(self.db, {'baghdad_fee': 5000, 'other_fee': 7000})
         result = self.m.transparent_price_reply({'sender_id': 'region', 'text': 'السعر'}, PRODUCT,
             {'province': 'البصرة'}, [PRODUCT], [])
-        self.assertIn('22,000', result['reply'])
+        self.assertIn('22 ألف', result['reply'])
         self.assertIn('البصرة', result['reply'])
         self.assertNotIn('المحافظة؟', result['reply'])
 
@@ -260,7 +265,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.customer('region')
         self.m.save_delivery_settings(self.db, {'baghdad_fee': 5000, 'other_fee': 7000})
         result = self.m.transparent_price_reply({'sender_id': 'region', 'text': 'السعر'}, PRODUCT, {}, [PRODUCT], [])
-        for fact in ['لبغداد', 'لبقية المحافظات', '20,000', '22,000']:
+        for fact in ['لبغداد', 'لبقية المحافظات', '20 ألف', '22 ألف']:
             self.assertIn(fact, result['reply'])
 
     def test_price_fast_path_defers_mixed_questions_and_multi_item_context(self):
@@ -274,9 +279,9 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.message('current', 'outgoing', 'السعر سابقاً 10 آلاف')
         self.m.save_delivery_settings(self.db, {'baghdad_fee': 5000, 'other_fee': 5000})
         result = self.m.transparent_price_reply({'sender_id': 'current', 'text': 'السعر'}, dict(PRODUCT, price='17000'), {}, [PRODUCT], [])
-        self.assertIn('17,000', result['reply'])
-        self.assertIn('22,000', result['reply'])
-        self.assertNotIn('10,000', result['reply'])
+        self.assertIn('17 ألف', result['reply'])
+        self.assertIn('22 ألف', result['reply'])
+        self.assertNotIn('10 آلاف', result['reply'])
 
     def test_reviewed_patterns_reach_actual_provider_prompt(self):
         self.customer('prompt')

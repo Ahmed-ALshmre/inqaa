@@ -227,20 +227,20 @@ class DeepSalesPipelineTests(unittest.TestCase):
         with patch.object(self.m, '_call_main_ai_once', side_effect=responses) as provider:
             result = self.m.call_main_ai(dict(sender_id='lining', text='سعره وبيها بطانة؟'),
                       'text', {}, [], [product], product, None, '', [], customer_products=[product])
-        self.assertEqual(provider.call_count, 2)
+        self.assertEqual(provider.call_count, 0)
         self.assertIn('بطانة', result['reply'])
         self.assertFalse(result['create_order'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
-    def test_repeated_omission_recovers_price_and_missing_detail_together(self):
+    def test_missing_lining_routes_price_question_to_human_without_partial_reply(self):
         self.customer('fallback')
         with patch.object(self.m, '_call_main_ai_once', return_value=dict(reply='سعره 20 ألف.', create_order=False, order={})) as provider:
             result = self.m.call_main_ai(dict(sender_id='fallback', text='سعره وبيها بطانة؟'),
                       'text', {}, [], [PRODUCT], PRODUCT, None, '', [], customer_products=[PRODUCT])
-        self.assertEqual(provider.call_count, 2)
-        self.assertIn('20,000', result['reply'])
-        self.assertIn('بطانة', result['reply'])
-        self.assertTrue(result['_needs_fact_review'])
+        self.assertEqual(provider.call_count, 0)
+        self.assertEqual(result['reply'], '')
+        self.assertTrue(result['requires_human'])
+        self.assertTrue(result['_direct_fact_handoff'])
         self.assertFalse(result['create_order'])
 
     def test_height_and_size_answers_do_not_allow_bypassing_prior_lining_question(self):

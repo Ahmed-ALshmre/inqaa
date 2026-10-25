@@ -225,7 +225,7 @@ class CheckoutRegressionTests(unittest.TestCase):
             self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
             self.ev['text'] = 'شكد السعر؟'
             answered = self.m.process_webhook(self.db, {}, use_debounce=False)
-            self.assertEqual(answered['reply'], 'السعر 16000 دينار')
+            self.assertEqual(answered['reply'], 'السعر 16 ألف')
             self.assertTrue(self.m.is_customer_ai_enabled(self.db, self.sender))
 
     def test_explicit_conversation_pause_is_still_respected(self):

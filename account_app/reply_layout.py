@@ -21,6 +21,9 @@ def polish_surface_punctuation(reply):
         return reply
     reply = re.sub(r'([.!؟?؛])\s*[،؛]', r'\1', reply)
     reply = re.sub(r'،\s*،', '،', reply)
+    # Price starts a distinct sales function; make its preceding sentence
+    # complete before a planner sends it in a separate notification.
+    reply = re.sub(r'،\s+(?=(?:السعر|سعره|سعرها)\b)', '. ', reply)
     return reply
 
 
@@ -264,14 +267,21 @@ def plan_sales_bubbles(result, reply, image_urls=None):
     else:
         # Album descriptions are atomic. A model's arbitrary parts never alter
         # the approved text or override semantic protection of cost/conditions.
-        units = ([part.strip() for part in proposed] if result.get('_ordered_album') and valid
+        structured = bool(result.get('_semantic_parts') and valid)
+        units = ([part.strip() for part in proposed] if (result.get('_ordered_album') or structured) and valid
                  else _sales_units(reply))
-        duplicate_units = semantic_units(reply)
+        # The same size/color can legitimately describe two distinct photos.
+        # Check repetition within each product section, not between products.
+        duplicate_units = units if result.get('_ordered_album') else semantic_units(reply)
+        within_album_duplicate = bool(result.get('_ordered_album') and any(
+            len({compact(part) for part in semantic_units(unit)}) < len(semantic_units(unit))
+            for unit in units))
         if (len({compact(unit) for unit in units}) < len(units)
-                or len({compact(unit) for unit in duplicate_units}) < len(duplicate_units)):
+                or len({compact(unit) for unit in duplicate_units}) < len(duplicate_units)
+                or within_album_duplicate):
             reasons.append('duplicate_sales_content')
         parts = list(units)
-        desired = min(limit, max(2, math.ceil(len(compact(reply)) / SALES_TARGET_LENGTH)))
+        desired = min(limit, len(parts) if structured else max(2, math.ceil(len(compact(reply)) / SALES_TARGET_LENGTH)))
         while len(parts) > desired:
             def merge_cost(index):
                 left, right = parts[index:index + 2]

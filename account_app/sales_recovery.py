@@ -106,6 +106,8 @@ def checkout_reply(answer, notice, question):
         request = re.search(r'(?:[،,؛]\s*|\s+بس\s+|\s+حتى\s+)?(?:دز\w*|[أا]رسل\w*|[أا]حتاج|نحتاج|ناقص).{0,80}(?:رقم|موبايل|هاتف|محافظ|عنوان)', part)
         if request:
             part = part[:request.start()].strip(' ،,؛')
+        if normalized(part) in {'بس', 'حتى', 'و'}:
+            continue
         if part and normalized(part) != normalized(notice) and part not in kept:
             kept.append(part)
     return '\n'.join(kept + [notice]) if kept else notice

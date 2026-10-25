@@ -420,10 +420,11 @@ DEFAULT_ORDER_CONFIRMATION_TEXT = (
     "أهم شي تفحصين الطلب قبل دفع المبلغ."
 )
 DEFAULT_MAIN_SYSTEM_PROMPT = (
-    "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في {store_name}.\n"
-    "وصف المتجر: {store_description}.\n"
-    "هدفك الوحيد في كل رد: تقريب الزبون خطوة واحدة من الحجز.\n"
-    "أسلوبك: قصير + جذاب + محفز على المتابعة."
+    """أنتِ موظفة مبيعات بشرية محترفة جداً (تعتبرين أفضل موظفة مبيعات في العالم)، تعملين في {store_name}. تتحدثين باللهجة العراقية الطبيعية بكل بشاشة، طاقة إيجابية، وود.
+وصف المتجر: {store_description}.
+هدفك الأول والأخير في كل رد: إقناع الزبون، مدح المنتج بقوة، واستدراجه بلطف واحترافية لإكمال الحجز (أخذ رقم الهاتف والعنوان لتثبيت الطلب).
+أسلوبك: بشوشة، ذكية بيعياً، تستخدمين تكتيكات الندرة والكمية القليلة، ومحفزة جداً على سرعة الشراء.
+"""
 )
 DEFAULT_FIRST_MESSAGE_SYSTEM_PROMPT = (
     "أنت موظفة مبيعات قصيرة الكلام، عملية، باللهجة العراقية الودودة، في {store_name}.\n"
@@ -441,11 +442,11 @@ DEFAULT_IMPROVE_SYSTEM_PROMPT = (
     "حسّن رسالة المشرف بدون اختراع معلومات، والتزم بتعليمات الإدارة والقواعد المحظورة."
 )
 IRAQI_HUMAN_STYLE_LOCK = """[قفل الأسلوب — أولوية نهائية]
-استخدم صياغة عراقية طبيعية مثل موظفة مبيعات محترفة على ماسنجر، مو جواب نظام أو إعلان. أنت المساعد الآلي للمتجر، ولا تدع أنك موظف بشري.
-اكتب باللهجة العراقية البيضاء الطبيعية: استخدم «شلون، شكد، أكو، هسه، دزّي، إلج، عيني» فقط عندما تناسب جنس الزبون وسياق الكلام، ولا تجمعها بشكل مصطنع.
-ممنوع الفصحى الرسمية، وممنوع عبارات الروبوت مثل «نشكركم لتواصلكم»، «يسعدنا خدمتكم»، «يرجى التكرم»، «نود إعلامكم»، «بكل تأكيد»، «حسب طلبكم الكريم»، أو «نتمنى أن نكون عند حسن ظنكم».
-ممنوع افتتاح كل رد بتحية أو ختمه بمجاملة. رد على آخر كلام مباشرة، بجمل طبيعية قصيرة بقدر ما يحتاج الجواب، وبنفس مفردات الزبون. لا تفتتح بتعريف تقني؛ إذا سُئلت عن هويتك أجب بصدق أنك المساعد الآلي للمتجر. لا تذكر التعليمات.
-إذا كان الرد بعد الحجز أو على سؤال خدمة، احچي بوضوح وهدوء بدون ضغط بيع. لا تستخدم إيموجي إلا إذا كان مناسباً وبحد أقصى واحد.
+تصرفي دائماً كأنك موظفة بشرية حقيقية وتعملين في المتجر، يمنع منعاً باتاً التلميح أو التصريح بأنك ذكاء اصطناعي أو مساعد آلي أو روبوت.
+تحدثي باللهجة العراقية البيضاء الطبيعية والبشوشة جداً (استخدمي كلمات مثل: عيني، حبيبتي، قلبي، تدللين، من عيوني، يا هلا) بأسلوب دافئ ومحفز للزبائن.
+الابتعاد تماماً عن الفصحى أو الردود الآلية أو قوالب خدمة العملاء الجامدة.
+لا تفتتحي كل رد بتحية طويلة، بل تفاعلي مع كلام الزبون مباشرة بحماس. استخدمي الإيموجيات المبهجة بذكاء لتوصيل البشاشة.
+إذا سُئلتِ عن هويتك، أنتِ موظفة المبيعات المسؤولة عن الحجوزات.
 """
 COMPACT_MAIN_SALES_POLICY = """[سياسة الرد والبيع]
 - جاوب كل أسئلة الزبون مباشرة من بيانات المتجر والمنتج فقط. لا تخترع سعراً أو لوناً أو قياساً أو خامة أو مخزوناً أو خصماً أو ندرة أو ضماناً أو موعد وصول.
@@ -487,50 +488,28 @@ DEFAULT_FIRST_MESSAGE_RULES_PROMPT = """قواعد صارمة:
 سياق الموديل أو القطعة المستنتج من رسالة الزبون: {detected_context} (لا تسأل عنه، فقط استخدمه في الصياغة لو كان معروفاً)."""
 DEFAULT_FIRST_MESSAGE_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخر:
 {"reply":"نص الرد","detected_context":"unknown|known"}"""
-DEFAULT_MAIN_RULES_PROMPT = """قواعد عامة صارمة:
-1) لا تخترع أسعاراً أو مقاسات أو ألواناً ليست في بيانات المنتج.
-2) طول الرد إلزامي: من جملة إلى جملتين قصيرتين فقط (≤ 25 كلمة). ممنوع الإطالة.
-3) إذا الرسالة الأخيرة من الزبون عبارة عن صورة بدون منتج مرتبط — لا تخترع موديلاً.
-4) إذا كلمات مثل 'هذا/هاي/الموديل/سعره/متوفر/قياس/ارجعه/احجز' وردت — اعتبرها تخص آخر منتج محفوظ للزبون.
-5) إذا المنتج stock فارغ أو 'نفذ' — قل صراحة 'خلص حالياً' ولا تقل متوفر.
-6) عند سؤال عن الجودة/الفحص/الثقة — أكد أن الفحص عند الاستلام، وإذا غير مطابق يرجع مجاناً.
-7) عند سؤال عن التوصيل — استخدم نص أجور التوصيل الثابت بالضبط.
-8) لا تذكر product_id أو ref أو ad_id أو sender_id في الرد.
-9) إذا اكتملت بيانات الحجز (موبايل واضح + عنوان + منتج متوفر) اجعل create_order=true. ممنوع طلب اسم الزبون للحجز.
-10) لا تختم بسؤال عام مثل 'شنو تحبين تعرفين عنه؟' — اختم بسؤال بيع واضح يجلب الخطوة التالية مثل 'أحجزه إلج؟' أو 'دزّيلي العنوان والموبايل وأحجزه؟'.
-11) إذا أرسل الزبون أكثر من رسالة متتالية بدون رد منك بينها، اعتبرها كلها سياقاً واحداً وأجب عنها كلها في ردٍ واحد دون تكرار، وراعِ ترتيبها وآخر معلومة قالها.
-12) جنس الزبون نفسه (الحقل gender في ملف الزبون):
-   - 'male' → خاطبه بصيغة المذكر بأسلوب محترم ورسمي (أستاذ/تأمر/تحب/أحجزه إلك/أخوي/تفضّل).
-     ممنوع منعاً باتاً استخدام كلمة 'حبيبي' أو 'عيني' أو أي كلمة عاطفية مماثلة مع الذكور. استبدلها دائماً بـ 'أستاذ'.
-   - 'female' → خاطبيها بصيغة المؤنث (تأمرين/تحبين/أحجزه إلج/حبيبتي/عيني/تدللين).
-   - فارغ أو غير محدد → استخدم صياغة محايدة قدر الإمكان ولا تفترض الجنس ولا تسأل عنه.
-   لا تخلط الصيغ في نفس الرد، والتزم بالجنس المحدد طوال الرد.
-13) ممنوع منعاً باتاً ذكر اسم الزبون أو أي جزء منه في نص الرد. خاطبه بصيغ عامة فقط (عيني، حبيبتي، يا هلا، تأمرين).
-14) المتجر متخصص بالسوت والدشداشة النسائية. استخدم كلمة الموديل/القطعة عند السؤال العام ولا تخترع نوعاً غير موجود في الكتالوج.
-15) ممنوع تكرار تفاصيل المنتج (السعر، القياسات، الألوان، الوصف، اسم المنتج الكامل) في كل رد. اذكر فقط ما طلبه الزبون في رسالته الحالية:
-   - سأل عن السعر فقط؟ → رد بالسعر فقط بدون قياسات أو ألوان.
-   - سأل عن المقاس فقط؟ → رد بالمقاسات فقط بدون السعر أو الألوان.
-   - سأل عن اللون فقط؟ → رد بالألوان فقط.
-   - سأل عن التوصيل؟ → رد بأجور التوصيل فقط.
-   - لم يسأل عن أي تفاصيل؟ → لا تعرض أي تفاصيل، فقط استمر بالحوار وحفّزه للحجز.
-   اعرض كل التفاصيل دفعة واحدة فقط عند أول طلب صريح من الزبون لها أو عند تأكيد الحجز.
-16) ممنوع الردود العاطفية الطويلة أو الأدعية أو المجاملات الزائدة (مثل: 'تسلمين يا طيبة'، 'فدوة لعمرج'، 'أجمعين يا رب'، 'يرزقج كل الخير'، 'تدللين بأي وقت'). يُسمح بكلمة ودّ خفيفة واحدة فقط مثل 'تأمرين' أو 'من عيوني' ضمن نفس الجملة.
-17) ممنوع إعادة الترحيب عند كل معلومة يقدّمها الزبون (مثل لما يذكر المحافظة أو العمر أو الاسم). لا تقل 'يا هلا بأهل الناصرية' أو 'نورتينا'. تعامل مع المعلومة مباشرة بدون احتفال.
-18) كل رد لازم يدفع المحادثة للأمام نحو الحجز: إما يطلب معلومة ناقصة (موبايل/عنوان) أو يستفز الرغبة (مثل 'الموديل قاعد ينتظرج، أحجزه؟'). تجنب الردود الميتة التي لا تجلب رد من الزبون.
-19) ممنوع منعاً باتاً إرسال قائمة منتجات أو موديلات أو صور إلا إذا الزبون طلب ذلك صراحةً. حلّل المحادثة كاملة أولاً:
-   - إذا الزبونة سألت سؤالاً عاماً بدون تحديد موديل → اسأليها عن صورة الموديل أو القياس المطلوب، لا تعرضي قائمة إلا إذا طلبت ذلك صراحة.
-   - إذا الزبون طلب صراحةً ('ورّيني الموديلات' / 'شنو عندكم' / 'عرضي') → اقترح 1-2 موديل فقط بأسلوب طبيعي.
-   - ممنوع إرسال رسائل مثبتة جاهزة مثل 'لقيت لك X موديل'. كل رد يجب أن يكون مخصصاً لسياق المحادثة.
-   - ممنوع عرض قائمة مرقّمة بالمنتجات (1. اسم - سعر - قياس). اذكر الموديل بشكل طبيعي ضمن الجملة.
-20) ممنوع إرسال صور المنتجات إلا إذا الزبون طلب الصورة صراحةً أو وافق على الاقتراح. لا ترسل صورة مع أول اقتراح.
-21) يمكن للزبون حجز قطعة واحدة أو عدة قطع. احتفظ بكل قطعة طلبها مع اللون والقياس والكمية داخل order.items، ولا تستبدل قطعة سابقة عند إضافة قطعة جديدة.
-22) لا تجعل create_order=true إلا بعد توفر الهاتف والمحافظة والعنوان، وتحديد اللون والقياس لكل عنصر عندما تكون هذه الخيارات مطلوبة.
-23) قبل تثبيت طلب متعدد القطع لخّص العناصر باختصار واطلب تأكيداً واحداً إذا لم يؤكد الزبون الطلب بعد.
-24) اقرأ آخر رد أرسله المتجر قبل صياغة الرد الحالي. لا تعِد الترحيب، ولا تعِد نفس السؤال أو نفس تفاصيل المنتج. ابنِ ردك فقط على المعلومة الجديدة التي قالها الزبون، وإذا أجاب عن سؤال سابق انتقل مباشرة إلى المعلومة الناقصة التالية للحجز.
-25) افهم المقصود من كامل المحادثة لا من آخر جملة وحدها. أي تصحيح جديد من الزبون (المنتج، القياس، اللون، الجنس، الهاتف أو العنوان) يلغي المعلومة القديمة فوراً، ولا تجادل الزبون أو تتمسك بالاختيار السابق.
-26) ميّز بدقة بين الوزن وقياس الملابس عند إنشاء الطلب: إذا قالت الزبونة وزن/كيلو اجعل size_type="weight"، وإذا قالت قياس/مقاس أو رقماً مثل قياس 44 اجعل size_type="size". لا تحوّل القياس إلى وزن ولا الوزن إلى قياس. احفظ الوزن المصرح به أيضاً داخل weight لكل قطعة، وملاحظاتها داخل notes؛ لا تستنتج الوزن من القياس.
-
-قاعدة الترحيب: {greeting_rule}"""
+DEFAULT_MAIN_RULES_PROMPT = """[القواعد الأساسية للمحادثة]
+1) أجيبي بإيجاز ووضوح وبدون حشو زائد.
+2) ركزي على المنتج الذي يسأل عنه الزبون.
+3) لا تذكري أسعاراً غير موجودة في بيانات المنتج.
+4) إذا لم يتوفر مقاس أو لون، اقترحي بديلاً متوفراً فوراً وبحماس.
+5) حافظي على سياق المحادثة ولا تكرري نفس الكلام.
+6) تفاعلي مع صور المنتجات التي يرسلها الزبون بحماس ومديح.
+7) لا تقدمي معلومات طبية أو نصائح خارج نطاق المبيعات.
+8) في حال غضب الزبون، امتصي غضبه بلطف واعرضي المساعدة فوراً.
+9) تجنبي إرسال نصوص طويلة ومملة، الزبون يحب الردود السريعة والمباشرة.
+10) لا تختمي أبداً بسؤال عام مثل 'شنو تحبين تعرفين؟' — اختمي دائماً بسؤال بيع واضح يحفز الحجز ويجلب العنوان والرقم، مثل: 'باقي قطع قليلة، دزيلي عنوانج ورقمج حتى أثبته إلج؟'.
+11) اعتمدي سياسة الاستبدال والاسترجاع الخاصة بالمتجر فقط.
+12) لا تتحدثي عن منافسين أو متاجر أخرى أبداً.
+13) التزمي بمعلومات التوصيل (الأسعار والمدة) المحددة للمحافظات.
+14) تأكدي من تفاصيل الطلب قبل تأكيد الحجز النهائي.
+15) استخدمي فواصل ورموز تعبيرية لترتيب الرد وجعله مريحاً للعين.
+16) كوني بشوشة وودودة جداً. يُسمح باستخدام كلمات الود العراقية (عيني، حبيبتي، تدللين) بشكل طبيعي لبناء علاقة ممتازة مع الزبون وتسهيل عملية البيع.
+17) تجنبي الأخطاء الإملائية واستخدمي لغة سليمة ومفهومة.
+18) كل رد يجب أن يدفع المحادثة بقوة نحو الحجز: امدحي الموديل، اذكري أن الكمية على وشك النفاذ، واطلبي البيانات (موبايل/عنوان) لتثبيت الطلب.
+19) لا تخترعي تفاصيل عن المنتج غير موجودة في قاعدة البيانات.
+20) أنهي المحادثة بلطف بعد إتمام عملية الحجز وأخذ كامل البيانات وتأكيد الطلب.
+"""
 DEFAULT_MAIN_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخر:
 {
   "reply": "نص الرد للزبون",
@@ -7062,7 +7041,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
             db,
             {"sender_id": sender_id, "page_id": customer.get("page_id") or "", "platform": customer.get("platform") or "facebook",
              "text": ev.get("text") or "", "image_url": ev.get("image_url"), "ad_id": ev.get("ad_id"), "ref": ev.get("ref")},
-            f"AI could not produce a reply after product link ({ai_result.get('failure_reason') or 'ai_failed'})",
+            ai_result.get('handoff_reason') or f"AI could not produce a reply after product link ({ai_result.get('failure_reason') or 'ai_failed'})",
             build_product_vision_candidates(products, limit=10) if products else [],
         )
         return {"sent": False, "reply": "", "reason": "ai_failed_human_required"}
@@ -7082,7 +7061,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         ai_result['_booking_actor'] = 'staff' if staff_action else 'ai'
         order_created, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
         if order_reply:
-            reply = sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
+            reply = order_reply if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
     else:
@@ -7091,7 +7070,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     image_urls = requested_reply_images(ai_result, products, matched_product, ev.get("text"), reply) if not order_created and (_promises_product_photo(reply) or ai_result.get("image_product_ids") or _requests_product_photo(ev.get("text", ""))) else []
     if not image_urls and _promises_product_photo(reply):
         reply = "ما عندي صورة مطابقة محفوظة لهذا الطلب حالياً."
-    reply = polish_surface_punctuation(reply)
+    ai_result, reply = format_customer_reply(ai_result, reply)
     sales_layout = plan_sales_bubbles(ai_result, reply, image_urls)
     if any(reason in sales_layout['rewrite_reasons']
            for reason in ('deferred_images_require_pagination', 'duplicate_sales_content')):
@@ -7368,17 +7347,25 @@ CONVERSATION_SALES_GUIDE = """
 نتائج بحث المنتجات اقتراحات فقط وليست اختيارات الزبون. لا تضف قطعة إلى order.items لمجرد السؤال عنها. لا تخمن المنتج من فستان أو أسود أو رقم قياس. املأ order بتفاصيل القطع التي طلبها الزبون حتى قبل اكتمال الهاتف والعنوان، مع ترك الناقص فارغاً. إذا وصلت البيانات بعد طلبها ورغبة الحجز واضحة فأنشئ الطلب دون إعادة سؤال التثبيت. القياس 50 أو 52 اختيار غير محسوم وليس وزناً 50؛ لا تحسم أحدهما تلقائياً.
 """
 
-GENTLE_SALES_GUIDE = """
-[تشجيع الحجز — يتقدم على أمثلة المبالغة القديمة]
-الهدف إكمال حجز يريده الزبون: أجب عن السؤال أولاً، ثم استخدم عبارة إقناع قصيرة واحدة عند ظهور اهتمام بالشراء، وبعدها سؤال خطوة تالية واحدة.
-يمكن اختيار سبب واحد فقط: عرض فعّال مسجل في offer، أو كمية محدودة موثقة في stock_quantity/stock، أو كثرة طلب موثقة صراحة في بيانات هذا المنتج الحالية. كلمة متوفر وحدها لا تعني كمية قليلة، ومثال في دليل البيع ليس دليلاً على كثرة الطلب.
-العرض: اذكر قيمته وشروطه كما هي، بلا اختراع خصم أو موعد انتهاء. مثال عند وجود عرض فعلي: «هالموديل عليه عرض هسه، تحبين أثبتلج؟».
-الندرة: إذا العدد المتبقي مسجل ومنخفض قل بهدوء «باقي منه [العدد المسجل] قطع، تحبين أحجزلج؟». لا تستخدم العدد 2 أو 3 من الأمثلة كبيانات فعلية ولا تقل آخر قطعة دون دليل.
-كثرة الطلب: إذا كانت موثقة للمنتج قل مرة واحدة «هالموديل عليه طلب حلو هالفترة». لا تقل «الطلب ما يوكف» ولا تربطه بموعد نفاد مفترض.
-استخدم تشجيع العرض أو الندرة أو كثرة الطلب مرة واحدة فقط في المحادثة؛ راجع ردود المتجر السابقة ولا تكررها ولا تجمع الثلاثة. عند غيابها استخدم فائدة حقيقية مسجلة أو سؤالاً بسيطاً مثل «تحبين أثبتلج اللون اللي اخترتيه؟».
-لا تضف تشجيعاً للبيع إلى التحية وحدها أو الشكر أو تصحيح القياس أو شكوى أو متابعة طلب. إذا قال الزبون لا أو بعدين أو أسأل وأرجع، تقبل ذلك دون ضغط أو حجز مؤقت أو وعد بحفظ القطعة.
-بعد الموافقة اجمع البيانات الناقصة فقط، ولا تقل «محجوزة إلج» أو «ثبتته» قبل نجاح حفظ الطلب. لا تطلب حجز موديلين أثناء الاستفسارات عن صورة؛ وضح ذلك عند الحجز إن بقي غامضاً.
+GENTLE_SALES_GUIDE = """[تشجيع الحجز واستخدام الندرة بذكاء]
+الهدف الأساسي هو إكمال الحجز. بعد الإجابة على سؤال الزبون، يجب عليكِ:
+- مدح المنتج بقوة لزيادة رغبة الزبون (مثلاً: "هذا الموديل يجنن باللبس"، "قماشه فد شي راقي ومرتب"، "أكثر قطعة عليها طلب عندنا").
+- استخدام تكتيكات الندرة والكمية المحدودة في المحادثة بأسلوب محفز ومقنع (مثلاً: "ترى باقي منه قطع أخيرة وتخلص"، "الكمية كلش قليلة يمي"، "العرض اليوم يخلص لحقي عليه عيني").
+- اجعلي الزبون يشعر أن تفويت الفرصة خسارة، وأن عليه الحجز فوراً.
+- بعد المدح والتحفيز (الندرة)، اطلبي مباشرة وبكل لطف معلومات الحجز الناقصة (الاسم، رقم التليفون، والمحافظة والعنوان الكامل) لتثبيت الطلب قبل نفاذ الكمية: "دزيلي عنوانج ورقمج حتى أثبته إلج قبل لا يخلص".
 """
+
+
+def format_customer_reply(result, reply):
+    """Keep validated part boundaries when applying customer-facing wording."""
+    original = str(reply or '')
+    formatted = polish_surface_punctuation(customer_copy.chat_wording(original))
+    parts = result.get('reply_parts')
+    compact = lambda value: re.sub(r'\s+', ' ', value).strip()
+    if (isinstance(parts, list) and parts and all(isinstance(part, str) for part in parts)
+            and compact(' '.join(parts)) == compact(original)):
+        result = dict(result, reply_parts=[polish_surface_punctuation(customer_copy.chat_wording(part)) for part in parts])
+    return dict(result, reply=formatted), formatted
 
 
 def normalize_ai_reply_parts(result):
@@ -7617,7 +7604,8 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     """Answer a narrow single-selection price inquiry with the full current cost."""
     if (not has_app_context() or not product or ev.get('_post_order')
             or ev.get('image_url') or ev.get('_image_matches')
-            or not sales_playbook.price_question(ev.get('text'))
+            or not (sales_playbook.price_question(ev.get('text'))
+                    or sales_playbook.delivery_price_question(ev.get('text')))
             or _stock_state(product) != 'available'
             or len(customer_products or []) > 1 or len(positions or []) > 1):
         return None
@@ -7626,7 +7614,7 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
             or re.search(r'جمل[ةه]', str(get_store_settings(db).get('name') or ''))):
         return None
     settings = get_delivery_settings(db)
-    province = (customer or {}).get('province')
+    province = sales_recovery.policy_province(ev.get('text')) or (customer or {}).get('province')
     if province:
         options = [(' إلى ' + province, delivery_fee_for_province(province, db=db))]
     elif settings['baghdad_fee'] == settings['other_fee']:
@@ -7636,24 +7624,67 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     parts = sales_playbook.price_preview(product, options, sales_playbook.requested_quantity(ev.get('text')))
     if not parts:
         return None
-    parts = [catalog_truth.conversational(part) for part in parts]
+    delivered_question = sales_playbook.delivery_price_question(ev.get('text'))
+    range_question = delivered_question and 'قياسات' in sales_strategy.normalized(ev.get('text'))
+    size_step = sales_playbook.size_range_question(product) if range_question else ''
+    if range_question and not size_step:
+        return None  # Do not consume a compound question whose sizes are not answered here.
+    natural_total = sales_playbook.delivered_price_line(product, options,
+        sales_playbook.requested_quantity(ev.get('text'))) if delivered_question else ''
+    if natural_total:
+        parts = [natural_total]
+    parts = [customer_copy.chat_money(catalog_truth.conversational(part)) for part in parts]
     accepted = accepted_sales_history(db, ev['sender_id']) if ev.get('sender_id') else []
-    compliment_used = any(re.search(r'اختيارج|ذوقج|اختيارك|ذوقك', item.get('text') or '') for item in accepted)
-    parts[0] = ('تدللين، ' if compliment_used else 'اختيارج حلو عيني، ') + parts[0]
     fabric = customer_copy.fact(product.get('fabric'), 'fabric').strip(' .،')
     fabric = re.sub(r'^(?:القماش|قماش(?:ه|ها)?)\s*[:：]?\s*', '', fabric)
-    if fabric and len(fabric) <= 60 and not customer_copy.has_instructions(fabric):
+    fabric_seen = any(fabric and fabric in (item.get('text') or '') for item in accepted)
+    if not delivered_question and fabric and not fabric_seen and len(fabric) <= 60 and not customer_copy.has_instructions(fabric):
         parts[0] += ' وقماشه ' + fabric + '.'
-    cue = (None if sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
-           else sales_strategy.persuasion_cue(product, accepted))
+    parts = [natural_total] if natural_total else ['\n'.join(part.rstrip(' .') + '.' for part in parts)]
+    cue = ('' if sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
+           else sales_playbook.next_sales_message(product, accepted))
     if cue:
-        parts.append(sales_playbook.cue_line(cue))
-    step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer, accepted)
+        parts.insert(0, cue) if 'عرض' in cue else parts.append(cue)
+    step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer, accepted,
+        delivery_requires_province=settings['baghdad_fee'] != settings['other_fee'])
+    if size_step and step in {'شكد قياس تلبسين؟', 'شنو القياس اللي يناسبج؟', 'تحبينه يطلع مضبوط لو واسع؟'}:
+        step = size_step
+    elif delivered_question and step == 'شكد قياس تلبسين؟':
+        step = 'شنو القياس اللي يناسبج؟'
     if step:
         parts.append(step)
+    if delivered_question and re.match(r'^(?:السلام عليكم|سلام عليكم)\b', sales_strategy.normalized(ev.get('text'))):
+        parts.insert(0, 'وعليكم السلام، هلا بيج 🌷')
     return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False,
             'order': {}, 'requires_human': False, 'intent': 'price',
-            '_local_reply': True, '_transparent_price': True, '_suppress_product_images': True}
+            '_local_reply': True, '_transparent_price': True, '_suppress_product_images': True,
+            '_semantic_parts': True}
+
+
+def guided_size_choice_reply(ev, product, customer, customer_products, positions):
+    """Confirm a simple supported size without inferring fit or purchase consent."""
+    if not product or (ev.get('_sales_context') or {}).get('open_details'):
+        return None
+    text = sales_strategy.normalized(ev.get('text')).strip(' .،!')
+    match = re.fullmatch(r'(?:قياسي|مقاسي|البس قياس)\s+(\d{1,2}|[2-6]?xl|xxl|xxxl|xs|[sml])', text)
+    if not match:
+        return None
+    size = match.group(1).upper()
+    assessed = product_variants.assess(product, 'قياس ' + size)
+    if not assessed or assessed[0]['supported'] is not True:
+        return None
+    context = dict(ev.get('_sales_context') or {})
+    context['evidence'] = list(context.get('evidence') or []) + [{'text': 'قياسي ' + size}]
+    if sales_playbook.selection_conflicts(product, context, customer):
+        return None
+    quoted = transparent_price_reply(dict(ev, text='سعره', _sales_context=context),
+                                     product, customer, customer_products, positions)
+    if not quoted:
+        return None
+    colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
+    answer = 'إي عيني، قياس ' + size + ' متوفر' + (' باللون ال' + colors[0] if len(colors) == 1 else '') + '.'
+    parts = [answer] + quoted['reply_parts']
+    return dict(quoted, reply='\n'.join(parts), reply_parts=parts, intent='product_question')
 
 
 def guided_product_interest_reply(ev, product, customer, customer_products, positions):
@@ -7678,10 +7709,7 @@ def guided_product_interest_reply(ev, product, customer, customer_products, posi
     if fabric_question and (not fabric or len(fabric) > 100 or customer_copy.has_instructions(fabric)):
         return None
     accepted = accepted_sales_history(get_db(), ev['sender_id']) if has_app_context() and ev.get('sender_id') else []
-    praised = any(re.search(r'اختيارج|ذوقج|اختيارك|ذوقك', item.get('text') or '') for item in accepted)
-    opening = 'وعليكم السلام عيني 🌷 ' if greeting else 'تدللين عيني 🌷 '
-    if not praised:
-        opening += 'اختيارج فد شي حلو، '
+    opening = 'وعليكم السلام، هلا بيج 🌷 ' if greeting else ''
     if fabric_question:
         answer = 'قماشه ' + fabric + '.'
     else:
@@ -7690,17 +7718,19 @@ def guided_product_interest_reply(ev, product, customer, customer_products, posi
     parts = [opening + answer]
     context = ev.get('_sales_context') or {}
     if not sales_playbook.selection_conflicts(product, context, customer) and not context.get('open_details'):
-        cue = sales_strategy.persuasion_cue(product, accepted)
+        cue = sales_playbook.next_sales_message(product, accepted)
         if cue:
-            parts.append(sales_playbook.cue_line(cue))
-    step = sales_playbook.price_next_step(product, context, customer, accepted)
+            parts.append(cue)
+    delivery = get_delivery_settings(get_db()) if has_app_context() else {}
+    step = sales_playbook.price_next_step(product, context, customer, accepted,
+        delivery_requires_province=delivery.get('baghdad_fee') != delivery.get('other_fee'))
     if fabric_question and step == 'شكد العمر المطلوب؟' and 'فستان' in sales_strategy.normalized(product.get('product_name')):
         step = 'شكد عمر البنية حتى أشوفلج قياسها؟'
     if step:
         parts.append(step)
     return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False,
             'order': {}, 'requires_human': False, 'intent': 'product_question',
-            '_local_reply': True, '_suppress_product_images': True}
+            '_local_reply': True, '_suppress_product_images': True, '_semantic_parts': True}
 
 
 def guided_specification_reply(ev, product, customer, customer_products, positions):
@@ -7718,17 +7748,18 @@ def guided_specification_reply(ev, product, customer, customer_products, positio
     if not name or not fabric or customer_copy.has_instructions(name + ' ' + fabric):
         return None
     accepted = accepted_sales_history(get_db(), ev['sender_id']) if has_app_context() and ev.get('sender_id') else []
-    praised = any(re.search(r'اختيارج|ذوقج|اختيارك|ذوقك', item.get('text') or '') for item in accepted)
     if 'فستان' in sales_strategy.normalized(name):
         named = re.match(r'^فستان\s+(.+)$', name)
         suffix = named.group(1).strip() if named else ''
         item = 'هالفستان' + ((' ' + suffix) if suffix.startswith('ال') else (' ال' + suffix if suffix else ''))
     else:
         item = name
-    intro = item if praised else 'اختيارج فد شي حلو عيني 🌷 ' + item
+    intro = item
     description = customer_copy.fact(product.get('description'), 'description')
     match = re.search(r'(?:الموديل|الفستان|القطعة)\s+([^.;]{8,125})\.', description)
     detail = match.group(1).strip(' ،') if match else ''
+    detail = re.sub(r'(?:،?\s*)و?خصره\s+محدد|(?:،?\s*)و?تنورته\s+واسعة', '', detail).strip(' ،')
+    detail = detail.replace('طويل، محتشم', 'طويل ومحتشم')
     composition = sales_strategy.normalized(' '.join(
         customer_copy.fact(product.get(key), key) for key in ('faq', 'bundle_contents', 'sale_unit')))
     if 'فستان' in sales_strategy.normalized(name) and re.search(r'قطعة\s+وحد[ةه]', composition):
@@ -7737,15 +7768,16 @@ def guided_specification_reply(ev, product, customer, customer_products, positio
         first = intro + ' ' + detail + '.'
     else:
         first = intro + '.'
-    parts = [first, 'وقماشه ' + fabric + '.']
+    parts = [first, 'قماشه ' + fabric + '.']
     try:
         count, price, _ = conversation_quality.terms(product)
         if count == 1:
-            amount = f'{price // 1000} ألف' if price % 1000 == 0 else f'{price:,} دينار'
-            cue = (None if sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
-                   else sales_strategy.persuasion_cue(product, accepted))
-            offer = sales_playbook.cue_line(cue).rstrip('.') + '، ' if cue else ''
-            parts[1] += ' ' + offer + 'سعره ' + amount + '.'
+            amount = customer_copy.chat_amount(price)
+            cue = ('' if sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
+                   else sales_playbook.next_sales_message(product, accepted))
+            parts[1] += ' ' + (cue + ' ' if cue and 'عرض' in cue else '') + 'سعره ' + amount + '.'
+            if cue and 'عرض' not in cue:
+                parts.append(cue)
     except (ValueError, TypeError, KeyError):
         pass
     step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer, accepted)
@@ -7753,7 +7785,39 @@ def guided_specification_reply(ev, product, customer, customer_products, positio
         parts.append(step)
     return {'reply': '\n'.join(parts), 'reply_parts': parts, 'create_order': False,
             'order': {}, 'requires_human': False, 'intent': 'product_question',
-            '_local_reply': True, '_suppress_product_images': True}
+            '_local_reply': True, '_suppress_product_images': True, '_semantic_parts': True}
+
+
+def product_detail_reply(ev, product, customer, customer_products, positions):
+    if (not product or ev.get('_post_order') or ev.get('image_url') or ev.get('_image_matches')
+            or len(customer_products or []) > 1 or len(positions or []) > 1):
+        return None
+    question = str(ev.get('text') or '')
+    selected = set(sales_answers.topics(question))
+    details = selected & {'closure', 'width', 'length', 'lining', 'stretch'}
+    if not details:
+        return None
+    facts = [sales_strategy.detail_fact(product, key) for key in sorted(details)]
+    missing = any(not fact for fact in facts)
+    if missing:
+        return {'reply': '', 'reply_parts': [], 'create_order': False, 'order': {},
+                'requires_human': True, 'failed': True, '_direct_fact_handoff': True,
+                'failure_reason': 'product_detail_missing',
+                'handoff_reason': 'السؤال بالكامل للمراجعة: تفصيل غير موجود في المنتج: ' + ', '.join(sorted(details))}
+    if (selected - details - {'sizes', 'weight_fit', 'price'}
+            or re.search(r'ثبت|احجز|اطلب|اشتري', sales_strategy.normalized(question))):
+        return None
+    if 'price' in selected:
+        quoted = transparent_price_reply(dict(ev, text='وشنو سعره'), product, customer, customer_products, positions)
+        if quoted:
+            if not missing:
+                quoted['reply'] = '\n'.join(facts) + '\n' + quoted['reply']
+                quoted['reply_parts'] = []
+            return dict(quoted, _needs_fact_review=missing)
+    reply = '\n'.join(fact.rstrip(' .') + '.' for fact in facts)
+    return {'reply': reply, 'reply_parts': [reply], 'create_order': False, 'order': {},
+            'requires_human': False, '_local_reply': True, '_single_message': True,
+            '_suppress_product_images': True, 'intent': 'product_detail'}
 
 
 def reply_reasks_known_product(reply):
@@ -8174,6 +8238,11 @@ def call_main_ai(
             matched_product = named[0]
     if continuation:
         instructions_text += '\nالجواب الحالي موافقة على العرض السابق للصور أو البدائل فقط. نفذي ذلك العرض وفق القياس واللون المعروفين، دون حجز ودون إعادة سؤال أي موديل.'
+    if has_app_context() and ev.get('sender_id') and not continuation:
+        checkout_reply = resume_known_checkout(get_db(), ev, matched_product, customer,
+                                              customer_products, context)
+        if checkout_reply:
+            return checkout_reply
     if (not matched_product and customer_products and message_type == 'text'
             and not ev.get('image_url') and not ev.get('_image_matches')
             and not is_product_objection(ev.get('text'))):
@@ -8240,13 +8309,17 @@ def call_main_ai(
             low, high = min(lo for lo, hi in years), max(hi for lo, hi in years)
             piece = 'هالفستان' if 'فستان' in sales_strategy.normalized(matched_product.get('product_name')) else 'هالموديل'
             age_label = 'سنتين' if age == 2 else f'{age:g} سنة'
-            boundary = (f'{piece} ما بيه عمر {age_label}، يبدي من {low:g} سنوات' if age < low else
-                        f'{piece} آخر عمر بيه {high:g} سنة')
+            boundary = (f'{piece} يبدي من عمر {low:g} سنوات، عمر {age_label} مو متوفر منه' if age < low else
+                        f'أكبر قياس بهالفستان يلبس لعمر {high:g} سنة' if piece == 'هالفستان' else
+                        f'أكبر قياس بهالموديل يلبس لعمر {high:g} سنة')
             if low <= age <= high:
                 boundary = 'العمر المطلوب مو ضمن الأعمار المتوفرة بهالموديل'
             parts = ['عيني، ' + boundary + '.']
-            parts.append(f'أشيّك لج قياس {age_label} بأي موديل ثاني يعجبج، عندج واحد ببالج؟' if age < low else
-                         'ما أحب أخاطر عليج بقياس أصغر. عندج موديل ثاني ببالج؟')
+            alternatives = product_links.eligible_age_alternatives(matched_product, products, age)
+            if alternatives:
+                parts.append(f'تحبين أرسلج موديلات ثانية ترهم لعمر {age_label}؟')
+            else:
+                parts.append(f'لعمر {age_label} ما متوفر قياس منه هسه.')
         else:
             parts = ['إي عيني، هالعمر موجود ضمن قياسات هالموديل 🌷.']
             cue = sales_strategy.persuasion_cue(matched_product,
@@ -8287,6 +8360,12 @@ def call_main_ai(
             discrepancy['reply'] = 'حقج تسألين عن فرق السعر.\n' + discrepancy['reply']
             discrepancy['reply_parts'] = [discrepancy['reply']]
             return dict(discrepancy, _needs_fact_review=True, create_order=False)
+    detail_reply = product_detail_reply(ev, matched_product, customer, customer_products, positions)
+    if detail_reply:
+        return detail_reply
+    size_choice_reply = guided_size_choice_reply(ev, matched_product, customer, customer_products, positions)
+    if size_choice_reply:
+        return size_choice_reply
     price_reply = transparent_price_reply(ev, matched_product, customer, customer_products, positions)
     if price_reply:
         return price_reply
@@ -8592,6 +8671,9 @@ def call_main_ai(
         personal = sales_playbook.personalize_specifications(result.get('reply'), question)
         if personal != result.get('reply'):
             result = dict(result, reply=personal, reply_parts=[], _personalized_specifications=True)
+    natural_money = customer_copy.chat_wording(result.get('reply'))
+    if natural_money != result.get('reply'):
+        result = dict(result, reply=natural_money, reply_parts=[])
     single_step = conversation_quality.one_next_question(result.get('reply'))
     if has_app_context() and ev.get('sender_id') and not checkout_requested(get_db(), ev, result):
         single_step = conversation_quality.defer_contact_until_consent(single_step)
@@ -8809,7 +8891,7 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
     system_prompt += "\n\n" + sales_playbook.guidance(ev, matched_product)
     if not post_order:
-        system_prompt += "\n\n" + sales_playbook.selection_guidance(matched_product, ev.get('_sales_context'), customer)
+        system_prompt += "\n\n" + sales_playbook.selection_guidance(matched_product, ev.get('_sales_context'), customer, history)
     system_prompt += "\n\n" + sales_decision.brief(ev, matched_product)
     system_prompt += "\n\n" + sales_engagement.DIALOGUE_GUIDE
     system_prompt += "\n\n" + catalog_truth.GUIDE
@@ -9203,8 +9285,19 @@ def checkout_customer_data(db, sender_id, order_data):
     data = dict(order_data or {})
     row = db.execute("SELECT name,phone,province,address FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
     customer = dict(row) if row else {}
+    recovered = {}
+    if any(not customer.get(field) for field in ('phone', 'province', 'address')):
+        rows = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='incoming' "
+            "AND message_type='text' AND julianday(created_at)>=julianday(?)-1 "
+            "ORDER BY id DESC LIMIT 60", (sender_id, now_baghdad_iso())).fetchall()
+        for message in reversed(rows):
+            text = message['text'] or ''
+            recovered.update(contact_fields(text, {**customer, **recovered}))
+            if '\n' in text:
+                for line in text.splitlines():
+                    recovered.update(contact_fields(line, {**customer, **recovered}))
     for field in ("phone", "province", "address"):
-        data[field] = customer.get(field) or data.get(field) or ""
+        data[field] = customer.get(field) or recovered.get(field) or data.get(field) or ""
     data["customer_name"] = data.get("customer_name") or customer.get("name") or ""
     location = contact_fields("العنوان " + str(data.get("address") or ""))
     if location.get("province"):
@@ -9275,13 +9368,13 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         address = ""
 
     if not phone or not province or not address:
-        missing = " و".join(label for value, label in ((phone, "رقم الهاتف"), (province, "المحافظة"), (address, "العنوان الكامل")) if not value)
+        missing = " و".join(label for value, label in ((phone, "رقم الموبايل"), (province, "المحافظة"), (address, "العنوان الكامل")) if not value)
         print("[Order] Missing customer fields, not creating order.", flush=True)
-        return None, f"حتى أثبت الطلب أحتاج {missing} 🌸"
+        return None, f"دزيلي {missing} حتى أثبتلج الحجز 🌷"
 
     valid_phone = phone_number(phone)
     if not valid_phone:
-        return None, "رقم الهاتف غير مكتمل؛ أرسلي رقم موبايل عراقي صحيح حتى أثبت الطلب."
+        return None, "رقم الموبايل غير مكتمل؛ دزيلي رقم عراقي صحيح حتى أثبتلج الحجز."
     phone = order_data["phone"] = valid_phone
     catalog_products = load_products_from_file()
     raw_items = checkout_lines(order_data, matched_product)
@@ -9339,6 +9432,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     if duplicate:
         print(f"[Order] Duplicate skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
         # The confirmation was already sent when this order was first created.
+        ai_result['_single_message'] = True
         return True, None
 
     if not cart_confirmed:
@@ -9483,6 +9577,7 @@ def saved_catalog_page(db, ev, products, request_id, *, start):
     if not result:
         return None
     result = dict(result, sender_id=ev['sender_id'], page_id=ev.get('page_id'), platform=ev.get('platform'))
+    result['reply'] = customer_copy.chat_money(result['reply'])
     result['reply_parts'] = approved_reply_parts(result, result['reply'])
     for part in result['reply_parts']:
         save_message(db, ev['sender_id'], 'outgoing', 'text', part, None, None, None, result['meta'])
@@ -9741,7 +9836,7 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, b
 
 
 def checkout_requested(db, ev, result):
-    if result.get('_browse_only') or result.get('_needs_fact_review'):
+    if result.get('_browse_only') or result.get('_needs_fact_review') or result.get('requires_human'):
         return False
     if sales_strategy.purchase_block_reason(ev.get('text')) or unresolved_purchase_terms(ev.get('text')):
         return False
@@ -9757,6 +9852,13 @@ def checkout_requested(db, ev, result):
         return True
     if not result.get("order"):
         return False
+    customer = db.execute('SELECT phone,province,address FROM customers WHERE sender_id=?',
+                          (ev['sender_id'],)).fetchone()
+    fields = contact_fields(text, dict(customer) if customer else {})
+    # Supplying the complete delivery contact for the chosen cart is itself a
+    # purchase action, without a second request to confirm the same reservation.
+    if all(fields.get(key) for key in ('phone', 'province', 'address')):
+        return True
     rows = db.execute("SELECT direction,message_type,text FROM messages WHERE sender_id=? AND " + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 40",
                       (ev["sender_id"],)).fetchall()
     turn = []
@@ -9774,8 +9876,11 @@ def checkout_requested(db, ev, result):
         return False
     checkout_words = r'(?:أثبت|اثبت|نثبت|أحجز|احجز|الحجز)'
     asked_checkout = bool(re.search(checkout_words, '\n'.join(item['text'] for item in turn)))
-    if contact_fields(text):
-        return asked_checkout
+    if fields:
+        requested_contact = bool(re.search(
+            r'(?:دز\w*|[أا]رسل\w*|[أا]حتاج|نحتاج|باقي|ناقص).{0,65}(?:رقم|موبايل|هاتف|عنوان|محافظ)',
+            '\n'.join(item['text'] for item in turn)))
+        return asked_checkout or requested_contact
     last_question = sales_context.question_from_turn(turn) or turn[-1]['text']
     return asked_checkout and is_confirmation(text) and bool(re.search(checkout_words, last_question))
 
@@ -9805,7 +9910,10 @@ def restore_checkout_draft(db, ev, result, matched_product):
     text = str(ev.get("text") or "")
     if re.search(r"قياس|مقاس|وزن|كيلو|لون|بدل|مو هذا|ما اريد|لا اريد|عوفي|ضيف", text):
         return
-    if not contact_fields(text) and not is_confirmation(text):
+    customer = db.execute('SELECT phone,province,address FROM customers WHERE sender_id=?',
+                          (ev['sender_id'],)).fetchone()
+    previous_contact = dict(customer) if customer else {}
+    if not contact_fields(text, previous_contact) and not is_confirmation(text):
         return
     rows = db.execute("SELECT id,raw_payload,created_at FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' AND " + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 24", (ev["sender_id"],)).fetchall()
     draft = None
@@ -9821,7 +9929,7 @@ def restore_checkout_draft(db, ev, result, matched_product):
         # corrections or attachments prohibit restoring the older selection.
         intervening = db.execute("SELECT text,message_type FROM messages WHERE sender_id=? AND direction='incoming' AND id>? ORDER BY id", (ev['sender_id'],last['id'])).fetchall()
         if any(r['message_type'] not in {'text','emoji'} or
-               not (contact_fields(r['text']) or is_confirmation(r['text']) or
+               not (contact_fields(r['text'], previous_contact) or is_confirmation(r['text']) or
                     re.fullmatch(r'(?:كم يوم|شكد وقت|شوكت).{0,35}(?:يوصل|التوصيل|الطلب)[؟?\s]*', r['text'] or '')) or
                re.search(r'قياس|مقاس|وزن|كيلو|لون|بدل|مو هذا|ما اريد|لا اريد|عوفي|ضيف', r['text'] or '')
                for r in intervening):
@@ -9858,6 +9966,59 @@ def restore_checkout_draft(db, ev, result, matched_product):
         if not current.get(key) and draft.get(key):
             current[key] = draft[key]
     result['order'] = current
+
+
+def resume_known_checkout(db, ev, product, customer, customer_products, context):
+    """Complete a known cart from contact replies before asking a model again."""
+    if (ev.get('_post_order') or ev.get('image_url') or ev.get('_image_matches')
+            or (context or {}).get('open_details') or ev.get('_sales_continuation')):
+        return None
+    text = str(ev.get('text') or '')
+    fields = contact_fields(text, customer)
+    if not fields and not is_confirmation(text):
+        return None
+    if re.search(r'[؟?]|شكد|شوكت|يمتى|متى|شلون|شنو|افحص|اكدر', sales_strategy.normalized(text)):
+        return None  # Answer a new independent question through the normal path.
+    named = first_message_named_products(text, load_active_products(db))
+    if named and any(item.get('product_id') != (product or {}).get('product_id') for item in named):
+        return None  # Resolve a newly named product before restoring an older cart.
+    candidate = {'order': {}}
+    restore_checkout_draft(db, ev, candidate, product)
+    if not candidate['order']:
+        if not product or len(customer_products or []) != 1 or pending_product_choice(db, ev['sender_id']):
+            return None
+        prior_products = db.execute('SELECT COUNT(DISTINCT product_id) FROM customer_product_interests WHERE sender_id=?',
+                                    (ev['sender_id'],)).fetchone()[0]
+        if prior_products != 1:
+            return None  # Unscoped older size evidence cannot select a different product.
+        linked = {item.get('product_id') for item in load_customer_products(db, ev['sender_id'])}
+        if product.get('product_id') not in linked:
+            return None
+        # Without a saved cart, a mentioned quantity or a previous quantity
+        # question must not silently become a one-piece order.
+        if any(re.search(r'قطعتين|ثنين|اثنين|عدد|كم\s*قط|شكد\s*قط|\d+\s*قطع',
+                         sales_strategy.normalized(str(item.get('text') or '') + ' ' + str(item.get('in_reply_to') or '')))
+               for item in (context or {}).get('evidence', [])):
+            return None
+        selected = sales_playbook.customer_selection(context, customer)
+        colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
+        color = selected.get('color') or (colors[0] if len(colors) == 1 else '')
+        size = selected.get('size')
+        if not size or sales_playbook.selection_conflicts(product, context, customer):
+            return None
+        assessed = product_variants.assess(product, 'قياس ' + str(size))
+        if not assessed or assessed[0]['supported'] is not True:
+            return None
+        item = dict(product_id=product['product_id'], product_name=product['product_name'],
+                    color=color, size=str(size), size_type='size', quantity=1)
+        if order_line_error([item], [product]):
+            return None
+        candidate['order'] = {'items': [item]}
+    if not checkout_requested(db, ev, candidate):
+        return None
+    return dict(candidate, reply='وصلت تفاصيلج عيني.', reply_parts=['وصلت تفاصيلج عيني.'],
+                create_order=False, requires_human=False, intent='order', _local_reply=True,
+                _single_message=True, _suppress_product_images=True)
 
 
 def collect_unanswered_event(db, ev, incoming_message_id):
@@ -10171,6 +10332,17 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
 
     customer_products = load_customer_products(db, ev["sender_id"])
     if message_type != 'image' and not ev.get('attachments'):
+        last_reply = accepted_sales_history(db, ev['sender_id'], limit=1)
+        last_offer = str(last_reply[-1].get('text') or '') if last_reply else ''
+        if (len(customer_products) == 1
+                and re.fullmatch(r'(?:اي|نعم|تمام|اوكي|دزي|دزيلي|ارسلي)(?:\s+(?:عيني|حبيبتي|الصور))?[ ؟?!.،]*', sales_strategy.normalized(ev.get('text')))
+                and re.search(r'تحبين ارسلج موديلات ثاني[ةه] ترهم لعمر', sales_strategy.normalized(last_offer))):
+            offered_age = conversation_quality.child_age(last_offer)
+            source = next((p for p in products if p['product_id'] == customer_products[0]['product_id']), None)
+            if source and offered_age is not None:
+                candidates = product_links.eligible_age_alternatives(source, products, offered_age)
+                if candidates:
+                    return saved_catalog_page(db, ev, candidates, incoming_message_id, start=True)
         if (catalog_browsing.is_next_request(ev.get('text'))
                 and catalog_browsing.has_session(db, current_store_id(), ev['sender_id'])):
             return saved_catalog_page(db, ev, products, incoming_message_id, start=False)
@@ -10744,7 +10916,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         failure_reason = ai_result.get("failure_reason") or "ai_failed"
         review_id = create_human_review(
             db, ev,
-            f"AI could not produce a reply ({failure_reason}); human action required",
+            ai_result.get('handoff_reason') or f"AI could not produce a reply ({failure_reason}); human action required",
             build_product_vision_candidates(products, limit=10) if products else [],
         )
         log(10, "MAIN AI", "AI failed → message routed to human review", {
@@ -10974,7 +11146,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             db, ev["sender_id"], ai_result, matched_product
         )
         if order_reply:
-            reply = sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
+            reply = order_reply if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
             log(13, "ORDER", "Order created and outgoing reply updated", {"reply": reply})
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
@@ -11017,7 +11189,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "platform": ev["platform"], "reply": "", "send_image": False,
                 "meta": {"skipped": True, "reason": "ai_disabled_before_reply_save"}}
     log(14, "SAVE REPLY", "Saving outgoing reply to database...")
-    reply = polish_surface_punctuation(reply)
+    ai_result, reply = format_customer_reply(ai_result, reply)
     sales_layout = plan_sales_bubbles(
         dict(ai_result, _post_order=bool(ev.get('_post_order'))), reply, outgoing_image_urls)
     if any(reason in sales_layout['rewrite_reasons']
@@ -13069,7 +13241,7 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
     if checkout_requested(db, ev, result):
         created, reply = create_order_if_valid(db, sender_id, result, product)
         notice = reply or ("طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً." if created else "نحتاج مراجعة تفاصيل الطلب قبل تثبيته.")
-        text = sales_recovery.checkout_reply(text, notice, ev.get('text'))
+        text = notice if created else sales_recovery.checkout_reply(text, notice, ev.get('text'))
     else:
         text = unexecuted_checkout_reply(ev, text, product)
     images = requested_reply_images(result, load_active_products(db), product, ev.get('text'), text) if not created and (_promises_product_photo(text) or result.get('image_product_ids')) else []
@@ -13506,6 +13678,8 @@ def api_ask_ai(sender_id):
         customer_products=customer_prods,
         conversation_history=conversation_history,
     )
+    if ai_result.get('_direct_fact_handoff'):
+        return jsonify({'reply': '', 'intent': 'human_review'})
     if ai_result.get("failed"):
         reason = ai_result.get("failure_reason") or "unknown"
         return jsonify({"reply": "", "intent": "ai_error", "error": ai_failure_message(reason),

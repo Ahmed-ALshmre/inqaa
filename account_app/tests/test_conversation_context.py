@@ -26,7 +26,7 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value=result):
             response = self.event('ثبتي\nزين افحصها كدام المندوب؟')
         self.assertIn('تفحصين القطعة', response['reply'])
-        self.assertIn('حتى أثبت الطلب أحتاج', response['reply'])
+        self.assertIn('حتى أثبتلج الحجز', response['reply'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
     def test_september29_short_photo_reply_uses_saved_staff_offer(self):
@@ -132,7 +132,8 @@ class ConversationContextTests(unittest.TestCase):
             m.complete_customer_product_link(self.db, self.sender, suit,
                                              'image_recognition', source='image_recognition')
             result = self.event('٧٥ بس اذا القميص عريض ٤٢ يناسبني')
-            self.assertIn('سوت', result['reply'])
+            self.assertEqual(result['reply'], '')
+            self.assertIsNotNone(result['meta'].get('human_review_id'))
             self.assertNotIn('قميص رباط', result['reply'])
             self.assertEqual(m.get_active_product_binding(self.db, self.sender)['product_id'], 'P010')
             suggested = self.db.execute('''SELECT 1 FROM customer_product_interests
@@ -271,7 +272,7 @@ class ConversationContextTests(unittest.TestCase):
                 self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['F2'])
                 self.assertIsNone(m.pending_product_choice(self.db, self.sender))
                 self.assertTrue(classify.call_args.args[3])
-                self.assertIn('15,000', self.event(question)['reply'])
+                self.assertIn('15 ألف', self.event(question)['reply'])
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
 
     def test_contextual_reverse_selection_restores_only_explicit_choice(self):
@@ -281,7 +282,7 @@ class ConversationContextTests(unittest.TestCase):
             result = self.event('أريد دانتيل مو انيقة', model_reply='تمام، نكمل على دانتيل. شنو القياس المطلوب؟')
         self.assertIn('دانتيل', result['reply'])
         self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['F1'])
-        self.assertIn('16,000', self.event('شكد سعره؟')['reply'])
+        self.assertIn('16 ألف', self.event('شكد سعره؟')['reply'])
 
     def test_ambiguous_or_invalid_selection_keeps_context(self):
         self.recognize()
@@ -382,7 +383,7 @@ class ConversationContextTests(unittest.TestCase):
             result = self.event("ما هي مواصفات الفستان؟")
         model.assert_not_called()
         self.assertIn('16 ألف', result['reply'])
-        self.assertIn('شنو قياس الملابس', result['reply'])
+        self.assertIn('شكد قياس تلبسين', result['reply'])
         self.assertNotIn("اعتمد الجدول", result["reply"])
         self.assertNotIn('38 إلى 52', result['reply'])
         self.assertIsNone(m.known_product_question_reply("شنو القياسات؟", product))
@@ -765,17 +766,17 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,'_call_main_ai_once',return_value={'reply':'','failed':True,'failure_reason':'provider_http_402'}) as model:
             result=m.call_main_ai(dict(self.ev,text='شكد السعر؟'),'text',{},[],CATALOG,CATALOG[0],None,'',[])
         self.assertFalse(result['requires_human'])
-        self.assertIn('16,000',result['reply'])
+        self.assertIn('16 ألف',result['reply'])
         self.assertTrue(result['_transparent_price'])
         self.assertIn('المجموع ويا التوصيل', result['reply'])
         model.assert_not_called()
 
     def test_unknown_compound_question_is_not_hidden_by_price_fallback(self):
-        with patch.object(m,'_call_main_ai_once',return_value={'reply':'','requires_human':True,'handoff_reason':'تفصيل غير متوفر'}):
+        with patch.object(m,'_call_main_ai_once',return_value={'reply':'','requires_human':True,'handoff_reason':'تفصيل غير متوفر'}) as model:
             result=m.call_main_ai(dict(self.ev,text='شكد السعر وشنو الطول'),'text',{},[],CATALOG,CATALOG[0],None,'',[])
-        self.assertFalse(result.get('failed'))
-        self.assertTrue(result['_needs_fact_review'])
-        self.assertIn('16,000', result['reply'])
-        self.assertIn('طول القطعة', result['reply'])
+        model.assert_not_called()
+        self.assertTrue(result['requires_human'])
+        self.assertTrue(result['_direct_fact_handoff'])
+        self.assertEqual(result['reply'], '')
         self.assertFalse(result['create_order'])
         self.assertFalse(result.get('_catalog_fallback'))

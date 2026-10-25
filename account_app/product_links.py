@@ -159,3 +159,11 @@ def eligible_related_products(product, products, *, size='', age_years=None,
         if len(result) >= maximum:
             break
     return result
+
+
+def eligible_age_alternatives(product, products, age_years):
+    """The owner allows an opt-in age alternative from the current catalog."""
+    source = dict(product or {})
+    source['related_product_ids'] = [str(item.get('product_id') or '') for item in products or []
+                                    if isinstance(item, dict) and item.get('image_url')]
+    return eligible_related_products(source, products, age_years=age_years, limit=2)

@@ -96,7 +96,7 @@ class MessagingMediaTests(unittest.TestCase):
         # The parsed retry still ignored the customer's size question. Keep the
         # verified price and acknowledge the missing size fact rather than
         # accepting a partial answer or inventing a size range.
-        self.assertIn('18,000 د.ع.', result['reply'])
+        self.assertIn('18 ألف', result['reply'])
         self.assertIn('سوت حوامل', result['reply'])
         self.assertIn('قياسات', result['reply'])
         self.assertIn('تأكيد', result['reply'])

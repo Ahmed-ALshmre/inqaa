@@ -49,7 +49,7 @@ class SalesMethodsTests(unittest.TestCase):
     def test_weight_without_mapping_and_unverified_photo_are_rejected(self):
         self.assertTrue(strategy.reply_error('وزن 69 يناسبج قياس 42','وزني 69',DRESS))
         self.assertTrue(strategy.reply_error('وزن 69 يلبسج قياس 42','وزني 69',DRESS))
-        self.assertIn('شنو قياس الملابس', strategy.missing_fact_reply('وزني 69 شنو قياسي؟', DRESS))
+        self.assertIn('شكد قياس تلبسين', strategy.missing_fact_reply('وزني 69 شنو قياسي؟', DRESS))
         self.assertTrue(strategy.reply_error('تصوير الموديل حقيقي','اريد فيديو',DRESS))
         self.assertFalse(strategy.reply_error('ما عندي فيديو حقيقي موثق','اريد فيديو',DRESS))
 
@@ -70,9 +70,9 @@ class SalesReplyPipelineTests(unittest.TestCase):
     customer=fixtures.AuditFixTests.customer
 
     def test_main_prompt_locks_natural_iraqi_style(self):
-        self.assertIn('صياغة عراقية طبيعية', self.m.IRAQI_HUMAN_STYLE_LOCK)
-        self.assertIn('أنت المساعد الآلي للمتجر', self.m.IRAQI_HUMAN_STYLE_LOCK)
-        self.assertIn('ممنوع الفصحى الرسمية', self.m.IRAQI_HUMAN_STYLE_LOCK)
+        self.assertIn('اللهجة العراقية البيضاء الطبيعية', self.m.IRAQI_HUMAN_STYLE_LOCK)
+        self.assertTrue(strategy.reply_error('أنا إنسان', 'انتي ذكاء؟', DRESS))
+        self.assertIn('الابتعاد تماماً عن الفصحى', self.m.IRAQI_HUMAN_STYLE_LOCK)
 
     def ask(self,text,responses):
         self.customer('test')

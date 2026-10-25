@@ -47,22 +47,22 @@ class DeepConversionTests(unittest.TestCase):
         answer, model = self.ask('شكد سعره وشنو قماشه ويا التوصيل لبغداد؟',
                                 dict(reply='', failed=True, failure_reason='provider_http_402', create_order=False))
         self.assertEqual(model.call_count, 1)
-        for fact in ['15,000', 'باربي', '5,000', '20,000']:
+        for fact in ['15 ألف', 'باربي', '5 آلاف', '20 ألف']:
             self.assertIn(fact, answer['reply'])
         self.assertFalse(answer['create_order'])
         self.assertFalse(answer.get('_needs_fact_review'))
         self.assertFalse(answer.get('failed'))
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
-    def test_unknown_width_does_not_erase_price_fabric_or_trigger_checkout(self):
+    def test_unknown_width_routes_entire_compound_question_without_checkout(self):
         order = dict(items=[dict(product_id='T1', color='اسود', size='44', quantity=1)],
                      phone='07700000000', province='بغداد', address='بغداد حي تجريبي')
         text = 'ثبتيه بس شكد سعره وشنو قماشه وعرضه من تحت الابط؟'
         answer, model = self.ask(text, dict(reply='نحتاج نتأكد من العرض', requires_human=True, order=order))
-        self.assertIn('15,000', answer['reply'])
-        self.assertIn('باربي', answer['reply'])
-        self.assertIn('عرض القطعة', answer['reply'])
-        self.assertTrue(answer['_needs_fact_review'])
+        model.assert_not_called()
+        self.assertEqual(answer['reply'], '')
+        self.assertTrue(answer['requires_human'])
+        self.assertTrue(answer['_direct_fact_handoff'])
         self.assertFalse(self.m.checkout_requested(self.db, {'text': text}, answer))
         self.assertFalse(answer['create_order'])
 
@@ -76,7 +76,7 @@ class DeepConversionTests(unittest.TestCase):
         answer, model = self.ask('شكد سعره وشنو قماشه؟', dict(reply='سعره 15 ألف.', create_order=False))
         self.assertEqual(model.call_count, 2)
         self.assertIn('باربي', answer['reply'])
-        self.assertIn('15,000', answer['reply'])
+        self.assertIn('15 ألف', answer['reply'])
         self.assertFalse(answer['create_order'])
 
     def test_price_objection_keeps_fabric_answer_when_cta_is_rejected(self):
@@ -156,7 +156,7 @@ class DeepConversionTests(unittest.TestCase):
 
     def test_unknown_extra_question_is_not_silently_dropped_during_recovery(self):
         answer, _ = self.ask('شكد سعره ووين محلكم؟', dict(reply='', failed=True, failure_reason='no_api_key'))
-        self.assertIn('15,000', answer['reply'])
+        self.assertIn('15 ألف', answer['reply'])
         self.assertIn('عنوان المحل يحتاج تأكيد', answer['reply'])
         self.assertTrue(answer['_needs_fact_review'])
         self.assertFalse(answer['create_order'])

@@ -212,7 +212,7 @@ class CheckoutConsentAudit(unittest.TestCase):
         self.db.commit()
         first = self.process('اريد هذا')
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders').fetchone()[0], 0)
-        self.assertIn('الهاتف', first['reply'])
+        self.assertIn('الموبايل', first['reply'])
         self.process('07701234567', create_order=False)
         final = self.process('بغداد حي اور', create_order=False)
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders').fetchone()[0], 1)

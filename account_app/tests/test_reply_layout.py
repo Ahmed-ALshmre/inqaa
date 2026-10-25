@@ -1,9 +1,17 @@
 import unittest
 
-from account_app.reply_layout import approved_parts, compact, plan_sales_bubbles
+from account_app.reply_layout import approved_parts, compact, plan_sales_bubbles, polish_surface_punctuation
 
 
 class ReplyLayoutTests(unittest.TestCase):
+    def test_price_boundary_does_not_leave_the_previous_message_with_a_comma(self):
+        text = 'قياس 44 متوفر بالأسود وعليه عرض خاص هالفترة، سعره 16 ألف والتوصيل 5 آلاف والمجموع 21 ألف. أثبتلج حجز؟'
+        cleaned = polish_surface_punctuation(text)
+        plan = plan_sales_bubbles({}, cleaned)
+        self.assertFalse(any(part.endswith('،') for part in plan['reply_parts']))
+        for fact in ['16 ألف', '5 آلاف', '21 ألف']:
+            self.assertIn(fact, ' '.join(plan['reply_parts']))
+
     def test_product_answer_after_greeting_is_not_mistaken_for_greeting_only(self):
         reply = 'تدللين عيني 🌷 إي متوفر باللون الأسود.\nاللون الأسود مناسبج؟'
         plan = plan_sales_bubbles({'intent': 'product_question', 'reply_parts': reply.splitlines()}, reply)

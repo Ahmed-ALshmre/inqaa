@@ -45,6 +45,28 @@ def _normalized_positions(value):
 FABRIC_WORDS = {normalized(word) for word in FABRIC_WORDS}
 
 
+def chat_amount(amount):
+    """Exact Iraqi chat notation, without currency abbreviations."""
+    amount = int(amount)
+    thousands, remainder = divmod(amount, 1000)
+    if not thousands:
+        return str(amount)
+    unit = 'آلاف' if 3 <= thousands <= 10 else 'ألف'
+    return f'{thousands} {unit}' + (f' و{remainder}' if remainder else '')
+
+
+def chat_money(text):
+    def replace(match):
+        number = match[1].translate(DIGITS).replace(',', '').replace('٬', '')
+        return chat_amount(int(number))
+    return re.sub(r'(?<![\d,٬])([0-9٠-٩۰-۹]+(?:[,٬][0-9٠-٩۰-۹]{3})*)\s*'
+                  r'(?:د\.\s*ع\.?|دينار)(?!\w)', replace, str(text or ''))
+
+
+def chat_wording(text):
+    return chat_money(text).replace('الهاتف', 'الموبايل')
+
+
 def _fabric_word(word):
     candidates=(word,word[1:] if word.startswith('و') else word)
     return any(value in FABRIC_WORDS or (value.endswith('ه') and value[:-1]+'ة' in FABRIC_WORDS)

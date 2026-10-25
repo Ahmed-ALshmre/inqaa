@@ -112,8 +112,8 @@ class ZernioTests(unittest.TestCase):
         self.referral()
         self.incoming()
         result = self.process_latest()
-        self.assertIn('16,000', result['reply'])
-        self.assertNotIn('12,000', result['reply'])
+        self.assertIn('16 ألف', result['reply'])
+        self.assertNotIn('12 ألف', result['reply'])
         with m.app.app_context():
             binding = m.get_db().execute("SELECT * FROM customer_product_interests WHERE status='active'").fetchone()
             self.assertEqual(binding['product_id'], 'F2')
@@ -123,7 +123,7 @@ class ZernioTests(unittest.TestCase):
         self.incoming()
         self.referral()
         result = self.process_latest()
-        self.assertIn('16,000', result['reply'])
+        self.assertIn('16 ألف', result['reply'])
         with m.app.app_context():
             self.assertEqual(m.get_db().execute("SELECT count(*) FROM messages WHERE direction='incoming'").fetchone()[0], 1)
             self.assertEqual(m.get_db().execute('SELECT count(*) FROM ai_jobs').fetchone()[0], 1)
@@ -138,7 +138,7 @@ class ZernioTests(unittest.TestCase):
         self.payload['message']['platform'] = 'instagram'
         self.referral()
         self.incoming()
-        self.assertIn('16,000', self.process_latest()['reply'])
+        self.assertIn('16 ألف', self.process_latest()['reply'])
 
     def test_ref_mapping_without_ad_id_resolves_product(self):
         self.payload['metadata'] = {'referral': {'ref': 'dress-campaign'}}
@@ -146,7 +146,7 @@ class ZernioTests(unittest.TestCase):
         self.incoming()
         catalog = self.catalog()
         catalog[1]['ref'] = 'dress-campaign'
-        self.assertIn('16,000', self.process_latest(catalog)['reply'])
+        self.assertIn('16 ألف', self.process_latest(catalog)['reply'])
 
     def test_fresh_referral_can_replace_older_selection(self):
         self.referral()
@@ -157,7 +157,7 @@ class ZernioTests(unittest.TestCase):
             m.complete_customer_product_link(m.get_db(), self.sender(), catalog[0], 'manual', source='manual_admin')
             m.get_db().execute("UPDATE customer_product_interests SET last_seen_at='2026-10-15T12:00:00+03:00'")
             m.get_db().commit()
-        self.assertIn('16,000', self.process_latest(catalog)['reply'])
+        self.assertIn('16 ألف', self.process_latest(catalog)['reply'])
 
     def test_same_second_customer_selection_precedes_ad_milliseconds(self):
         self.payload['timestamp'] = '2026-10-16T14:00:00.900Z'
@@ -169,7 +169,7 @@ class ZernioTests(unittest.TestCase):
             m.complete_customer_product_link(m.get_db(), self.sender(), catalog[0], 'manual', source='manual_admin')
             m.get_db().execute("UPDATE customer_product_interests SET last_seen_at='2026-10-16T17:00:00+03:00'")
             m.get_db().commit()
-        self.assertIn('12,000', self.process_latest(catalog)['reply'])
+        self.assertIn('12 ألف', self.process_latest(catalog)['reply'])
 
     def test_explicit_change_and_followup_do_not_return_to_old_ad_product(self):
         self.referral()
@@ -259,7 +259,7 @@ class ZernioTests(unittest.TestCase):
                 catalog[1], {'product_found': True, 'product_id': 'F2'},
                 'https://scontent.xx.fbcdn.net/synthetic-creative.jpg')) as recognition:
             result = self.process_latest(catalog)
-        self.assertIn('16,000', result['reply'])
+        self.assertIn('16 ألف', result['reply'])
         self.assertNotIn('دزيلي صورة', result['reply'])
         recognition.assert_called_once()
         with m.app.app_context():

@@ -100,7 +100,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         reply = send.call_args.args[0]['reply']
         self.assertLess(reply.index('الأول'), reply.index('الثاني'))
         self.assertLess(reply.index('الثاني'), reply.index('الثالث'))
-        for text in ['كيلوت', '17,000', 'تنورة', '12,000', 'قميص مو متوفر']:
+        for text in ['كيلوت', '17 ألف', 'تنورة', '12 ألف', 'قميص مو متوفر']:
             self.assertIn(text, reply)
         model.assert_not_called()
         active = self.db.execute("SELECT product_id FROM customer_product_interests WHERE sender_id='album-customer' AND status='active'").fetchall()
@@ -173,6 +173,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
     def test_caption_questions_are_answered_for_every_photo_without_size_invention(self):
         result, send, model = self.process([dict(product_found=True, product_id='A'),
                                            dict(product_found=True, product_id='B')], 'شنو القياسات والالوان؟')
+        self.assertIsNotNone(send.call_args, result)
         reply = send.call_args.args[0]['reply']
         self.assertEqual(reply.count('38 إلى 52'), 2)
         self.assertEqual(reply.count('ألوانه أسود'), 2)

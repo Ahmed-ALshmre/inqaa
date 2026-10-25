@@ -6,10 +6,10 @@ historical product facts. Current catalog, policy and customer choices win.
 import re
 
 try:
-    from . import sales_strategy, customer_copy, product_variants, conversation_quality
+    from . import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from .pricing import terms, quote, offer_tiers
 except ImportError:
-    import sales_strategy, customer_copy, product_variants, conversation_quality
+    import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from pricing import terms, quote, offer_tiers
 
 REVIEWED_LESSONS = {
@@ -119,7 +119,46 @@ def price_question(text):
         r'(?:ممكن\s+)?(?:السعر|سعر|سعره|سعرها|بشكد|بيش|بكم)|'
         r'(?:و?شنو)\s*(?:سعره|سعرها|سعر الموديل|السعر)|'
         r'(?:شكد|اشكد|بشكد|بيش|كم)\s*(?:سعر|سعره|سعرها|السعر|اسعر|سعر هذا|سعر الموديل)|'
+        r'(?:بيش|بكم|بشكد)\s*(?:هذا|هاذا|هاي|هالقطعة|هالسوت|هالفستان)|'
         r'(?:شكد|اشكد|بشكد|بيش|بكم|سعر|عرض)\s*(?:(?:ال)?قطعتين|ثنين|\d+\s*قطع)', text))
+
+
+def delivery_price_question(text):
+    text = sales_strategy.normalized(text).strip(' ؟?!.،')
+    text = re.sub(r'^(?:السلام عليكم|سلام عليكم)\s*[،,]?\s*', '', text)
+    return bool(re.fullmatch(
+        r'(?:شكد|اشكد|كم)\s+(?:تصير|يصير|المبلغ|السعر|سعره|سعرها|'
+        r'سعر\s+(?:السوت|الفستان|الموديل|القطعة))\s*(?:ويا|مع)\s*التوصيل'
+        r'(?:\s*(?:ل|الى)\s*بغداد)?(?:\s*و?شكد\s*(?:بي|بيه)\s*قياسات)?', text))
+
+
+def delivered_price_line(product, delivery_options, quantity=None):
+    """One confirmed retail total; variable fees and package pricing stay explicit."""
+    if len(delivery_options) != 1 or quantity not in (None, 1):
+        return ''
+    try:
+        count, price, _ = terms(product)
+        if count != 1:
+            return ''
+        priced = quote([{'product_id': product['product_id'], 'quantity': 1}],
+                       [product], delivery_options[0][1])
+        amount, shipping = priced['product_total'], priced['delivery_fee']
+        total = customer_copy.chat_amount(amount + shipping)
+        name = customer_copy.fact(product.get('product_name'), 'product_name')
+        label = 'السوت' if 'سوت' in name else ('الفستان' if 'فستان' in name else 'القطعة')
+        unit = str(amount // 1000) if amount >= 1000 and amount % 1000 == 0 else customer_copy.chat_amount(amount)
+        fee = customer_copy.chat_amount(shipping) if shipping else 'مجاني'
+        return f'سعره مع التوصيل {total}؛ {label} {unit} والتوصيل {fee} 🌷'
+    except (ValueError, TypeError, KeyError):
+        return ''
+
+
+def size_range_question(product):
+    data = product_variants.size_data(customer_copy.fact(product.get('sizes')))
+    if len(data['weights']) == 1 and not any(data[key] for key in ('ranges', 'years', 'numbers', 'labels')):
+        low, high = data['weights'][0]
+        return f'قياساته من {low} الى {high} كيلو، شكد تلبسين؟'
+    return ''
 
 
 def requested_quantity(text):
@@ -189,23 +228,29 @@ def selection_conflicts(product, context, customer=None):
     return False
 
 
-def price_next_step(product, context, customer=None, history=()):
+def price_next_step(product, context, customer=None, history=(), *, delivery_requires_province=False):
     """Move to the next unanswered selection without inferring purchase consent."""
     selected = customer_selection(context, customer)
+    context, customer = context or {}, customer or {}
+    if context.get('open_details'):
+        return ''
+    recent = ' '.join(str(item.get('text') or '') for item in (history or [])[-8:]
+                      if item.get('direction') == 'outgoing')
+    province = customer.get('province') or next((sales_recovery.policy_province(item.get('text'))
+        for item in reversed(context.get('evidence', [])) if sales_recovery.policy_province(item.get('text'))), None)
     sizes = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))
     age_based = bool(sizes['years']) or bool(re.search(r'سن[ةه]|سنتين|سنوات|سنين|اشهر|شهر',
         sales_strategy.normalized(customer_copy.fact(product.get('sizes')))))
     if age_based and selected['age'] is None:
         return 'شكد العمر المطلوب؟'
     if not age_based and not selected['size']:
-        recent = ' '.join(str(item.get('text') or '') for item in (history or [])[-8:]
-                          if item.get('direction') == 'outgoing')
-        if re.search(r'شنو\s+قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
-            colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
-            if colors and not selected['color'] and not re.search(r'شنو\s+لون|يا\s+لون|اللون\s+\S+\s+مناسب', recent):
-                return f'اللون ال{colors[0]} مناسبج؟' if len(colors) == 1 else 'يا لون يعجبج؟'
-            return 'إذا تحبين، أساعدج نتأكد من القياس المناسب؟'
-        return 'شنو قياس الملابس اللي ترتاحين بيه عادة حتى أشوفلج المتوفر؟'
+        if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
+            if not province and delivery_requires_province and 'محافظ' not in recent:
+                return 'من يا محافظة حتى أحسبلج أجور التوصيل؟'
+            if 'مضبوط لو واسع' not in recent:
+                return 'تحبينه يطلع مضبوط لو واسع؟'
+            return 'شنو القياس اللي يناسبج؟'
+        return 'شكد قياس تلبسين؟'
     if age_based:
         try:
             supported = any(low <= float(selected['age']) <= high for low, high in sizes['years'])
@@ -214,22 +259,74 @@ def price_next_step(product, context, customer=None, history=()):
     else:
         checks = product_variants.assess(product, 'قياس ' + str(selected['size']))
         supported = bool(checks and checks[0]['supported'] is True)
-    if not supported or (context or {}).get('open_details'):
+    if not supported or context.get('open_details'):
         return ''
     colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
-    if not selected['color']:
-        if len(colors) == 1:
-            return f'اللون ال{colors[0]} مناسبج؟'
+    if not selected['color'] and len(colors) > 1:
         return 'شنو اللون اللي يعجبج؟' if colors else ''
-    if selected['color'] in colors:
-        return 'تحبين نكمل حجزه؟'
+    if len(colors) == 1 or selected['color'] in colors:
+        if not province and delivery_requires_province:
+            return 'من يا محافظة حتى أحسبلج أجور التوصيل؟'
+        return booking_invitation(context, history)
     return ''
 
 
-def selection_guidance(product, context, customer=None):
+def booking_invitation(context, history=()):
+    """A second invitation needs a new buying-related turn, never a refusal."""
+    evidence = (context or {}).get('evidence', [])
+    latest = sales_strategy.normalized(evidence[-1].get('text')) if evidence else ''
+    if (latest and (sales_strategy.explicit_pause(latest) or sales_strategy.stop_kind(latest)
+                   or sales_strategy.soft_indecision(latest) or sales_strategy._courtesy_only(latest))):
+        return ''
+    offers = [item for item in history or [] if item.get('direction') == 'outgoing'
+              and re.search(r'(?:أثبتلج|اثبتلج|أحجزلج|احجزلج|نكمل).{0,18}حجز', item.get('text') or '')]
+    if not offers:
+        return 'أثبتلج حجز؟'
+    if len(offers) >= 2 or not latest:
+        return ''
+    previous = sales_strategy.normalized(evidence[-2].get('text')) if len(evidence) > 1 else ''
+    if latest == previous or not re.search(r'سعر|قماش|متوفر|موجود|قياس|لون|توصيل|فحص|يناسب|حلو|عجب|تمام', latest):
+        return ''
+    return 'تحبين أثبتلج الحجز هسه؟'
+
+
+def next_sales_message(product, history=()):
+    """Mention the recorded offer now and save its scarcity for another turn."""
+    cue = sales_strategy.persuasion_cue(product, history)
+    if not cue:
+        return ''
+    opening, ending = price_cue_parts(cue)
+    if opening:
+        return opening
+    offer = customer_copy.fact(product.get('offer'))
+    if (cue.get('kind') == 'limited_stock' and re.search(r'الكمية\s+محدودة', offer)
+            and not re.search(r'(?:آخر|اخر)\s+الكمية', offer)
+            and not product.get('stock_quantity')):
+        return 'تره الكمية محدودة.'
+    return ending
+
+
+def price_cue_parts(cue):
+    """Keep the recorded offer before the price and scarcity after it."""
+    if not cue:
+        return '', ''
+    text = str(cue.get('text') or '').strip(' .')
+    if cue.get('kind') != 'offer':
+        return '', cue_line(cue)
+    last = bool(re.search(r'(?:آخر|اخر)\s+الكمي[هة]', text))
+    limited = bool(re.search(r'الكمية\s+محدودة', text))
+    offer = re.sub(r'\s+على\s+(?:آخر|اخر)\s+الكمي[هة]|\s+الكمية\s+محدودة', '', text).strip(' ،')
+    opening = ('وعليه عرض هالفترة.' if re.fullmatch(r'عرض خاص(?: لفترة محدودة)?', offer) else
+               ('وعليه ' if offer.startswith('عرض') else '') + offer + '.')
+    ending = ('تره الكمية الباقية قليلة كلش، كم قطعة بس.' if last else
+              'تره الكمية محدودة.' if limited else '')
+    return opening, ending
+
+
+def selection_guidance(product, context, customer=None, history=()):
     if not product:
         return ''
-    step = price_next_step(product, context, customer)
+    step = price_next_step(product, context, customer, history)
     return ('[توجيه الاختيار الحالي]\n'
             'سؤال الموظفة السابق عن القياس لا يعني أن الزبونة أجابت. '
             'لا تسرد نطاق القياسات أو الأوزان عند سؤال المواصفات أو القماش أو التوفر العام؛ '

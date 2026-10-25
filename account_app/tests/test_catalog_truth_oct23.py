@@ -92,8 +92,8 @@ class CatalogTruthPipelineTests(unittest.TestCase):
 
     def test_repeated_wrong_price_is_replaced_by_calculated_facts(self):
         result = self.run_reply('شنو مواصفاته وسعره ويا التوصيل؟', 'سعر الفستان 20 ألف وقماشه لينن')
-        self.assertIn('16,000', result['reply'])
-        self.assertIn('21,000', result['reply'])
+        self.assertIn('16 ألف', result['reply'])
+        self.assertIn('21 ألف', result['reply'])
         self.assertNotIn('20 ألف', result['reply'])
         self.assertFalse(result['create_order'])
 
@@ -134,7 +134,7 @@ class CatalogTruthPipelineTests(unittest.TestCase):
     def test_fallback_answers_known_specifications_without_generic_gap(self):
         result = self.run_reply('ما هي مواصفات الفستان؟', '')
         self.assertIn('قطعة وحدة', result['reply'])
-        for fact in ['16 ألف', 'لينن', 'طويل', 'شنو قياس الملابس']:
+        for fact in ['16 ألف', 'لينن', 'طويل', 'شكد قياس تلبسين']:
             self.assertIn(fact, result['reply'])
         self.assertNotIn('38 إلى 52', result['reply'])
         self.assertNotIn('بقية التفاصيل', result['reply'])

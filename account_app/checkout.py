@@ -62,6 +62,11 @@ def contact_fields(text, previous=None):
         result["phone"] = phone
     is_question = bool(re.search(r"[؟?]|\b(?:شكد|كم|بشكد|شوكت|يوصل|توصيل|يصير|ليش|وين)\b", clean))
     declaration = bool(re.search(r"(?:عنواني|العنوان|اني من|انا من)", clean))
+    if phone and is_question:
+        # A question after declared contact details does not erase the address.
+        prefix = re.split(r'\s+(?:و?شكد|و?كم|و?شوكت|و?يمتى|و?متى|و?شلون|و?اكدر)\b', original, maxsplit=1)[0]
+        if prefix != original and phone_number(prefix):
+            result.update(contact_fields(prefix, previous))
     province = ""
     # A mall/hospital name must not overrule the city at the start of an address.
     locality = re.split(r"(?:قرب|مقابل|مقابيل|خلف|يم|مجاور|شارع|مول|جامع|مستشفى)\s", clean, maxsplit=1)[0]
