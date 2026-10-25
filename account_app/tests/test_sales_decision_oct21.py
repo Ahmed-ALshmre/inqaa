@@ -124,8 +124,8 @@ class DecisionPipelineTests(unittest.TestCase):
         provider.assert_not_called()
         self.assertFalse(result['create_order'])
         self.assertTrue(result['_needs_fact_review'])
-        self.assertIn('17,000',result['reply'])
-        self.assertIn('فرق السعر',result['reply'])
+        self.assertEqual(result['reply'], '')
+        self.assertTrue(result['requires_human'])
         self.assertNotIn('وزنج',result['reply'])
 
     def test_split_photo_request_returns_offered_images_without_checkout(self):

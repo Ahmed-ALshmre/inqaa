@@ -196,7 +196,7 @@ def continuation(text, state):
     # Resolve the last explicit question, not an earlier question in the turn.
     question = question_from_turn(turn)
     q = normalized(question)
-    if re.search(r'صور|تشوف|اشوف|ادزل|موديل ثاني|موديلات ثاني|بديل', q):
+    if re.search(r'صور|تشوف|اشوف|ادزل|موديل ثاني|موديلات ثاني|بديل|اقترح', q):
         intent = 'clarify' if re.search(r'احجز|اثبت|نثبت|حجز', q) else 'browse'
         return {'intent': intent, 'offer': '\n'.join(x['text'] for x in turn),
                 'question': question}

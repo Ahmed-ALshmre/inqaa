@@ -124,9 +124,8 @@ class OrderedSalesPipelineTests(unittest.TestCase):
 
     def test_unrecognized_album_uses_owner_reply_policy_and_retains_unknown_identity(self):
         result, send, model = self.process([dict(product_found=False)] * 3)
-        self.assertIn('الثالث', result['reply'])
-        self.assertNotIn('غير متوفر', result['reply'])
-        self.assertEqual(result['reply'].count('مو متوفر عدنا حالياً'), 3)
+        self.assertIn('هالموديلات ما متوفرة', result['reply'])
+        self.assertIn('أقترحلج غيرهن؟', result['reply'])
         self.assertEqual(result['reply_parts'], [result['reply']])
         self.assertNotIn('دزي لقطة', result['reply'])
         self.assertTrue(all(not item['product_found'] for item in self.m.customer_image_positions(self.db, 'album-customer')))
@@ -181,7 +180,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
 
     def test_separate_messages_are_collected_in_customer_order(self):
         result, send, model = self.process([dict(product_found=True, product_id=x['product_id']) for x in CATALOG], separate=True)
-        self.assertIn('الأول متوفر عيني، كيلوت', send.call_args.args[0]['reply'])
+        self.assertIn('الأول متوفر، كيلوت', send.call_args.args[0]['reply'])
         self.assertIn('الثالث، قميص', send.call_args.args[0]['reply'])
 
     def test_recognized_album_recovers_image_pause_but_respects_manual_pause(self):

@@ -62,9 +62,9 @@ class ReviewedLessonTests(unittest.TestCase):
         self.assertIn('22,000', reply)
 
     def test_price_reply_uses_one_relevant_selection_step(self):
-        self.assertIn('شكد قياس تلبسين', playbook.price_next_step(PRODUCT, {}))
+        self.assertIn('شكد قياس تلبس', playbook.price_next_step(PRODUCT, {}))
         self.assertIn('العمر المطلوب', playbook.price_next_step(dict(PRODUCT, sizes='من سنة إلى 3 سنوات'), {}))
-        self.assertIn('شكد قياس تلبسين', playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}))
+        self.assertIn('شكد قياس تلبس', playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}))
 
     def test_customer_size_advances_to_color_but_staff_question_is_not_an_answer(self):
         context = {'evidence': [{'text': '44', 'in_reply_to': 'شنو قياسك؟'}]}
@@ -73,7 +73,7 @@ class ReviewedLessonTests(unittest.TestCase):
         for context in [{'evidence': [{'text': 'وزني 80'}]},
                         {'last_staff_turn': [{'text': 'شنو قياسج؟'}]},
                         {'evidence': [{'text': 'سعره', 'in_reply_to': 'شنو قياسج؟'}]}]:
-            self.assertIn('شكد قياس تلبسين', playbook.price_next_step(PRODUCT, context))
+            self.assertIn('شكد قياس تلبس', playbook.price_next_step(PRODUCT, context))
 
     def test_no_booking_step_for_unknown_or_unsupported_size_or_unresolved_fact(self):
         for product, context, customer in [
@@ -134,7 +134,7 @@ class ReviewedLessonTests(unittest.TestCase):
 
     def test_ignored_size_question_switches_to_a_different_easy_step(self):
         size_asked = [{'direction': 'outgoing', 'text': 'شنو قياس الملابس اللي ترتاحين بيه عادة؟'}]
-        self.assertIn('مضبوط لو واسع', playbook.price_next_step(PRODUCT, {}, history=size_asked))
+        self.assertNotIn('مضبوط لو واسع', playbook.price_next_step(PRODUCT, {}, history=size_asked))
         fit_asked = size_asked + [{'direction': 'outgoing', 'text': 'تحبينه يطلع مضبوط لو واسع؟'}]
         self.assertEqual(playbook.price_next_step(PRODUCT, {}, history=fit_asked), 'شنو القياس اللي يناسبج؟')
 
@@ -198,8 +198,8 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.assertNotIn('ذوقج حلو', result['reply'])
         self.assertIn('عرض هالفترة', result['reply'])
         self.assertNotIn('الكمية محدودة', result['reply'])
-        self.assertIn('مضبوط لو واسع', result['reply'])
-        self.assertNotIn('شنو قياس', result['reply'])
+        self.assertNotIn('مضبوط لو واسع', result['reply'])
+        self.assertIn('شنو القياس', result['reply'])
         self.assertNotIn('38', result['reply'])
         plan = self.m.plan_sales_bubbles(result, result['reply'])
         self.assertGreaterEqual(plan['total_messages'], 2)
@@ -221,7 +221,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         product = dict(PRODUCT, fabric='القماش تركي', offer='عرض خاص الكمية محدودة')
         result, model = self.ask('سلام عليكم شنهو نوع القماش', product=product)
         model.assert_not_called()
-        for value in ['وعليكم السلام', 'هلا بيج', 'قماشه تركي', 'عرض هالفترة', 'شكد قياس تلبسين']:
+        for value in ['وعليكم السلام', 'هلا بيك', 'قماشه تركي', 'عرض هالفترة', 'شكد قياس تلبس']:
             self.assertIn(value, result['reply'])
         for value in ['ممتازة', 'درجة أولى', '38', '52', 'آخر قطعة']:
             self.assertNotIn(value, result['reply'])
@@ -233,7 +233,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
                        description='الموديل طويل، محتشم، وخصره محدد وتنورته واسعة. قياساته 38 إلى 52.')
         result, model = self.ask('ما هي مواصفات الفستان؟', product=product)
         model.assert_not_called()
-        for value in ['طويل', 'لينن', '16 ألف', 'عرض هالفترة', 'شكد قياس تلبسين']:
+        for value in ['طويل', 'لينن', '16 ألف', 'عرض هالفترة', 'شكد قياس تلبس']:
             self.assertIn(value, result['reply'])
         self.assertNotIn('تنورته', result['reply'])
         self.assertNotIn('خصره', result['reply'])
@@ -244,7 +244,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         result, model = self.ask('متوفر')
         model.assert_not_called()
         self.assertNotIn('38', result['reply'])
-        self.assertIn('شكد قياس تلبسين', result['reply'])
+        self.assertIn('شكد قياس تلبس', result['reply'])
         for question in ['القماش ثقيل لو خفيف؟', 'قماشه تركي لو صيني؟',
                          'متوفر قياس 44؟', 'شنو قماشه وسعره؟', 'شنو القياسات المتوفرة؟']:
             self.assertIsNone(self.m.guided_product_interest_reply(

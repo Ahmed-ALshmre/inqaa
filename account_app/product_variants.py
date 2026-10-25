@@ -24,6 +24,33 @@ SIZE_RE = re.compile(r'(?<!\w)(?:[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',re.I)
 RANGE_RE = re.compile(r'(\d{1,3})\s*(?:كيلو\s*)?(?:الي|[-–—]|لحد)\s*(\d{1,3})')
 
 
+ADULT_LABELS = ('S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL')
+
+
+def normalize_size_words(value):
+    text = str(value or '')
+    for pattern, label in (
+        (r'(?<!\w)(?:اكسين|اكسين لارج|اكس اكس لارج)(?!\w)', 'XXL'),
+        (r'(?<!\w)(?:اكس\s*لارج|اكسترا لارج)(?!\w)', 'XL'),
+        (r'(?<!\w)(?:ثلاث اكس|ثلاثه اكس)(?!\w)', '3XL'),
+        (r'(?<!\w)(?:اربع اكس|اربعه اكس)(?!\w)', '4XL'),
+        (r'(?<!\w)(?:خمس اكس|خمسه اكس)(?!\w)', '5XL')):
+        text = re.sub(pattern, label, text, flags=re.I)
+    return text
+
+
+def owner_adult_labels(product):
+    """Store-owner stock declaration; never a universal weight conversion."""
+    text = normalized(' '.join(str((product or {}).get(k) or '') for k in ('product_name', 'category', 'sizes')))
+    if re.search(r'اطفال|طفل|بناتي|ولادي|سنوات|سنين|سن[ةه]|شهر', text):
+        return ()
+    sizes = size_data((product or {}).get('sizes'))
+    if sizes['labels']:
+        return ()  # An explicit variant inventory takes precedence over store defaults.
+    adult_chart = bool(sizes['weights'] or any(lo >= 30 for lo, hi in sizes['ranges']))
+    return ADULT_LABELS if 'نسائي' in text or adult_chart else ()
+
+
 def colors(value):
     return list(dict.fromkeys(ALIASES[m[1]] for m in COLOR_RE.finditer(normalized(value))))
 
@@ -74,9 +101,10 @@ def display(value,field):
 
 
 def requested(question):
-    text=normalized(question)
+    text=normalized(normalize_size_words(question))
     sizes=list(dict.fromkeys(m[1].upper() for m in re.finditer(
         r'(?:قياس(?:ه|ها)?|مقاس(?:ه|ها)?|سايز)\s*(\d{1,3}|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',text)))
+    sizes = list(dict.fromkeys(sizes + [m[0].upper() for m in SIZE_RE.finditer(text)]))
     choices=[]
     for match in COLOR_RE.finditer(text):
         before=text[max(0,match.start()-22):match.start()]
@@ -103,11 +131,14 @@ def assess(product,question):
     except ImportError:
         import customer_copy
     data=size_data(customer_copy.fact(product.get('sizes'),'sizes'))
+    data['labels'] = list(dict.fromkeys(data['labels'] + list(owner_adult_labels(product))))
+    data['known'] = data['known'] or bool(data['labels'])
     offered=colors(customer_copy.fact(product.get('colors'),'colors'))
     result=[]
     for size in request['sizes']:
         supported=None
-        if data['known']:
+        numeric_known = bool(data['ranges'] or data['numbers'])
+        if (numeric_known if size.isdigit() else bool(data['labels'])):
             supported=(int(size) in data['numbers'] or any(lo<=int(size)<=hi for lo,hi in data['ranges'])) if size.isdigit() else size in data['labels']
         result.append({'field':'size','value':size,'supported':supported})
     for color in request['colors']:
@@ -119,7 +150,7 @@ def assess(product,question):
 
 
 def is_lookup(question):
-    text=normalized(question)
+    text=normalized(normalize_size_words(question))
     return (any(requested(question).values())
             and bool(re.search(r'متوفر|موجود|اكو|عندكم|عندج|عندك|[؟?]',text))
             and not re.search(r'احجز|ثبت|طلبية|توصيل|فيديو|قماش|خامة|مناسب|وزن|عمر|طول|عرض|غالي|ارخص|ميزاني|خصم|تخفيض',text))
@@ -154,7 +185,14 @@ def order_choice_error(product,field,value):
             return 'اللون '+str(value)+' مو موجود بهالموديل، المتوفر '+ '، '.join(offered)
     else:
         data=size_data(customer_copy.fact(product.get('sizes'),'sizes'))
-        if not data['known']:
+        data['labels'] = list(dict.fromkeys(data['labels'] + list(owner_adult_labels(product))))
+        data['known'] = data['known'] or bool(data['labels'])
+        requested_range = re.fullmatch(r'(\d{2})\s*[-،,/]\s*(\d{2})', text)
+        if requested_range:
+            lo, hi = map(int, requested_range.groups())
+            valid = lo <= hi and all(n in data['numbers'] or any(a <= n <= b for a, b in data['ranges']) for n in (lo, hi))
+            return '' if valid else 'نطاق القياس المطلوب مو موجود بهالموديل'
+        if not data['known'] or (text.isdigit() and not (data['ranges'] or data['numbers'])):
             return ''  # Weight/age guidance is not a garment size inventory.
         numeric=re.fullmatch(r'\d{1,3}',text)
         if numeric:

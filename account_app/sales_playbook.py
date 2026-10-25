@@ -177,7 +177,7 @@ def customer_selection(context, customer=None):
     if len(stored_colors) == 1:
         selected['color'] = stored_colors[0]
     for item in context.get('evidence', []):
-        text = sales_strategy.normalized(item.get('text'))
+        text = sales_strategy.normalized(product_variants.normalize_size_words(item.get('text')))
         question = sales_strategy.normalized(item.get('in_reply_to'))
         # A bare number belongs to the one dimension asked in the previous turn.
         if re.fullmatch(r'\d{1,3}', text):
@@ -193,10 +193,34 @@ def customer_selection(context, customer=None):
             selected['size'] = text.upper()
             continue
         if re.search(r'[؟?]|شنو|شكد|كم قياس|متوفر|موجود|اكو', text):
-            continue  # An availability question is not a confirmed choice.
+            # Asking for a specific size retains that preference, never consent
+            # to buy. General ranges and explicit alternatives remain unresolved.
+            requested_sizes = product_variants.requested(text)['sizes']
+            numeric_range = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/]\s*(\d{2})(?!\d)', text)
+            if numeric_range:
+                selected['size'] = numeric_range[1] + '-' + numeric_range[2]
+            elif len(requested_sizes) == 1 and not re.search(r'(?<!\w)(?:لو|او|مو)(?!\w)|من\s*\d+|ما اريد', text):
+                numbers = re.findall(r'(?<!\d)\d{2}(?!\d)', text)
+                if not requested_sizes[0].isdigit() or len(numbers) == 1:
+                    selected['size'] = requested_sizes[0]
+            continue
         size_pattern = r'(?:قياسي|مقاسي|البس|قياس|مقاس|سايز)\s*(\d{1,2}|[2-6]?xl|xxl|xxxl|xs|[sml])(?!\w)'
         sizes = [hit[1].upper() for hit in re.finditer(size_pattern, text)
                  if not re.search(r'(?:مو|لا|ما اريد)\s*$', text[max(0, hit.start()-15):hit.start()])]
+        size_range = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/]\s*(\d{2})(?!\d)', text)
+        if size_range:
+            selected['size'] = size_range[1] + '-' + size_range[2]
+            chosen_colors = product_variants.requested(text)['colors']
+            if len(chosen_colors) == 1:
+                selected['color'] = chosen_colors[0]
+            continue
+        labels = product_variants.requested(text)['sizes']
+        if labels and not any(size.isdigit() for size in labels) and not re.search(r'(?<!\w)(?:لو|او|مو)(?!\w)|ما اريد', text):
+            selected['size'] = labels[-1]
+            chosen_colors = product_variants.requested(text)['colors']
+            if len(chosen_colors) == 1:
+                selected['color'] = chosen_colors[0]
+            continue
         if re.search(r'\d{1,2}\s*(?:لو|او|/)\s*(?:(?:قياس|مقاس)\s*)?\d{1,2}', text) or len(set(sizes)) > 1:
             selected['size'] = None
         elif sizes:
@@ -247,8 +271,6 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
             if not province and delivery_requires_province and 'محافظ' not in recent:
                 return 'من يا محافظة حتى أحسبلج أجور التوصيل؟'
-            if 'مضبوط لو واسع' not in recent:
-                return 'تحبينه يطلع مضبوط لو واسع؟'
             return 'شنو القياس اللي يناسبج؟'
         return 'شكد قياس تلبسين؟'
     if age_based:

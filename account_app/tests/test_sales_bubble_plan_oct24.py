@@ -155,12 +155,12 @@ class SalesBubblePlanOct24Tests(unittest.TestCase):
         self.assertEqual(plan['reply_parts'], [])
         self.assertEqual(plan['total_messages'], 3)
 
-    def test_indivisible_sales_answer_flags_rewrite_instead_of_padding_or_cutting_words(self):
+    def test_short_sales_answer_can_stay_one_without_padding_or_cutting_words(self):
         reply = 'هذا الموديل متوفر باللون الأسود حسب الخيارات المسجلة'
         plan = self.plan(reply)
         self.assertEqual(plan['reply_parts'], [reply])
-        self.assertTrue(plan['needs_rewrite'])
-        self.assertEqual(plan['rewrite_reasons'], ['insufficient_distinct_sales_messages'])
+        self.assertFalse(plan['needs_rewrite'])
+        self.assertEqual(plan['rewrite_reasons'], [])
 
     def test_ordinary_service_confirmation_thanks_and_optout_stay_one_message(self):
         cases = [({}, 'تم تثبيت الطلب. افحصي القطعة بوجود المندوب.'),
@@ -197,11 +197,11 @@ class SalesBubblePlanOct24Tests(unittest.TestCase):
             self.assertTrue(plan['needs_rewrite'])
             self.assertIn('duplicate_sales_content', plan['rewrite_reasons'])
 
-    def test_a_single_uncaptioned_sales_photo_requires_a_real_second_function(self):
+    def test_a_single_uncaptioned_sales_photo_needs_no_padding(self):
         plan = self.plan('', images=['https://images.test/single.png'])
         self.assertEqual(plan['total_messages'], 1)
-        self.assertTrue(plan['needs_rewrite'])
-        self.assertIn('insufficient_distinct_sales_messages', plan['rewrite_reasons'])
+        self.assertFalse(plan['needs_rewrite'])
+        self.assertEqual(plan['rewrite_reasons'], [])
 
     def test_lists_links_and_currency_never_split_or_lose_approved_facts(self):
         reply = ('تفاصيل الموديل https://example.test/a?q=1.5.\nالقياسات المتوفرة:\n'

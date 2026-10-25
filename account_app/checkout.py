@@ -176,7 +176,11 @@ def unsupported_order_action(reply):
 
 
 def ambiguous_measurement(value):
-    return bool(re.search(r"\b(?:او|لو)\b|واذا|[/–-]", normalized(value)))
+    clean = normalized(value)
+    # Owner accepts adjacent numeric sizes as a range, not two unresolved choices.
+    if re.fullmatch(r'\d{2}\s*[-،,/]\s*\d{2}', clean):
+        return False
+    return bool(re.search(r"\b(?:او|لو)\b|واذا|[/–-]", clean))
 
 
 def measurement_history_error(items, messages):

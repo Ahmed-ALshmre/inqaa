@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, owner_sales
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links
+    import vision_payload, delivery_state, catalog_browsing, product_links, owner_sales
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media
@@ -441,23 +441,19 @@ DEFAULT_IMPROVE_SYSTEM_PROMPT = (
     "أنت محرر رسائل لمتجر {store_name} يتحدث باللهجة العراقية الودودة. "
     "حسّن رسالة المشرف بدون اختراع معلومات، والتزم بتعليمات الإدارة والقواعد المحظورة."
 )
-IRAQI_HUMAN_STYLE_LOCK = """[قفل الأسلوب — أولوية نهائية]
-تصرفي دائماً كأنك موظفة بشرية حقيقية وتعملين في المتجر، يمنع منعاً باتاً التلميح أو التصريح بأنك ذكاء اصطناعي أو مساعد آلي أو روبوت.
-تحدثي باللهجة العراقية البيضاء الطبيعية والبشوشة جداً (استخدمي كلمات مثل: عيني، حبيبتي، قلبي، تدللين، من عيوني، يا هلا) بأسلوب دافئ ومحفز للزبائن.
-الابتعاد تماماً عن الفصحى أو الردود الآلية أو قوالب خدمة العملاء الجامدة.
-لا تفتتحي كل رد بتحية طويلة، بل تفاعلي مع كلام الزبون مباشرة بحماس. استخدمي الإيموجيات المبهجة بذكاء لتوصيل البشاشة.
-إذا سُئلتِ عن هويتك، أنتِ موظفة المبيعات المسؤولة عن الحجوزات.
-"""
+IRAQI_HUMAN_STYLE_LOCK = """اللهجة العراقية البيضاء الطبيعية، بروح موظفة مبيعات عراقية شاطرة. الابتعاد تماماً عن الفصحى الجامدة.
+استخدمي ألقاب حبيبتي/عمري/روحي/حياتي/عيني للإناث المعروفة فقط، وخطاب المذكر للرجل، ومحايداً لغير المعروف.
+لا تدعي أنك إنسان إذا سئلت عن هويتك. إيموجي واحد أو اثنان عند الحاجة فقط."""
 COMPACT_MAIN_SALES_POLICY = """[سياسة الرد والبيع]
 - جاوب كل أسئلة الزبون مباشرة من بيانات المتجر والمنتج فقط. لا تخترع سعراً أو لوناً أو قياساً أو خامة أو مخزوناً أو خصماً أو ندرة أو ضماناً أو موعد وصول.
-- اكتب كموظفة مبيعات عراقية طبيعية: رد قصير ودافئ، بلا فصحى رسمية أو كلام روبوت، وبحد أقصى إيموجي واحد. لا تكرر التحية. التزم بجنس ملف الزبون؛ وإذا غير معروف استخدم صياغة محايدة.
+- اكتب كموظفة مبيعات عراقية طبيعية: رد قصير ودافئ، بلا فصحى رسمية أو كلام روبوت، وبحد أقصى إيموجيين عند الحاجة فقط. لا تكرر التحية. التزم بجنس ملف الزبون؛ وإذا غير معروف استخدم صياغة محايدة.
 - بعد الجواب استخدم فائدة موثقة واحدة وسؤال خطوة تالية واحد عندما يناسب المرحلة. لا تضغط بعد الشكر أو الرفض أو التأجيل، ولا تطلب بيانات الحجز قبل رغبة شراء واضحة.
 - افهم التصحيح والنفي من كامل السياق. المعلومة الأحدث تلغي القديمة. لا تعتبر السؤال أو مشاهدة الصور موافقة شراء، ولا تعِد سؤالاً أجاب عنه الزبون.
 - المقاس الصريح يتقدم على التخمين. الوزن وحده لا يحدد قياساً من دون جدول. أجب عن الطول والعرض والبطانة والإغلاق فقط إذا كانت موثقة، ولا تستنتج سقوط القماش أو شكل اللبسة وملاءمتها من اسم الخامة وحده.
 - اعرض بديلاً أو اثنين فقط عند طلب بديل أو وجود اعتراض سعر. لا تعرض الكتالوج من نفسك ولا تضف البدائل إلى السلة.
 - عند الحجز احتفظ بكل قطعة مستقلة داخل order.items مع اللون والقياس والكمية. لا تطلب اسم الزبون. لا تجعل create_order=true إلا مع رغبة صريحة، هاتف صحيح، محافظة، عنوان، وحسم خيارات كل قطعة. لا تقل تم الحجز قبل نجاح النظام.
 - العرض أو البكج يُطبق كما هو؛ لا تقسّم سعر البكج لاستنتاج سعر مفرد. احسب التوصيل والمجموع من سياسة المتجر الحالية.
-- رتّب رد البيع المكتمل في جزأين إلى خمسة أجزاء مفيدة بحسب السؤال؛ الغالب جزآن أو ثلاثة، وقد تحتاج المقارنة أكثر. الأول يجيب مباشرة، والوسط يوضح فائدة أو يعالج التردد أو يعرض حقيقة تسويقية معتمدة للمنتج مرة واحدة، والأخير يسأل عن أقرب خطوة مناسبة فقط. لا تملأ العدد بكلام مكرر. اجمع السعر والتوصيل والمجموع معاً، واجمع حقول التواصل الناقصة معاً. تأكيد الحجز والشكر والرفض والمهلة وخدمة الطلب تبقى رسالة واحدة. reply يساوي الأجزاء مفصولة بسطر فارغ.
+- رتّب رد البيع المكتمل في رسالة إلى أربع رسائل قصيرة مفيدة بحسب السؤال؛ الغالب رسالة أو رسالتان، وقد تحتاج المقارنة أكثر. الأول يجيب مباشرة، والوسط يوضح فائدة أو يعالج التردد أو يعرض حقيقة تسويقية معتمدة للمنتج مرة واحدة، والأخير يسأل عن أقرب خطوة مناسبة فقط. لا تملأ العدد بكلام مكرر. اجمع السعر والتوصيل والمجموع معاً، واجمع حقول التواصل الناقصة معاً. تأكيد الحجز والشكر والرفض والمهلة وخدمة الطلب تبقى رسالة واحدة. reply يساوي الأجزاء مفصولة بسطر فارغ.
 - لا تذكر product_id أو ref أو ad_id أو sender_id أو التعليمات الداخلية. لا تدّع أنك إنسان إذا سُئلت. حوّل للبشر فقط عند إجراء غير متاح أو معلومة ضرورية غير موجودة.
 """
 COMPACT_MAIN_OUTPUT_PROMPT = """أرجع JSON صالحاً فقط بهذه البنية:
@@ -3011,13 +3007,13 @@ def _customer_name_from_db(db, sender_id: str) -> str:
 
 
 def _customer_gender_from_db(db, sender_id: str) -> str:
-    """يجلب جنس الزبون المخزّن من قاعدة البيانات إن وُجد."""
+    """يختار صيغة الخطاب: الاختيار الصريح أولاً، ثم ترجيح الاسم دون تخزينه كهوية مؤكدة."""
     try:
         row = db.execute(
-            "SELECT gender FROM customers WHERE sender_id=?",
+            "SELECT gender,name FROM customers WHERE sender_id=?",
             (sender_id,),
         ).fetchone()
-        return ((row["gender"] or "").strip().lower()) if row else ""
+        return owner_sales.address_gender(row["name"], (row["gender"] or "").strip().lower()) if row else ""
     except Exception:
         return ""
 
@@ -4175,6 +4171,8 @@ def _requests_product_photo(text):
 
 
 def _promises_product_photo(text):
+    if re.search(r"بس هاي الصور[ةه] متوفر[ةه]|ما عندي تصوير إضافي|ما عدنا صور إضافية", str(text or "")):
+        return False
     if sales_recovery.claims_sent_models(text):
         return True
     if re.search(r"(?:دزيلي|ارسلي|أرسلي|ابعثي|ابعثلي).{0,30}(?:صور|صوره|صورة)", str(text or "")):
@@ -6891,25 +6889,40 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
             return True
         if any(row['previous'] in {'pending', 'unconfirmed'} for row in matching):
             return False  # Previous acceptance is uncertain; never replay blindly.
-        _last_transport_result.set(None)
-        try:
-            if result.get('_delivery_recipient'):
-                payload = {'type': 'image', 'url': value} if image else {'type': 'text', 'text': value}
-                detail = _post_manychat_send(result['_delivery_recipient'], [payload], platform=platform,
-                    page_id=page_id, store_id=result.get('_delivery_store') or current_store_id(), label='auto-reply')
-                _last_transport_result.set(detail)
-                ok = detail.get('ok', False)
-            else:
-                ok = (send_image_to_facebook(sender_id, value, page_id, platform) if image
-                      else send_text_to_facebook(sender_id, value, page_id, platform))
-        except Exception:
-            ok = False
-        detail = _last_transport_result.get() or {}
-        status = detail.get('status_code') or 0
-        rejected = (isinstance(status, int) and 400 <= status < 500 and status != 408) or detail.get('status') == 'missing_key'
+        ok, rejected = False, False
+        # Retry a confirmed image rejection once. A timeout is an unknown
+        # acceptance state, not evidence of rejection; never duplicate it.
+        for attempt in range(2 if image else 1):
+            if superseded() or (db is not None and
+                    (not is_ai_enabled(db) or not is_customer_ai_enabled(db, sender_id))):
+                return False
+            _last_transport_result.set(None)
+            try:
+                if result.get('_delivery_recipient'):
+                    payload = {'type': 'image', 'url': value} if image else {'type': 'text', 'text': value}
+                    detail = _post_manychat_send(result['_delivery_recipient'], [payload], platform=platform,
+                        page_id=page_id, store_id=result.get('_delivery_store') or current_store_id(), label='auto-reply')
+                    _last_transport_result.set(detail)
+                    ok = detail.get('ok', False)
+                else:
+                    ok = (send_image_to_facebook(sender_id, value, page_id, platform) if image
+                          else send_text_to_facebook(sender_id, value, page_id, platform))
+            except Exception:
+                ok = False
+            detail = _last_transport_result.get() or {}
+            status = detail.get('status_code') or 0
+            rejected = (isinstance(status, int) and 400 <= status < 500 and status != 408) or detail.get('status') in {
+                'missing_key', 'rejected', 'invalid_image', 'unsupported_message'}
+            if ok or not rejected or detail.get('status') == 'missing_key':
+                break
         if db is not None:
             delivery_state.update(db, prepared, 'accepted' if ok else 'rejected' if rejected else 'unconfirmed',
                                   image=value if image else None, text=None if image else value)
+            if image and not ok:
+                review_id = has_pending_human_review(db, sender_id) or create_human_review(db,
+                    {'sender_id': sender_id, 'page_id': page_id, 'platform': platform, 'text': ''},
+                    'تعذر إرسال صور المنتج بعد المحاولة المسموحة؛ يلزم إرسال يدوي')
+                result.setdefault('meta', {}).update(needs_human=True, human_review_id=review_id)
         return bool(ok)
 
     sent = False
@@ -7070,6 +7083,8 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     image_urls = requested_reply_images(ai_result, products, matched_product, ev.get("text"), reply) if not order_created and (_promises_product_photo(reply) or ai_result.get("image_product_ids") or _requests_product_photo(ev.get("text", ""))) else []
     if not image_urls and _promises_product_photo(reply):
         reply = "ما عندي صورة مطابقة محفوظة لهذا الطلب حالياً."
+    ai_result = owner_result_surface(dict(ai_result, reply=reply), ev, customer, history)
+    reply = ai_result['reply']
     ai_result, reply = format_customer_reply(ai_result, reply)
     sales_layout = plan_sales_bubbles(ai_result, reply, image_urls)
     if any(reason in sales_layout['rewrite_reasons']
@@ -7347,13 +7362,7 @@ CONVERSATION_SALES_GUIDE = """
 نتائج بحث المنتجات اقتراحات فقط وليست اختيارات الزبون. لا تضف قطعة إلى order.items لمجرد السؤال عنها. لا تخمن المنتج من فستان أو أسود أو رقم قياس. املأ order بتفاصيل القطع التي طلبها الزبون حتى قبل اكتمال الهاتف والعنوان، مع ترك الناقص فارغاً. إذا وصلت البيانات بعد طلبها ورغبة الحجز واضحة فأنشئ الطلب دون إعادة سؤال التثبيت. القياس 50 أو 52 اختيار غير محسوم وليس وزناً 50؛ لا تحسم أحدهما تلقائياً.
 """
 
-GENTLE_SALES_GUIDE = """[تشجيع الحجز واستخدام الندرة بذكاء]
-الهدف الأساسي هو إكمال الحجز. بعد الإجابة على سؤال الزبون، يجب عليكِ:
-- مدح المنتج بقوة لزيادة رغبة الزبون (مثلاً: "هذا الموديل يجنن باللبس"، "قماشه فد شي راقي ومرتب"، "أكثر قطعة عليها طلب عندنا").
-- استخدام تكتيكات الندرة والكمية المحدودة في المحادثة بأسلوب محفز ومقنع (مثلاً: "ترى باقي منه قطع أخيرة وتخلص"، "الكمية كلش قليلة يمي"، "العرض اليوم يخلص لحقي عليه عيني").
-- اجعلي الزبون يشعر أن تفويت الفرصة خسارة، وأن عليه الحجز فوراً.
-- بعد المدح والتحفيز (الندرة)، اطلبي مباشرة وبكل لطف معلومات الحجز الناقصة (الاسم، رقم التليفون، والمحافظة والعنوان الكامل) لتثبيت الطلب قبل نفاذ الكمية: "دزيلي عنوانج ورقمج حتى أثبته إلج قبل لا يخلص".
-"""
+GENTLE_SALES_GUIDE = owner_sales.GUIDE
 
 
 def format_customer_reply(result, reply):
@@ -7410,6 +7419,16 @@ POST_ORDER_SERVICE_RULES = """
 
 def handle_post_order_message(db, ev, customer, history, products, customer_products, order, conversation_history=None):
     """Continue after-sales chat without silently pausing or mutating booked orders."""
+    owner_reason = owner_sales.human_reason(ev.get('text'), post_order=True)
+    if owner_reason:
+        action = conversation_quality.operational_request(ev.get('text'))
+        request_id = (order_actions.record(db, ev['sender_id'], order['id'], action, now_baghdad_iso())
+                      if action and action['kind'] in {'cancel', 'size'} else None)
+        review_id = has_pending_human_review(db, ev['sender_id']) or create_human_review(db, ev, owner_reason)
+        cancel_followups_for_sender(db, ev['sender_id'], owner_reason)
+        return saved_checkout_reply(db, ev, 'هسه أحوّل رسالتج للقسم المختص حبيبتي',
+            {'post_order_followup': True, 'needs_human': True, 'human_review_id': review_id,
+             'order_action_request': request_id, 'order_id': order['id']})
     action = conversation_quality.operational_request(ev.get("text"))
     if action and action["kind"] in {"cancel", "size"}:
         if action["kind"] == "size" and order_actions.size_key(order_actions.single_size(order)) == order_actions.size_key(action["value"]):
@@ -8215,7 +8234,7 @@ def owner_linked_discovery_reply(ev, matched_product, products, context):
             '_browse_only': True, '_local_reply': True}
 
 
-def call_main_ai(
+def _call_main_ai_with_context(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
     fix_instruction=None, customer_products=None, conversation_history=None,
@@ -8687,6 +8706,63 @@ def call_main_ai(
     return result
 
 
+def call_main_ai(ev, message_type, customer, history, products, matched_product,
+                 image_result, instructions_text, rules_list, fix_instruction=None,
+                 customer_products=None, conversation_history=None, catalog_search_context=None):
+    context = (sales_context.load(get_db(), current_store_id(), ev['sender_id'])
+               if has_app_context() and ev.get('sender_id') else sales_context.advance({}, history))
+    context = sales_context.advance(context, [{'direction': 'incoming', 'text': ev.get('text')}])
+    ev = dict(ev, text=product_variants.normalize_size_words(ev.get('text')), _sales_context=context)
+    address = infer_explicit_customer_gender(ev.get('text')) or owner_sales.address_gender((customer or {}).get('name'), (customer or {}).get('gender'))
+    if not address and has_app_context() and ev.get('sender_id'):
+        address = _customer_gender_from_db(get_db(), ev['sender_id'])
+    customer = dict(customer or {}, gender=address)
+    chosen = matched_product or (customer_products[0] if len(customer_products or []) == 1 else None)
+    continuation = sales_context.continuation(ev.get('text'), context)
+    if chosen and continuation and continuation['intent'] == 'browse' and re.search(r'بديل|اقترح|موديلات ثاني|موديل ثاني', continuation['question']):
+        selected = sales_playbook.customer_selection(context, customer)
+        child = current_store_id() == baraah.STORE_ID or bool(product_variants.size_data(chosen.get('sizes'))['years'])
+        if (selected['age'] is None if child else not selected['size']):
+            result = owner_sales.result('شكد العمر المطلوب؟' if child else 'شكد قياس تلبسين؟')
+            return owner_result_surface(result, ev, customer, history)
+    result = owner_sales.reply(ev, chosen, customer, context, history,
+                              photo_count=len(product_image_urls(chosen)) if chosen else 0)
+    if result is None:
+        result = _call_main_ai_with_context(ev, message_type, customer, history, products,
+            matched_product, image_result, instructions_text, rules_list,
+            fix_instruction=fix_instruction, customer_products=customer_products,
+            conversation_history=conversation_history, catalog_search_context=catalog_search_context)
+    return owner_result_surface(result, ev, customer, history)
+
+
+def owner_result_surface(result, ev, customer=None, history=()):
+    result = dict(result or {})
+    original = str(result.get('reply') or '')
+    if not original:
+        return result
+    if owner_sales.FORBIDDEN_REPLY.search(customer_copy.normalized(original)):
+        return owner_sales.result(human='forbidden_customer_placeholder', silent=True)
+    gender = infer_explicit_customer_gender(ev.get('text')) or owner_sales.address_gender((customer or {}).get('name'), (customer or {}).get('gender'))
+    if not gender and has_app_context() and ev.get('sender_id'):
+        gender = _customer_gender_from_db(get_db(), ev['sender_id'])
+    seed = str(ev.get('message_id') or ev.get('text') or '') + str(len(history))
+    reply = owner_sales.surface(original, gender, seed)
+    parts = result.get('reply_parts')
+    if isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and \
+            re.sub(r'\s+', ' ', ' '.join(parts)).strip() == re.sub(r'\s+', ' ', original).strip():
+        # A delimiter preserves boundaries while the full-turn guard limits
+        # endearments and emoji globally, rather than once per bubble.
+        joined = owner_sales.surface('\n␞\n'.join(parts), gender, seed)
+        result['reply_parts'] = [part.strip() for part in joined.split('␞') if part.strip()]
+        reply = '\n\n'.join(result['reply_parts'])
+    else:
+        if reply == original and 'reply_parts' not in result:
+            return result
+        result['reply_parts'] = [reply]
+    result['reply'] = reply
+    return result
+
+
 def _call_main_ai_once(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
@@ -8895,6 +8971,7 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + sales_decision.brief(ev, matched_product)
     system_prompt += "\n\n" + sales_engagement.DIALOGUE_GUIDE
     system_prompt += "\n\n" + catalog_truth.GUIDE
+    system_prompt += "\n\n" + owner_sales.GUIDE
     if not post_order and matched_product:
         system_prompt += "\n\n" + sales_strategy.persuasion_guidance(
             matched_product,
@@ -9555,6 +9632,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
 
 
 def saved_checkout_reply(db, ev, reply, meta, payload=None):
+    reply = owner_sales.surface(reply, _customer_gender_from_db(db, ev['sender_id']), ev.get('text'))
     save_message(db, ev["sender_id"], "outgoing", "text", reply, None, None, None, payload or meta)
     save_conversation_message(db, ev["sender_id"], "assistant", reply)
     return {"sender_id": ev["sender_id"], "page_id": ev.get("page_id"), "platform": ev.get("platform"),
@@ -9563,6 +9641,7 @@ def saved_checkout_reply(db, ev, reply, meta, payload=None):
 
 def saved_album_reply(db, ev, images, products, meta):
     result = product_albums.response(images, products, ev.get('text') or '')
+    result = owner_result_surface(result, ev)
     result['reply_parts'] = approved_reply_parts(result, result['reply'])
     for part in result['reply_parts']:
         save_message(db, ev['sender_id'], 'outgoing', 'text', part, None, None, None, meta)
@@ -10320,8 +10399,18 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         cancel_followups_for_sender(db, ev['sender_id'], 'customer_requested_human')
         set_customer_ai_enabled(db, ev['sender_id'], False, reason='customer_requested_human')
         return saved_checkout_reply(db, ev,
-            'حاضر، سجلت طلبك حتى يراجع المحادثة موظف المتجر.',
+            owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي', customer.get('gender')),
             {'needs_human': True, 'human_review_id': review_id, 'customer_requested_human': True})
+
+    owner_reason = owner_sales.human_reason(ev.get('text'))
+    if sales_decision.price_mismatch(ev.get('text')):
+        owner_reason = 'advertisement_price_mismatch'
+    if owner_reason:
+        review_id = has_pending_human_review(db, ev['sender_id']) or create_human_review(db, ev, owner_reason)
+        cancel_followups_for_sender(db, ev['sender_id'], owner_reason)
+        return saved_checkout_reply(db, ev,
+            owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي', customer.get('gender')),
+            {'needs_human': True, 'human_review_id': review_id, 'owner_handoff': owner_reason})
 
     # ── STEP 07: Load products ────────────────────────────────────────────────
     log(7, "PRODUCTS", "Loading active products from products.json...")
@@ -10613,6 +10702,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         first_reply_text, detected_gender = generate_first_message_reply(
             db, ev, products, first_instructions, first_rules,
         )
+        first_reply_text = owner_sales.surface(first_reply_text, _customer_gender_from_db(db, ev['sender_id']), ev.get('text'))
         if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
             return {"sender_id": ev["sender_id"], "page_id": ev["page_id"],
                     "platform": ev["platform"], "reply": "", "send_image": False,
@@ -10644,6 +10734,26 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         ev = dict(ev, _resolve_default_for_image=True)
         image_flow("04_before_image_matching", sender_id=ev["sender_id"], image_url=ev.get("image_url"))
         matched_product, match_method, image_result = match_product(db, ev, products)
+        if not matched_product and len(extract_media({'attachments': ev.get('attachments', [])}, image_url=ev.get('image_url') or '')) <= 1:
+            advertised = [p for p in products if any(ev.get(key) and
+                str(p.get(key) or '').strip() == str(ev[key]).strip() for key in ('ad_id', 'ref'))]
+            binding = get_active_product_binding(db, ev['sender_id']) or {}
+            if not advertised and binding.get('source') in {'ad_id', 'ref', 'ad_ref', 'zernio_ad', 'ad_referral'}:
+                advertised = [p for p in products if p['product_id'] == binding.get('product_id')]
+            if not advertised and (not binding or binding.get('source') == 'ad_ref'):
+                attribution = ad_attribution.load(db, ev['sender_id']) or {}
+                advertised = [p for p in products if any(attribution.get(key) and
+                    str(p.get(key) or '').strip() == str(attribution[key]).strip() for key in ('ad_id', 'ref'))]
+            if len(advertised) == 1:
+                matched_product, match_method = advertised[0], 'ad_id'
+                image_result = {'available': _stock_state(matched_product) == 'available',
+                                'ad_identity_fallback': True}
+                customer_image_positions(db, ev['sender_id'], [{'image_index': 1,
+                    'image_url': ev.get('image_url'), 'product_found': True, 'product_id': matched_product['product_id']}])
+                complete_customer_product_link(db, ev['sender_id'], matched_product,
+                                               'ad_id', confidence=100, source='ad_id')
+                ev = dict(ev, image_url=None, attachments=[], _image_matches=[], _ad_identity_fallback=True,
+                          text=ev.get('text') or 'متوفر وشكد سعره؟')
         if matched_product:
             unresolved = [item for item in (image_result or {}).get('images', []) if not item.get('product_found')]
             if unresolved:
@@ -11189,6 +11299,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "platform": ev["platform"], "reply": "", "send_image": False,
                 "meta": {"skipped": True, "reason": "ai_disabled_before_reply_save"}}
     log(14, "SAVE REPLY", "Saving outgoing reply to database...")
+    ai_result = owner_result_surface(dict(ai_result, reply=reply), ev, customer, history)
+    reply = ai_result['reply']
     ai_result, reply = format_customer_reply(ai_result, reply)
     sales_layout = plan_sales_bubbles(
         dict(ai_result, _post_order=bool(ev.get('_post_order'))), reply, outgoing_image_urls)

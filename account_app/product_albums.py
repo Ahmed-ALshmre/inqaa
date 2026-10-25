@@ -150,10 +150,17 @@ def summary(images, products, question=''):
 
 
 def response(images, products, question='', extra=''):
+    positions = current_positions(images, products)
+    if len(positions) > 1 and all((not p['product_found'] or stock_state(p) == 'out') and not p.get('service_error') for p in positions):
+        message = 'للأسف هالموديلات ما متوفرة، تحبين أقترحلج غيرهن؟'
+        return {'reply': message, 'reply_parts': [message], 'create_order': False, 'order': {},
+                'intent': 'image_check', '_local_reply': True, '_ordered_album': True, 'requires_human': False}
     bubbles = parts(images, products, question)
     if extra and bubbles:
         eligible=eligible_positions(images,products,question)
-        target=eligible[-1]['image_index']-1 if eligible else len(bubbles)-1
+        target = len(bubbles)-1  # One next-step question, at the end of the whole turn.
+        if eligible and eligible[-1]['image_index'] - 1 != target:
+            extra = 'وبالنسبة للموديل المتوفر، ' + extra
         bubbles[target] += '\n' + extra
     return {'reply': '\n\n'.join(bubbles), 'reply_parts': bubbles,
             'create_order': False, 'order': {}, 'intent': 'image_check',

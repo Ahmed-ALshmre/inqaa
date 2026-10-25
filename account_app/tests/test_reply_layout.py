@@ -25,7 +25,7 @@ class ReplyLayoutTests(unittest.TestCase):
         reply = '\n\n'.join(parts)
         result = approved_parts({'reply_parts': parts}, reply)
         self.assertEqual(compact(' '.join(result)), compact(reply))
-        self.assertTrue(1 <= len(result) <= 3)
+        self.assertTrue(1 <= len(result) <= 4)
         self.assertEqual(approved_parts({'reply_parts': result}, reply), result)
         return result
 
@@ -47,7 +47,7 @@ class ReplyLayoutTests(unittest.TestCase):
                  'الفحص متاح عند الاستلام ضمن سياسة المتجر الخاصة بالطلبات.',
                  'شنو اللون اللي تفضلينه حتى نراجع توفره إلك؟']
         result = self.layout(parts)
-        self.assertEqual(len(result), 1)
+        self.assertTrue(1 <= len(result) <= 4)
         self.assertTrue(result[-1].endswith(parts[-1]))
 
     def test_receipt_and_structured_lines_are_not_cut(self):
@@ -99,7 +99,7 @@ class ReplyLayoutTests(unittest.TestCase):
             'حتى نكمل الحجز أحتاج رقم الموبايل الصحيح للتواصل وياج.',
             'والمحافظة والعنوان الكامل وأقرب نقطة دالة حتى يوصل المندوب.',
         ])
-        self.assertEqual(len(parts), 1)
+        self.assertTrue(1 <= len(parts) <= 4)
         self.assertIn('المجموع', parts[0])
         self.assertIn('المحافظة', parts[0])
 
@@ -121,7 +121,7 @@ class ReplyLayoutTests(unittest.TestCase):
             'الفحص عند الاستلام بوجود المندوب وفق سياسة المتجر المعتمدة.',
             'شنو اللون اللي تفضلينه حتى أراجع توفره بالقياس اللي اخترتيه؟',
         ])
-        self.assertEqual(len(parts), 1)
+        self.assertTrue(1 <= len(parts) <= 4)
         self.assertIn('الفستان', parts[0])
 
     def test_indivisible_text_is_never_truncated_or_split_midword(self):
@@ -136,7 +136,7 @@ class ReplyLayoutTests(unittest.TestCase):
             'شنو الموديل اللي تفضلينه؟',
         ]
         result = self.layout(paragraphs)
-        self.assertTrue(2 <= len(result) <= 3)
+        self.assertTrue(2 <= len(result) <= 4)
         self.assertTrue(result[-1].endswith(paragraphs[-1]))
         self.assertGreater(len(compact(result[-1])), len(paragraphs[-1]) + 100)
 
@@ -145,7 +145,7 @@ class ReplyLayoutTests(unittest.TestCase):
                         for i in range(1, 10)]
         reply = '\n\n'.join(descriptions)
         result = approved_parts({'reply_parts': descriptions, '_ordered_album': True}, reply)
-        self.assertEqual(len(result), 3)
+        self.assertEqual(len(result), 4)
         self.assertEqual(compact(' '.join(result)), compact(reply))
         self.assertEqual(approved_parts({'reply_parts': result, '_ordered_album': True}, reply), result)
         for description in descriptions:

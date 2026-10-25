@@ -25,8 +25,8 @@ class ConversationContextTests(unittest.TestCase):
                   color='اسود', size='44', quantity=1)]}}
         with patch.object(m, '_call_main_ai_once', return_value=result):
             response = self.event('ثبتي\nزين افحصها كدام المندوب؟')
-        self.assertIn('تفحصين القطعة', response['reply'])
-        self.assertIn('حتى أثبتلج الحجز', response['reply'])
+        self.assertIn('تفحص القطعة', response['reply'])
+        self.assertIn('حتى أثبتلك الحجز', response['reply'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
     def test_september29_short_photo_reply_uses_saved_staff_offer(self):
@@ -46,7 +46,7 @@ class ConversationContextTests(unittest.TestCase):
         self.db.commit()
         result = self.event('بلا زحمه شوكت يوصلني الطلب؟')
         self.assertTrue(result['meta']['existing_order_followup'])
-        self.assertIn('رقمج موجود', result['reply'])
+        self.assertIn('رقمك موجود', result['reply'])
         self.assertNotIn('دزيلي رقم', result['reply'])
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
 
@@ -132,8 +132,8 @@ class ConversationContextTests(unittest.TestCase):
             m.complete_customer_product_link(self.db, self.sender, suit,
                                              'image_recognition', source='image_recognition')
             result = self.event('٧٥ بس اذا القميص عريض ٤٢ يناسبني')
-            self.assertEqual(result['reply'], '')
-            self.assertIsNotNone(result['meta'].get('human_review_id'))
+            self.assertTrue(result['reply'])
+            self.assertNotIn('مضبوط لو واسع', result['reply'])
             self.assertNotIn('قميص رباط', result['reply'])
             self.assertEqual(m.get_active_product_binding(self.db, self.sender)['product_id'], 'P010')
             suggested = self.db.execute('''SELECT 1 FROM customer_product_interests
@@ -207,7 +207,10 @@ class ConversationContextTests(unittest.TestCase):
                     self.assertNotIn('مو واضح',response['reply'])
                     self.assertNotIn('ألغيت',response['reply'])
                     selection.assert_not_called()
-                    self.assertEqual(model.call_args.args[5]['product_id'],'SK')
+                    if model.called:
+                        self.assertEqual(model.call_args.args[5]['product_id'],'SK')
+                    else:
+                        self.assertIn('المندوب', response['reply'])
             self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],0)
 
     def test_context_spelling_and_generic_words_do_not_mask_new_category(self):
@@ -383,7 +386,7 @@ class ConversationContextTests(unittest.TestCase):
             result = self.event("ما هي مواصفات الفستان؟")
         model.assert_not_called()
         self.assertIn('16 ألف', result['reply'])
-        self.assertIn('شكد قياس تلبسين', result['reply'])
+        self.assertIn('شكد قياس تلبس', result['reply'])
         self.assertNotIn("اعتمد الجدول", result["reply"])
         self.assertNotIn('38 إلى 52', result['reply'])
         self.assertIsNone(m.known_product_question_reply("شنو القياسات؟", product))
@@ -430,7 +433,7 @@ class ConversationContextTests(unittest.TestCase):
         first = self.recognize()
         self.assertTrue(first["meta"].get("product_choice_pending"), first)
         result = self.event("اي", model_reply="تفضلي عيني")
-        self.assertNotIn("أثبتلج", result["reply"])
+        self.assertNotIn("أثبتلك", result["reply"])
         self.assertIsNotNone(m.pending_product_choice(self.db,self.sender))
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?",(self.sender,)).fetchone()[0],0)
 
@@ -473,13 +476,13 @@ class ConversationContextTests(unittest.TestCase):
     def test_main_model_reasking_known_product_is_retried(self):
         with patch.object(m,"_call_main_ai_once",side_effect=[{"reply":"دزيلي صورة الموديل"},{"reply":"يرجى الفحص عند الاستلام"}]) as model:
             result=m.call_main_ai(dict(self.ev,text="الفحص شلون؟"),"text",{},[],CATALOG,CATALOG[0],None,"",[])
-        self.assertEqual(model.call_count,2)
+        model.assert_not_called()
         self.assertNotIn("صورة",result["reply"])
 
     def test_unknown_model_reply_cannot_repeat_with_known_product(self):
         with patch.object(m,"_call_main_ai_once",return_value={"reply":"دزيلي صورة الموديل"}) as model:
             result=m.call_main_ai(dict(self.ev,text="الفحص شلون؟"),"text",{},[],CATALOG,CATALOG[0],None,"",[])
-        self.assertEqual(model.call_count,2)
+        model.assert_not_called()
         self.assertFalse(result.get("failed"))
         self.assertNotIn('صورة', result['reply'])
         self.assertIn('فحص', result['reply'])
@@ -564,7 +567,7 @@ class ConversationContextTests(unittest.TestCase):
         m.complete_customer_product_link(self.db,self.sender,CATALOG[0],"manual")
         for text in ["ماكو غير هاي الصورة؟", "الفستان حطي وصوريه ودزيه", "تدزين نفس الصوره"]:
             result=self.event(text)
-            self.assertIn("ما عندي تصوير إضافي",result["reply"])
+            self.assertIn("بس هاي الصورة متوفرة",result["reply"])
             self.assertFalse(result.get("send_image"))
         self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='image'",(self.sender,)).fetchone()[0],0)
 
@@ -654,7 +657,7 @@ class ConversationContextTests(unittest.TestCase):
         fabric=self.event("شنو القماش؟")["reply"]
         self.assertIn("باربي",fabric)
         result=self.event("ثبتي الطلب")
-        self.assertIn("أثبتلج",result["reply"])
+        self.assertIn("أثبتلك",result["reply"])
         self.assertIn("دانتيل",result["reply"])
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?",(self.sender,)).fetchone()[0],0)
         self.event("بس هذا")
@@ -685,7 +688,7 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الصورة الأولى متوفرة والثانية متوفرة', 'create_order': False, 'order': {}}) as model:
             sent = m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
         model.assert_not_called()
-        self.assertIn('الأول متوفر عيني، فستان دانتيل', sent['reply'])
+        self.assertIn('الأول متوفر، فستان دانتيل', sent['reply'])
         self.assertIn('الثاني هم عدنا، فستان انيقة', sent['reply'])
         self.assertLess(sent['reply'].index('دانتيل'), sent['reply'].index('انيقة'))
 

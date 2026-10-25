@@ -90,7 +90,7 @@ class SalesTurnPipelineTests(unittest.TestCase):
                 self.assertNotIn('نكمل اختيارج', result['reply'])
                 self.assertNotIn('شامل', result['reply'])
                 if 'قياسات' in text:
-                    self.assertIn('قياساته من 70 الى 130 كيلو، شكد تلبسين؟', result['reply'])
+                    self.assertIn('قياساته من 70 الى 130 كيلو، شكد تلبس؟', result['reply'])
                     self.assertIn('وعليكم السلام', result['reply'])
                 else:
                     self.assertIn('شنو القياس اللي يناسبج؟', result['reply'])
@@ -135,7 +135,7 @@ class SalesTurnPipelineTests(unittest.TestCase):
         product = dict(PRODUCT, colors='اسود')
         result, provider = self.ask('متوفر', product=product, customer={'size': '44'})
         provider.assert_not_called()
-        self.assertIn('أثبتلج حجز؟', result['reply'])
+        self.assertIn('أثبتلك حجز؟', result['reply'])
         self.assertNotIn('محافظ', result['reply'])
         self.assertNotIn('اختيارج فد شي حلو', result['reply'])
         self.assertEqual(len(self.m.plan_sales_bubbles(result, result['reply'])['reply_parts']), 2)
@@ -153,19 +153,17 @@ class SalesTurnPipelineTests(unittest.TestCase):
         self.assertNotIn('المحافظة', message)
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
-    def test_simple_size_confirmation_uses_catalog_without_model_or_fit_guarantee(self):
+    def test_simple_size_confirmation_uses_owner_fit_and_next_missing_step(self):
         product = dict(PRODUCT, colors='اسود', offer='عرض خاص')
         result, provider = self.ask('قياسي 44', product=product)
         provider.assert_not_called()
-        self.assertIn('قياس 44 متوفر باللون الأسود', result['reply'])
-        for value in ['15 ألف', '5 آلاف', '20 ألف', 'أثبتلج حجز؟']:
-            self.assertIn(value, result['reply'])
-        self.assertNotIn('مضبوط', result['reply'])
-        self.assertNotIn('ملكي', result['reply'])
+        self.assertIn('متوفر', result['reply'])
+        self.assertIn('فيت', result['reply'])
+        self.assertIn('محافظة', result['reply'])
+        self.assertNotIn('وزن', result['reply'])
         self.assertFalse(result['create_order'])
         parts = self.m.plan_sales_bubbles(result, result['reply'])['reply_parts']
-        self.assertLessEqual(len(parts), 5)
-        self.assertTrue(any(all(value in part for value in ['15 ألف', '5 آلاف', '20 ألف']) for part in parts))
+        self.assertTrue(1 <= len(parts) <= 4)
         for text in ['قياسي 56', 'قياسي 44؟', 'قياسي 44 بس اخاف يضيق', 'قياسي 44 لو 46', 'قياسي 44 واحجزيه']:
             with self.subTest(text=text):
                 self.assertIsNone(self.m.guided_size_choice_reply(

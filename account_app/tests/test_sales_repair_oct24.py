@@ -117,7 +117,7 @@ class DialogueTests(unittest.TestCase):
         with patch.object(self.m, '_call_main_ai_once') as model:
             result = self.m.call_main_ai(dict(sender_id='price', text='شكد سعره'), 'text', {}, [], [PRODUCT], PRODUCT, None, '', [])
         model.assert_not_called()
-        for text in ['لينن', '16 ألف', '21 ألف', 'شكد قياس تلبسين']:
+        for text in ['لينن', '16 ألف', '21 ألف', 'شكد قياس تلبس']:
             self.assertIn(text, result['reply'])
         self.assertFalse(result['create_order'])
 

@@ -75,12 +75,13 @@ class StructuredReplyTests(unittest.TestCase):
         self.assertIn('قياس 38 موجود',reply['reply_parts'][1])
         self.assertNotIn('قياس 54',reply['reply_parts'][1])
 
-    def test_sales_question_is_attached_to_available_photo_not_unknown_photo(self):
+    def test_sales_question_ends_turn_and_identifies_available_model(self):
         images=[{'product_found':True,'product_id':'A'},{'product_found':False}]
         step=product_albums.next_question(images,fixtures.CATALOG,{})
         reply=product_albums.response(images,fixtures.CATALOG,extra=step)
-        self.assertIn(step,reply['reply_parts'][0])
-        self.assertNotIn(step,reply['reply_parts'][1])
+        self.assertNotIn(step,reply['reply_parts'][0])
+        self.assertIn(step,reply['reply_parts'][-1])
+        self.assertIn('للموديل المتوفر', reply['reply_parts'][-1])
 
     def test_known_missing_variant_cannot_be_booked(self):
         base={'product_id':'A','quantity':1,'size':'44','color':'اسود'}

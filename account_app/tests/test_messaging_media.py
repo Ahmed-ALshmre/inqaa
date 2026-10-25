@@ -409,10 +409,12 @@ class MessagingMediaTests(unittest.TestCase):
             token=self.m._current_store_id.set(store)
             try:
                 result={'sender_id':self.sender,'reply':'\n\n'.join(parts),'reply_parts':parts}
-                self.assertEqual(self.m.approved_reply_parts(result,result['reply']),[result['reply']])
+                expected = self.m.approved_reply_parts(result,result['reply'])
+                self.assertTrue(1 <= len(expected) <= 4)
+                self.assertEqual(' '.join(expected).split(), result['reply'].split())
                 with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
                     self.m.send_webhook_result_to_facebook(result)
-                self.assertEqual([call.args[1] for call in send.call_args_list],[result['reply']])
+                self.assertEqual([call.args[1] for call in send.call_args_list],expected)
                 result['_single_message']=True
                 with patch.object(self.m,'send_text_to_facebook',return_value=True) as send:
                     self.m.send_webhook_result_to_facebook(result)
@@ -430,8 +432,9 @@ class MessagingMediaTests(unittest.TestCase):
         with patch.object(self.m, 'process_webhook', return_value=result), patch.object(
                 self.m, '_post_manychat_send', return_value={'ok': True}) as send:
             self.m._process_manychat_webhook_async_locked(self.body([], 'مواصفات'), self.sender, 'facebook')
-        self.assertEqual([c.args[1] for c in send.call_args_list],
-                         [[{'type': 'text', 'text': reply}]])
+        sent = [message['text'] for call in send.call_args_list for message in call.args[1]]
+        self.assertTrue(1 <= len(sent) <= 4)
+        self.assertEqual(' '.join(sent).split(), reply.split())
 
     def test_delivery_fees_are_separate_by_store_and_destination(self):
         for sid,baghdad,other in [('al-fatena',3000,7000),('khuyoot',0,4500)]:

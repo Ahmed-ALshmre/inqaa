@@ -230,7 +230,7 @@ class DashboardReliabilityTests(unittest.TestCase):
             'تفاصيل الخامة ومقارنة القصات تخص هذا الخيار وحده وتحتاج مراجعتها قبل الاختيار.'
             for index in range(1, 13))
         parts = self.m.approved_reply_parts({}, reply)
-        self.assertTrue(2 <= len(parts) <= 3)
+        self.assertTrue(2 <= len(parts) <= 4)
         with patch.object(self.m, 'send_text_to_facebook', side_effect=[True, False]) as send, \
              patch.object(self.m, 'send_image_to_facebook') as image:
             result = self.m.send_webhook_result_to_facebook({
@@ -246,7 +246,7 @@ class DashboardReliabilityTests(unittest.TestCase):
             'الأسود والأحمر هما اللونان الموجودان وقياساته من 38 إلى 52 حسب الجدول.'
             for index in range(1, 13))
         parts = self.m.approved_reply_parts({}, text)
-        self.assertTrue(2 <= len(parts) <= 3)
+        self.assertTrue(2 <= len(parts) <= 4)
         with patch.object(self.m, 'send_text_via_manychat_detailed', side_effect=[{'ok': True}, {'ok': False, 'status_code': 400}]) as send:
             result = self.client.post(f'/api/conversations/{self.sender}/send', json={'text': text})
         self.assertFalse(result.json['ok'])

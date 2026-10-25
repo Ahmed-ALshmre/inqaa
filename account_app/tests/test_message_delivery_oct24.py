@@ -122,7 +122,7 @@ class MessageDeliveryOct24Tests(unittest.TestCase):
         self.assertTrue(delivered['ok'])
         self.assertEqual(self.texts(direct), expected)
         self.assertEqual(self.texts(asynchronous), expected)
-        self.assertTrue(1 <= len(expected) <= 3)
+        self.assertTrue(1 <= len(expected) <= 4)
         self.assertEqual(compact(' '.join(self.texts(asynchronous))), compact(reply))
         for description in descriptions:
             self.assertEqual(sum(description.strip() in text for text in self.texts(asynchronous)), 1)

@@ -6,10 +6,10 @@ hints: they cannot replace, omit or resurrect facts after a reply correction.
 import re
 import math
 
-MAX_PARTS = 3
+MAX_PARTS = 4
 # Most sales replies fit comfortably in one bubble, including the next question.
 # This is a grouping target, never a hard cut or permission to truncate a fact.
-TARGET_LENGTH = 600
+TARGET_LENGTH = 280
 MAX_SALES_MESSAGES = 5
 SALES_TARGET_LENGTH = 80
 LIST_ITEM = re.compile(r"^\s*(?:[-*•]|\d+[.)\-])\s+")
@@ -111,7 +111,7 @@ def approved_parts(result, reply):
              and compact(" ".join(proposed)) == compact(reply))
     # Blank paragraphs and model hints must not turn a short, connected answer
     # into a stream of notifications, even when each sentence has a new topic.
-    if len(compact(reply)) <= TARGET_LENGTH:
+    if len(compact(reply)) <= TARGET_LENGTH and not (result.get('_ordered_album') and valid):
         return [reply]
     album = bool(result.get('_ordered_album') and valid)
     # An album item is indivisible, but several photo descriptions can share one
@@ -232,7 +232,7 @@ def _sales_units(reply):
 
 
 def plan_sales_bubbles(result, reply, image_urls=None):
-    """Plan 2–5 visible sales messages, counting photos in the same budget.
+    """Plan 1–4 text bubbles, with the existing five-message media budget.
 
     The caller must persist and send this exact plan. ``needs_rewrite`` is a
     validation failure, never permission to pad the reply, silently remove
@@ -256,7 +256,7 @@ def plan_sales_bubbles(result, reply, image_urls=None):
     # response can use all five slots without inventing a caption.
     image_cap = MAX_SALES_MESSAGES - bool(reply)
     selected, deferred = images[:image_cap], images[image_cap:]
-    limit = max(1, MAX_SALES_MESSAGES - len(selected))
+    limit = min(MAX_PARTS, max(1, MAX_SALES_MESSAGES - len(selected)))
     reasons = []
     proposed = result.get('reply_parts')
     valid = (isinstance(proposed, list) and proposed
@@ -281,7 +281,7 @@ def plan_sales_bubbles(result, reply, image_urls=None):
                 or within_album_duplicate):
             reasons.append('duplicate_sales_content')
         parts = list(units)
-        desired = min(limit, len(parts) if structured else max(2, math.ceil(len(compact(reply)) / SALES_TARGET_LENGTH)))
+        desired = min(limit, len(parts) if (structured or result.get('_ordered_album')) else max(2, math.ceil(len(compact(reply)) / SALES_TARGET_LENGTH)))
         while len(parts) > desired:
             def merge_cost(index):
                 left, right = parts[index:index + 2]
@@ -303,8 +303,6 @@ def plan_sales_bubbles(result, reply, image_urls=None):
         reasons.append('deferred_images_require_pagination')
     if kind and total > 1:
         reasons.append('exception_requires_one_visible_message')
-    elif not kind and total and total < 2:
-        reasons.append('insufficient_distinct_sales_messages')
     if parts and compact(' '.join(parts)) != compact(reply):
         raise ValueError('Sales layout changed the approved reply')
     return {'reply': reply, 'reply_parts': parts, 'image_urls': selected,

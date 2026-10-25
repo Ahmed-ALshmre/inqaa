@@ -128,8 +128,8 @@ class SalesReplyPipelineTests(unittest.TestCase):
     def test_premature_close_retries_then_asks_budget_without_handoff(self):
         bad={'reply':'قماشه باربي، أحجزه الج؟','create_order':False}
         result,model=self.ask('غالي',[bad,bad])
-        self.assertEqual(model.call_count,2)
-        self.assertIn('الميزانية',result['reply'])
+        model.assert_not_called()
+        self.assertIn('القطعة تستاهل',result['reply'])
         self.assertFalse(result.get('_needs_fact_review'))
 
     def test_real_prompt_includes_notes_and_targeted_sales_guidance(self):

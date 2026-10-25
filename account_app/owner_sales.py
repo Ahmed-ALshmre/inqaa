@@ -1,0 +1,233 @@
+"""Owner-approved sales policy, kept separate from untrusted chat/catalog prose.
+
+Approved October 26, 2026. These are store policies, not a universal size/weight
+conversion. Operational changes still require real staff execution.
+"""
+import hashlib
+import re
+
+try:
+    from . import customer_copy, product_variants, sales_answers, sales_strategy
+    from .pricing import terms, offer_tiers
+except ImportError:
+    import customer_copy, product_variants, sales_answers, sales_strategy
+    from pricing import terms, offer_tiers
+
+GUIDE = '''[سياسة المالك المعتمدة — تتقدم على صياغات البيع القديمة المتعارضة]
+اشتغلي بروح موظفة عراقية شاطرة بالمبيعات: جاوبي مباشرة وباختصار وحنية، وكملي من آخر نقطة بالمحادثة.
+للأنثى المعروفة نوّعي بصورة طبيعية بين حبيبتي، عمري، روحي، حياتي، عيني؛ كلمة واحدة عادةً تكفي. هذه الألقاب للإناث فقط. للرجل استخدمي أستاذ/تفضل وخطاب المذكر، ولغير المعروف خطاباً محايداً. رجّحي صيغة الخطاب من الاسم الأول الواضح فقط، والأسماء المشتركة أو المستعارة تبقى محايدة. كلام الزبون الصريح يتقدم على الاسم؛ جنس الطفل أو نوع الملابس لا يحدد خطاب المشتري. لا تدعي أنك إنسان إذا سئلت عن هويتك.
+يمكن إيموجي واحد أو اثنين في بعض الردود عند الحاجة فقط، وليس بكل رسالة أو بعد الشكوى.
+الرد من رسالة إلى أربع رسائل قصيرة حسب الحاجة، لكل رسالة معنى كامل. لا تحولي كلمة أو رمزاً إلى إشعار منفصل. جاوبي كل الأسئلة، وآخر رسالة أثناء البيع تنتهي بسؤال واحد يناسب الناقص: قياس، لون إذا متعدد، محافظة، أو أحجزلج؟ لا سؤال بيع بعد التثبيت أو الشكر أو الرفض أو التحويل.
+ممنوع نهائياً سؤال تحبينه مضبوط لو واسع أو أي مرادف له. رغبة الزبونة بالوسع ليست طلب قياس عرض بالسنتيمتر ولا تستدعي التدخل. قياسات متاجر الملابس النسائية متاحة من S إلى 5XL وفق تأكيد المالك، وليست تحويلاً عالمياً إلى وزن. XXL وإكسين نفس التسمية. استخدمي قياس الزبونة مباشرة ولا تعيدي سؤال الوزن بعده. 50،52 نطاق قياس للزبونة وليس طلب قطعتين أو ضرورة سؤالها أيهما.
+بمتاجر الأطفال نعتمد العمر فقط. لا تطلبي وزن الطفل أو طوله. سنة ونص لموديل يبدأ بسنتين: اشرحي بشكل مشروط إذا بنيتها خشنة ممكن يجي مناسب، مع الفحص؛ لا تسجلي السنتين بدل عمرها قبل قبولها.
+المنتج المربوط بالإعلان معروف: أجيبي باسمه وسعره الحالي من أول رد، دون طلب صورة أو قول مو متأكدة. فشل تحليل صورة لا يلغي ربط الإعلان. صورة تطابقت فعلاً مع منتج آخر أو تصحيح صريح من الزبونة يُحدّث الاختيار.
+السعر مباشر؛ اذكري العرض وقلة الكمية وانتهاء العرض فقط إذا مؤكدات ببيانات المنتج. لا تعرضي فيديو من نفسج. إذا لا توجد صور إضافية قولي بس هاي الصورة متوفرة وطمئني بالفحص.
+الدفع عند الاستلام، والفحص بوجود المندوب قبل الدفع. إذا القطعة لا تناسب أو بيها إشكال ترجع مع المندوب مجاناً دون دفع أي شيء حتى أجور التوصيل. لا تمددي هذه السياسة لما بعد الدفع ومغادرة المندوب؛ تلك الحالات للبشر.
+الاستلام الجزئي مسموح للقطع المنفصلة ويحسب المستلم بسعر المفرد؛ البكجات والعروض المشروطة بعدد تُستلم كاملة أو ترجع كاملة، ولا تباع قطعة من بكج كامل فقط.
+الألوان: اذكري الموجود بنفس الموديل فقط. عند نفاد الموديل اقترحي غيره من نفس المتجر؛ قبل إرسال البدائل اسألي عن القياس أو العمر إن كان مجهولاً فقط. الصور لموديلات مختلفة تجاب برسائل منفصلة؛ إذا كلها غير متوفرة اختصري واسألي تحبين أقترحلج؟
+لا تطلبي الاسم. عند شراء صريح وبيانات مكتملة ثبتي مباشرة، دون تأكيد شراء ثان. اطلبي الناقص فقط؛ رقم ناقص يصحح قبل التثبيت، والمحافظة وحدها لا تكفي: منطقة ونقطة دالة. آخر تصحيح للزبونة يتقدم على القديم لكل قطعة. رسالة التثبيت الحالية يرسلها النظام مرة واحدة بعد نجاح الحفظ، ولا تعاد بسبب سؤال لاحق.
+حوّلي لتدخل بشري: طلب موظفة، رقم المتجر، الصوتيات، اختلاف سعر الإعلان، تفاصيل مجهولة مثل الطول والبطانة والمطاطية، إلغاء أو تعديل أو إضافة بعد الحجز، تأخر الطلب، الشكاوى والإرجاع بعد الدفع. لا تخمني. تفاصيل مجهولة وصوتيات: لا رد بديل ولا كليشة انتظار. عند إجراء طلب/شكوى وبعد إنشاء المراجعة فعلاً: هسه أحوّل رسالتج للقسم المختص حبيبتي؛ عدلي الخطاب حسب الجنس.
+التوصيل حسب إعدادات المتجر، والمعتاد يوم أو يومان. طلب باچر ليس ضماناً: إن شاء الله يوصل بس مو أكيد، إحنا نسلمه لشركة التوصيل. إذا يشترط الوصول المضمون حوّلي للبشر قبل الحجز. لا تعدي بوصول باچر إذا الوقت الحالي أو السياسة لا يدعمان ذلك.
+أجور التوصيل لشركة التوصيل؛ لا تخترعي إعفاءً. في اعتراض السعر اشرحي العرض المثبت والقطعة تستاهل ثم كملي بالسؤال المناسب، دون تغيير المنتج من نفسج.
+ممنوع: وصل المرفق، تم استلام الصورة، هذه التفاصيل تحتاج تأكيداً، أخلّي البنية تشيكه، هسه يفتح الألبوم، أو ادعاء إرسال/تحويل/حجز/تعديل لم ينفذه النظام. فشل صور مؤكد يعاد مرة واحدة ثم تدخل بشري؛ الإرسال غير المؤكد لا يعاد عميانياً.
+'''
+
+AFFECTION = re.compile(r'(?<!\w)(?:حبيبتي|حبيبي|عمري|روحي|حياتي|قلبي|كلبي|عيوني|عيني)(?!\w)')
+EMOJI = re.compile('[\U0001F300-\U0001FAFF\u2600-\u27BF][\uFE0F\u200D]*')
+FIT_QUESTION = re.compile(r'(?:تحبين|تحب|تريدين|تريد)\s*(?:ه|ها)?\s*(?:يطلع|يكون|يجي)?\s*(?:مضبوط|ضيق|فيت|واسع)\s*(?:عليج\s*)?(?:لو|او|أو)\s*(?:مضبوط|ضيق|فيت|واسع)[؟?]?', re.I)
+
+
+FORBIDDEN_REPLY = re.compile(
+    r'وصل(?:تني|نا)?\s*(?:المرفق|المرفقات|الصورة|الصوره)|تم استلام (?:الصورة|المرفق)|'
+    r'هذه التفاصيل تحتاج تاكيد|اخلي البني[ةه].{0,25}(?:تشيك|ترد)|هسه يفتح.{0,15}الالبوم')
+
+
+# Addressing hints only: never persist an inferred identity in customers.gender.
+FEMALE_NAMES = set('ساره سارة زينب فاطمه فاطمة مريم هدى زهراء دعاء اسراء ايات آيات رقيه رقية حوراء سعاد سحر امل عبير اريج بتول حنان حنين مها رنا رشا ريم رحاب رباب شيماء شهد شذى علياء غاده غادة دلال دانيا دانيه دانية ضحى نسرين ندى نوال هناء هبه هبة هاجر ياسمين يسرى بشرى خديجه خديجة عائشه عائشة اسماء اسيل جنات سوسن لقاء ليلى لينا روان رؤى رفيف رغد'.split())
+MALE_NAMES = set('احمد محمد محمود علي حسن حسين حيدر مصطفى عمر عثمان خالد وليد كريم مهدي عادل ياسر ياسين قاسم عباس عبدالعزيز عبدالله عبدالرحمن ابراهيم اسماعيل اسحاق يوسف يعقوب زكريا حامد ماجد امجد مؤيد رائد ثائر سامر ماهر طارق لؤي اكرم حمزه حمزة هاشم صادق عمار اسامه اسامة ناصر ناظم نبيل يحيى بلال اسعد سعد سيف'.split())
+FEMALE_LATIN = set('sara sarah zainab zaynab fatima fatimah maryam mariam huda zahraa zahra rania rasha reem nada noorhan shahad shaimaa shayma'.split())
+MALE_LATIN = set('ahmed ahmad mohamed mohammad mohammed muhammad ali hassan hasan hussein hussain haider hayder mustafa omar osman khaled waleed kareem karim mahdi adel yasser ibrahim ismail youssef yusuf'.split())
+
+FEMALE_NAMES = {customer_copy.normalized(n) for n in FEMALE_NAMES}
+MALE_NAMES = {customer_copy.normalized(n) for n in MALE_NAMES}
+
+
+def address_gender(name, explicit=''):
+    """Conservative name hint for wording; explicit customer/staff choice wins.
+
+    Shared names (Noor, Islam, Malak), aliases and business names stay neutral.
+    A female customer's father's name later in the display name never wins.
+    """
+    if explicit in {'male', 'female'}:
+        return explicit
+    clean = customer_copy.normalized(name)
+    words = re.findall(r'[^\W\d_]+', clean)
+    if not words or any(w in {'متجر', 'ستور', 'store', 'shop', 'بوتيك', 'شركة', 'مؤسسة'} for w in words):
+        return ''
+    # Honorifics must be standalone words: أمجد is not أم + a child's name.
+    if words[0] in {'ام', 'umm', 'um'} and len(words) > 1:
+        return 'female'
+    if words[0] in {'ابو', 'ابي', 'abu', 'abo'} and len(words) > 1:
+        return 'male'
+    first = words[0]
+    if first in FEMALE_NAMES or first in FEMALE_LATIN:
+        return 'female'
+    if first in MALE_NAMES or first in MALE_LATIN:
+        return 'male'
+    return ''
+
+
+def surface(text, gender='', seed='', *, warm=True):
+    """One coherent surface for local and model replies; never alters receipts."""
+    text = str(text or '').strip()
+    if not text or re.match(r'^تم\s+(?:تثبيت|تسجيل|حجز|تأكيد|تاكيد)', text):
+        return text
+    text = FIT_QUESTION.sub('', text).strip()
+    female = gender == 'female'
+    if not female:
+        text = AFFECTION.sub('', text)
+        for before, after in [('تدللين', 'تدلل'), ('تحبين', 'تحب'), ('تلبسين', 'تلبس'),
+                              ('تريدين', 'تريد'), ('تكدرين', 'تكدر'), ('تفحصين', 'تفحص'),
+                              ('تتأكدين', 'تتأكد'), ('تتاكدين', 'تتاكد'), ('ترجعين', 'ترجع'),
+                              ('تدفعين', 'تدفع'), ('دزيلي', 'دزلي'), ('قياسج', 'قياسك'),
+                              ('عنوانج', 'عنوانك'), ('رقمج', 'رقمك'), ('عليج', 'عليك'),
+                              ('لج', 'لك'), ('بيج', 'بيك')]:
+            text = re.sub(r'(?<!\w)' + before + r'(?!\w)', after, text)
+        text = text.replace('أحجزلج', 'أحجزلك').replace('أثبتلج', 'أثبتلك').replace('رسالتج', 'رسالتك')
+    else:
+        choice = ('حبيبتي', 'عمري', 'روحي', 'حياتي', 'عيني')[int(hashlib.sha256(str(seed).encode()).hexdigest()[:8], 16) % 5]
+        matches = list(AFFECTION.finditer(text))
+        if matches:
+            text = AFFECTION.sub(lambda m: choice if m.start() == matches[0].start() else '', text)
+        elif warm:
+            text = choice + '، ' + text
+    # Across the entire turn, not two emoji per bubble.
+    count = 0
+    def limit_emoji(match):
+        nonlocal count
+        count += 1
+        return match[0] if count <= 2 else ''
+    text = EMOJI.sub(limit_emoji, text)
+    text = re.sub(r'[ \t]{2,}', ' ', text)
+    text = re.sub(r'([،,])\s*[،,]', r'\1', text)
+    text = re.sub(r'\s+([،,.؟?])', r'\1', text)
+    return text.strip(' ،,')
+
+
+def human_reason(text, *, post_order=False, message_type='text'):
+    clean = customer_copy.normalized(text)
+    if message_type == 'audio':
+        return 'voice_message'
+    if re.search(r'(?:رقم|موبايل|هاتف).{0,20}(?:المتجر|المحل|الصفحة|الصفحه|عدكم|عندكم)|(?:رقمكم|رقمج حتى اتصل|اريد رقم اتصل)', clean):
+        return 'store_phone_requested'
+    if re.search(r'(?:اريد|ممكن|خليني|حولني).{0,25}(?:موظف|بشر|انسان)|ما اريد.{0,12}(?:بوت|ذكاء)', clean):
+        return 'customer_requested_human'
+    if re.search(r'(?:اذا|لازم|ضروري|اكيد|تضمن).{0,25}(?:باچر|باجر|غدا|غداً).{0,25}(?:اكيد|مضمون|ما اريد|ماريد)|(?:اذا|لازم).{0,12}(?:مو اكيد|مو مضمون)', clean):
+        return 'guaranteed_arrival_required'
+    conditional_inspection = bool(re.search(r'اذا|لو', clean) and re.search(r'نفس الصور|افحص|فحص', clean) and not re.search(r'استلمت|دفعت|راح المندوب', clean))
+    if post_order and not conditional_inspection:
+        if re.search(r'بدل|بدّل|غيري|غيرلي|تغيير|الغ|الغاء|اضيف|ضيف|زيد|زودي|ارجع|استبد|اشتكي|شكوى|ما وصل|ماوصل|مو واصل|تاخر|صار.{0,12}(?:يومين|ايام)|وين طلبي|وين الطلب|استلمت|وصلني.{0,25}(?:صغير|ضيّق|ضيق|مو|غير)', clean):
+            return 'post_order_action'
+    return ''
+
+
+def result(text='', *, human='', silent=False):
+    return dict(reply='' if silent else text, reply_parts=[] if silent else [text],
+                create_order=False, order={}, requires_human=bool(human),
+                failed=bool(human), failure_reason=human, handoff_reason=human,
+                _needs_fact_review=bool(human),
+                _owner_policy=True, _local_reply=True, _suppress_product_images=True,
+                _semantic_parts=True)
+
+
+def next_step(product, context, customer):
+    try:
+        from .sales_playbook import customer_selection
+    except ImportError:
+        from sales_playbook import customer_selection
+    known = customer_selection(context, customer)
+    years = product_variants.size_data((product or {}).get('sizes'))['years']
+    if years and known['age'] is None:
+        return 'شكد العمر المطلوب؟'
+    if not years and not known['size']:
+        return 'شكد قياس تلبسين؟'
+    colors = product_variants.colors((product or {}).get('colors'))
+    if len(colors) > 1 and not known['color']:
+        return 'أي لون تحبين؟'
+    if not (customer or {}).get('province'):
+        return 'من يا محافظة؟'
+    return 'أثبّت لج حجز؟'
+
+
+def reply(ev, product, customer, context, history, *, photo_count=0):
+    """Narrow, owner-approved turns before generic generation/recovery."""
+    text = customer_copy.normalized(ev.get('text')).strip(' .،!؟?')
+    reason = human_reason(text, post_order=bool(ev.get('_post_order')))
+    if reason:
+        return result(human=reason, silent=True)
+    if re.search(r'(?:كاتبين|مكتوب|بالاعلان|بالاعلان).{0,45}(?:ليش|سعر|الف|\d)|ليش.{0,35}(?:اعلان|كاتبين)', text) and re.search(r'ليش|غير|فرق', text):
+        return dict(result(human='advertisement_price_mismatch', silent=True), _needs_fact_review=True)
+    if not product or ev.get('_post_order') or len(ev.get('_image_matches') or []) > 1:
+        return None
+    try:
+        from .product_albums import stock_state
+    except ImportError:
+        from product_albums import stock_state
+    if re.search(r'احجز|ثبت|اطلب|اشتري|07[0-9]{7,}', text):
+        return None
+    step = next_step(product, context, customer)
+    if stock_state(product) == 'out' and not re.fullmatch(r'(?:اي|نعم|تمام|دزيلي|دزي|ارسلي)[ ؟?!.،]*', text):
+        return result('للأسف هذا الموديل ما متوفر، تحبين أقترحلج غيره؟')
+    if stock_state(product) != 'available':
+        return None
+    if ev.get('_ad_identity_fallback'):
+        count, price, _ = terms(product)
+        unit = ' للبكج الكامل' if count > 1 else ''
+        offer = '، عليه عرض حالياً' if product.get('offer') else ''
+        return result(customer_copy.fact(product.get('product_name')) + ' متوفر، سعره ' + customer_copy.chat_amount(price) + unit + offer + '. ' + step)
+    if re.search(r'(?<!\w)(?:باچر|باجر|غدا|غداً)(?!\w)', text) and re.search(r'يوصل|توصيل|اريد|ضروري|مناسب', text):
+        return result('إن شاء الله يوصلج باچر بس مو أكيد، إحنا نسلّمه لشركة التوصيل، يناسبج؟')
+    years = product_variants.size_data(product.get('sizes'))['years']
+    if years and min(lo for lo, hi in years) == 2 and re.search(r'سن[ةه]\s*(?:و\s*)?(?:نص|نصف)|سنه ونص|18\s*شهر', text):
+        return result('إذا بنيتها خشنة، قياس السنتين ممكن يجي فيت ومناسب عليها، وتكدرين تفحصينه بوجود المندوب قبل الدفع، تحبين قياس السنتين؟')
+    if re.search(r'اخذ.{0,15}(?:وحده|قطعه).{0,25}(?:ارجع|الثاني)|ارجع.{0,12}(?:الثاني|وحده)|استلام جزئي', text):
+        count, _, _ = terms(product)
+        restricted = count > 1 or bool(offer_tiers(product))
+        return result(('هذا عرض كامل، ما نكدر نجزّئه؛ تستلمينه كامل أو ترجعينه كامل. ' if restricted else
+                       'إي تكدرين تستلمين اللي يناسبج وترجعين الثانية ويا المندوب، والمستلمة تنحسب بسعر المفرد. ') + step)
+    if re.search(r'(?:وحده|قطعه).{0,15}(?:بكج|البكج)|(?:بكج|البكج).{0,20}(?:مفرد|وحده|قطعه)', text):
+        if terms(product)[0] > 1:
+            return result('للأسف يجي بكج كامل، ما نكدر نبيعه مفرد، أحجزلج البكج؟')
+    if re.search(r'صور.{0,20}(?:اكثر|اضافي|ثاني|غير)|غير.{0,15}صور|صوري|تصوير حقيقي|صورة حقيقية|تدزين نفس الصوره', text) and photo_count <= 1 and not re.search(r'قماش|خامة|سعر|طول|عرض|بطان|مطاط', text):
+        return result('بس هاي الصورة متوفرة، بس تكدرين تفحصين الطلب بوجود المندوب قبل الدفع، وإذا بيه أي إشكال يرجع مجاناً بدون أجور توصيل. ' + step)
+    if re.search(r'دفع|مقدم|مقدّم|احول|تحويل مبلغ|اخاف|مو نفس الصور|يختلف.{0,12}الصور|افحص|فحص|ارجعه.{0,20}(?:اذا|لو)', text) and not re.search(r'سحاب|بطان|طول|عرض|لاستيك|مطاط|قماش|خامة', text):
+        return result('الدفع عند الاستلام، تفحصين القطعة وتتأكدين منها بوجود المندوب قبل الدفع، وإذا بيها أي إشكال ترجعينها مجاناً وما تدفعين أي شي حتى أجور التوصيل. ' + step)
+    if re.search(r'توصيل.{0,15}مجاني|بدون.{0,10}توصيل', text):
+        if not re.search(r'مجاني', str(product.get('delivery') or '')):
+            offer = 'القطع عليها عرض حالياً، ' if product.get('offer') else ''
+            return result(offer + 'وأجور التوصيل لشركة التوصيل مو إلنا. ' + step)
+    if re.search(r'غالي|يصير اقل|خصم|تخفيض', text) and not re.search(r'ارخص|ميزاني|بديل|قماش|خامة', text) and sales_answers.known_budget(text, context) is None:
+        offer = 'حالياً عليه عرض والقطعة تستاهل. ' if product.get('offer') else 'هذا سعر القطعة الحالي والقطعة تستاهل. '
+        return result(offer + step)
+    # Casual fit is not a request for the missing centimetre width.
+    if re.search(r'سم|سانتي|سنتيمتر|محيط|عرض|بطان|سحاب|مطاط|لاستيك|طول', text):
+        return None
+    requested = product_variants.requested(text)['sizes']
+    declared = re.search(r'(?:قياسي|مقاسي|البس قياس)\s*(\d{2})(?!\d)', text)
+    if declared:
+        requested = requested + [declared[1]]
+    range_match = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/ ]+\s*(\d{2})(?!\d)', text)
+    if re.search(r'قماش|سعر|توصيل|لون|قياسات|فحص|الوان|الفرق', text):
+        return None
+    if requested or range_match or re.fullmatch(r'(?:اريده?\s+)?(?:واسع|فيت|راهي)', text):
+        checks = product_variants.assess(product, text)
+        if any(check['supported'] is False for check in checks):
+            return None
+        # Actual missing measurements still take the silent detail-review path.
+        if (context or {}).get('open_details'):
+            return None
+        if requested or range_match:
+            choice = range_match[1] + '-' + range_match[2] if range_match else requested[-1]
+            step = next_step(product, context, dict(customer or {}, size=choice))
+        return result('إي متوفر ويجي فيت ومرتب عالجسم، ' + step)
+    return None
