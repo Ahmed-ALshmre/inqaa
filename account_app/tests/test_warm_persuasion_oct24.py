@@ -1,7 +1,7 @@
 """Approved marketing facts and considerate in-session buying decisions."""
 import unittest
 
-from account_app import sales_strategy as strategy, sales_decision, sales_engagement
+from account_app import sales_strategy as strategy, sales_decision, sales_engagement, sales_answers
 
 
 PRODUCT = dict(product_id='D1', product_name='فستان', category='فستان',
@@ -10,6 +10,22 @@ PRODUCT = dict(product_id='D1', product_name='فستان', category='فستان'
 
 
 class WarmPersuasionTests(unittest.TestCase):
+    def test_unknown_elastic_or_buttons_gets_answer_and_staff_review(self):
+        product = dict(PRODUCT, closure='', stretch='', description='', faq='', notes='')
+        question = 'العفو البجامه لاستيك لو دگم'
+        self.assertEqual(sales_answers.topics(question), ['closure'])
+        reply = strategy.missing_fact_reply(question, product)
+        self.assertIn('لاستيك لو دگم', reply)
+        self.assertTrue(strategy.fact_requires_human(question, product))
+
+    def test_numeric_fit_concern_does_not_guarantee_unknown_width(self):
+        product = dict(PRODUCT, sizes='من 55 كيلو الى 130 قياسات خاصة متوفر', measurements='')
+        question = '٧٥ بس اذا القميص عريض ٤٢ يناسبني'
+        reply = strategy.missing_fact_reply(question, product)
+        self.assertIn('قياس 42', reply)
+        self.assertIn('الوزن وحده ما يكفي', reply)
+        self.assertTrue(strategy.fact_requires_human(question, product))
+
     def test_admin_approvals_allow_only_their_own_claim(self):
         for cue, text in strategy.SALES_CUES.items():
             with self.subTest(cue=cue):

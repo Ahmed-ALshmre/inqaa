@@ -121,6 +121,24 @@ class ConversationContextTests(unittest.TestCase):
             self.assertFalse(m.reply_reasks_known_product(result['reply']))
             self.assertEqual(m.get_active_product_binding(self.db,self.sender)['product_id'],'F2')
 
+    def test_fit_question_about_part_of_photo_does_not_suggest_another_product(self):
+        suit = dict(CATALOG[0], product_id='P010', product_name='سوت',
+                    sizes='من 55 كيلو الى 130 قياسات خاصة متوفر',
+                    fabric='قماش فرسان درجة أولى', price='17000')
+        shirt = dict(CATALOG[1], product_id='P009', product_name='قميص رباط',
+                     sizes='وزن 73–78 كيلو = قياس 44', price='16000')
+        with patch.object(m, 'load_products_from_file', return_value=[suit, shirt]), \
+             patch.object(m, 'load_active_products', return_value=[suit, shirt]):
+            m.complete_customer_product_link(self.db, self.sender, suit,
+                                             'image_recognition', source='image_recognition')
+            result = self.event('٧٥ بس اذا القميص عريض ٤٢ يناسبني')
+            self.assertIn('سوت', result['reply'])
+            self.assertNotIn('قميص رباط', result['reply'])
+            self.assertEqual(m.get_active_product_binding(self.db, self.sender)['product_id'], 'P010')
+            suggested = self.db.execute('''SELECT 1 FROM customer_product_interests
+                WHERE sender_id=? AND product_id='P009' ''', (self.sender,)).fetchone()
+            self.assertIsNone(suggested)
+
     def test_opening_duplicate_name_uses_unique_ad_binding(self):
         catalog = [dict(p, product_name='فستان',ad_id=str(i+100)) for i,p in enumerate(CATALOG)]
         self.ev['ad_id']='101'

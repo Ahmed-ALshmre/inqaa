@@ -10233,13 +10233,28 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # لا يتم إرسال أي قائمة أو صور تلقائياً هنا
     _catalog_search_matches = []
     _catalog_search_request_info = {}
+    photo_fit_followup = False
     if message_type != "image" and ev.get("text"):
         search_result = search_available_products_for_request(ev.get("text"), products, limit=5)
         request_info = search_result.get("request") or {}
         matches = search_result.get("matches") or []
+        text = ev.get('text', '')
+        # A size/fit reply after a confirmed photo describes that garment,
+        # even if it names a component such as "القميص". A catalogue search
+        # for the component can otherwise inject another product's size table.
+        asks_for_another_model = bool(re.search(
+            r'(?:اريد|أريد|ابغي|غير|ثاني|بدل|وريني|دزيلي).{0,30}(?:موديل|قطعة|فستان|سوت|قميص|طقم|بديل)'
+            r'|(?:موديل|قطعة|فستان|سوت|قميص|طقم|بديل).{0,20}(?:غير|ثاني|بدل)', text))
+        photo_fit_followup = bool(
+            active_binding and active_binding.get('source') in
+            {'image_recognition', 'manual_admin', 'ad_ref'}
+            and re.search(r'[0-9٠-٩]', text)
+            and re.search(r'وزن|كيلو|قياس|مقاس|يناسب|عريض|واسع|ضيق|يلبس|عمر|سن[هة]', text)
+            and not sales_context.browse_request(text) and not asks_for_another_model)
         skip_search_for_current_context = bool(
             customer_products and (_is_contextual_product_question(ev.get("text", "")) or
-                (is_product_detail_followup(ev.get("text", "")) and select_customer_context_product(ev.get("text", ""), customer_products)))
+                (is_product_detail_followup(ev.get("text", "")) and select_customer_context_product(ev.get("text", ""), customer_products))
+                or photo_fit_followup)
         )
         if request_info.get("is_search") and not skip_search_for_current_context and matches:
             remember_product_search_results(db, ev["sender_id"], matches, request_info)
@@ -10422,6 +10437,11 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # A prior review must not silence new questions after AI is resumed.
     # Resolve the current explicit choice before falling back to customer memory.
     matched_product, match_method, image_result = match_product(db, ev, products)
+    if not matched_product and photo_fit_followup and active_binding:
+        matched_product = next((p for p in products
+                                if p.get('product_id') == active_binding.get('product_id')), None)
+        if matched_product:
+            match_method = 'customer_memory'
     if target:
         matched_product, match_method = target, "first_message_name" if ev.get('_first_message_product_id') else "text"
         if ((ev.get('_ad_source') or {}).get('resolution') == 'matched'

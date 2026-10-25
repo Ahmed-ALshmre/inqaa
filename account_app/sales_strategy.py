@@ -508,6 +508,19 @@ def missing_fact_reply(question, product):
         return 'الوزن وحده ما يكفي أحدد قياس مضبوط لهالموديل؛ شنو قياس الملابس المعتاد؟'
     if 'فيديو' in text and not product.get('video_url'):
         return 'هسه ما عندي فيديو لهالموديل، المتوفر صوره.'
+    if re.search(r'لاستيك|استيك|دگم|دكم', text) and not re.search(
+            r'لاستيك|استيك|دگم|دكم', normalized(' '.join(
+                customer_copy.fact(product.get(key)) for key in
+                ('closure', 'stretch', 'description', 'faq', 'notes')))):
+        return ('تدللين عيني 🌷 تفصيل القطعة إذا لاستيك لو دگم يحتاج أتأكد منه من نفس الموديل. '
+                'خليت الموظفة تراجعه حتى تختارين وإنتِ مرتاحة.')
+    if re.search(r'عريض|واسع|ضيق', text) and re.search(r'\d{2}', text) and not measurement_fact(product, 'width'):
+        size = re.search(r'(?<!\d)([3-6]\d)\s*(?:يناسب|يجي|يلبس)', text)
+        chosen = f'قياس {size[1]}' if size else 'القياس اللي ذكرتيه'
+        name = customer_copy.fact(product.get('product_name')).strip() or 'القطعة'
+        part = f'القميص بهال{name}' if 'قميص' in text and 'سوت' in normalized(name) else name
+        return (f'عيني، {chosen} وعرض {part} يحتاجن قياس بالسنتيمتر حتى أتأكد إذا يجيج مريح؛ '
+                'الوزن وحده ما يكفي. خليت الموظفة تتأكدلج من نفس الموديل 🌷')
     if re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not measurement_fact(product, 'width'):
         return 'عرض القطعة بالسنتيمتر يحتاج قياس من المتجر حتى نتأكد من الرقم الصحيح.'
     return ''
@@ -515,5 +528,9 @@ def missing_fact_reply(question, product):
 
 def fact_requires_human(question, product):
     text = normalized(question)
-    return (bool(product) and bool(re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر', text))
+    if not product:
+        return False
+    if re.search(r'لاستيك|استيك|دگم|دكم', text) and missing_fact_reply(question, product):
+        return True
+    return (bool(re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر|عريض|واسع|ضيق', text))
             and not measurement_fact(product, 'width'))
