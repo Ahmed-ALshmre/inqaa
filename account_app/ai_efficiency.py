@@ -143,8 +143,10 @@ def vision_choice(payload, products):
             raise ValueError('incomplete')
         text = raw.strip().removeprefix('```json').removeprefix('```').removesuffix('```').strip()
         if text.startswith('{'):
-            value = json.loads(text)['product_id']
+            parsed = json.loads(text)
+            value = parsed['product_id']
         else:
+            parsed = {}
             value = text.strip('"\'')
         if value is None or str(value).upper() in {'NONE', 'NO_MATCH', 'NULL'}:
             return {'product_found': False, 'product_id': '', 'confidence': 0,
@@ -152,8 +154,16 @@ def vision_choice(payload, products):
         ids = {str(p['product_id']) for p in products}
         if value not in ids:
             raise ValueError('unknown product')
-        return {'product_found': True, 'product_id': value, 'confidence': 100,
-                'reason': 'Catalog visual match', 'raw': raw}
+        result = {'product_found': True, 'product_id': value, 'confidence': 100,
+                  'reason': 'Catalog visual match', 'raw': raw}
+        try:
+            from .product_variants import single_color
+        except ImportError:
+            from product_variants import single_color
+        color = single_color(parsed.get('observed_color'))
+        if color:
+            result['observed_color'] = color
+        return result
     except (KeyError, IndexError, TypeError, ValueError):
         return {'product_found': False, 'product_id': '', 'service_error': True,
                 'error_code': 'invalid_vision_response', 'reason': 'Incomplete or invalid image analysis response'}

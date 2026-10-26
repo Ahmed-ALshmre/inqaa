@@ -68,6 +68,11 @@ def consensus(results):
         return failed
     matches = {r['product_id']: r for r in results if r.get('product_found') and r.get('product_id')}
     if len(matches) == 1:
-        return next(iter(matches.values()))
+        result = dict(next(iter(matches.values())))
+        colors = {r['observed_color'] for r in results if r.get('product_found') and r.get('observed_color')}
+        result.pop('observed_color', None)
+        if len(colors) == 1:
+            result['observed_color'] = next(iter(colors))
+        return result
     return {'product_found': False, 'product_id': '', 'confidence': 0,
             'reason': 'Conflicting vision matches' if matches else 'No confident vision match'}

@@ -8,12 +8,13 @@ import math
 import re
 
 try:
-    from . import customer_copy, product_albums, product_variants
+    from . import customer_copy, product_albums, product_variants, catalog_profile
     from .pricing import terms
 except ImportError:
     import customer_copy
     import product_albums
     import product_variants
+    import catalog_profile
     from pricing import terms
 
 
@@ -52,6 +53,8 @@ def _facts(product, field):
 
 
 def _audience(product):
+    if product.get('audience') in catalog_profile.AUDIENCES:
+        return product['audience']
     text = ' '.join(_facts(product, field) for field in ('category', 'product_name'))
     groups = {
         'boys': r'ولادي|ولاد|اولادي|اولاد|صبيان|\bboys?\b',
@@ -64,6 +67,8 @@ def _audience(product):
 
 
 def _category(product):
+    if product.get('product_type') in catalog_profile.TYPES and product.get('product_type') != 'other':
+        return product['product_type']
     text = _facts(product, 'category')
     groups = (
         ('dresses', r'فستان|فساتين|dress'),
@@ -73,7 +78,12 @@ def _category(product):
         ('trousers', r'بنطل|بنطر|شروال|trouser|pants'),
         ('tops', r'بلوز|قميص|قمصان|shirt|blouse'),
     )
-    return next((name for name, pattern in groups if re.search(pattern, text)), text)
+    matched = next((name for name, pattern in groups if re.search(pattern, text)), '')
+    if not matched:
+        matched = next((name for name, pattern in groups if re.search(pattern, _facts(product, 'product_name'))), '')
+    if matched:
+        return matched
+    return '' if text in {'اطفال', 'ملابس', 'ملابس اطفال', 'بناتي', 'ولادي', 'نسائي', 'رجالي', 'اخرى'} else text
 
 
 def _size_data(product):
@@ -119,14 +129,21 @@ def eligible_related_products(product, products, *, size='', age_years=None,
     source = str(product.get('product_id') or '').strip()
     store = _store(product)
     target_audience = str(audience or _audience(product)).strip().lower()
-    if target_audience and target_audience not in {'boys', 'girls', 'women', 'men'}:
+    if target_audience and target_audience not in catalog_profile.AUDIENCES:
         return []
     catalog = {str(item.get('product_id') or '').strip(): item for item in products or []
                if isinstance(item, dict) and _store(item) == store}
     result = []
-    for pid in normalize_related_ids(product.get('related_product_ids')):
+    groups = set(product.get('recommendation_groups') or [])
+    ids = normalize_related_ids(product.get('related_product_ids'))
+    ids += [pid for pid, candidate in catalog.items() if pid not in ids and groups
+            and groups & set(candidate.get('recommendation_groups') or [])]
+    ids.sort(key=lambda pid: -catalog_profile.normalize(catalog.get(pid) or {})['recommendation_priority'])
+    for pid in ids:
         candidate = catalog.get(pid)
         if not candidate or pid == source or product_albums.stock_state(candidate) != 'available':
+            continue
+        if candidate.get('recommendation_enabled') is False:
             continue
         quantity = candidate.get('stock_quantity')
         if quantity not in (None, ''):
@@ -138,7 +155,7 @@ def eligible_related_products(product, products, *, size='', age_years=None,
                 continue
         if _category(candidate) != category:
             continue
-        if target_audience and _audience(candidate) != target_audience:
+        if target_audience and not catalog_profile.compatible_audience(_audience(candidate), target_audience):
             continue
         if not target_audience and _audience(candidate):
             continue  # An ambiguous source does not prove a gender/age audience.

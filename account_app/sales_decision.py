@@ -115,12 +115,40 @@ def unresolved_purchase_questions(state, product):
     return result
 
 
+def required_details(messages):
+    """Distinguish an explicit purchase condition from an earlier information question."""
+    required = []
+    for message in messages:
+        direction, text = message['direction'], message['text'] or ''
+        if direction == 'outgoing':
+            required = advance_details(required, direction, text)
+            continue
+        if direction != 'incoming':
+            continue
+        retained = advance_details(required, direction, text)
+        required = [key for key in required if key in retained]
+        for clause in re.split(r'[،,.؟?\n]+|\s+(?:بس|لكن)\s+', normalized(text)):
+            if re.search(r'مو\s*شرط|مو مهم|ما يهمني|ما\s*(?:احتاج|اريد)\s*(?:اعرف|تتاكد)', clause):
+                continue
+            if not re.search(r'(?<!\w)(?:اذا|شرط|بشرط|لازم|ضروري)(?!\w)|'
+                             r'لا\s+(?:تثبت\w*|ثبتي|تحجز\w*|احجزي)', clause):
+                continue
+            for key, (_, pattern) in DETAILS.items():
+                if key not in required and re.search(pattern, clause):
+                    required.append(key)
+    return required
+
+
 def budget_alternatives(question, state, products, matched, delivery_fee):
     """At most two verified cheaper retail options, preserving explicit filters.
 
     Unknown age/weight charts, mixed baskets and ambiguous bundle units must go
     through normal clarification, never a confident recommendation.
     """
+    try:
+        from . import product_links, catalog_profile
+    except ImportError:
+        import product_links, catalog_profile
     if not matched or not re.search(r'ارخص|ميزاني|باقل', normalized(question)):
         return []
     evidence = [sales_answers.evidence_text(item) for item in (state or {}).get('evidence', [])]
@@ -159,10 +187,10 @@ def budget_alternatives(question, state, products, matched, delivery_fee):
     age_text = next((normalized(t) for t in reversed(sources) if re.search(r'عمر|سنوات|سنه|سنة|شهر|سنتين', normalized(t))), '')
     age = None
     if age_text:
-        match = re.search(r'(\d+)\s*(?:سنوات|سن[ةه])', age_text)
-        if not match or re.search(r'نص|نصف|شهر|سنتين', age_text):
+        ages = product_variants.child_ages(age_text)
+        if len(ages) != 1:
             return []
-        age = int(match[1])
+        age = ages[0]
     # A customer's weight alone does not establish garment size equivalence.
     if not filters.get('sizes') and any(re.search(r'وزن|كيلو|كغم', normalized(t)) for t in sources):
         return []
@@ -175,14 +203,18 @@ def budget_alternatives(question, state, products, matched, delivery_fee):
         return []
     if count != 1:
         return []
-    category = normalized(matched.get('category'))
+    category = product_links._category(matched)
     if not category:
         return []
     result = []
     for product in products or []:
         if product.get('product_id') == matched.get('product_id') or product_albums.stock_state(product) != 'available':
             continue
-        if normalized(product.get('category')) != category:
+        if (product.get('recommendation_enabled') is False
+                or product_links._store(product) != product_links._store(matched)
+                or product_links._category(product) != category
+                or not catalog_profile.compatible_audience(product_links._audience(product),
+                    catalog_profile.query_audience(question) or product_links._audience(matched))):
             continue
         available_colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
         if rejected_colors and (not available_colors or not set(available_colors) - rejected_colors):
