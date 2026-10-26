@@ -113,6 +113,17 @@ def is_confirmation(text):
     return bool(re.fullmatch(affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*", normalized(text).strip()))
 
 
+def delivery_fee_inquiry(text):
+    """A question about a single piece's shipping is not a condition of purchase."""
+    clean = normalized(text)
+    if not (re.search(r'توصيل|شحن', clean) and re.search(r'مجاني|بلاش|اجور|رسوم|شكد|كم', clean)):
+        return False
+    if re.search(r'بشرط|(?<!\w)شرط(?!\w)|فقط|احجز|حجز|ثبت|اشتري|اطلب|اخذ|اريد|رفض|ارجع|رجع|ما\s*عجب|استلام', clean):
+        return False
+    return bool(re.search(r'حتى\s*اذا|(?<!\w)(?:هل|يعني)(?!\w)|'
+                          r'(?<!\w)اذا\s*(?:بس\s*)?(?:قطع[هة]|وحد[هة]|1)(?!\w)', clean))
+
+
 def unresolved_purchase_terms(text):
     """Do not treat price questions or conditional terms as purchase consent.
 
@@ -121,6 +132,8 @@ def unresolved_purchase_terms(text):
     than blocking every question mark or every occurrence of "if".
     """
     clean = normalized(text)
+    if delivery_fee_inquiry(text):
+        return 'unanswered_price_or_shipping'
     if re.search(
             r'(?:شكد|كم|بشكد|بيش|شنو).{0,22}(?:سعر|المجموع|توصيل|تحسب|يطلع)|'
             r'(?:سعر|توصيل|المجموع).{0,16}(?:شكد|كم|بيش)|'

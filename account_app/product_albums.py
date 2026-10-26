@@ -36,7 +36,15 @@ def image_question(question,index):
 def eligible_positions(images,products,question=''):
     positions=current_positions(images,products)
     return [p for p in positions if p['available']
-            and all(v['supported'] is True for v in product_variants.assess(p,question if len(positions)==1 else image_question(question,p['image_index'])))]
+            and all(v['supported'] is True for v in product_variants.assess(p,position_question(p,question,len(positions))))]
+
+
+def position_question(item, question, count):
+    specific = question if count == 1 else image_question(question, item['image_index'])
+    color = product_variants.single_color(item.get('observed_color'))
+    if color and not product_variants.requested(specific)['colors']:
+        specific += ' اللون ' + color
+    return specific
 
 
 def variant_sentences(product,question):
@@ -45,6 +53,19 @@ def variant_sentences(product,question):
     for check in checks:
         value=check['value']
         if check['field']=='size':
+            if check.get('age_based'):
+                age_label = product_variants.age_text(value)
+                if check['supported']:
+                    sentences.append(f'عمر {age_label} متوفر')
+                else:
+                    known = customer_copy.fact(product.get('sizes'), 'sizes')
+                    sentence = f'عمر {age_label} مو ضمن قياسات هالموديل، المتوفر {known}'
+                    fit = product_variants.boundary_fit(product, float(value)) if re.fullmatch(r'\d+(?:\.\d+)?', value) else None
+                    build = product_variants.child_build(question)
+                    if fit and (not build or build == fit['build']):
+                        sentence += f"؛ ممكن يناسبه قياس {fit['size']} سنوات إذا {fit['condition']}"
+                    sentences.append(sentence)
+                continue
             if check['supported'] is False:
                 known=customer_copy.fact(product.get('sizes'),'sizes')
                 sentences.append(f'قياس {value} مو موجود بهذا الموديل، قياساته {known}')
@@ -83,8 +104,9 @@ def current_positions(images, products):
         product = catalog.get(item.get('product_id')) if item.get('product_found') else None
         item['product_found'] = bool(product)
         # Re-read the stock, name and price; recognition memory is identity only.
-        for field in ('product_name', 'stock', 'price', 'sizes', 'colors', 'fabric', 'status'):
+        for field in ('product_name', 'stock', 'stock_quantity', 'price', 'sizes', 'colors', 'fabric', 'status'):
             item[field] = (product or {}).get(field)
+        item['observed_color'] = product_variants.single_color(item.get('observed_color'))
         item['available'] = bool(product and stock_state(product) == 'available')
         result.append(item)
     return result
@@ -93,7 +115,7 @@ def current_positions(images, products):
 UNKNOWN_REPLY = 'هذا الموديل مو متوفر عدنا حالياً.'
 
 
-def parts(images, products, question=''):
+def _individual_parts(images, products, question=''):
     lines = []
     available_count = 0
     catalog={p['product_id']:p for p in products}
@@ -103,12 +125,12 @@ def parts(images, products, question=''):
         # A known single-model lookup should answer about that model directly.
         ref = reference(item['image_index']) if len(positions) > 1 else ''
         prefix = ref + '، ' if ref else ''
-        specific=question if len(positions)==1 else image_question(question,item['image_index'])
+        specific=position_question(item,question,len(positions))
         if not item['product_found']:
             # No match is the owner's customer-facing availability policy.
             # Keep identity unknown internally, including its pending review.
             lines.append(prefix + ('ما گدرت أتأكد من هذا الموديل هسه، خليني أراجعه.'
-                                   if item.get('service_error') else UNKNOWN_REPLY))
+                                   if item.get('service_error') or item.get('pending') else UNKNOWN_REPLY))
             continue
         name = customer_copy.fact(item.get('product_name')) or 'هذا الموديل'
         state = stock_state(item)
@@ -145,27 +167,119 @@ def parts(images, products, question=''):
     return lines
 
 
+def _price(product, named=False):
+    try:
+        count, price, _ = terms(product)
+    except (ValueError, TypeError, KeyError):
+        return ''
+    if not price:
+        return ''
+    label = ('سعر ' + customer_copy.fact(product.get('product_name'))) if named else 'سعره'
+    return f'{label} {price:,} د.ع' + (f' للبكج ({count} قطع)' if count > 1 else '')
+
+
+def parts(images, products, question=''):
+    """Group repeated identities while keeping original positions in memory."""
+    positions = current_positions(images, products)
+    if len(positions) <= 1:
+        return _individual_parts(images, products, question)
+    if all((not p['product_found'] and not p.get('service_error') and not p.get('pending'))
+           or (p['product_found'] and stock_state(p) == 'out') for p in positions):
+        return ['هذي الموديلات مو متوفرة عدنا حالياً.']
+
+    catalog = {p['product_id']: p for p in products}
+    groups = {}
+    for item in positions:
+        specific = position_question(item, question, len(positions))
+        checks, details = variant_sentences(item, specific) if item['product_found'] else ([], [])
+        # Different explicit sizes or factual questions are separate choices.
+        # A color change alone belongs to the same model description.
+        key = (item.get('product_id'),
+               tuple((c['field'], c['value'], c['supported']) for c in checks if c['field'] != 'color'),
+               tuple(bool(re.search(pattern, specific)) for pattern in (r'قماش|خام[ةه]', r'قياس|مقاس|عمر|وزن', r'الوان|ألوان')))
+        if not item['product_found']:
+            key = ('unknown', item['image_index'])
+        group = groups.setdefault(key, dict(item=item, positions=[], checks=[], details=[], questions=[]))
+        group['positions'].append(item['image_index'])
+        group['questions'].append(specific)
+        for check, detail in zip(checks, details):
+            if check not in group['checks']:
+                group['checks'].append(check)
+                group['details'].append(detail)
+
+    groups = list(groups.values())
+    lines = []
+    collective = []
+    for group in groups:
+        item, checks = group['item'], group['checks']
+        prefix = (' و'.join(reference(i) for i in group['positions']) + '، ') if len(groups) > 1 else ''
+        if not item['product_found']:
+            lines.append(prefix + ('ما گدرت أتأكد من هذا الموديل هسه، خليني أراجعه.'
+                                   if item.get('service_error') or item.get('pending') else UNKNOWN_REPLY))
+            collective.append(False)
+            continue
+        name = customer_copy.fact(item.get('product_name')) or 'هذا الموديل'
+        state = stock_state(item)
+        if state == 'out':
+            lines.append(prefix + name + ' مو متوفر عدنا حالياً.')
+            collective.append(False)
+            continue
+        colors = [c for c in checks if c['field'] == 'color']
+        available_colors = [c['value'] for c in colors if c['supported'] is True]
+        sizes_ok = all(c['supported'] is True for c in checks if c['field'] == 'size')
+        available = state == 'available' and sizes_ok and (not colors or bool(available_colors))
+        blocked = not sizes_ok or (bool(colors) and not available_colors)
+        line = prefix + name
+        if available:
+            color_text = (' بال' + ' وال'.join(available_colors)) if available_colors else ''
+            line += ' متوفر' + color_text + ' عيني 🌷'
+        elif state == 'unknown':
+            line += ' خليني أتأكد من توفره'
+        price = _price(catalog[item['product_id']]) if not blocked else ''
+        if price:
+            line += '، ' + price
+        details = []
+        for check, detail in zip(checks, group['details']):
+            if check['field'] == 'color':
+                if check['supported'] is True:
+                    continue
+                if check['supported'] is False:
+                    detail = 'أما ال' + check['value'] + ' فمو متوفر حالياً'
+            details.append(detail)
+        specific = ' '.join(group['questions'])
+        for pattern, field, title in [(r'قماش|خام[ةه]', 'fabric', 'القماش'),
+                                      (r'قياس|مقاس|عمر|وزن', 'sizes', 'قياساته'),
+                                      (r'لون|الوان|ألوان', 'colors', 'ألوانه')]:
+            if re.search(pattern, specific) and not any(c['field'] == field.rstrip('s') for c in checks):
+                value = customer_copy.fact(item.get(field), field)
+                details.append(title + (' ' + value if value else ' تحتاج تأكيد من المتجر'))
+        if details:
+            line += '، ' + '؛ '.join(details)
+        lines.append(line + '.')
+        collective.append(available and all(c['supported'] is True for c in checks) and not details and not colors)
+
+    # Two different available models share one natural opening and their prices.
+    names = [customer_copy.fact(g['item'].get('product_name')) for g in groups]
+    if len(groups) == 2 and all(collective) and len(set(names)) == 2:
+        prices = [_price(catalog[g['item']['product_id']], named=True) for g in groups]
+        lines = [' و'.join(names) + ' ثنينهن متوفرات عيني 🌷' +
+                 ('، ' + '، و'.join(p for p in prices if p) if any(prices) else '') + '.']
+    return lines
+
+
 def summary(images, products, question=''):
     return '\n\n'.join(parts(images, products, question))
 
 
 def response(images, products, question='', extra=''):
-    positions = current_positions(images, products)
-    if len(positions) > 1 and all((not p['product_found'] or stock_state(p) == 'out') and not p.get('service_error') for p in positions):
-        message = 'للأسف هالموديلات ما متوفرة، تحبين أقترحلج غيرهن؟'
-        return {'reply': message, 'reply_parts': [message], 'create_order': False, 'order': {},
-                'intent': 'image_check', '_local_reply': True, '_ordered_album': True, 'requires_human': False}
     bubbles = parts(images, products, question)
     if extra and bubbles:
-        eligible=eligible_positions(images,products,question)
-        target = len(bubbles)-1  # One next-step question, at the end of the whole turn.
-        if eligible and eligible[-1]['image_index'] - 1 != target:
-            extra = 'وبالنسبة للموديل المتوفر، ' + extra
-        bubbles[target] += '\n' + extra
-    return {'reply': '\n\n'.join(bubbles), 'reply_parts': bubbles,
+        bubbles.append(extra)
+    reply = '\n\n'.join(bubbles)
+    return {'reply': reply, 'reply_parts': [reply] if reply else [], '_single_message': True,
             'create_order': False, 'order': {}, 'intent': 'image_check',
             '_needs_fact_review': any(p['product_found'] and stock_state(p)!='out' and
-                (any(v['supported'] is None for v in product_variants.assess(p,question if len(images)==1 else image_question(question,p['image_index'])))
+                (any(v['supported'] is None for v in product_variants.assess(p,position_question(p,question,len(images))))
                  or any(re.search(pattern,question if len(images)==1 else image_question(question,p['image_index']))
                         and not customer_copy.fact(p.get(field),field)
                         for pattern,field in [(r'قماش|خام[ةه]','fabric'),(r'قياس|مقاس','sizes'),(r'لون|الوان|ألوان','colors')]))
@@ -180,6 +294,8 @@ def next_question(images, products, customer, context=None, store='default', que
     distinct = {x['product_id'] for x in available}
     if product_variants.requested(question)['sizes'] or product_variants.requested(question)['colors']:
         return ''  # A specific availability question needs its answer, not a sales prompt.
+    if any(product_variants.requested_age(item, question) is not None for item in available):
+        return ''
     if len(distinct) > 1:
         return 'أي واحد عجبج أكثر؟'
     evidence = ' '.join(x.get('text', '') for x in (context or {}).get('evidence', []))
@@ -220,7 +336,8 @@ def availability_error(reply, matched, products, images=None):
         for clause in clauses:
             # Color words inside the catalog name do not qualify a stock claim.
             qualifier = clause.replace(normalize((product or {}).get('product_name')), '') if product else clause
-            if re.search(r'فيديو|قياس\s*\d|مقاس\s*\d|لون|الابيض|الاسود|الاحمر|الرصاصي|البيج|الازرق|عمر\s*\d|طول|عرض|بطان', qualifier):
+            if (product_variants.colors(qualifier) or
+                    re.search(r'فيديو|قياس\s*\d|مقاس\s*\d|لون|الابيض|الاسود|الاحمر|الرصاصي|البيج|الازرق|عمر\s*\d|طول|عرض|بطان', qualifier)):
                 continue
             absent = bool(re.search(negative, clause))
             if not product and absent:

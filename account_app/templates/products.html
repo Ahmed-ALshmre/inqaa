@@ -1,253 +1,86 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#33243f">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>المنتجات — صوف</title>
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v=7">
   <link rel="icon" href="/static/icons/icon-192.png?v=7">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=25">
-  <link rel="stylesheet" href="/static/css/theme.css?v=1">
-  <link rel="stylesheet" href="/static/css/ui.css?v=1">
-  <script defer src="/static/js/ui.js?v=1"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=25"><link rel="stylesheet" href="/static/css/theme.css?v=1">
+  <link rel="stylesheet" href="/static/css/ui.css?v=1"><script defer src="/static/js/ui.js?v=1"></script>
+  <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/static/css/products.css?v=1">
 </head>
-<body class="products-page">
-  <nav class="navbar navbar-dark navbar-custom fixed-top px-3">
-    <div class="nav-main d-flex align-items-center gap-2">
-      <span class="navbar-brand fw-bold fs-6 mb-0">
-        <img class="app-brand-logo me-2" src="/static/icons/soof-mascot-idle.png?v=1" alt="شعار صوف">منتجات صوف
-      </span>
+{% macro input(id, label, placeholder='', type='text', wide=false) -%}
+<div class="catalog-field {{ 'wide' if wide else '' }}"><label for="{{ id }}">{{ label }}</label><input class="form-control" id="{{ id }}" type="{{ type }}" placeholder="{{ placeholder }}" {% if type=='number' %}min="0" step="1"{% endif %}></div>
+{%- endmacro %}
+{% macro area(id, label, placeholder='', rows=2) -%}
+<div class="catalog-field wide"><label for="{{ id }}">{{ label }}</label><textarea class="form-control" id="{{ id }}" rows="{{ rows }}" placeholder="{{ placeholder }}"></textarea></div>
+{%- endmacro %}
+{% macro select(id, label, options, empty='غير محدد') -%}
+<div class="catalog-field"><label for="{{ id }}">{{ label }}</label><select class="form-select" id="{{ id }}"><option value="">{{ empty }}</option>{% for value,title in options.items() %}<option value="{{ value }}">{{ title }}</option>{% endfor %}</select></div>
+{%- endmacro %}
+<body class="products-page catalog-workspace">
+<header class="catalog-topbar"><a href="/dashboard" class="catalog-brand"><img src="/static/icons/soof-mascot-idle.png" alt="صوف"><span>صوف <small>إدارة المنتجات</small></span></a><nav aria-label="تنقل الصفحة"><a href="/dashboard">المحادثات</a><a href="/orders">الطلبات</a><a href="/settings">الإعدادات</a></nav><details class="catalog-tools"><summary><i class="bi bi-three-dots"></i><span>أدوات الكتالوج</span></summary><div><button type="button" onclick="exportProducts()">تصدير المنتجات</button><button type="button" onclick="document.getElementById('productsImportInput').click()">استيراد المنتجات</button><a href="/settings/maintenance">النسخ الاحتياطي</a></div></details><input type="file" id="productsImportInput" accept="application/json,.json" hidden onchange="importProductsFile(this)"></header>
+<main class="products-layout catalog-layout">
+<aside class="products-list-panel catalog-library" aria-label="مكتبة المنتجات">
+  <div class="catalog-library-heading"><div><span class="catalog-eyebrow">الكتالوج</span><h1>المنتجات <span id="productsCount">—</span></h1></div><button class="catalog-icon-button" type="button" onclick="loadProducts()" aria-label="تحديث المنتجات"><i class="bi bi-arrow-clockwise"></i></button></div>
+  <div class="catalog-filters"><label class="visually-hidden" for="productsStoreSelect">المتجر</label><select class="form-select" id="productsStoreSelect" aria-label="المتجر"></select><div class="catalog-search"><i class="bi bi-search"></i><input id="productSearch" type="search" placeholder="اسم، كود، لون أو مقاس" aria-label="بحث المنتجات" oninput="renderProducts()"></div>
+    <div class="catalog-filter-pair"><select id="productAudienceFilter" aria-label="تصفية الجمهور" onchange="renderProducts()"><option value="">كل الفئات</option>{% for key,title in catalog_schema.audiences.items() %}<option value="{{ key }}">{{ title }}</option>{% endfor %}</select><select id="productAvailabilityFilter" aria-label="تصفية التوفر" onchange="renderProducts()"><option value="">كل الحالات</option><option value="available">متوفر</option><option value="out">غير متوفر</option><option value="unknown">يحتاج تأكيد</option><option value="hidden">مخفي</option></select></div>
+    <div class="catalog-filter-pair"><select id="productGroupFilter" aria-label="تصفية المجموعة" onchange="renderProducts()"><option value="">كل المجموعات</option></select><select id="productSort" aria-label="ترتيب المنتجات" onchange="renderProducts()"><option value="name">الاسم</option><option value="priority">أولوية الاقتراح</option><option value="code">الكود</option></select></div>
+    <button class="btn btn-primary catalog-new" type="button" onclick="newProduct()"><i class="bi bi-plus-lg"></i> إضافة منتج</button>
+  </div>
+  <div class="products-list" id="productsList" aria-label="قائمة المنتجات"><p class="catalog-empty">جاري تحميل المنتجات…</p></div>
+  <footer class="catalog-library-footer">اختر منتجاً لتعديل بياناته أو ربط بدائله.</footer>
+</aside>
+<section class="product-form-panel catalog-editor" aria-label="بطاقة المنتج">
+  <div class="product-form-header catalog-editor-header"><div><button type="button" class="catalog-back-library" onclick="showProductLibrary()"><i class="bi bi-arrow-right"></i> قائمة المنتجات</button><span class="catalog-eyebrow" id="productContext">بطاقة المنتج</span><h2 id="formTitle">إضافة منتج</h2><span id="saveState" role="status">لا توجد تعديلات</span></div><div class="catalog-navigation"><button type="button" onclick="navigateProduct(-1)" id="previousProduct" aria-label="المنتج السابق"><i class="bi bi-chevron-right"></i></button><span id="productPosition">جديد</span><button type="button" onclick="navigateProduct(1)" id="nextProduct" aria-label="المنتج التالي"><i class="bi bi-chevron-left"></i></button></div></div>
+  <form id="productForm" class="product-form catalog-form" novalidate onsubmit="saveProduct(event)">
+    <div class="catalog-profile-summary"><div class="catalog-summary-image" id="productSummaryImage"><i class="bi bi-bag"></i></div><div><strong id="productSummaryName">منتج جديد</strong><p id="productSummaryMeta">حدد الجمهور ونوع القطعة ليسهل اقتراحها.</p></div><div class="catalog-completeness"><span id="profileReadiness">بيانات المنتج</span><progress id="profileProgress" max="7" value="0"></progress></div></div>
+    <div class="catalog-tabbar" role="tablist" aria-label="أقسام بطاقة المنتج">
+      {% for id,title,icon in [('basics','الأساسيات','box'),('fit','الجمهور والمقاسات','rulers'),('knowledge','تفاصيل البيع','chat-square-text'),('media','الصور','images'),('links','البدائل والاقتراح','diagram-3')] %}<button type="button" role="tab" id="tab-{{ id }}" aria-controls="panel-{{ id }}" aria-selected="{{ 'true' if loop.first else 'false' }}" onclick="showProductTab('{{ id }}')"><i class="bi bi-{{ icon }}"></i>{{ title }}</button>{% endfor %}
     </div>
-    <div class="nav-actions d-flex align-items-center gap-2">
-      <a class="btn btn-outline-light btn-sm" href="/dashboard">
-        <i class="bi bi-chat-dots me-1"></i>الداشبورد
-      </a>
-      <a class="btn btn-outline-light btn-sm" href="/orders">
-        <i class="bi bi-receipt me-1"></i>الطلبات
-      </a>
-      <a class="btn btn-outline-light btn-sm" href="/settings" title="الإعدادات">
-        <i class="bi bi-gear me-1"></i>الإعدادات
-      </a>
-      <a class="btn btn-outline-light btn-sm" href="/logout"><i class="bi bi-box-arrow-left"></i><span>خروج</span></a>
-      <input type="file" id="productsImportInput" accept="application/json,.json" style="display:none" onchange="importProductsFile(this)">
-      <input type="file" id="databaseImportInput" accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/octet-stream" style="display:none" onchange="importDatabaseFile(this)">
-      <div class="btn-group btn-group-sm data-tools" role="group" aria-label="استيراد وتصدير">
-        <button class="btn btn-outline-light" type="button" onclick="exportProducts()" title="تصدير المنتجات">
-          <i class="bi bi-box-arrow-up"></i><span>منتجات</span>
-        </button>
-        <button class="btn btn-outline-light" type="button" onclick="document.getElementById('productsImportInput').click()" title="استيراد المنتجات">
-          <i class="bi bi-box-arrow-in-down"></i><span>منتجات</span>
-        </button>
-        <button class="btn btn-outline-light" type="button" onclick="exportDatabase()" title="تصدير قاعدة البيانات">
-          <i class="bi bi-database-up"></i><span>DB</span>
-        </button>
-        <button class="btn btn-outline-light" type="button" onclick="document.getElementById('databaseImportInput').click()" title="استيراد قاعدة البيانات">
-          <i class="bi bi-database-down"></i><span>DB</span>
-        </button>
-      </div>
-      <button class="btn btn-outline-light btn-sm" onclick="loadProducts()">
-        <i class="bi bi-arrow-clockwise"></i>
-      </button>
-    </div>
-  </nav>
-
-  <main class="products-layout">
-    <section class="products-list-panel">
-      <div class="products-toolbar">
-        <div>
-          <div class="fw-bold">المنتجات</div>
-          <div class="small" style="color:var(--text-muted)" id="productsCount">—</div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="newProduct()">
-          <i class="bi bi-plus-circle me-1"></i>منتج جديد
-        </button>
-      </div>
-      <div class="p-2 border-bottom" style="border-color:var(--border)!important;">
-        <select class="form-select form-select-sm mb-2" id="productsStoreSelect" aria-label="المتجر"></select>
-        <div class="input-group input-group-sm">
-          <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
-          <input type="text" class="form-control border-0" id="productSearch" placeholder="بحث بالاسم أو الكود..."
-            oninput="renderProducts()">
-        </div>
-      </div>
-      <div class="products-list" id="productsList">
-        <div class="text-center py-5" style="color:var(--text-muted)">
-          <div class="spinner-border spinner-border-sm mb-2"></div>
-          <div class="small">جاري التحميل...</div>
-        </div>
-      </div>
+    <div id="productFormError" class="catalog-error" role="alert" hidden></div>
+    <section id="panel-basics" role="tabpanel" aria-labelledby="tab-basics" class="catalog-tabpanel">
+      <div class="catalog-section-heading"><h3>هوية المنتج وسعره</h3><p>المعلومات التي يرجع لها المساعد عند سؤال الزبون.</p></div>
+      <div class="catalog-fields">{{ input('productName','اسم المنتج','مثال: فستان الاميرات',wide=true) }}{{ input('productId','كود المنتج','P015') }}{{ input('productPrice','السعر بالدينار','13000، أو بكج 3 قطع بـ25000') }}
+      {{ select('productStatus','الظهور بالكتالوج',{'active':'نشط — ظاهر','inactive':'مخفي'}) }}{{ select('productStock','التوفر',{'متوفر':'متوفر','نفذ':'غير متوفر'},'غير مؤكد') }}{{ input('productStockQuantity','الكمية الفعلية المتبقية','اتركها فارغة إذا غير معروفة','number') }}{{ input('productOffer','العرض الحالي','مثال: عرض على آخر القطع') }}{{ area('productDescription','وصف قصير للزبون','ما الذي يميز القطعة؟ وصف حقيقي بدون أسعار قديمة.') }}
+      </div><details class="catalog-advanced"><summary>ربط الإعلان واسم الطلب</summary><div class="catalog-fields">{{ input('productRef','مرجع الإعلان Ref') }}{{ input('productAdId','معرف الإعلان Ad ID') }}{{ input('productOrderName','اسم المنتج في الطلبات','الاسم المطابق في نظام الطلبات',wide=true) }}</div></details>
     </section>
-
-    <section class="product-form-panel">
-      <div class="product-form-header">
-        <div>
-          <div class="fw-bold" id="formTitle">إضافة منتج</div>
-          <div class="small" style="color:var(--text-muted)">التعديلات تحفظ مباشرة في products.json</div>
-        </div>
-        <button class="btn btn-outline-secondary btn-sm" onclick="newProduct()">
-          <i class="bi bi-eraser me-1"></i>تفريغ
-        </button>
-      </div>
-
-      <form id="productForm" class="product-form" onsubmit="saveProduct(event)">
-        <div class="product-ai-hint"><i class="bi bi-stars"></i><div><strong>بطاقة معرفة المنتج</strong><span>كلما كانت الحقول دقيقة، فهم المساعد المنتج وأجاب الزبونة بثقة أكبر.</span></div></div>
-        <div class="row g-3">
-          <div class="col-12"><h6 class="product-section-title">التعريف والبيع</h6></div>
-          <div class="col-md-4">
-            <label class="form-label">كود المنتج</label>
-            <input class="form-control" id="productId" required placeholder="P009">
-          </div>
-          <div class="col-md-8">
-            <label class="form-label">اسم المنتج</label>
-            <input class="form-control" id="productName" required placeholder="اسم المنتج">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label" for="productOrderName">اسم المنتج عند إرسال الطلب</label>
-            <input class="form-control" id="productOrderName" placeholder="اسم المنتج المطابق في Menger">
-            <div class="small text-muted mt-1">يُستخدم في تلغرام وAPI فقط عند تثبيت الطلب. اتركه فارغاً لاستخدام اسم المنتج الحالي.</div>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">السعر</label>
-            <input class="form-control" id="productPrice" placeholder="7000 دينار">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">الحالة</label>
-            <select class="form-select" id="productStatus">
-              <option value="active">نشط / يظهر بالكتالوج</option>
-              <option value="inactive">غير نشط / مخفي</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">المخزون</label>
-            <input class="form-control" id="productStock" placeholder="متوفر / نفذ">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">الكمية المتوفرة</label>
-            <input class="form-control" id="productStockQuantity" type="number" min="0" placeholder="مثال: 25">
-          </div>
-          <div class="col-12"><h6 class="product-section-title">الخيارات والمواصفات</h6></div>
-          <div class="col-md-6">
-            <label class="form-label">المقاسات</label>
-            <input class="form-control" id="productSizes" placeholder="S / M / L / XL">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">الألوان</label>
-            <input class="form-control" id="productColors" placeholder="وردي، أزرق...">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">Ref</label>
-            <input class="form-control" id="productRef" placeholder="inqi_set_03">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">Ad ID</label>
-            <input class="form-control" id="productAdId" placeholder="38">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">التصنيف</label>
-            <input class="form-control" id="productCategory" placeholder="سوت نسائي / دشداشة نسائية">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">القماش</label>
-            <input class="form-control" id="productFabric" placeholder="تركي، كريب، لينن...">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">القصة والاستخدام</label>
-            <input class="form-control" id="productStyle" placeholder="واسع، رسمي، للدوام...">
-          </div>
-          <div class="col-12">
-            <h6 class="product-section-title">منتجات مرتبطة تختارينها للمساعد</h6>
-            <p class="small text-muted mb-2" id="relatedProductsHelp">اختاري موديلات مختلفة من المتجر نفسه ليقترح المناسب منها حسب القياس والعمر والتصنيف. الربط متبادل بين المنتجات المختارة، ولا يضيف قطعة إلى حجز الزبون.</p>
-            <label class="form-label" for="relatedProductsSearch">ابحثي عن منتج بالاسم أو الكود أو التصنيف أو القياس</label>
-            <input class="form-control mb-2" id="relatedProductsSearch" type="search" autocomplete="off" aria-describedby="relatedProductsHelp">
-            <div class="d-flex flex-wrap gap-2 mb-2" id="relatedProductsSelected" aria-label="المنتجات المرتبطة المختارة"></div>
-            <div class="border rounded p-2" id="relatedProductsOptions" style="max-height:240px;overflow-y:auto" role="group" aria-label="اختيار المنتجات المرتبطة"></div>
-            <div class="small text-muted mt-1" id="relatedProductsCount" role="status" aria-live="polite"></div>
-          </div>
-          <div class="col-12">
-            <h6 class="product-section-title">عبارات تشجيع تؤكدينها لهذا المنتج</h6>
-            <p class="small text-muted mb-2">حددي الحقائق التي تؤكدينها لهذا الموديل الآن فقط، وحدّثي الاختيار أو أزيليه عندما تتغير حالة المخزون أو الطلب. يختار المساعد عبارة مناسبة دون اختراع أعداد أو مواعيد. تفاصيل العرض تبقى في حقل «العرض».</p>
-            <div class="d-flex flex-wrap gap-3" id="productSalesCues">
-              <label class="form-check"><input class="form-check-input" type="checkbox" name="sales_cues" value="limited_stock"> <span class="form-check-label">باقي من هذا الموديل قطع قليلة الآن (تأكيد يدوي)</span></label>
-              <label class="form-check"><input class="form-check-input" type="checkbox" name="sales_cues" value="high_demand"> <span class="form-check-label">عليه طلب</span></label>
-              <label class="form-check"><input class="form-check-input" type="checkbox" name="sales_cues" value="frequent_bookings"> <span class="form-check-label">يحجزه زبائن هواية</span></label>
-              <label class="form-check"><input class="form-check-input" type="checkbox" name="sales_cues" value="many_purchases"> <span class="form-check-label">اشتراه زبائن هواية</span></label>
-            </div>
-          </div>
-          <div class="col-12"><h6 class="product-section-title">تفاصيل موثقة تساعد على إكمال البيع</h6><p class="small text-muted">حقول اختيارية؛ اترك المعلومة غير المعروفة فارغة. وثّق القياسات والصور دون تخمين.</p></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_lining">البطانة</label><textarea class="form-control" id="knowledge_lining" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_transparency">الشفافية</label><textarea class="form-control" id="knowledge_transparency" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_stretch">المطاطية</label><textarea class="form-control" id="knowledge_stretch" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_closure">طريقة الإغلاق</label><textarea class="form-control" id="knowledge_closure" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_measurements">جدول القياسات بالسنتيمتر</label><textarea class="form-control" id="knowledge_measurements" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_fit_notes">ملاحظات الملاءمة</label><textarea class="form-control" id="knowledge_fit_notes" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_bundle_contents">محتويات البكج</label><textarea class="form-control" id="knowledge_bundle_contents" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_sale_unit">طريقة البيع: مفرد أو بكج</label><textarea class="form-control" id="knowledge_sale_unit" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_real_photo_notes">توثيق الصور الحقيقية</label><textarea class="form-control" id="knowledge_real_photo_notes" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_video_url">رابط فيديو المنتج</label><textarea class="form-control" id="knowledge_video_url" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_faq">أسئلة متكررة وإجابات موثقة</label><textarea class="form-control" id="knowledge_faq" rows="2"></textarea></div>
-<div class="col-md-6"><label class="form-label" for="knowledge_inspection_policy">سياسة الفحص والاستبدال</label><textarea class="form-control" id="knowledge_inspection_policy" rows="2"></textarea></div>
-<div class="col-12"><h6 class="product-section-title">الصور ومعرفة الذكاء الاصطناعي</h6></div>
-          <div class="col-12">
-            <label class="form-label">صور المنتج</label>
-            <input id="productImageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onchange="uploadProductImages(this)">
-            <textarea id="productImages" hidden></textarea>
-            <button class="product-upload-zone" type="button" onclick="document.getElementById('productImageFiles').click()">
-              <i class="bi bi-cloud-arrow-up"></i>
-              <strong>اختيار صور من الجهاز</strong>
-              <span>PNG أو JPG أو WEBP — حتى 10 صور</span>
-            </button>
-            <div class="product-upload-progress" id="productUploadProgress"></div>
-          </div>
-          <div class="col-12">
-            <div class="product-image-preview" id="productImagePreview"></div>
-          </div>
-          <div class="col-12">
-            <label class="form-label">أسماء البحث والكلمات التي قد تستخدمها الزبونة</label>
-            <textarea class="form-control" id="productKeywords" rows="2"></textarea>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">وصف البيع للزبونة</label>
-            <textarea class="form-control" id="productDescription" rows="4"></textarea>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">الوصف البصري للتعرّف على الصور</label>
-            <textarea class="form-control" id="productVisualDescription" rows="4"></textarea>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">العرض</label>
-            <input class="form-control" id="productOffer" placeholder="سعر خاص">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">التوصيل</label>
-            <input class="form-control" id="productDelivery" placeholder="توصيل لجميع المحافظات">
-          </div>
-          <div class="col-12">
-            <label class="form-label">ملاحظات</label>
-            <textarea class="form-control" id="productNotes" rows="2"></textarea>
-          </div>
-        </div>
-
-        <div class="product-form-actions">
-          <button class="btn btn-primary" type="submit" id="saveProductBtn">
-            <i class="bi bi-save me-1"></i>حفظ المنتج
-          </button>
-          <button class="btn btn-outline-danger" type="button" id="deleteProductBtn" onclick="deleteCurrentProduct()" style="display:none;">
-            <i class="bi bi-trash me-1"></i>حذف
-          </button>
-        </div>
-      </form>
+    <section id="panel-fit" role="tabpanel" aria-labelledby="tab-fit" class="catalog-tabpanel" hidden>
+      <div class="catalog-section-heading"><h3>لمن تناسب القطعة؟</h3><p>اختيارات واضحة للجمهور والعمر والمقاس، مع إبقاء المقاسات القديمة كما هي إلى أن تعدّلها.</p></div>
+      <div class="catalog-fields">{{ select('productAudience','الجمهور',catalog_schema.audiences) }}{{ select('productType','نوع القطعة',catalog_schema.product_types) }}{{ select('productSizeSystem','طريقة تحديد المقاس',catalog_schema.size_systems) }}{{ input('productColors','الألوان المتوفرة','وردي، بيج، جوزي') }}</div>
+      <div class="catalog-size-block catalog-fields" id="ageSizeFields" hidden>{{ input('productAgeMin','من عمر','مثال: 6','number') }}{{ select('productAgeMinUnit','وحدة البداية',{'months':'شهر','years':'سنة'},'اختر الوحدة') }}{{ input('productAgeMax','إلى عمر','مثال: 7','number') }}{{ select('productAgeMaxUnit','وحدة النهاية',{'months':'شهر','years':'سنة'},'اختر الوحدة') }}<p class="catalog-help wide">النطاق يشمل كل الأعمار بين البداية والنهاية. إذا المتوفر أعمار متقطعة، استخدم المقاسات المحفوظة واكتب الأعمار المؤكدة فقط.</p></div>
+      <div class="catalog-size-block catalog-fields" id="weightSizeFields" hidden>{{ input('productWeightMin','من وزن / كيلو','60','number') }}{{ input('productWeightMax','إلى وزن / كيلو','90','number') }}<p class="catalog-help wide">نطاق تقريبي للبالغين، وليس ضمان ملاءمة. أضف قياسات القطعة بالسنتيمتر عند توفرها.</p></div>
+      <div class="catalog-fields"><div class="catalog-field wide" id="legacySizeField"><label for="productSizes">المقاسات المتوفرة فعلياً</label><input class="form-control" id="productSizes" placeholder="38، 40، 44 أو S / M / L أو 3 إلى 7 سنوات"><small>لا تضف قياساً أو عمراً غير متوفر.</small></div><div class="catalog-size-preview wide" id="sizePreview" role="status"></div>{{ area('knowledge_measurements','قياسات القطعة بالسنتيمتر','مثال: قياس 42 — صدر 100 سم، طول 120 سم') }}{{ area('knowledge_fit_notes','ملاحظات الملاءمة','ملاحظات مؤكدة؛ لا تخمين من الوزن فقط.') }}</div>
     </section>
-  </main>
-
-
-  <div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/static/js/mobile_app.js?v=2"></script>
-  <script src="/static/js/products.js?v=16"></script>
-</body>
-</html>
+    <section id="panel-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="catalog-tabpanel" hidden>
+      <div class="catalog-section-heading"><h3>إجابات جاهزة من معلومات صحيحة</h3><p>اترك غير المعروف فارغاً. المعلومة الفارغة لا تعني أن الميزة غير موجودة.</p></div>
+      <div class="catalog-fields">{{ input('productFabric','القماش','قطن، دانتيل، قديفة…') }}{{ input('productStyle','القصة والاستخدام','واسع، رسمي، يومي…') }}{{ input('knowledge_lining','البطانة','مبطّن بالكامل، أو وصف دقيق') }}{{ input('knowledge_transparency','الشفافية') }}{{ input('knowledge_stretch','المطاطية') }}{{ input('knowledge_closure','طريقة الإغلاق') }}{{ input('knowledge_sale_unit','طريقة البيع','مفرد أو بكج') }}{{ input('knowledge_bundle_contents','محتوى البكج وعروض العدد','مثال: قطعتين بـ16000') }}{{ area('knowledge_faq','أسئلة متكررة وإجاباتها','س: …
+ج: …') }}{{ area('knowledge_inspection_policy','سياسة الفحص الخاصة بالمنتج','اتركها فارغة لاعتماد سياسة المتجر.') }}{{ input('productDelivery','استثناء التوصيل','مثال: توصيل مجاني حسب العرض',wide=true) }}{{ area('productKeywords','أسماء البحث عند الزبائن','أسماء بديلة أو أسماء شائعة لهذا الموديل.') }}{{ area('productNotes','ملاحظات موثقة إضافية') }}</div>
+      <details class="catalog-advanced"><summary>عبارات تشجيع مؤكدة</summary><p class="catalog-help">اختيارات يدوية للمعلومات المؤكدة حالياً؛ أزلها عند تغير الواقع.</p><div id="productSalesCues" class="catalog-checks">{% for key,title in [('limited_stock','آخر قطع'),('high_demand','عليه طلب'),('frequent_bookings','يحجزه زبائن كثيرون'),('many_purchases','اشتراه زبائن كثيرون')] %}<label><input type="checkbox" name="sales_cues" value="{{ key }}">{{ title }}</label>{% endfor %}</div></details>
+    </section>
+    <section id="panel-media" role="tabpanel" aria-labelledby="tab-media" class="catalog-tabpanel" hidden>
+      <div class="catalog-section-heading"><h3>صور المنتج وألوانها</h3><p>اربط كل صورة بلونها حتى يرسل المساعد الصورة المناسبة.</p></div>
+      <input id="productImageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onchange="uploadProductImages(this)"><textarea id="productImages" hidden></textarea>
+      <button class="product-upload-zone" type="button" onclick="document.getElementById('productImageFiles').click()"><i class="bi bi-cloud-arrow-up"></i><strong>اختيار صور من الجهاز</strong><span>PNG أو JPG أو WEBP — حتى 10 صور</span></button><div id="productUploadProgress" role="status"></div><div class="product-image-preview" id="productImagePreview"></div>
+      <div class="catalog-fields">{{ input('knowledge_video_url','رابط فيديو المنتج','https://…',type='url',wide=true) }}{{ area('knowledge_real_photo_notes','ملاحظات الصور الحقيقية') }}{{ area('productVisualDescription','الوصف البصري للتعرف على الصور','القصّة، التطريز، الأجزاء والعلامات المميزة بدون تخمين.') }}</div>
+    </section>
+    <section id="panel-links" role="tabpanel" aria-labelledby="tab-links" class="catalog-tabpanel" hidden>
+      <div class="catalog-section-heading"><h3>بدائل تناسب طلب الزبون</h3><p>الربط والمجموعة يحددان المرشحين؛ التوفر والجمهور والقياس يحددان ما يمكن اقتراحه.</p></div>
+      <label class="catalog-toggle"><input type="checkbox" id="productRecommendationEnabled" checked><span><strong>السماح باقتراح هذا المنتج</strong><small>عند إيقافه يبقى الرد عنه متاحاً إذا اختاره الزبون بنفسه.</small></span></label>
+      <div class="catalog-fields">{{ select('productRecommendationPriority','أولوية الاقتراح',{'1':'1 — منخفضة','2':'2','3':'3 — عادية','4':'4','5':'5 — عالية'}) }}{{ input('productGroups','مجموعات الاقتراح','مثال: حفلات بناتي، شتوي ولادي') }}<div class="catalog-field wide"><label for="existingGroupPicker">إضافة من مجموعة موجودة</label><div class="catalog-inline"><select id="existingGroupPicker" class="form-select"><option value="">اختر مجموعة</option></select><button type="button" class="btn btn-outline-secondary" onclick="addExistingGroup()">إضافة</button></div><small>المنتجات ضمن مجموعة واحدة تصبح مرشحة لبعضها، بعد فحص الفئة والقياس.</small></div><div class="catalog-field wide"><label>المناسبات والاستخدام</label><div class="catalog-checks" id="productOccasions">{% for key,title in catalog_schema.occasions.items() %}<label><input type="checkbox" name="occasions" value="{{ key }}">{{ title }}</label>{% endfor %}</div></div>{{ area('productRecommendationNotes','سبب اقتراحه للزبون','مثال: مناسب لعيد الميلاد بسبب القصة والتطريز الموثقين.') }}</div>
+      <h4 class="catalog-subheading">ربط موديلات محددة</h4><p class="catalog-help" id="relatedProductsHelp">اختر بدائل من المتجر نفسه. الربط متبادل، ولا يضيف أي قطعة للطلب تلقائياً.</p><label class="visually-hidden" for="relatedProductsSearch">بحث المنتجات المرتبطة</label><input class="form-control" id="relatedProductsSearch" type="search" placeholder="بحث باسم المنتج أو كوده أو مقاسه" aria-describedby="relatedProductsHelp"><div id="relatedProductsSelected" class="catalog-chips" aria-label="المنتجات المرتبطة المختارة"></div><div id="relatedProductsOptions" class="catalog-related-options" role="group" aria-label="اختيار المنتجات المرتبطة"></div><div id="relatedProductsCount" class="catalog-help" role="status" aria-live="polite"></div>
+      <details class="catalog-preview"><summary><i class="bi bi-play-circle"></i> تجربة الاقتراح قبل الحفظ</summary><p>أدخل احتياجاً لتشوف البدائل المتوفرة من الروابط والمجموعات. التجربة لا ترسل شيئاً للزبون.</p><div class="catalog-fields">{{ select('previewAudience','جمهور الزبون',catalog_schema.audiences,'نفس جمهور المنتج') }}{{ input('previewAge','عمر الطفل بالأشهر','مثال: 18 = سنة ونص','number') }}{{ input('previewSize','قياس الملابس','مثال: 44 أو XL') }}{{ select('previewOccasion','المناسبة',catalog_schema.occasions,'كل المناسبات') }}</div><button type="button" class="btn btn-outline-primary" id="previewRecommendationsBtn" onclick="previewRecommendations()">عرض الاقتراحات المناسبة</button><div id="recommendationPreview" role="status" aria-live="polite"></div></details>
+    </section>
+    <details class="catalog-advanced catalog-legacy"><summary>التصنيف النصي السابق</summary><div class="catalog-fields">{{ input('productCategory','التصنيف القديم','يُحفظ كما هو؛ قوائم الجمهور ونوع القطعة أدق للاقتراح.',wide=true) }}</div></details>
+    <footer class="product-form-actions catalog-savebar"><span id="missingProfileFields">أكمل البيانات ثم احفظ المنتج.</span><div><button class="btn btn-outline-danger" type="button" id="deleteProductBtn" onclick="deleteCurrentProduct()" hidden>حذف</button><button class="btn btn-primary" type="submit" id="saveProductBtn"><i class="bi bi-check2"></i> حفظ المنتج</button></div></footer>
+  </form>
+</section>
+</main>
+<script id="catalogSchema" type="application/json">{{ catalog_schema|tojson }}</script>
+<div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script><script src="/static/js/products.js?v=17"></script>
+{% include "_mobile_nav.html" %}
+</body></html>

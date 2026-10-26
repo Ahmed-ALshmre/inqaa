@@ -8,9 +8,11 @@ import re
 try:
     from . import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from .pricing import terms, quote, offer_tiers
+    from .checkout import is_confirmation
 except ImportError:
     import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from pricing import terms, quote, offer_tiers
+    from checkout import is_confirmation
 
 REVIEWED_LESSONS = {
     'cost': (
@@ -75,11 +77,40 @@ def guidance(ev, product=None):
     ids = lesson_ids(ev, product)
     if not ids:
         return ''
+    lessons = [REVIEWED_LESSONS[key] for key in ids]
+    if product and last_pieces_price_line(product):
+        lessons = [lesson for key, lesson in zip(ids, lessons) if key != 'cost']
+        lessons.append(
+            'أسلوب عرض آخر القطع: افتتح بالعرض والسعر الحالي بجملة عراقية قصيرة، مثل «عليه عرض على آخر قطع، وصار سعره … 🌷»، '
+            'وبعدها خطوة مناسبة تكمل الحوار. الصياغة مرنة بنفس الأسلوب، وليست نصاً إلزامياً. '
+            'السعر من المنتج الحالي ولا تخترع سعراً قبل العرض أو نسبة خصم أو موعد نفاد. '
+            'لا تضف القماش والتوصيل والمجموع لسؤال السعر وحده؛ إذا سأل عنها أو جمع عدة أسئلة أجب عن المطلوب كله. '
+            'اسأل عن العمر أو القياس أو اللون المجهول فقط، ولا تكرر العرض في كل دور ولا تضغط بعد رفض أو تردد.')
     return ('[أنماط رد راجعتها من محادثات انتهت بحجز وأخرى توقفت — تستخدم حسب الحاجة]\n'
             'تعلم طريقة معالجة السؤال، ولا تنسخ ضماناً أو سعراً أو بيانات زبون من الماضي. '
             'الأمثلة أنماط صياغة؛ لا تكتب علامة … للزبون، ولا تملأ معلومة مجهولة بالتخمين. '
             'هذه الأنماط لا تثبت سبباً إحصائياً للحجز ولا تتجاوز رفض الزبون أو شرطه غير المحسوم.\n'
-            + '\n'.join(REVIEWED_LESSONS[key] for key in ids))
+            + '\n'.join(lessons))
+
+
+def last_pieces_price_line(product, history=(), quantity=None, *, allow_offer=True):
+    """The owner's short style, only for a documented plain last-batch offer."""
+    if not sales_strategy._sales_available(product) or quantity not in (None, 1):
+        return ''
+    offer = sales_strategy.normalized(sales_strategy._offer_fact(product)).strip(' .،')
+    if not re.fullmatch(r'(?:عليه\s+)?عرض(?:\s+خاص)?(?:\s+لفتر[هة]\s+محدود[هة])?\s+عل[ىي]\s+'
+                        r'(?:اخر\s+الكمي[هة]|اخر\s+(?:ال)?قطع)', offer):
+        return ''
+    try:
+        count, price, _ = terms(product)
+        if count != 1 or offer_tiers(product):
+            return ''
+    except (ValueError, TypeError, KeyError):
+        return ''
+    amount = customer_copy.chat_amount(price)
+    if not allow_offer or sales_strategy.persuasion_used(history):
+        return f'سعره {amount} 🌷'
+    return f'عليه عرض على آخر قطع، وصار سعره {amount} 🌷'
 
 
 def price_preview(product, delivery_options, quantity=None):
@@ -173,12 +204,26 @@ def customer_selection(context, customer=None):
     """Read customer answers; a staff question never supplies a missing size."""
     context, customer = context or {}, customer or {}
     selected = {key: customer.get(key) for key in ('size', 'age', 'color')}
+    selected['colors'] = []
+    selected['color_options'] = []
+    selected['ages'] = []
     stored_colors = product_variants.colors(str(selected['color'] or ''))
     if len(stored_colors) == 1:
         selected['color'] = stored_colors[0]
+    selected['colors'] = stored_colors
     for item in context.get('evidence', []):
         text = sales_strategy.normalized(product_variants.normalize_size_words(item.get('text')))
         question = sales_strategy.normalized(item.get('in_reply_to'))
+        replacement = product_variants.color_replacement(text)
+        proposed = product_variants.color_replacement(question)
+        if proposed and (is_confirmation(text) or product_variants.chosen_colors(text) == [proposed[0]]):
+            replacement = proposed
+        if replacement and replacement[1] in selected['colors']:
+            selected['colors'] = list(dict.fromkeys(replacement[0] if color == replacement[1] else color
+                                                    for color in selected['colors']))
+            selected['color'] = selected['colors'][0] if len(selected['colors']) == 1 else None
+            selected['color_options'] = []
+            continue
         # A bare number belongs to the one dimension asked in the previous turn.
         if re.fullmatch(r'\d{1,3}', text):
             dimensions = [name for name, pattern in (
@@ -188,6 +233,7 @@ def customer_selection(context, customer=None):
                 selected['size'] = text
             elif dimensions == ['age']:
                 selected['age'] = int(text)
+                selected['ages'] = [int(text)]
             continue
         if re.fullmatch(r'[2-6]?xl|xxl|xxxl|xs|[sml]', text):
             selected['size'] = text.upper()
@@ -228,23 +274,30 @@ def customer_selection(context, customer=None):
         elif re.search(r'(?:مو|لا|ما اريد)\s*(?:قياس|مقاس|سايز)', text):
             selected['size'] = None
         age = conversation_quality.child_age(text)
-        if age is not None:
+        if age is not None and (not sizes or re.search(r'عمر', text)):
             selected['age'] = age
+            selected['ages'] = product_variants.child_ages(text) or [age]
         colors = product_variants.requested(text)['colors']
         if len(colors) == 1:
             selected['color'] = colors[0]
+            selected['colors'] = colors
+            selected['color_options'] = []
         elif product_variants.colors(text):
             selected['color'] = None
+            selected['colors'] = product_variants.chosen_colors(text)
+            selected['color_options'] = colors if colors and not selected['colors'] else []
     return selected
 
 
 def selection_conflicts(product, context, customer=None):
     selected = customer_selection(context, customer)
+    if any(product_variants.order_choice_error(product, 'color', color) for color in selected['colors']):
+        return True
     for field in ('size', 'color'):
         if selected[field] and product_variants.order_choice_error(product, field, str(selected[field])):
             return True
     years = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))['years']
-    if years and selected['age'] is not None:
+    if years and selected['age'] is not None and not selected['size']:
         try:
             return not any(low <= float(selected['age']) <= high for low, high in years)
         except (TypeError, ValueError):
@@ -265,7 +318,10 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
     sizes = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))
     age_based = bool(sizes['years']) or bool(re.search(r'سن[ةه]|سنتين|سنوات|سنين|اشهر|شهر',
         sales_strategy.normalized(customer_copy.fact(product.get('sizes')))))
-    if age_based and selected['age'] is None:
+    chosen_year_size = product_variants.year_size(selected['size']) if sizes['years'] else None
+    if sizes['years'] and chosen_year_size is None and selected['size']:
+        chosen_year_size = product_variants.child_age(selected['size'])
+    if age_based and selected['age'] is None and chosen_year_size is None:
         return 'شكد العمر المطلوب؟'
     if not age_based and not selected['size']:
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
@@ -275,7 +331,8 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
         return 'شكد قياس تلبسين؟'
     if age_based:
         try:
-            supported = any(low <= float(selected['age']) <= high for low, high in sizes['years'])
+            chosen_age = chosen_year_size if chosen_year_size is not None else float(selected['age'])
+            supported = any(low <= chosen_age <= high for low, high in sizes['years'])
         except (TypeError, ValueError):
             supported = False
     else:
@@ -284,6 +341,14 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
     if not supported or context.get('open_details'):
         return ''
     colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
+    if len(selected['colors']) > 1:
+        if any(color not in colors for color in selected['colors']):
+            return ''
+        return 'قطعة من كل لون؟'
+    if len(selected['color_options']) > 1:
+        if any(color not in colors for color in selected['color_options']):
+            return ''
+        return 'تفضلين ' + ' لو '.join('ال' + color for color in selected['color_options']) + '؟'
     if not selected['color'] and len(colors) > 1:
         return 'شنو اللون اللي يعجبج؟' if colors else ''
     if len(colors) == 1 or selected['color'] in colors:
@@ -349,8 +414,13 @@ def selection_guidance(product, context, customer=None, history=()):
     if not product:
         return ''
     step = price_next_step(product, context, customer, history)
+    selected = customer_selection(context, customer)
+    plural = ('الزبون اختار الألوان معاً: ' + ' و'.join(selected['colors'])
+              + '. لا تسأله أي لون يريد مرة ثانية؛ تحقق من توفر كل لون واسأل عن عدد كل لون إذا لم يحدد. '
+              if len(selected['colors']) > 1 else '')
     return ('[توجيه الاختيار الحالي]\n'
-            'سؤال الموظفة السابق عن القياس لا يعني أن الزبونة أجابت. '
+            + plural
+            + 'سؤال الموظفة السابق عن القياس لا يعني أن الزبونة أجابت. '
             'لا تسرد نطاق القياسات أو الأوزان عند سؤال المواصفات أو القماش أو التوفر العام؛ '
             'اعرض النطاق فقط إذا طلبته صراحة. أجب عن حاجتها واسأل عن قياسها المعتاد إذا ما ذكرته. '
             'إذا القياس أو العمر معروف لا تعد السؤال عنه. '
@@ -380,8 +450,7 @@ def naturalize_last_quantity_reply(reply, product):
     offer = customer_copy.fact((product or {}).get('offer'))
     if not re.search(r'(?:آخر|اخر)\s+الكمي[هة]', offer):
         return reply
-    return re.sub(r'\s+على\s+(?:آخر|اخر)\s+الكمي[هة]',
-                  '، تره الكمية الباقية قليلة كلش، كم قطعة بس', reply)
+    return re.sub(r'على\s+(?:آخر|اخر)\s+الكمي[هة]', 'على آخر قطع', reply)
 
 
 def personalize_specifications(reply, question):

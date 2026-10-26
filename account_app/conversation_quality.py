@@ -59,18 +59,11 @@ def budget(text):
 
 
 def child_age(text):
-    text = normalized(text)
-    match = re.search(r"(?:عمر(?:ه|ها)?\s*)?(\d+)\s*(?:اشهر|شهر)", text)
-    if match:
-        return int(match.group(1)) / 12
-    match = re.search(r"(?:عمر(?:ه|ها)?\s*)?(\d+)\s*(?:سنوات|سنه|سنة)", text)
-    if match:
-        return int(match.group(1))
-    if re.search(r'عمر(?:ه|ها)?\s*سنتين', text):
-        return 2
-    if re.search(r'عمر(?:ه|ها)?\s*سن[هة](?!\w)', text):
-        return 1.5 if re.search(r'سن[هة]\s*و?نص', text) else 1
-    return None
+    try:
+        from .product_variants import child_age as parse_age
+    except ImportError:
+        from product_variants import child_age as parse_age
+    return parse_age(text)
 
 
 def operational_request(text):

@@ -3,19 +3,19 @@ import json
 import re
 
 try:
-    from . import sales_decision
-    from .checkout import normalized, phone_number, invalid_shipping_address
+    from . import sales_decision, product_variants
+    from .checkout import normalized, phone_number, invalid_shipping_address, is_confirmation
     from .delivery_state import VISIBLE_SQL
 except ImportError:
-    import sales_decision
-    from checkout import normalized, phone_number, invalid_shipping_address
+    import sales_decision, product_variants
+    from checkout import normalized, phone_number, invalid_shipping_address, is_confirmation
     from delivery_state import VISIBLE_SQL
 
 PRODUCT_KNOWLEDGE_FIELDS = (
     'lining', 'transparency', 'stretch', 'closure', 'measurements', 'fit_notes',
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
 )
-EVIDENCE_VERSION = 1
+EVIDENCE_VERSION = 2
 
 
 def browse_request(text):
@@ -90,6 +90,8 @@ def context_evidence(text, turn):
     if re.search(declarations, clean) or re.fullmatch(r'(?:xs|s|m|l|xl|xxl|xxxl|[2-6]xl)', clean):
         return True
     question = question_from_turn(turn)
+    if is_confirmation(text) and product_variants.color_replacement(question):
+        return True
     # Preserve the raw answer with its question; never turn it into a guessed
     # size/age/quantity. Ignore small-talk and follow-up questions as answers.
     return bool(question and len(clean) <= 80

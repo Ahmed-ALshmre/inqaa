@@ -2,13 +2,16 @@
 import re
 
 try:
-    from .checkout import PROVINCES, normalized
+    from .checkout import PROVINCES, normalized, delivery_fee_inquiry
 except ImportError:
-    from checkout import PROVINCES, normalized
+    from checkout import PROVINCES, normalized, delivery_fee_inquiry
 
 
 def policy_question(text):
     clean = normalized(text).strip(' ؟?!.،\n')
+    if delivery_fee_inquiry(text) and not re.search(
+            r'قماش|خام|عمر|قياس|مكان|عنوانكم|وين|سعر(?:ه|ها)|سعر\s+(?!التوصيل|الشحن)|دفع|فحص', clean):
+        return 'delivery'
     clean = re.sub(r'(شكد|اشكد|كم|بشكد)(?=التوصيل|توصيل|الشحن|شحن)', r'\1 ', clean)
     clean = re.sub(r'^(?:السلام عليكم|سلام عليكم|هلو|مرحبا)\s*', '', clean)
     clean = re.sub(r'^و(?=توصيل|التوصيل)', '', clean)
