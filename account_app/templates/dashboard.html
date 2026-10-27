@@ -19,13 +19,14 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/dashboard.css?v=25">
-  <link rel="stylesheet" href="/static/css/messenger.css?v=4">
+  <link rel="stylesheet" href="/static/css/messenger.css?v=5">
   <link rel="stylesheet" href="/static/css/workspace.css?v=1">
   <link rel="stylesheet" href="/static/css/rewards.css?v=3">
   <script defer src="/static/js/mascot.js?v=1"></script>
   <script defer src="/static/js/rewards.js?v=4"></script>
   <link rel="stylesheet" href="/static/css/theme.css?v=1">
   <link rel="stylesheet" href="/static/css/ui.css?v=1">
+  <link rel="stylesheet" href="/static/css/inbox.css?v=1">
   <script defer src="/static/js/ui.js?v=1"></script>
 </head>
 <body class="messenger-page">
@@ -127,28 +128,29 @@
 
   <!-- Column 1: Sidebar -->
   <div class="sidebar" id="sidebarPanel">
-    <div class="inbox-heading"><div class="ui-inbox-title"><span class="ui-inbox-symbol" aria-hidden="true"><i class="bi bi-chat-square-heart"></i></span><div><small>مساحة العمل</small><h1>المحادثات</h1></div></div><span id="inboxConnection" role="status">جاري الاتصال</span></div>
+    <div class="inbox-heading">
+      <div class="ui-inbox-title"><span class="ui-inbox-symbol" aria-hidden="true"><i class="bi bi-chat-square-text"></i></span><div><small>صندوق الوارد</small><h1>المحادثات</h1></div></div>
+      <div class="inbox-heading-actions"><span id="inboxConnection" role="status" data-state="connecting">جاري الاتصال</span><button type="button" id="refreshInboxButton" class="inbox-refresh" onclick="loadConversations(false)" aria-label="تحديث المحادثات" title="تحديث المحادثات"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button></div>
+    </div>
     <div id="inboxFilterPanel" class="inbox-filter-panel">
-    <div class="p-2 border-bottom" style="border-color:var(--border)!important; background:var(--sidebar-bg);">
-      <select class="form-select form-select-sm mb-2" id="conversationStoreFilter" onchange="setConversationStoreFilter(this.value)">
+    <div class="inbox-search-tools">
+      <select class="form-select form-select-sm" id="conversationStoreFilter" onchange="setConversationStoreFilter(this.value)" aria-label="المتجر">
         <option value="all">كل المتاجر</option>
 
       </select>
-      <div class="input-group input-group-sm">
+      <div class="input-group input-group-sm inbox-search">
         <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
         <input type="text" class="form-control border-0" id="searchInput"
-          aria-label="بحث المحادثات" placeholder="اسم، هاتف، منتج أو رسالة…" oninput="filterCustomers()">
+          aria-label="بحث المحادثات" placeholder="ابحث عن محادثة…" oninput="filterCustomers()">
       </div>
     </div>
-    <div class="px-2 py-1 border-bottom" style="border-color:var(--border)!important; background:var(--sidebar-bg);">
-      <div class="btn-group btn-group-sm w-100" role="group" id="conversationFilters">
-        <button class="btn btn-outline-success" data-filter="booked" onclick="setFilter('booked',this)"><i class="bi bi-bag-check me-1"></i>تم الطلب</button>
-        <button class="btn btn-outline-secondary" data-filter="problems" onclick="setFilter('problems',this)">
-          <i class="bi bi-person-exclamation me-1"></i>تحتاج تدخلاً بشرياً
-        </button>
-        <button class="btn btn-outline-danger" data-filter="system_issues" onclick="setFilter('system_issues',this)" title="أخطاء تقنية أو تكرار خطوات الحجز؛ المراجعات المعلّقة تظهر أيضاً ضمن التدخل البشري">مشاكل النظام</button>
-        <button class="btn btn-outline-secondary active" data-filter="all" onclick="setFilter('all',this)">الكل</button>
-        <button class="btn btn-outline-secondary" data-filter="unanswered" onclick="setFilter('unanswered',this)">لم يتم الرد</button>
+    <div class="inbox-quick-filters">
+      <div role="group" aria-label="حالة المحادثات" id="conversationFilters">
+        <button class="btn active" type="button" data-filter="all" onclick="setFilter('all',this)" aria-pressed="true"><i class="bi bi-chat-dots" aria-hidden="true"></i>الكل</button>
+        <button class="btn" type="button" data-filter="unanswered" onclick="setFilter('unanswered',this)" aria-pressed="false"><i class="bi bi-reply" aria-hidden="true"></i>بانتظار الرد</button>
+        <button class="btn" type="button" data-filter="problems" onclick="setFilter('problems',this)" aria-pressed="false" title="المحادثات التي تحتاج تدخلاً بشرياً"><i class="bi bi-person-exclamation" aria-hidden="true"></i>تدخل بشري</button>
+        <button class="btn" type="button" data-filter="booked" onclick="setFilter('booked',this)" aria-pressed="false"><i class="bi bi-bag-check" aria-hidden="true"></i>تم الحجز</button>
+        <button class="btn" type="button" data-filter="system_issues" onclick="setFilter('system_issues',this)" aria-pressed="false" title="أخطاء تقنية أو تكرار خطوات الحجز؛ المراجعات المعلّقة تظهر أيضاً ضمن التدخل البشري"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>مشاكل النظام</button>
       </div>
     </div>
     <details class="inbox-filters"><summary><i class="bi bi-sliders2"></i> تصفية متقدمة <span id="activeFilterCount"></span></summary>
@@ -165,13 +167,16 @@
     </details>
     </div>
     <div class="inbox-result-line" id="inboxResultCount" role="status"></div>
-    <div class="customer-list" id="customerList">
+    <div class="customer-list" id="customerList" aria-label="قائمة المحادثات" aria-busy="true" tabindex="-1">
       <div class="text-center py-5" style="color:var(--text-muted)">
         <div class="spinner-border spinner-border-sm mb-2" role="status"></div>
         <div class="small">جاري التحميل...</div>
       </div>
     </div>
-    <div class="inbox-load-status" id="inboxLoadStatus" role="status" aria-live="polite"></div>
+    <div class="inbox-pagination">
+      <div class="inbox-load-status" id="inboxLoadStatus" role="status" aria-live="polite"></div>
+      <button type="button" class="inbox-load-more" id="loadMoreConversationsButton" onclick="loadMoreConversations()" disabled>تحميل محادثات أقدم</button>
+    </div>
   </div>
 
   <!-- Column 2: Chat -->
@@ -640,7 +645,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=3"></script>
-<script src="/static/js/dashboard.js?v=34"></script>
+<script src="/static/js/dashboard.js?v=35"></script>
 <script src="/static/js/conversation_tools.js?v=3"></script>
 <script>
   if ('serviceWorker' in navigator) {
