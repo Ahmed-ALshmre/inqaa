@@ -1,0 +1,109 @@
+/* Inbox-only styling. Stable tools, row geometry and pagination while reading. */
+.messenger-page #sidebarPanel {
+  --inbox-ink:#352b41;
+  --inbox-muted:#756780;
+  --inbox-line:#ece6f1;
+  background:#fbfafc!important;
+  border:1px solid var(--inbox-line);
+}
+.messenger-page #sidebarPanel .inbox-heading {
+  padding:17px 16px 14px;
+  flex-shrink:0;
+  border-bottom:1px solid var(--inbox-line);
+}
+#sidebarPanel .ui-inbox-title {gap:10px;min-width:0}
+#sidebarPanel .ui-inbox-symbol {width:39px;height:39px;border-radius:13px;font-size:19px;background:#f0e9f7}
+.messenger-page #sidebarPanel h1 {font-size:20px;margin:0;line-height:1.6;color:var(--inbox-ink)}
+#sidebarPanel .ui-inbox-title small {font-size:9px;color:var(--inbox-muted)}
+.inbox-heading-actions {display:flex;align-items:center;gap:5px;flex-shrink:0}
+#sidebarPanel #inboxConnection {padding:4px 6px;font-size:9px;background:#edf6f0;color:#397253;max-width:88px;overflow:hidden;text-overflow:ellipsis}
+#sidebarPanel #inboxConnection[data-state=error] {background:#fbefea;color:#9b5441}
+#sidebarPanel #inboxConnection[data-state=connecting] {background:#f2eef6;color:#79658a}
+.inbox-refresh {display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--inbox-line);border-radius:10px;background:#fff;color:#7b6392;font-size:16px}
+.inbox-refresh:hover {background:#f4eef9}
+.inbox-refresh:disabled {opacity:.45}
+#sidebarPanel .inbox-filter-panel {background:#fff;flex-shrink:0}
+.inbox-search-tools {display:grid;grid-template-columns:minmax(104px,.9fr) minmax(0,1.65fr);gap:8px;padding:12px 14px 8px;align-items:center}
+#sidebarPanel #conversationStoreFilter {height:39px;margin:0;background-color:#fff;font-size:11px;border-radius:11px;border:1px solid var(--inbox-line)!important;padding-block:6px}
+.messenger-page #sidebarPanel .inbox-search {height:39px;min-width:0;background:#f6f3f9;border:1px solid transparent;border-radius:11px;padding:2px 3px;flex-wrap:nowrap}
+#sidebarPanel .inbox-search .input-group-text {background:transparent!important;padding:4px 6px}
+#sidebarPanel .inbox-search input {font-size:11px;min-width:0;padding:5px 3px;color:var(--inbox-ink)}
+#sidebarPanel .inbox-search input::placeholder {color:#786682}
+.messenger-page #sidebarPanel #conversationFilters {display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;padding:4px 14px 10px}
+.messenger-page #sidebarPanel #conversationFilters button {
+  grid-column:span 2;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  min-width:0;min-height:33px;padding:6px 4px;margin:0;
+  border:1px solid #eee8f3;border-radius:10px!important;
+  color:#776685;background:#faf8fc;font-size:10px;font-weight:600;white-space:nowrap;
+  box-shadow:none;transition:background-color .12s,color .12s;
+}
+.messenger-page #sidebarPanel #conversationFilters button:nth-last-child(-n+2) {grid-column:span 3}
+.messenger-page #sidebarPanel #conversationFilters button.active {background:#75549b;border-color:#75549b;color:#fff;box-shadow:0 2px 5px #70509913}
+.messenger-page #sidebarPanel #conversationFilters button:not(.active):hover {background:#f0e9f7;color:#5b3b7b}
+#sidebarPanel .inbox-filters {padding:6px 15px 8px;border-block:1px solid #f0ebf4;background:#fff}
+#sidebarPanel .inbox-filters summary {display:flex;align-items:center;gap:7px;padding:4px 1px;font-size:10px;color:#766081}
+#sidebarPanel .inbox-filters summary::after {content:'⌄';margin-inline-start:auto;font-size:14px;line-height:1}
+#sidebarPanel .inbox-filters[open] summary::after {transform:rotate(180deg)}
+#sidebarPanel .inbox-filter-grid {padding-top:8px;max-height:230px;gap:8px}
+#sidebarPanel .inbox-filter-grid label {font-size:10px}
+#sidebarPanel .inbox-filter-grid input,#sidebarPanel .inbox-filter-grid select {font-size:11px;background:#faf8fc;border-color:var(--inbox-line);min-height:34px}
+#sidebarPanel .inbox-filter-grid button {font-size:11px;background:#f4eef9;color:#705099}
+#sidebarPanel .inbox-result-line {padding:8px 17px 6px;font-size:10px;line-height:1.5;min-height:29px;background:#fbfafc;flex-shrink:0;color:var(--inbox-muted)}
+.messenger-page #sidebarPanel #customerList {
+  flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:#d7ccdf transparent;
+  scrollbar-gutter:stable;overscroll-behavior:contain;
+  overflow-anchor:none;scroll-behavior:auto!important;padding-bottom:5px;
+}
+#customerList.is-filtering {opacity:.55}
+.messenger-page #customerList .customer-item {
+  align-items:flex-start;gap:10px;margin:4px 9px;padding:12px 10px;
+  min-height:104px;border:1px solid #f0ebf4!important;border-inline-start:3px solid transparent!important;
+  border-radius:13px;background:#fff!important;box-shadow:none;
+  content-visibility:visible;contain-intrinsic-size:none;
+  transition:background-color .12s,border-color .12s;overflow-anchor:none;
+}
+.messenger-page #customerList .customer-item:hover {background:#f6f1fa!important;border-color:#e6dced!important}
+.messenger-page #customerList .customer-item.active {background:#efe6f7!important;border-color:#e5d7ef!important;border-inline-start-color:#8d66ad!important;box-shadow:none}
+.messenger-page #customerList .cust-avatar {width:39px;height:39px;margin-top:3px;border-radius:12px;font-size:13px;background:#f0eaf6!important;color:#7b5d97!important}
+#customerList .cust-row-heading {display:flex;gap:7px;align-items:center;min-width:0;min-height:21px}
+.messenger-page #customerList .cust-name {flex:1;font-size:13px;font-weight:650;color:var(--inbox-ink);line-height:1.8}
+#customerList .is-unanswered .cust-name {font-weight:750}
+#customerList .is-unanswered .cust-row-heading::before {content:'';width:5px;height:5px;border-radius:50%;background:#a181bb;flex-shrink:0}
+.messenger-page #customerList .cust-time {font-size:10px;white-space:nowrap;color:#7e7089;line-height:1.8;font-variant-numeric:tabular-nums}
+.messenger-page #customerList .cust-preview {font-size:12px;line-height:1.9;color:#73627f;margin-top:1px;text-align:start}
+#customerList .cust-statuses {display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+#customerList .cust-statuses:empty {display:none}
+.cust-status {display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;line-height:1.6;padding:2px 6px;border-radius:6px;color:#755987;background:#f3edf7}
+.cust-status-review {background:#fbf0df;color:#8b5c1d}
+.cust-status-issue {background:#fbecea;color:#984d44}
+.cust-status-booked {background:#e9f4ef;color:#2e7057}
+.cust-status-hot {background:#f9eded;color:#994f51}
+.cust-status-warm {background:#f6f0e5;color:#87612c}
+.messenger-page #customerList .conversation-store-badge {font-size:10px;line-height:1.5;padding:2px 6px;margin:3px 0 1px;border-radius:5px;background:#f0eaf6;color:#755987;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.messenger-page #customerList .store-fatena {background:#f8edf3;color:#8c5a74}
+.messenger-page #customerList .store-khuyoot {background:#eaf3ef;color:#4a7562}
+.messenger-page #customerList .store-golden-threads {background:#f8f1df;color:#856b2c}
+.messenger-page #customerList .store-baraah {background:#eaf0fa;color:#536e96}
+#customerList .cust-source {font-size:10px;line-height:1.6;color:#7e658e;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.messenger-page #customerList .customer-item.flash-image {animation:none;box-shadow:inset -3px 0 #b89b63}
+.inbox-pagination {flex-shrink:0;min-height:75px;padding:7px 14px 10px;background:#fff;border-top:1px solid var(--inbox-line)}
+#sidebarPanel #inboxLoadStatus {padding:0!important;border:0!important;min-height:16px;line-height:1.5;font-size:9px;color:var(--inbox-muted);text-align:center;margin-bottom:5px}
+.inbox-load-more {display:block;width:100%;min-height:35px;border:1px solid #e5d9ef;border-radius:10px;background:#f6f0fa;color:#77558f;font-size:11px;font-weight:650;line-height:1.6;padding:6px 10px}
+.inbox-load-more:hover:not(:disabled) {background:#ece0f5;border-color:#d7c1e7}
+.inbox-load-more:disabled {color:#81718d;border-color:#ede7f2;background:#faf8fc;cursor:default}
+.inbox-load-more[data-loading=true] {color:#77558f;background:#f4edf9}
+.inbox-empty {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:45px 22px;text-align:center;color:#a08aaf;min-height:220px}
+.inbox-empty i {display:grid;place-items:center;width:58px;height:58px;border-radius:19px;background:#f0e8f7;font-size:24px;color:#9a7caf}
+.inbox-empty strong {font-size:12px;color:#79658a}
+.inbox-empty span {font-size:10px;line-height:1.8}
+@media(max-width:768px) {
+  .messenger-page #sidebarPanel .inbox-heading {padding:13px 16px 11px}
+  .inbox-search-tools {padding-top:10px}
+  .messenger-page #customerList .customer-item {margin:4px 10px;padding:12px 10px}
+  .inbox-pagination {padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+}
+@media(prefers-reduced-motion:reduce) {
+  #sidebarPanel *,#sidebarPanel *::before,#sidebarPanel *::after {transition:none!important;animation:none!important}
+}
