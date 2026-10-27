@@ -93,10 +93,10 @@ def contact_fields(text, previous=None):
             return {"address": address}
     without_phone = PHONE.sub("", original).strip(" ,،.\n")
     explicit = re.search(r"(?:عنواني|العنوان)\s*[:：-]?\s*(.+)", without_phone, re.S)
-    location_marker = re.search(r"\b(?:حي|قرب|شارع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|ناحية|ناحيه|مجمع|مستشفى|جامع|جامعة|جامعه|مدرسة|مدرسه|صيدلية|صيدليه|مول|محطة|محطه|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b|(?:رقم\s*(?:ال)?دار|دار|زقاق)\s*\d+", normalized(without_phone))
+    location_marker = re.search(r"\b(?:حي|قرب|شارع|سريع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|ناحية|ناحيه|مجمع|مستشفى|جامع|جامعة|جامعه|مدرسة|مدرسه|صيدلية|صيدليه|مول|محطة|محطه|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b|(?:رقم\s*(?:ال)?دار|دار|زقاق)\s*\d+", normalized(without_phone))
     if explicit:
         address = explicit.group(1).strip(" ,،.\n")
-    elif not is_question and not re.search(r"\b(?:اريد|احجز|فستان|سوت|قميص|وزن|قياس)\b", clean) and (province or previous.get("province")) and (location_marker or province):
+    elif not is_question and not re.search(r"\b(?:اريد|احجز|فستان|سوت|قميص|وزن|قياس)\b", clean) and (location_marker or province):
         address = re.sub(r"^(?:اني من|انا من|من)\s+", "", without_phone).strip()
     else:
         address = ""

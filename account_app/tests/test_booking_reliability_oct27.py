@@ -45,6 +45,15 @@ class StockAndAddressTests(unittest.TestCase):
         self.assertEqual(new['province'], 'النجف')
         self.assertNotIn('بغداد', new['address'])
 
+    def test_landmark_survives_later_province_but_courtesy_is_not_a_landmark(self):
+        contact = contact_fields('مجمع الزهور')
+        self.assertEqual(contact['address'], 'مجمع الزهور')
+        contact.update(contact_fields('بغداد', contact))
+        self.assertEqual(contact['province'], 'بغداد')
+        self.assertEqual(contact['address'], 'مجمع الزهور')
+        for text in ('عيوني', 'تمام', 'شكرا', 'سماوي', 'شكد التوصيل؟'):
+            self.assertNotIn('address', contact_fields(text, {'province': 'بغداد'}))
+
     def test_long_local_sales_reply_cannot_force_one_bubble(self):
         reply = ('قياس 42 متوفر بالأسود لهذا الفستان. '
                  'قماشه باربي والرباط منفصل حسب تفاصيل الموديل. '
