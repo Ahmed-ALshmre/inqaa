@@ -8507,6 +8507,32 @@ def owner_linked_discovery_reply(ev, matched_product, products, context):
             '_browse_only': True, '_local_reply': True}
 
 
+def natural_negotiation_reply(ev, product, customer, context, history, *, kind=''):
+    kind = kind or owner_sales.negotiation_kind(ev.get('text'))
+    if not kind or not product or ev.get('_post_order') or _stock_state(product) != 'available':
+        return None
+    options = []
+    if kind == 'free_delivery' and has_app_context():
+        db = get_db()
+        settings = get_delivery_settings(db)
+        province = sales_recovery.policy_province(ev.get('text')) or (customer or {}).get('province')
+        options = ([('', delivery_fee_for_province(province, db))] if province else
+                   [('', settings['baghdad_fee'])] if settings['baghdad_fee'] == settings['other_fee'] else
+                   [(' لبغداد', settings['baghdad_fee']), (' لبقية المحافظات', settings['other_fee'])])
+    draft = {'order': {}}
+    stage_customer = dict(customer or {})
+    if has_app_context() and ev.get('sender_id'):
+        restore_checkout_draft(get_db(), ev, draft, product, for_negotiation=True)
+        items = draft['order'].get('items') or []
+        if len(items) == 1 and items[0].get('product_id') == product.get('product_id'):
+            stage_customer.update({key: items[0][key] for key in ('size', 'color') if items[0].get(key)})
+    result = owner_sales.negotiation_reply(ev, product, stage_customer, context, history,
+                                          delivery_options=options, kind=kind)
+    if result and draft['order']:
+        result['order'] = draft['order']
+    return result
+
+
 def _call_main_ai_with_context(
     ev, message_type, customer, history, products,
     matched_product, image_result, instructions_text, rules_list,
@@ -8648,6 +8674,10 @@ def _call_main_ai_with_context(
     pending_condition = unresolved_condition(history, question) if not ev.get('_post_order') else None
     if pending_condition and not post_order_acknowledgement_reply(question) and not customer_declines_purchase(question):
         kind = pending_condition['kind']
+        if kind in {'price', 'free_delivery'}:
+            negotiation = natural_negotiation_reply(ev, matched_product, customer, context, history, kind=kind)
+            if negotiation:
+                return negotiation
         detail = ('موعد الوصول اللي طلبتيه يحتاج تأكيد من المتجر؛ ما أگدر أضمنه هسه.' if kind == 'arrival' else
                   'شرط التوصيل المجاني يحتاج تأكيد قبل الحجز.' if kind == 'free_delivery' else
                   'السعر أو التخفيض اللي اشترطتيه يحتاج موافقة المتجر قبل الحجز.')
@@ -9028,8 +9058,12 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
         if (selected['age'] is None if child else not selected['size']):
             result = owner_sales.result('شكد العمر المطلوب؟' if child else 'شكد قياس تلبسين؟')
             return owner_result_surface(result, ev, customer, history)
-    result = owner_sales.reply(ev, chosen, customer, context, history,
-                              photo_count=len(product_image_urls(chosen)) if chosen else 0)
+    pending_terms = unresolved_condition(history, ev.get('text'))
+    result = (natural_negotiation_reply(ev, chosen, customer, context, history)
+              if not pending_terms or pending_terms['kind'] != 'arrival' else None)
+    if result is None:
+        result = owner_sales.reply(ev, chosen, customer, context, history,
+                                  photo_count=len(product_image_urls(chosen)) if chosen else 0)
     if result is None:
         result = _call_main_ai_with_context(ev, message_type, customer, history, products,
             matched_product, image_result, instructions_text, rules_list,
@@ -10400,7 +10434,7 @@ def unexecuted_checkout_reply(ev, reply, product):
     return 'حتى أثبت الطلب أحتاج نحدد القطعة واللون والقياس وبيانات التوصيل، ونأكد الموافقة عليها.'
 
 
-def restore_checkout_draft(db, ev, result, matched_product):
+def restore_checkout_draft(db, ev, result, matched_product, *, for_negotiation=False):
     """Carry known single-item options across contact-only replies, never corrections."""
     if result.get('_browse_only'):
         return
@@ -10412,7 +10446,8 @@ def restore_checkout_draft(db, ev, result, matched_product):
     customer = db.execute('SELECT phone,province,address FROM customers WHERE sender_id=?',
                           (ev['sender_id'],)).fetchone()
     previous_contact = dict(customer) if customer else {}
-    if not contact_fields(text, previous_contact) and not is_confirmation(text):
+    if (not contact_fields(text, previous_contact) and not is_confirmation(text)
+            and not (for_negotiation and owner_sales.negotiation_kind(text))):
         return
     rows = db.execute("SELECT id,raw_payload,created_at FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' AND " + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 24", (ev["sender_id"],)).fetchall()
     draft = None
@@ -10429,6 +10464,7 @@ def restore_checkout_draft(db, ev, result, matched_product):
         intervening = db.execute("SELECT text,message_type FROM messages WHERE sender_id=? AND direction='incoming' AND id>? ORDER BY id", (ev['sender_id'],last['id'])).fetchall()
         if any(r['message_type'] not in {'text','emoji'} or
                not (contact_fields(r['text'], previous_contact) or is_confirmation(r['text']) or
+                    owner_sales.negotiation_kind(r['text']) or
                     re.fullmatch(r'(?:كم يوم|شكد وقت|شوكت).{0,35}(?:يوصل|التوصيل|الطلب)[؟?\s]*', r['text'] or '')) or
                re.search(r'قياس|مقاس|وزن|كيلو|لون|بدل|مو هذا|ما اريد|لا اريد|عوفي|ضيف', r['text'] or '')
                for r in intervening):

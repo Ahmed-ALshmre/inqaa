@@ -8,10 +8,10 @@ import re
 
 try:
     from . import customer_copy, product_variants, sales_answers, sales_strategy
-    from .pricing import terms, offer_tiers
+    from .pricing import terms, offer_tiers, quote
 except ImportError:
     import customer_copy, product_variants, sales_answers, sales_strategy
-    from pricing import terms, offer_tiers
+    from pricing import terms, offer_tiers, quote
 
 GUIDE = '''[سياسة المالك المعتمدة — تتقدم على صياغات البيع القديمة المتعارضة]
 اشتغلي بروح موظفة عراقية شاطرة بالمبيعات: جاوبي مباشرة وباختصار وحنية، وكملي من آخر نقطة بالمحادثة.
@@ -22,6 +22,7 @@ GUIDE = '''[سياسة المالك المعتمدة — تتقدم على صي�
 بمتاجر الأطفال نعتمد العمر فقط. لا تطلبي وزن الطفل أو طوله. سنة ونص لموديل يبدأ بسنتين: اشرحي بشكل مشروط إذا بنيتها خشنة ممكن يجي مناسب، مع الفحص؛ لا تسجلي السنتين بدل عمرها قبل قبولها.
 المنتج المربوط بالإعلان معروف: أجيبي باسمه وسعره الحالي من أول رد، دون طلب صورة أو قول مو متأكدة. فشل تحليل صورة لا يلغي ربط الإعلان. صورة تطابقت فعلاً مع منتج آخر أو تصحيح صريح من الزبونة يُحدّث الاختيار.
 لا تسردي سياسة المتجر كلها في كل دور. اذكري فقط السياسة التي سأل عنها الزبون أو تزيل تردده الحالي. نوّعي تركيب الجمل بصورة طبيعية من سياق المحادثة، دون تكرار التحية والعرض والسؤال المحسوم.
+طلب التخفيض مساومة طبيعية، وليس مشكلة نظام أو سبب تحويل أو شرطاً يعلق المحادثة. ارفضي التخفيض الإضافي بلطف واذكري السعر الحقيقي؛ قولي عليه عرض فقط إذا العرض مثبت. تابعي الاختيار الناقص دون إعادة الأسئلة المجابة. بعد توضيح السعر، موافقة الزبون أو إكمال بيانات الحجز يسمحان بالمتابعة بالسعر الحقيقي، دون مطالبته بعبارة «ألغي الشرط». لا تقبلي السعر الذي اقترحه من عندك ولا تثبتي خلال المساومة نفسها.
 لا تستخدمي «حسب سياسة المتجر» أو «بشرط» أو لغة العقود كحشو. اشرحي المعلومة مباشرة عند السؤال عنها. الصورة المتعرف عليها تحتاج جواباً مفيداً عن الموديل والسؤال المرافق، لا «وصلت الصورة» أو «اختيارج حلو» وحدها. حافظي على القياس واللون والاختيارات المعروفة، واطلبي فقط الناقص فعلاً.
 السعر مباشر؛ اذكري العرض وقلة الكمية وانتهاء العرض فقط إذا مؤكدات ببيانات المنتج. لا تعرضي فيديو من نفسج. إذا لا توجد صور إضافية قولي بس هاي الصورة متوفرة وطمئني بالفحص.
 الدفع عند الاستلام، والفحص بوجود المندوب قبل الدفع. إذا القطعة لا تناسب أو بيها إشكال ترجع مع المندوب مجاناً دون دفع أي شيء حتى أجور التوصيل. لا تمددي هذه السياسة لما بعد الدفع ومغادرة المندوب؛ تلك الحالات للبشر.
@@ -208,6 +209,70 @@ def conversational_wording(reply):
     """Remove policy-label filler; retain the actual fee, inspection or condition."""
     return re.sub(r'(?:حسب|وفق|ضمن|بموجب)\s+(?:سياس[ةه]|شروط)\s+(?:المتجر|المحل|الصفحة)(?:\s+المعتمدة)?[،,]?\s*',
                   '', reply).strip()
+
+
+def negotiation_kind(text):
+    clean = customer_copy.normalized(text)
+    if re.search(r'ارخص|ميزاني|بديل|(?<!\w)(?:باجر|باچر|غدا)(?!\w)|يلحق|يوصل|موعد|لازم اليوم', clean):
+        return ''
+    if delivery_objection(clean):
+        return 'free_delivery'
+    if re.search(r'خصم|تخفيض|تنزل\w*.{0,15}سعر|تنقص\w*.{0,15}سعر|يصير\s*(?:اقل|ارخص)|'
+                 r'(?:اخر|آخر)\s*سعر|سعر\w*\s*نهائي|خلي\w*\s*(?:ب|بـ)\s*\d', clean):
+        return 'price'
+    return ''
+
+
+def negotiation_reply(ev, product, customer, context, history, *, delivery_options=(), kind=''):
+    """Decline ordinary haggling, quote current facts, then continue the dialogue."""
+    kind = kind or negotiation_kind(ev.get('text'))
+    if not kind or not product or ev.get('_post_order'):
+        return None
+    selected = set(sales_answers.topics(ev.get('text')))
+    if selected - {'price', 'delivery', 'fabric', 'colors', 'sizes'}:
+        return None  # Preserve the normal route for independent unknown facts.
+    try:
+        count, price, _ = terms(product)
+    except (ValueError, TypeError, KeyError):
+        return None
+    unit = 'البكج' if count > 1 else 'القطعة'
+    label = 'سعر البكج' if count > 1 else 'سعره'
+    if kind == 'price':
+        offered = bool(customer_copy.fact(product.get('offer')) or
+                       re.search(r'(?<!\w)بدل(?!\w)', customer_copy.normalized(product.get('price'))))
+        refusal = ('ما نكدر ننزل أكثر، عليه عرض حاليًا' if offered else 'هذا السعر النهائي، ما عدنا تخفيض حاليًا')
+        opening = f'{refusal}، {label} {customer_copy.chat_amount(price)} و{unit} تستاهل.'
+    elif kind == 'free_delivery' and delivery_options:
+        try:
+            fees = [(region, quote([dict(product_id=product['product_id'], quantity=count)], [product], fee)['delivery_fee'])
+                    for region, fee in delivery_options]
+        except (ValueError, TypeError, KeyError):
+            return None
+        if all(fee == 0 for _, fee in fees):
+            opening = f'إي، التوصيل مجاني بهذا العرض، {label} {customer_copy.chat_amount(price)}.'
+        else:
+            costs = ' و'.join('التوصيل' + region + ' ' + (customer_copy.chat_amount(fee) if fee else 'مجاني') for region, fee in fees)
+            opening = f'ما نكدر نخلي التوصيل مجاني، {costs}. {label} {customer_copy.chat_amount(price)}.'
+    else:
+        return None
+    parts = [opening]
+    detail_topics = selected - {'price', 'delivery'}
+    if detail_topics:
+        facts, gaps = sales_answers.product_fragments(ev.get('text'), product)
+        if gaps:
+            return None
+        parts.extend(fact for fact in facts if not re.search(r'سعر|توصيل|د\.\s*ع', fact))
+    if not sales_strategy.purchase_block_reason(ev.get('text')):
+        try:
+            from .sales_playbook import price_next_step
+        except ImportError:
+            from sales_playbook import price_next_step
+        step = price_next_step(product, context, customer, history)
+        if step:
+            parts.append(step)
+    reply = '\n'.join(parts)
+    return dict(result(reply), reply_parts=parts, _browse_only=True,
+                _negotiation_declined=kind, _semantic_parts=True)
 
 
 def reply(ev, product, customer, context, history, *, photo_count=0):

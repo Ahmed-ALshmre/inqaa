@@ -100,6 +100,14 @@ def contact_fields(text, previous=None):
         address = re.sub(r"^(?:اني من|انا من|من)\s+", "", without_phone).strip()
     else:
         address = ""
+    if province and address and not explicit:
+        # Mixed bargaining + contact messages must not print the proposed price
+        # or purchase instruction on the courier's address label.
+        for alias in PROVINCES[province]:
+            match = re.search(r'(?<!\w)(?:بال|ب)?' + re.escape(alias).replace('ة', '[ةه]') + r'(?!\w)', address)
+            if match and re.search(r'اذا|ثبتي|احجزي|تخفيض|خصم|سعر', normalized(address[:match.start()])):
+                address = address[match.start():].strip()
+                break
     # A province on its own is not a delivery address.
     address_words = re.findall(r"\w+", normalized(address))
     province_only = any(re.sub(r"^محافظ[ةه]\s+", "", normalized(address)).replace('ة', 'ه') == normalized(alias).replace('ة', 'ه') for aliases in PROVINCES.values() for alias in aliases)
@@ -168,24 +176,39 @@ def unresolved_purchase_terms(text):
 
 
 def unresolved_condition(history, text=''):
-    """Customer conditions survive contact-only turns until explicitly waived.
+    """Unanswered conditions persist; a quoted refusal ends price haggling.
 
-    Assistant language cannot establish that an arrival/discount condition was
-    fulfilled. Ordinary price questions do not become a persistent condition.
+    Ending a negotiation is not purchase consent. The checkout caller still
+    requires the customer's next unconditional purchase/contact action.
+    Arrival promises never establish that an arrival condition was fulfilled.
     """
     pending = None
-    entries = [row.get('text') or row.get('content') or '' for row in history or []
-               if row.get('direction') == 'incoming' or row.get('role') == 'user']
-    if text and (not entries or entries[-1] != text):
-        entries.append(text)
-    for entry in entries:
+    entries = list(history or [])
+    incoming = [row.get('text') or row.get('content') or '' for row in entries
+                if row.get('direction') == 'incoming' or row.get('role') == 'user']
+    if text and (not incoming or incoming[-1] != text):
+        entries.append({'direction': 'incoming', 'text': text})
+    for row in entries:
+        entry = row.get('text') or row.get('content') or ''
         clean = normalized(entry)
+        if row.get('direction') == 'outgoing' or row.get('role') == 'assistant':
+            if pending and pending['kind'] in {'price', 'free_delivery'}:
+                priced = bool(re.search(r'سعر|توصيل', clean) and re.search(r'\d', clean))
+                declined = re.search(r'ما\s*(?:عدنا|عندنا|نكدر|اكدر|اگدر).{0,25}(?:تخفيض|خصم|ننزل|انزل|مجاني)|'
+                                     r'(?:هذا|السعر)\s+(?:السعر\s+)?النهائي|ما\s*نكدر\s*ننزل\s*اكثر', clean)
+                confirmed_free_offer = (pending['kind'] == 'free_delivery'
+                                        and 'التوصيل مجاني بهذا العرض' in clean)
+                if priced and (declined or confirmed_free_offer):
+                    pending = None
+            continue
+        if not (row.get('direction') == 'incoming' or row.get('role') == 'user'):
+            continue
         if re.search(r'بدون\s*(?:اي\s*)?شرط|الغ[يى]\s*الشرط|مو\s*شرط|'
                      r'(?:عادي|موافق[هة]?|ما\s*عندي\s*مانع).{0,30}(?:المد[هة]|يومين|ثلاث|التوصيل|السعر|موعد)|'
                      r'(?:المد[هة]|السعر|الموعد).{0,20}(?:عادي|موافق|يناسبني)', clean):
             pending = None
         elif unresolved_purchase_terms(entry) == 'conditional_purchase_terms':
-            kind = ('arrival' if re.search(r'يوصل|يلحق|باجر|غدا|اليوم|ساع[هة]|يومين|اسبوع', clean)
+            kind = ('arrival' if re.search(r'يوصل|يلحق|(?<!\w)(?:باچر|باجر|غدا|اليوم|ساع[هة]|يومين|اسبوع)(?!\w)', clean)
                     else 'free_delivery' if re.search(r'توصيل.{0,18}مجاني|مجاني.{0,18}توصيل', clean)
                     else 'price')
             pending = {'kind': kind, 'text': str(entry)}

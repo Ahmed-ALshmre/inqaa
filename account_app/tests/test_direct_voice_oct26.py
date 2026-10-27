@@ -302,7 +302,9 @@ class DirectVoicePipelineTests(unittest.TestCase):
         self.generated.update(create_order=True, order=dict(phone='07701234567', province='بغداد',
             address='حي اور', items=[dict(product_id='V1', color='وردي', size='سنة', quantity=1)]))
         result = self.process()
-        self.assertIn('شرط', result['reply'])
+        self.assertIn('ما نكدر نخلي التوصيل مجاني', result['reply'])
+        self.assertIn('5 آلاف', result['reply'])
+        self.assertNotIn('حسم هالشرط', result['reply'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
     def test_voice_cancellation_after_booking_does_not_silently_change_order(self):
