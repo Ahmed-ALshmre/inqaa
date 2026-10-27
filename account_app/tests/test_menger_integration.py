@@ -119,7 +119,7 @@ class IntegrationTests(unittest.TestCase):
             for mode in ('manual','ai'):
                 sender = 'routing-' + mode
                 m.get_or_create_customer(m.get_db(), sender, '', 'facebook')
-                data = dict(phone='07701234567', province='بغداد', address='المنصور', items=items)
+                data = dict(phone='07701234567', province='بغداد', address='المنصور قرب جامع الاختبار', items=items)
                 if mode == 'manual':
                     response = self.client.post(f'/api/conversations/{sender}/create_order', json=data, headers=self.headers)
                     self.assertEqual(response.status_code, 200, response.get_json())
@@ -174,7 +174,7 @@ class IntegrationTests(unittest.TestCase):
                 m.get_or_create_customer(m.get_db(), sender, '', 'facebook')
                 kwargs = {'side_effect': result} if isinstance(result, Exception) else {'return_value': result}
                 with patch.object(menger.requests, 'post', **kwargs) as api:
-                    response = self.client.post(f'/api/conversations/{sender}/create_order', json=dict(phone='07701234567', province='بغداد', address='المنصور', items=[dict(product_id='P1', quantity=1)]), headers=self.headers)
+                    response = self.client.post(f'/api/conversations/{sender}/create_order', json=dict(phone='07701234567', province='بغداد', address='المنصور قرب جامع الاختبار', items=[dict(product_id='P1', quantity=1)]), headers=self.headers)
                 self.assertEqual(response.status_code, 200, response.get_json())
                 self.assertEqual(api.call_count, 1)
                 self.assertIn(expected, telegram.call_args.args[0])
@@ -209,7 +209,7 @@ class IntegrationTests(unittest.TestCase):
                     m._current_store_id.reset(token)
                 with patch.object(m, 'load_products_from_file', return_value=catalog):
                     response = self.client.post(f'/api/conversations/{sender}/create_order',
-                        json=dict(phone='07701234567', province='بغداد', address='المنصور', notes='اتصل أولاً',
+                        json=dict(phone='07701234567', province='بغداد', address='المنصور قرب جامع الاختبار', notes='اتصل أولاً',
                                   items=[dict(product_id='same-id', quantity=2, color='أسود', size='44')]), headers=self.headers)
                 self.assertEqual(response.status_code, 200, response.get_json())
                 row = m.get_db().execute('SELECT * FROM menger_deliveries WHERE local_store=?', (store_id,)).fetchone()
@@ -237,7 +237,7 @@ class IntegrationTests(unittest.TestCase):
             for paid in (True, False):
                 sender = 'paid-' + str(paid)
                 m.get_or_create_customer(m.get_db(), sender, '', 'facebook')
-                data = dict(phone='07701234567',province='بغداد',address='المنصور',items=items,is_paid=paid,notes='اتصل قبل الوصول')
+                data = dict(phone='07701234567',province='بغداد',address='المنصور قرب جامع الاختبار',items=items,is_paid=paid,notes='اتصل قبل الوصول')
                 response = self.client.post(f'/api/conversations/{sender}/create_order',json=data,headers=self.headers)
                 self.assertEqual(response.status_code,200,response.get_json())
                 order = m.get_db().execute('SELECT * FROM orders WHERE sender_id=?',(sender,)).fetchone()

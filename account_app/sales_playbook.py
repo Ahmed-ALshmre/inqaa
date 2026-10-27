@@ -242,6 +242,12 @@ def customer_selection(context, customer=None):
             # Asking for a specific size retains that preference, never consent
             # to buy. General ranges and explicit alternatives remain unresolved.
             requested_sizes = product_variants.requested(text)['sizes']
+            requested_colors = product_variants.requested(text)['colors']
+            if len(requested_colors) == 1 and not re.search(r'ما اريد|ماريد|مو\s+' + re.escape(requested_colors[0]), text):
+                selected['color'] = requested_colors[0]
+            age = conversation_quality.child_age(text)
+            if age is not None:
+                selected['age'] = age
             numeric_range = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/]\s*(\d{2})(?!\d)', text)
             if numeric_range:
                 selected['size'] = numeric_range[1] + '-' + numeric_range[2]

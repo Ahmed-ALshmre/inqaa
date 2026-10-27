@@ -33,6 +33,11 @@ def main():
             ENABLE_BACKGROUND_JOBS="0",
             DISABLE_CLIP="1",
             ZERNIO_AL_FATENA_ENABLED="0",
+            # Synthetic fixture credentials; the Session.request patch below
+            # blocks every real request. Tests must not depend on live keys.
+            OPENROUTER_API_KEY="offline-test-only",
+            TELEGRAM_BOT_TOKEN="offline-test-only",
+            TELEGRAM_CHAT_ID="-10000000001",
         )
         with patch("requests.sessions.Session.request", side_effect=RuntimeError("Real network calls are disabled in tests")):
             suite = unittest.defaultTestLoader.discover(str(Path(__file__).parent))

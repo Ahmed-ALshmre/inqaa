@@ -93,7 +93,7 @@ class SalesTurnPipelineTests(unittest.TestCase):
                     self.assertIn('قياساته من 70 الى 130 كيلو، شكد تلبس؟', result['reply'])
                     self.assertIn('وعليكم السلام', result['reply'])
                 else:
-                    self.assertIn('شنو القياس اللي يناسبج؟', result['reply'])
+                    self.assertIn('شنو القياس اللي يناسبك؟', result['reply'])
                 self.assertFalse(result['create_order'])
         self.m.save_delivery_settings(self.db, {'baghdad_fee': 4000, 'other_fee': 7000})
         known_province = self.m.transparent_price_reply({'sender_id': 'reply', 'text':

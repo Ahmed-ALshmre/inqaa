@@ -58,6 +58,14 @@ def budget(text):
     return value * 1000 if value < 1000 else value
 
 
+def child_ages(text):
+    """Explicit ages in a turn, in order; never clothing sizes or prices."""
+    clean = normalized(text)
+    matches = re.finditer(r'(?:ل?عمر(?:ه|ها)?\s*\d{1,2}(?:\s*(?:اشهر|شهر|سنوات|سن[ةه]))?(?:\s*و?نص)?|'
+                          r'\d{1,2}\s*(?:اشهر|شهر|سنوات|سن[ةه])|ل?عمر(?:ه|ها)?\s*سن(?:تين|[ةه](?:\s*و?نص)?))', clean)
+    return [age for match in matches if (age := child_age(match[0])) is not None]
+
+
 def child_age(text):
     try:
         from .product_variants import child_age as parse_age

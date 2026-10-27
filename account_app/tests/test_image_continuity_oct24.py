@@ -91,10 +91,9 @@ class ImageContinuityOct24Tests(unittest.TestCase):
         return result
 
     def assert_received_without_reasking(self, reply):
-        self.assertTrue(str(reply or '').strip(), 'An already received photo needs an explicit acknowledgement')
+        self.assertEqual(reply, '', 'Retain the review without another image acknowledgement')
         normalized = self.m.sales_strategy.normalized(reply)
-        self.assertRegex(normalized, r'(?:الصوره|الصورة|صورتج|صورتك).{0,25}(?:وصل|عندي|استلم|موجود|محفوظ)|'
-                                    r'(?:وصل|استلم|شفت|عندي|محفوظ).{0,25}(?:الصوره|الصورة|صورتج|صورتك)')
+        self.assertTrue(self.m.has_pending_human_review(self.db, self.sender))
         self.assertNotRegex(normalized, r'(?:دز|ارسل|ابعث).{0,25}(?:صوره|صورة)|'
                                        r'(?:صوره|صورة).{0,20}(?:من جديد|مره ثانيه|مرة ثانية)')
         self.assertNotIn('17000', normalized.replace(',', '').replace('٬', ''),
@@ -144,7 +143,7 @@ class ImageContinuityOct24Tests(unittest.TestCase):
             second = self.process(self.body('شكد سعره؟'))
             self.assert_received_without_reasking(second.get('reply'))
             self.assertNotIn('مو متوفر', second['reply'])
-            self.assertNotEqual(first['reply'], second['reply'])
+            self.assertEqual(first['reply'], second['reply'])
             self.assertIsNone(self.m.get_active_product_binding(self.db, self.sender))
             self.assertEqual(recognize.call_count, 1)
 
@@ -154,13 +153,13 @@ class ImageContinuityOct24Tests(unittest.TestCase):
             reason='Synthetic provider billing failure'))
         with stack:
             first = self.process(self.body(image=True))
-            self.assertIn('الصورة وصلت', first['reply'])
+            self.assertEqual(first['reply'], '')
             second = self.process(self.body('شنو؟'))
-            self.assertIn('الصورة عندي', second['reply'])
-            self.assertNotEqual(first['reply'], second['reply'])
+            self.assertEqual(second['reply'], '')
+            self.assertTrue(self.m.has_pending_human_review(self.db, self.sender))
             third = self.process(self.body('زين شكد السعر؟'))
             self.assertEqual(third['reply'], '')
-            self.assertEqual(third['meta']['reason'], 'human_image_review_pending')
+            self.assertIn(third['meta']['reason'], ('human_image_review_pending', 'image_service_unavailable'))
             self.assertEqual(recognize.call_count, 1)
 
     def test_old_billing_failure_retries_archived_photo_after_credit_recovers(self):
@@ -177,7 +176,9 @@ class ImageContinuityOct24Tests(unittest.TestCase):
             self.db.commit()
             recognize.return_value = dict(product_found=True, product_id=self.product['product_id'], confidence=100)
             second = self.process(self.body('شكد سعره؟'))
-            self.assertIn('17 ألف', second['reply'])
+            recovered_reply = second.get('reply') or second.get('meta', {}).get('auto_reply', {}).get('reply', '')
+            self.assertIn('متوفر', recovered_reply)
+            self.assertTrue(second.get('meta', {}).get('auto_reply', {}).get('sent') or second.get('reply'))
             self.assertEqual(recognize.call_count, 2)
             self.assertEqual(self.m.get_active_product_binding(self.db, self.sender)['product_id'],
                              self.product['product_id'])

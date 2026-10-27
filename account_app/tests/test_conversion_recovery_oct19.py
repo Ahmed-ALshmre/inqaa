@@ -79,7 +79,7 @@ class ConversionRecoveryTests(unittest.TestCase):
 
     def test_missing_one_catalog_item_preserves_known_lines_and_routes_that_item_to_staff(self):
         self.customer('missing')
-        order = dict(phone='07701234567', province='بغداد', address='بغداد حي اور', items=[
+        order = dict(phone='07701234567', province='بغداد', address='بغداد حي اور قرب جامع الاختبار', items=[
             dict(product_id='A', product_name='فستان جوزي', color='جوزي', size='44', quantity=1),
             dict(product_id='', product_name='الفستان الأسود', color='اسود', size='44', quantity=1)])
         result = dict(create_order=True, order=copy.deepcopy(order))

@@ -148,7 +148,7 @@ class CheckoutConsentAudit(unittest.TestCase):
             self.patches.append(mocked)
         self.m.complete_customer_product_link(self.db, self.sender, self.product, 'manual', source='manual_admin')
         self.db.execute('UPDATE customers SET phone=?,province=?,address=? WHERE sender_id=?',
-                        ('07701234567', 'بغداد', 'بغداد حي اور', self.sender))
+                        ('07701234567', 'بغداد', 'بغداد حي اور قرب جامع الاختبار', self.sender))
         self.db.commit()
         self.m.save_message(self.db, self.sender, 'outgoing', 'text', 'تدللين عيني، شنو تحبين تعرفين عنه؟', None, None, None, {})
 
@@ -214,7 +214,7 @@ class CheckoutConsentAudit(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders').fetchone()[0], 0)
         self.assertIn('الموبايل', first['reply'])
         self.process('07701234567', create_order=False)
-        final = self.process('بغداد حي اور', create_order=False)
+        final = self.process('بغداد حي اور قرب جامع الاختبار', create_order=False)
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders').fetchone()[0], 1)
         self.assertEqual(final['reply_parts'], [self.m.DEFAULT_ORDER_CONFIRMATION_TEXT])
 
@@ -228,7 +228,7 @@ class MengerTransientAudit(unittest.TestCase):
                                         'api_key': 'offline-synthetic-key', 'source': 'audit-source'})
         menger.save_settings(self.db, 'default', {'store_id': 'original-store', 'store_name': 'لمسة ستور'})
         self.order = dict(created_at='2026-10-24T12:00:00+03:00', sender_id='synthetic-customer',
-                          phone='07701234567', province='بغداد', address='بغداد حي اور',
+                          phone='07701234567', province='بغداد', address='بغداد حي اور قرب جامع الاختبار',
                           items=[dict(product_id='P1', product_name='فستان', quantity=1,
                                       color='اسود', size='44', unit_price=16000)],
                           product_total=16000, delivery_fee=5000)
@@ -292,7 +292,7 @@ class PurchaseTermsGuardAudit(unittest.TestCase):
 
     def test_inspection_question_does_not_revoke_an_unconditional_instruction(self):
         for text in ['ثبتيه، وافحصه بحضور المندوب قبل الدفع؟', 'ثبتي واذا مو نفس الصورة يرجع؟',
-                     'اي ثبتي', 'اريد هذا', 'بغداد حي اور', '07701234567']:
+                     'اي ثبتي', 'اريد هذا', 'بغداد حي اور قرب جامع الاختبار', '07701234567']:
             with self.subTest(text=text):
                 self.assertEqual(checkout.unresolved_purchase_terms(text), '')
 

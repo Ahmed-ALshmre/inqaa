@@ -70,6 +70,8 @@ def _category(product):
     if product.get('product_type') in catalog_profile.TYPES and product.get('product_type') != 'other':
         return product['product_type']
     text = _facts(product, 'category')
+    if not text or text in {'غير مصنف', 'غير مصنفة', 'uncategorized'}:
+        text = _facts(product, 'product_name')
     groups = (
         ('dresses', r'فستان|فساتين|dress'),
         ('abaya', r'عباي|عباء|عبايات|abaya'),
@@ -184,3 +186,30 @@ def eligible_age_alternatives(product, products, age_years):
     source['related_product_ids'] = [str(item.get('product_id') or '') for item in products or []
                                     if isinstance(item, dict) and item.get('image_url')]
     return eligible_related_products(source, products, age_years=age_years, limit=2)
+
+
+def catalog_alternatives(product, products, *, size='', age_years=None, color='',
+                         request='', excluded=(), limit=4):
+    """Search the store catalogue with the customer's retained constraints."""
+    clean = customer_copy.normalized(request)
+    blocked = {str(pid) for pid in excluded} | {str(product.get('product_id'))}
+    candidates = [p for p in products if str(p.get('product_id')) not in blocked and p.get('image_url')]
+    requested_categories = [category for category, pattern in (
+        ('dresses', r'فستان|فساتين|فصاطين'), ('sets', r'طقم|اطقم|بلوز[ةه]\s*و?\s*تنور|قميص\s*و?\s*تنور'),
+        ('abaya', r'عباي|عباء'), ('skirts', r'تنور'), ('tops', r'بلوز|قميص')) if re.search(pattern, clean)]
+    allowed = requested_categories or [_category(product)]
+    result = []
+    for category in dict.fromkeys(allowed):
+        source = dict(product, category=category, related_product_ids=[str(p['product_id']) for p in candidates])
+        for candidate in candidates:
+            if not eligible_related_products(source, [candidate], size=size, age_years=age_years, limit=1):
+                continue
+            if color and any(v['supported'] is not True for v in product_variants.assess(candidate, 'لون ' + color)):
+                continue
+            if re.search(r'اثخن|ثخين|شتوي|خريفي|بداي[ةه]\s*شتاء', clean):
+                fabric = ' '.join(_facts(candidate, key) for key in ('fabric', 'description', 'notes'))
+                if not re.search(r'شتوي|خريفي|ثقيل|سميك|ثخين', fabric) or re.search(r'(?:مو|غير|ليس)\s*(?:شتوي|خريفي|ثقيل|سميك)', fabric):
+                    continue
+            if candidate['product_id'] not in {p['product_id'] for p in result}:
+                result.append(candidate)
+    return result[:limit]

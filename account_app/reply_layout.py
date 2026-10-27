@@ -67,6 +67,23 @@ def compact(text):
     return re.sub(r"\s+", " ", text or "").strip()
 
 
+def attach_symbols(units):
+    """An emoji or punctuation alone must never become a notification."""
+    merged, prefix = [], ''
+    for unit in units:
+        if not re.search(r'\w', unit):
+            if merged:
+                merged[-1] += ' ' + unit
+            else:
+                prefix += unit + ' '
+        else:
+            merged.append(prefix + unit)
+            prefix = ''
+    if prefix and merged:
+        merged[-1] += ' ' + prefix.strip()
+    return merged
+
+
 def topic(text):
     groups = (
         ("contact", r"رقم|موبايل|هاتف|عنوان|محافظة"),
@@ -272,6 +289,7 @@ def plan_sales_bubbles(result, reply, image_urls=None):
         structured = bool(result.get('_semantic_parts') and valid)
         units = ([part.strip() for part in proposed] if (result.get('_ordered_album') or structured) and valid
                  else _sales_units(reply))
+        units = attach_symbols(units)
         # The same size/color can legitimately describe two distinct photos.
         # Check repetition within each product section, not between products.
         duplicate_units = units if result.get('_ordered_album') else semantic_units(reply)

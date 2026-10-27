@@ -11,6 +11,11 @@ def clean(value):
 
 def money(value):
     text = clean(value).replace(",", "").replace("٬", "")
+    # An explicitly labelled former price is not a second current amount.
+    # Unlabelled multiple numbers remain ambiguous and must fail closed.
+    former = re.fullmatch(r'\s*(\d+(?:\.\d+)?\s*(?:الف|الاف|آلاف)?)\s+بدل\s+\d+(?:\.\d+)?\s*(?:الف|الاف|آلاف)?\s*', text)
+    if former:
+        text = former[1]
     matches = list(re.finditer(r"\d+(?:\.\d+)?", text))
     if len(matches) != 1:
         raise ValueError("سعر المنتج غير واضح؛ حدّث السعر قبل تثبيت الطلب")

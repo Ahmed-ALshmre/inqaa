@@ -18,18 +18,19 @@ class AlbumCopyTests(unittest.TestCase):
         images = [{'product_found':False}, {'product_found':True,'product_id':'A'}]
         result = product_albums.response(images, products, 'مرحبا متوفر قياس 38')
         self.assertEqual(approved_parts(result, result['reply']), [result['reply']])
-        self.assertIn('مو متوفر عدنا حالياً', result['reply_parts'][0])
-        self.assertIn('17,000', result['reply_parts'][1])
-        self.assertIn('قياس 38 موجود ضمن قياساته', result['reply_parts'][1])
-        self.assertNotIn('55', result['reply_parts'][1])
+        self.assertNotIn('مو متوفر عدنا حالياً', result['reply'])
+        self.assertIn('الثاني', result['reply_parts'][0])
+        self.assertIn('17,000', result['reply_parts'][0])
+        self.assertIn('قياس 38 موجود ضمن قياساته', result['reply_parts'][0])
+        self.assertNotIn('55', result['reply_parts'][0])
         self.assertFalse(customer_copy.has_instructions(result['reply']))
         self.assertFalse(product_albums.availability_error(result['reply'], products[0], products, images))
 
     def test_analysis_failure_does_not_turn_into_stock_claim(self):
         reply = product_albums.summary([{'product_found':False,'service_error':True}], fixtures.CATALOG)
-        self.assertIn('ما گدرت أتأكد', reply)
+        self.assertEqual(reply, '')
         self.assertNotIn('مو متوفر', reply)
-        self.assertTrue(product_albums.availability_error('الصورة الأولى: '+product_albums.UNKNOWN_REPLY,
+        self.assertTrue(product_albums.availability_error('الصورة الأولى: غير متوفر',
                                                         None, fixtures.CATALOG,
                                                         [{'product_found':False,'service_error':True}]))
 
@@ -103,8 +104,8 @@ class AlbumPipelineTests(unittest.TestCase):
         self.assertEqual(sent['reply'].count('قياس 38 موجود ضمن قياساته'), 2)
         self.assertIn('17 ألف', sent['reply'])
         self.assertIn('12 ألف', sent['reply'])
-        self.assertLess(sent['reply'].index('الأول'), sent['reply'].index('الثاني'))
-        self.assertLess(sent['reply'].index('الثاني'), sent['reply'].index('الثالث'))
+        self.assertLess(sent['reply'].index('الأول'), sent['reply'].index('الثالث'))
+        self.assertNotIn('الثاني', sent['reply'])
         rows = self.db.execute("SELECT text FROM messages WHERE direction='outgoing' ORDER BY id").fetchall()
         self.assertEqual([r[0] for r in rows],sent['reply_parts'])
         self.assertFalse(customer_copy.has_instructions(sent['reply']))

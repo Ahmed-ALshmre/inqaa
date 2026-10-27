@@ -116,7 +116,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         results = [dict(product_found=True, product_id='A'), dict(product_found=False), dict(product_found=True, product_id='B')]
         result, send, model = self.process(results)
         reply = send.call_args.args[0]['reply']
-        self.assertIn('الثاني، هذا الموديل مو متوفر عدنا حالياً.', reply)
+        self.assertNotIn('الثاني', reply)
         self.assertIn('الثالث هم عدنا، تنورة', reply)
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'album-customer'))
         review = self.db.execute("SELECT image_url,status FROM human_reviews WHERE sender_id='album-customer'").fetchall()
@@ -124,9 +124,9 @@ class OrderedSalesPipelineTests(unittest.TestCase):
 
     def test_unrecognized_album_uses_owner_reply_policy_and_retains_unknown_identity(self):
         result, send, model = self.process([dict(product_found=False)] * 3)
-        self.assertIn('هالموديلات ما متوفرة', result['reply'])
-        self.assertIn('أقترحلج غيرهن؟', result['reply'])
-        self.assertEqual(result['reply_parts'], [result['reply']])
+        self.assertEqual(result['reply'], '')
+        self.assertEqual(result['reply_parts'], [])
+        self.assertGreater(self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0], 0)
         self.assertNotIn('دزي لقطة', result['reply'])
         self.assertTrue(all(not item['product_found'] for item in self.m.customer_image_positions(self.db, 'album-customer')))
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'album-customer'))
@@ -236,7 +236,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         sent = (now - timedelta(minutes=20)).isoformat()
         self.db.execute("INSERT INTO followups(sender_id,status,sent_at,created_at) VALUES(?,'sent',?,?)", ('booking-customer', sent, sent))
         self.db.commit()
-        payload = {'order': {'phone': '07701234567', 'province': 'بغداد', 'address': 'بغداد حي اور',
+        payload = {'order': {'phone': '07701234567', 'province': 'بغداد', 'address': 'بغداد حي اور قرب جامع الاختبار',
                    'items': [{'product_id': 'A', 'color': 'اسود', 'size': '44', 'quantity': 1}]}}
         with patch.object(self.m, 'load_products_from_file', return_value=CATALOG), \
              patch.object(self.m, 'save_booking_to_file'), patch.object(self.m, 'send_order_to_telegram', return_value=True):

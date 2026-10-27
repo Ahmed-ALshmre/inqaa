@@ -594,7 +594,7 @@ class ConversationContextTests(unittest.TestCase):
                                     with patch.object(m,"_match_single_product",return_value=(None,None,{"product_found":False})) as match:
                                         result=self.event("",image="https://images.test/fail.jpg")
                                     self.assertEqual(match.call_count,1)
-                                    self.assertIn('الصورة وصلت', result['reply'])
+                                    self.assertEqual(result['reply'], '')
                                     self.assertNotRegex(result['reply'], r'(?:دزي|أرسلي|ارسلي).{0,25}(?:صوره|صورة)|متوفر|تم تثبيت')
                                     self.assertNotRegex(result['reply'], r'\d+[,.]?\d*\s*(?:د\.ع|دينار|ألف|الف)')
                                     self.assertFalse(m.is_customer_ai_enabled(self.db,self.sender))

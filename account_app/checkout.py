@@ -49,6 +49,14 @@ def invalid_shipping_address(text):
             bool(re.search(r"(?:ليش\s+انتو|انتو\s+(?:في|ب)|وين\s+(?:مكانكم|محلكم)|لو\s+خارجها)", clean)))
 
 
+def has_shipping_landmark(address):
+    clean = normalized(address)
+    return bool(re.search(r'(?<!\w)(?:قرب|مقابل|مقابيل|خلف|يم|مجاور|بجانب|بجوار)\s+\S{2,}', clean)
+                or re.search(r'نقط[ةه]\s+دال[ةه]\s*[:：-]?\s*\S{2,}', clean)
+                or (re.search(r'محل[ةه]\s*\d+', clean) and re.search(r'زقاق\s*\d+', clean)
+                    and re.search(r'دار\s*\d+', clean)))
+
+
 def contact_fields(text, previous=None):
     """Extract declarations, never an address from a shipping question."""
     previous = previous or {}
@@ -84,7 +92,7 @@ def contact_fields(text, previous=None):
             return {"address": address}
     without_phone = PHONE.sub("", original).strip(" ,،.\n")
     explicit = re.search(r"(?:عنواني|العنوان)\s*[:：-]?\s*(.+)", without_phone, re.S)
-    location_marker = re.search(r"\b(?:حي|قرب|شارع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|مستشفى|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b", normalized(without_phone))
+    location_marker = re.search(r"\b(?:حي|قرب|شارع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|مستشفى|جامع|مدرسة|مدرسه|صيدلية|صيدليه|مول|محطة|محطه|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b", normalized(without_phone))
     if explicit:
         address = explicit.group(1).strip(" ,،.\n")
     elif not is_question and not re.search(r"\b(?:اريد|احجز|فستان|سوت|قميص|وزن|قياس)\b", clean) and (province or previous.get("province")) and (location_marker or province):
@@ -97,6 +105,10 @@ def contact_fields(text, previous=None):
     if address and not province_only and not invalid_shipping_address(address) and len(address_words) >= 2 and (location_marker or province or len(address_words) >= 3):
         # A landmark sent in the next bubble supplements the established area.
         previous_address = str(previous.get("address") or "").strip()
+        if (previous_address and previous.get('province') and not province
+                and re.match(r'^(?:جامع|مدرس[ةه]|صيدلي[ةه]|مستشفى|مول|محط[ةه])\s', normalized(address))
+                and normalized(address) not in normalized(previous_address)):
+            address = 'قرب ' + address
         if (previous_address and not invalid_shipping_address(previous_address) and
                 not province and re.match(r"^(?:مقابل|قرب|خلف)\s", normalized(address)) and
                 normalized(address) not in normalized(previous_address)):
@@ -132,6 +144,11 @@ def unresolved_purchase_terms(text):
     than blocking every question mark or every occurrence of "if".
     """
     clean = normalized(text)
+    # Inspection/return at the courier is the published policy, not a demand
+    # for a discount or free shipping on a kept purchase.
+    if (re.search(r'ارجع|يرجع|ترجع|رجع|فحص|افحص', clean)
+            and not re.search(r'خصم|تخفيض|تحسب|تخلي|بشرط.{0,20}(?:سعر|يوصل|يلحق)', clean)):
+        return ''
     if delivery_fee_inquiry(text):
         return 'unanswered_price_or_shipping'
     if re.search(
@@ -218,6 +235,39 @@ def measurement_history_error(items, messages):
         if unresolved:
             return f"ذكرتِ أكثر من قياس لـ{item.get('product_name') or 'القطعة'}؛ أي قياس نعتمد قبل تثبيت الطلب؟"
     return ""
+
+
+def child_cart_error(items, messages, catalog):
+    """An explicit purchase for two ages cannot silently become one piece."""
+    try:
+        from .conversation_quality import child_ages, child_age
+    except ImportError:
+        from conversation_quality import child_ages, child_age
+    ids = {str(item.get('product_id') or '') for item in items}
+    if len(ids) != 1:
+        return ''  # Different-model allocation needs its own source evidence.
+    product = next((p for p in catalog if str(p.get('product_id')) in ids), {})
+    if not product_variants.size_data(product.get('sizes'))['years']:
+        return ''
+    wanted = []
+    for message in messages:
+        clean = normalized(message)
+        if re.search(r'(?:بس|فقط)\s*(?:قطعه|قطعة|وحده|واحد[ةه]?|عمر)', clean):
+            wanted = []
+        ages = child_ages(clean)
+        if len(ages) > 1 and re.search(r'اريد|اخذ|احتاج|قطعتين|ثنين|توام', clean) and not re.search(r'[؟?]|\b(?:لو|او)\b', clean):
+            wanted = ages
+    if not wanted:
+        return ''
+    supplied = []
+    for item in items:
+        age = child_age('عمر ' + str(item.get('size') or ''))
+        supplied.extend([age] * int(item.get('quantity') or 1))
+    for age in wanted:
+        if age not in supplied:
+            return 'اختيارات الأعمار محفوظة؛ باقي نحدد قطعة مستقلة لكل عمر قبل تثبيت الطلب.'
+        supplied.remove(age)
+    return ''
 
 
 def order_line_error(raw_items, catalog):

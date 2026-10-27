@@ -300,7 +300,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.message('cart', 'incoming', 'اريد احجز الاسود قياس 44')
         self.message('cart', 'outgoing', 'حتى نكمل الحجز، دزيلي رقمك وعنوانك.', {'checkout_draft': order})
         self.message('cart', 'outgoing', 'التوصيل خمسة آلاف والدفع عند الاستلام.')
-        text = '07700000000 بغداد حي تجريبي'
+        text = '07700000000 بغداد حي تجريبي قرب جامع الاختبار'
         self.message('cart', 'incoming', text)
         result = {'reply': '', 'order': {}}
         self.m.restore_checkout_draft(self.db, {'sender_id': 'cart', 'text': text}, result, PRODUCT)

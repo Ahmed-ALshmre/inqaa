@@ -104,7 +104,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         items = [dict(product_id="F1", product_name="فستان دانتيل", color="اسود", size="44", size_type="size", quantity=1)]
         if multiple:
             items.append(dict(product_id="S1", product_name="سوت ملكي", color="اسود", size="46", size_type="size", quantity=1))
-        return dict(phone="07701234567", province="بغداد", address="حي اور", items=items)
+        return dict(phone="07701234567", province="بغداد", address="حي اور قرب جامع الاختبار", items=items)
 
     def incoming(self, text):
         self.ev["text"] = text
@@ -200,7 +200,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertEqual(tuple(row), ("07701234567", "واسط", "كوت الموفقيه"))
 
     def test_single_checkout_merges_contact_and_returns_one_receipt(self):
-        self.m.update_customer_intelligence(self.db, self.sender, "بغداد حي اور")
+        self.m.update_customer_intelligence(self.db, self.sender, "بغداد حي اور قرب جامع الاختبار")
         self.m.update_customer_intelligence(self.db, self.sender, "٠٧٧٠١٢٣٤٥٦٧")
         result = {"order": {"items": self.data()["items"]}}
         created, reply = self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
@@ -289,7 +289,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.m.save_message(self.db, self.sender, "outgoing", "text", "دزيلي رقم الموبايل والعنوان حتى أثبت الحجز", None, None, None,
                             {"checkout_draft": {"items": self.data()["items"]}})
         self.incoming("07701234567")
-        self.incoming("بغداد حي اور")
+        self.incoming("بغداد حي اور قرب جامع الاختبار")
         self.ev["text"] = "كم يوم ويوصل الطلب"
         model_result = {"reply": "دزيلي الموبايل والعنوان حتى أثبت الحجز؟", "create_order": False, "order": {}}
         with patch.object(self.m, "extract_facebook_event", return_value=self.ev), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "is_customer_ai_enabled", return_value=True), patch.object(self.m, "is_store_feature_enabled", return_value=False), patch.object(self.m, "call_main_ai", return_value=model_result) as ai:
@@ -445,7 +445,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertEqual(response["reply"], "أي موديل تقصدين؟")
 
     def assert_image_received_without_product_guess(self, reply):
-        self.assertRegex(reply, r'الصورة.{0,20}وصلت|وصلت.{0,20}الصورة')
+        self.assertEqual(reply, '', 'Uncertain images go to human review without a holding template')
         self.assertNotRegex(reply, r'(?:دزي|أرسلي|ارسلي).{0,25}(?:صوره|صورة)|تم تثبيت|تم حجز|متوفر|خلص')
         self.assertNotRegex(reply, r'\d+[,.]?\d*\s*(?:د\.ع|دينار|ألف|الف)')
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
@@ -556,7 +556,8 @@ class CheckoutRegressionTests(unittest.TestCase):
         first.assert_not_called()
         model.assert_called_once()
         self.assertNotIn("فستان دانتيل", response["reply"])
-        self.assertIn("تفضلي", response["reply"])
+        self.assertIn("تفضل", response["reply"])
+        self.assertNotIn("تفضلي", response["reply"])
         self.assertNotIn("صورة", response["reply"])
 
     def test_existing_enabled_auto_binding_is_visible_to_ai(self):
@@ -631,7 +632,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         ai.assert_not_called()
         self.assert_image_received_without_product_guess(result['reply'])
         self.assertTrue(result["meta"]["ai_paused"])
-        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 1)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE sender_id=? AND direction='outgoing'", (self.sender,)).fetchone()[0], 0)
 
 
 if __name__ == "__main__":

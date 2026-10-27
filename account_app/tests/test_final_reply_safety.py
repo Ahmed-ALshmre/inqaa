@@ -79,9 +79,10 @@ class StructuredReplyTests(unittest.TestCase):
         images=[{'product_found':True,'product_id':'A'},{'product_found':False}]
         step=product_albums.next_question(images,fixtures.CATALOG,{})
         reply=product_albums.response(images,fixtures.CATALOG,extra=step)
-        self.assertNotIn(step,reply['reply_parts'][0])
         self.assertIn(step,reply['reply_parts'][-1])
-        self.assertIn('للموديل المتوفر', reply['reply_parts'][-1])
+        self.assertEqual(len(reply['reply_parts']), 1)
+        self.assertIn('الأول', reply['reply_parts'][0])
+        self.assertNotIn('الثاني', reply['reply'])
 
     def test_known_missing_variant_cannot_be_booked(self):
         base={'product_id':'A','quantity':1,'size':'44','color':'اسود'}

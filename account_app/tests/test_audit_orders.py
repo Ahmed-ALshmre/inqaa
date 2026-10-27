@@ -85,7 +85,7 @@ class AuditFixTests(unittest.TestCase):
             for i, phrase in enumerate(phrases):
                 sender='cart-'+str(i);self.customer(sender)
                 event=dict(sender_id=sender,text=phrase)
-                result={'require_cart_confirmation': True, 'order':dict(phone='07701234567',province='بغداد',address='حي اور',items=[dict(product_id='A',color='اسود',size='44',quantity=1),dict(product_id='A',color='اسود',size='48',quantity=1)])}
+                result={'require_cart_confirmation': True, 'order':dict(phone='07701234567',province='بغداد',address='حي اور قرب جامع الاختبار',items=[dict(product_id='A',color='اسود',size='44',quantity=1),dict(product_id='A',color='اسود',size='48',quantity=1)])}
                 _,reply=self.m.create_order_if_valid(self.db,sender,result,None)
                 self.m.saved_checkout_reply(self.db,event,reply,{}, {'checkout_proposal':result['_checkout_proposal']})
                 self.m.save_message(self.db,sender,'incoming','text',phrase,None,None,None,{})

@@ -62,7 +62,8 @@ class ImagePolicyRecoveryTests(unittest.TestCase):
             result = self.m.process_webhook(self.db, {}, use_debounce=False)
         self.assertIn('7,000', result['reply'])
         self.assertTrue(result['meta']['service_error'])
-        self.assertIn('بعد تحديد الموديل', result['reply'])
+        self.assertNotIn('الصورة وصلت', result['reply'])
+        self.assertNotIn('عرض القطعة', result['reply'])
 
     def test_saved_order_uses_its_own_service_flow(self):
         ev = self.prepare('شكد التوصيل')

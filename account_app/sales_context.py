@@ -87,7 +87,7 @@ def question_from_turn(turn):
 def context_evidence(text, turn):
     clean = normalized(text)
     declarations = r'قياس|مقاس|سايز|وزن|عمر|سنوات|سنه|سنة|لون|اسود|ابيض|احمر|ازرق|اخضر|اصفر|رصاصي|جوزي|نيلي|وردي|بيج|بيجي|زيتي|تركواز|بنفسجي|كريمي|ماروني|خمري|عنابي|برتقالي|ذهبي|فضي|ميزاني|غالي|احجز|حجزت|ما اريد|مو هذا|مو هاي|اقصد|غيره|غيرها|الاول|الثاني|الثالث|قطعتين|قطعه|قطعة'
-    if re.search(declarations, clean) or re.fullmatch(r'(?:xs|s|m|l|xl|xxl|xxxl|[2-6]xl)', clean):
+    if re.search(declarations + r'|قماش|شتوي|خريفي|اثخن|ثخين|صيفي', clean) or re.fullmatch(r'(?:xs|s|m|l|xl|xxl|xxxl|[2-6]xl)', clean):
         return True
     question = question_from_turn(turn)
     if is_confirmation(text) and product_variants.color_replacement(question):
@@ -153,7 +153,19 @@ def advance(state, messages):
                              'created_at': row.get('created_at'),
                              'in_reply_to': question_from_turn(turn)[:250],
                              'staff_context': '\n'.join(item['text'] for item in turn[-3:])[:900]})
-            evidence = [item for index, item in enumerate(evidence) if index == 0 or item != evidence[index - 1]][-24:]
+            evidence = [item for index, item in enumerate(evidence) if index == 0 or item != evidence[index - 1]]
+            if len(evidence) > 30:
+                # Preserve the source and question of older choices when a
+                # long conversation pushes them outside the recent window.
+                # These are raw preferences, never automatic cart items.
+                anchors = []
+                for pattern in (r'قياس|مقاس|سايز', r'عمر|سنوات|سنتين', r'لون|اسود|وردي|كريمي|ابيض', r'ميزاني|حدود السعر'):
+                    found = next((item for item in reversed(evidence[:-24])
+                                  if re.search(pattern, normalized(item['text'] + ' ' + item.get('in_reply_to', '')))), None)
+                    if found and found not in anchors:
+                        anchors.append(found)
+                # Keep the original chronology for later corrections.
+                evidence = [item for item in evidence[:-24] if item in anchors] + evidence[-24:]
         if row.get('direction') == 'incoming' and (
                 row.get('image_url') or row.get('message_type') in {'image', 'video', 'audio', 'file', 'attachment'}
                 or re.search(r'\b(?:لا|مو|غيره|غيرها|بدلي|بدل|عوفي)\b|ما\s*اريد|ماريد', clean)):

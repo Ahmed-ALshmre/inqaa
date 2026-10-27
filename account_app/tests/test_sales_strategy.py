@@ -145,7 +145,7 @@ class SalesReplyPipelineTests(unittest.TestCase):
 
     def test_multi_variant_checkout_charges_shipping_once(self):
         self.customer('buyer')
-        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي','items':[
+        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي قرب جامع الاختبار','items':[
             dict(product_id='D1',product_name='فستان رباط',color='اسود',size='42',quantity=1),
             dict(product_id='D1',product_name='فستان رباط',color='كريمي',size='46',quantity=1)]}
         with patch.object(self.m,'load_products_from_file',return_value=[DRESS]),patch.object(self.m,'send_order_to_telegram',return_value=True),patch.object(self.m,'save_booking_to_file'):
@@ -157,7 +157,7 @@ class SalesReplyPipelineTests(unittest.TestCase):
 
     def test_bundle_quantity_is_three_items_with_free_delivery(self):
         self.customer('bundle')
-        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي','items':[
+        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي قرب جامع الاختبار','items':[
             dict(product_id='B1',product_name='سوت بهاري',color=color,size='سنة',quantity=1) for color in ('وردي','ماروني','تركوازي')]}
         with patch.object(self.m,'load_products_from_file',return_value=[BUNDLE]),patch.object(self.m,'send_order_to_telegram',return_value=True),patch.object(self.m,'save_booking_to_file'):
             created,_=self.m.create_order_if_valid(self.db,'bundle',{'order':data},BUNDLE)

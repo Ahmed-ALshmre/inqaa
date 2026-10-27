@@ -305,7 +305,7 @@ class SalesCoreTests(unittest.TestCase):
         )
         self.db.commit()
         result, _ = create_order_if_valid(self.db, self.sender_id, {"order": {
-            "phone": "07701234567", "province": "بغداد", "address": "المنصور",
+            "phone": "07701234567", "province": "بغداد", "address": "المنصور قرب جامع الاختبار",
             "items": [
                 {"product_id": "P001", "color": "أسود", "size": "70", "size_type": "weight", "quantity": 2},
                 {"product_id": "P003", "color": "زيتي", "size": "90", "size_type": "weight", "quantity": 1},
@@ -321,7 +321,7 @@ class SalesCoreTests(unittest.TestCase):
 
     def test_incomplete_order_is_rejected(self):
         result, reply = create_order_if_valid(self.db, self.sender_id, {"order": {
-            "phone": "07701234567", "address": "المنصور",
+            "phone": "07701234567", "address": "المنصور قرب جامع الاختبار",
             "items": [{"product_id": "P001"}],
         }}, None)
         self.assertIsNone(result)
@@ -336,7 +336,7 @@ class SalesCoreTests(unittest.TestCase):
     @patch("account_app.app.find_duplicate_order", return_value={"id": 77})
     def test_duplicate_order_does_not_repeat_confirmation(self, _duplicate):
         result, reply = create_order_if_valid(self.db, self.sender_id, {"order": {
-            "phone": "07701234567", "province": "بغداد", "address": "المنصور",
+            "phone": "07701234567", "province": "بغداد", "address": "المنصور قرب جامع الاختبار",
             "items": [{"product_id": "P001", "color": "أسود", "size": "70"}],
         }}, None)
         self.assertTrue(result)

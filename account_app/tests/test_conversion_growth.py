@@ -132,7 +132,7 @@ class ConversionGrowthTests(unittest.TestCase):
 
     def test_unlinked_catalog_cart_is_confirmed_not_blocked_forever(self):
         product=dict(product_id='F1',product_name='فستان',price='18000',colors='اسود',sizes='40',status='active')
-        data=dict(phone='07701234567',province='بغداد',address='بغداد حي اور',items=[dict(product_id='F1',product_name='فستان',color='اسود',size='40',quantity=1)])
+        data=dict(phone='07701234567',province='بغداد',address='بغداد حي اور قرب جامع الاختبار',items=[dict(product_id='F1',product_name='فستان',color='اسود',size='40',quantity=1)])
         with patch.object(m,'load_products_from_file',return_value=[product]):
             result={'order':data}
             created,reply=m.create_order_if_valid(self.db,self.sender,result,None)
