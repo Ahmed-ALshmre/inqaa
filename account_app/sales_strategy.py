@@ -523,7 +523,7 @@ def detail_fact(product, kind):
     """Read a construction answer, never turn the question's wording into a fact."""
     if kind in {'width', 'length'}:
         return measurement_fact(product, kind)
-    patterns = {'closure': r'لاستيك|استيك|دگم|دكم|ازرار|أزرار|سحاب|كبس',
+    patterns = {'closure': r'لاستيك|استيك|(?<!\w)(?:دگم|دكم)(?!\w)|ازرار|أزرار|سحاب|كبس',
                 'lining': r'بطان|مبطن', 'stretch': r'مطاط|ليكرا|يتمدد'}
     if kind not in patterns:
         return ''
@@ -548,8 +548,8 @@ def missing_fact_reply(question, product):
         return 'حتى أضبط لج القياس، شكد قياس تلبسين؟'
     if 'فيديو' in text and not product.get('video_url'):
         return 'هسه ما عندي فيديو لهالموديل، المتوفر صوره.'
-    if re.search(r'لاستيك|استيك|دگم|دكم', text) and not re.search(
-            r'لاستيك|استيك|دگم|دكم', normalized(' '.join(
+    if re.search(r'لاستيك|استيك|(?<!\w)(?:دگم|دكم)(?!\w)', text) and not re.search(
+            r'لاستيك|استيك|(?<!\w)(?:دگم|دكم)(?!\w)', normalized(' '.join(
                 customer_copy.fact(product.get(key)) for key in
                 ('closure', 'stretch', 'description', 'faq', 'notes')))):
         return ('حقج تسألين عيني 🌷 ما أريد أخمّن عليج إذا لاستيك لو دگم.\n'
@@ -573,7 +573,7 @@ def fact_requires_human(question, product):
     text = normalized(question)
     if not product:
         return False
-    if re.search(r'لاستيك|استيك|دگم|دكم', text) and missing_fact_reply(question, product):
+    if re.search(r'لاستيك|استيك|(?<!\w)(?:دگم|دكم)(?!\w)', text) and missing_fact_reply(question, product):
         return True
     return (bool(re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر|عريض|واسع|ضيق', text))
             and not measurement_fact(product, 'width'))
