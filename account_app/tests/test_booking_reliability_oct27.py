@@ -65,10 +65,11 @@ class StockAndAddressTests(unittest.TestCase):
         self.assertIn('5 آلاف', reply)
 
     def test_address_surface_keeps_beige_and_attached_verbs_consistent(self):
-        reply = owner_sales.surface('هلا بيج، اللون بيج. تحبين أشوفلج المتوفر؟ ترجعينها ويا المندوب.', 'male')
+        reply = owner_sales.surface('هلا بيج، اللون بيج. تحبين تشوفين المتوفر وأشوفلج القياس؟ ترجعينها ويا المندوب.', 'male')
         self.assertIn('اللون بيج', reply)
         self.assertIn('أشوفلك', reply)
         self.assertIn('ترجعها', reply)
+        self.assertIn('تحب تشوف المتوفر', reply)
         self.assertNotIn('ترجعينها', reply)
 
     def test_photo_guarantee_question_answers_inspection_instead_of_only_price(self):
