@@ -142,6 +142,26 @@ class BookingPipelineTests(unittest.TestCase):
         self.assertNotIn('وصلت', result['reply'])
         self.assertFalse(result.get('create_order'))
 
+    def test_reported_photo_receipt_is_replaced_with_verified_price_when_caption_is_empty(self):
+        self.customer('reported-photo')
+        placeholder = 'اختيارج حلو 🌷 الصورة وصلت، خلينا نتأكد من الموديل حتى أنطيج سعره ومقاساته الصح.'
+        result = self.m.owner_result_surface({'reply': placeholder, 'create_order': False},
+            dict(sender_id='reported-photo', text='', _reply_product=PRODUCT))
+        self.assertTrue(result.get('_placeholder_recovered'), result)
+        self.assertIn('15', result['reply'])
+        for wording in ('اختيارج حلو', 'الصورة وصلت', 'خلينا نتأكد'):
+            self.assertNotIn(wording, result['reply'])
+        self.assertFalse(result.get('create_order'))
+
+    def test_reported_receipt_for_an_unmatched_photo_does_not_invent_a_product(self):
+        self.customer('unknown-reported-photo')
+        placeholder = 'اختيارج حلو 🌷 الصورة وصلت، خلينا نتأكد من الموديل حتى أنطيج سعره ومقاساته الصح.'
+        result = self.m.owner_result_surface({'reply': placeholder, 'create_order': False},
+            dict(sender_id='unknown-reported-photo', text=''))
+        self.assertEqual(result['reply'], '')
+        self.assertTrue(result['requires_human'])
+        self.assertFalse(result['create_order'])
+
     def test_failures_explain_local_and_provider_causes(self):
         for code, expected in [('catalog_color_conflict', 'ألوان'), ('empty_reply', 'فارغ'),
                                ('provider_http_402', 'رصيد'), ('provider_http_429', 'مشغولة'),
