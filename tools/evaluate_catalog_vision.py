@@ -28,7 +28,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-root', type=Path, required=True)
     parser.add_argument('--snapshot', type=Path, default=Path('analysis_20261024'))
-    parser.add_argument('--api-key-file', type=Path, required=True)
+    parser.add_argument('--api-key-file', type=Path)
+    parser.add_argument('--cases-file', type=Path, help='Optional local list of store/expected/image_file cases.')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--allow-live', action='store_true')
     args = parser.parse_args()
@@ -72,7 +73,8 @@ def main():
                 shutil.copy2(asset, temp / 'uploads' / asset.name)
         environment = dict(ENABLE_BACKGROUND_JOBS='0', DISABLE_CLIP='1', DATA_DIR=str(temp),
             DB_PATH=str(temp / 'sales.db'), PRODUCTS_FILE=str(temp / 'products.json'),
-            OPENROUTER_API_KEY=args.api_key_file.read_text(encoding='utf-8-sig').strip(),
+            OPENROUTER_API_KEY=(args.api_key_file.read_text(encoding='utf-8-sig').strip() if args.api_key_file
+                               else os.environ.get('QA_OPENROUTER_API_KEY', '')),
             TELEGRAM_BOT_TOKEN='', MANYCHAT_API_KEY='', STORAGE_RESTORE_REQUIRED='0')
         exists = os.path.exists
         with contextlib.ExitStack() as stack:
@@ -87,17 +89,21 @@ def main():
             db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', settings)
             db.commit()
             stack.enter_context(patch.object(m, '_image_ref_for_openrouter', side_effect=local_ref))
-            cases = [('default', 'P003'), ('khuyoot', 'P002'), ('al-fatena', 'P003'), ('baraah-kids', 'P010'), ('al-fatena', None)]
-            for store, expected in cases:
+            cases = (json.loads(args.cases_file.read_text(encoding='utf-8-sig')) if args.cases_file else
+                     [dict(store=store, expected=expected) for store, expected in
+                      [('default', 'P003'), ('khuyoot', 'P002'), ('al-fatena', 'P003'), ('baraah-kids', 'P010'), ('al-fatena', None)]])
+            for case in cases:
+                store, expected = case['store'], case['expected']
                 m._current_store_id.set(store)
                 products = m.load_active_products(db)
                 if expected:
                     product = next(item for item in products if item['product_id'] == expected)
                     url = product['image_url']; url = url[0] if isinstance(url, list) else url
-                    original = snapshot / 'images' / 'uploads' / Path(urlsplit(url).path).name
+                    original = (Path(case['image_file']) if case.get('image_file') else
+                                snapshot / 'images' / 'uploads' / Path(urlsplit(url).path).name)
                     with Image.open(original) as source:
                         picture = ImageOps.exif_transpose(source).convert('RGB')
-                        picture.thumbnail((720, 720), Image.Resampling.LANCZOS)
+                        picture.thumbnail((1280, 1800) if case.get('image_file') else (720, 720), Image.Resampling.LANCZOS)
                     input_hash = hashlib.sha256(original.read_bytes()).hexdigest()
                 else:
                     picture = Image.new('RGB', (600, 600), '#e5e5e5')
@@ -121,7 +127,8 @@ def main():
                 results.append(row)
                 (args.output / 'progress.json').write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
                 print(json.dumps({key: row[key] for key in ('store','expected','actual','passed','service_error','seconds')}), flush=True)
-    report = dict(scope='Re-encoded catalogue positives and blank negative; no independent customer-image accuracy measurement.',
+    report = dict(scope=('Archived store-product screenshots selected from actual backup conversations; bounded regression sample.' if args.cases_file else
+                        'Re-encoded catalogue positives and blank negative; no independent customer-image accuracy measurement.'),
         passed=sum(row['passed'] for row in results), total=len(results), cases=results,
         source_file_hashes=hashes, source_changed_during_run=hashes != source_file_hashes(args.source_root.resolve()),
         requests=len(gate.calls), known_cost_usd=gate.spent, blocked_external_requests=gate.blocked)

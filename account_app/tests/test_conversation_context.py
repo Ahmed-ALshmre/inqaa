@@ -65,7 +65,7 @@ class ConversationContextTests(unittest.TestCase):
         with m.app.app_context(), patch.object(m, 'current_store_id', return_value='default'):
             result = m.factual_customer_request({'text': 'شلون الدفع والتوصيل؟'}, products, products[0])
         self.assertIn('الدفع يصير عند الاستلام', result['reply'])
-        self.assertIn('الفحص عند الاستلام', result['reply'])
+        self.assertIn('الفحص بوجود المندوب قبل الدفع', result['reply'])
         self.assertNotIn('حسب سياسة المتجر', result['reply'])
     @classmethod
     def setUpClass(cls):
@@ -688,8 +688,8 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الصورة الأولى متوفرة والثانية متوفرة', 'create_order': False, 'order': {}}) as model:
             sent = m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
         model.assert_not_called()
-        self.assertIn('الأول متوفر، فستان دانتيل', sent['reply'])
-        self.assertIn('الثاني هم عدنا، فستان انيقة', sent['reply'])
+        self.assertIn('الأول، فستان دانتيل متوفر', sent['reply'])
+        self.assertIn('الثاني، فستان انيقة متوفر', sent['reply'])
         self.assertLess(sent['reply'].index('دانتيل'), sent['reply'].index('انيقة'))
 
     def test_repeated_product_keeps_both_image_positions(self):

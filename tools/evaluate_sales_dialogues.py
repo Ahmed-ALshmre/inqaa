@@ -241,7 +241,7 @@ def evaluate_turn(m, scenario, turn, texts, orders, sent):
         checks['no_adult_weight'] = not re.search(r'وزن.{0,10}(?:[5-9]\d|1[0-3]\d)|وزنج|وزنك', m.sales_strategy.normalized(reply))
     if turn['checks'].get('no_phone_reask'):
         checks['no_phone_reask'] = not m.sales_context.reasks_contact(reply, dict(phone=PHONE))
-    if scenario['id'] != 'explicit_checkout_split_contact':
+    if not scenario.get('expected_orders'):
         checks['no_unauthorized_order'] = not orders
     if turn['checks'].get('allow_silent_duplicate_ack') and orders:
         checks.pop('response_sent')
@@ -318,7 +318,7 @@ def run(args):
             key = args.api_key_file.read_text(encoding='utf-8-sig').strip()
         else:
             from dotenv import dotenv_values
-            key = dotenv_values(args.env_file).get('OPENROUTER_API_KEY') or ''
+            key = os.environ.get('QA_OPENROUTER_API_KEY') or dotenv_values(args.env_file).get('OPENROUTER_API_KEY') or ''
         if not key:
             raise ValueError('Live mode: configured API key is absent')
     captured = []
@@ -416,6 +416,11 @@ def run(args):
                 products = m.load_active_products(db)
                 product = next(p for p in products if p['product_id'] == case['product'])
                 m.complete_customer_product_link(db, sender, product, 'manual', source='manual_admin')
+                for prior in case.get('history', []):
+                    m.save_message(db, sender, prior['direction'], 'text', prior['text'], None, None, None,
+                                   prior.get('metadata') or {})
+                    if prior['direction'] == 'incoming':
+                        m.capture_customer_contact(db, sender, prior['text'])
                 if case.get('album'):
                     selected = [next(p for p in products if p['product_id'] == pid) for pid in case['album']]
                     for item in selected:

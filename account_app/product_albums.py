@@ -113,14 +113,34 @@ def variant_sentences(product,question):
     return checks,sentences
 
 
-def color_conflict(product):
+def remaining_colors(product):
+    """Read explicit stock facts, never instructions embedded in catalog prose."""
     note = customer_copy.normalized(customer_copy.fact((product or {}).get('notes')))
     match = re.search(r'(?:باقي|متبقي|المتبقي)\s+(?:بس|فقط)\s+([^.!\n]+)', note)
     if not match:
-        return False
+        return []
+    return product_variants.colors(match[1])
+
+
+def sales_product(product):
+    """Narrow stock from a precise remaining-color note without editing the catalog.
+
+    A subset is useful stock information (cream sold out, black remains), not
+    a reason to silence every question about the model. Disjoint declarations
+    still require review; they cannot introduce a new color into inventory.
+    """
+    result = dict(product)
+    remaining = remaining_colors(product)
+    recorded = set(product_variants.colors(product.get('colors')))
+    if remaining and set(remaining) <= recorded:
+        result['colors'] = '، '.join(remaining)
+    return result
+
+
+def color_conflict(product):
     recorded = set(product_variants.colors((product or {}).get('colors')))
-    remaining = set(product_variants.colors(match[1]))
-    return bool(recorded and remaining and recorded != remaining)
+    remaining = set(remaining_colors(product))
+    return bool(recorded and remaining and not remaining <= recorded)
 
 
 def stock_state(product):
@@ -143,6 +163,7 @@ def current_positions(images, products):
     for index, image in enumerate(images, 1):
         item = dict(image, image_index=index)
         product = catalog.get(item.get('product_id')) if item.get('product_found') else None
+        product = sales_product(product) if product else None
         item['product_found'] = bool(product)
         # Re-read the stock, name and price; recognition memory is identity only.
         for field in ('product_name', 'stock', 'stock_quantity', 'price', 'sizes', 'colors', 'fabric', 'status', 'notes'):

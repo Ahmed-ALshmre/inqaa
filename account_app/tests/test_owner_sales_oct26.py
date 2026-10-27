@@ -36,7 +36,7 @@ class OwnerPolicyTests(unittest.TestCase):
             self.assertTrue(product_variants.assess(PRODUCT, 'قياس ' + label)[0]['supported'])
             self.assertEqual(product_variants.order_choice_error(PRODUCT, 'size', label), '')
         child = dict(PRODUCT, product_name='فستان اطفال', sizes='2 إلى 7 سنوات')
-        self.assertIsNone(product_variants.assess(child, 'XXL')[0]['supported'])
+        self.assertFalse(product_variants.assess(child, 'XXL')[0]['supported'])
         self.assertEqual(product_variants.normalize_size_words('اريد اكسين'), 'اريد XXL')
         self.assertNotIn('وزن', owner_sales.reply({'text':'اكسين موجود؟'}, PRODUCT, {}, {}, [])['reply'])
 

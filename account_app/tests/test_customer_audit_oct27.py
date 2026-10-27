@@ -95,10 +95,12 @@ class AuditPolicyTests(unittest.TestCase):
         known = [dict(product_found=True, product_id='AUDIT')]
         self.assertIn('مو متوفر', product_albums.response(known, [dict(PRODUCT, stock='نفذ')])['reply'])
 
-    def test_conflicting_colors_are_not_offered_as_verified_stock(self):
+    def test_remaining_colors_narrow_inventory_but_disjoint_notes_need_review(self):
         product = dict(PRODUCT, colors='اسود وردي كريمي', notes='قماش شتوي باقي بس اسود')
-        self.assertTrue(product_albums.color_conflict(product))
-        self.assertEqual(product_albums.stock_state(product), 'unknown')
+        self.assertFalse(product_albums.color_conflict(product))
+        self.assertEqual(product_albums.sales_product(product)['colors'], 'أسود')
+        self.assertEqual(product_albums.stock_state(product), 'available')
+        self.assertTrue(product_albums.color_conflict(dict(product, notes='باقي بس احمر')))
         self.assertFalse(product_albums.color_conflict(dict(product, colors='اسود')))
 
     def test_two_children_cannot_be_priced_and_booked_as_one(self):
@@ -242,8 +244,8 @@ class AuditPipelineTests(unittest.TestCase):
         with patch.object(self.m, 'load_products_from_file', return_value=[product]):
             created, reply = self.m.create_order_if_valid(self.db, 'audit-color', result, product, cart_confirmed=True)
         self.assertFalse(created)
-        self.assertIn('المختص', reply)
-        self.assertTrue(self.m.has_pending_human_review(self.db, 'audit-color'))
+        self.assertRegex(reply, 'أسود|اسود')
+        self.assertFalse(self.m.has_pending_human_review(self.db, 'audit-color'))
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
     def test_mixed_color_price_and_payment_question_keeps_all_answers(self):
@@ -256,14 +258,16 @@ class AuditPipelineTests(unittest.TestCase):
         self.assertRegex(result['reply'], 'أسود|اسود')
         self.assertFalse(result['create_order'])
 
-    def test_landmark_is_requested_without_losing_saved_contact_or_cart(self):
+    def test_district_address_books_without_a_mandatory_landmark(self):
         self.customer('audit-landmark')
         self.m.capture_customer_contact(self.db, 'audit-landmark', '07701234567 بغداد المشتل')
         result = {'order': dict(items=[dict(product_id='AUDIT', size='44', color='اسود', quantity=1)])}
-        with patch.object(self.m, 'load_products_from_file', return_value=[PRODUCT]):
+        with patch.object(self.m, 'load_products_from_file', return_value=[PRODUCT]), \
+             patch.object(self.m, 'send_order_to_telegram', return_value=True), \
+             patch.object(self.m, 'save_booking_to_file'):
             created, reply = self.m.create_order_if_valid(self.db, 'audit-landmark', result, PRODUCT, cart_confirmed=True)
-        self.assertFalse(created)
-        self.assertIn('نقطة دالة', reply)
+        self.assertTrue(created, reply)
+        self.assertNotIn('نقطة دالة', reply)
         self.assertNotIn('رقم', reply)
         self.m.capture_customer_contact(self.db, 'audit-landmark', 'جامع الاختبار')
         contact = self.m.checkout_customer_data(self.db, 'audit-landmark', result['order'])

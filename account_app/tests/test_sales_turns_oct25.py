@@ -93,7 +93,7 @@ class SalesTurnPipelineTests(unittest.TestCase):
                     self.assertIn('قياساته من 70 الى 130 كيلو، شكد تلبس؟', result['reply'])
                     self.assertIn('وعليكم السلام', result['reply'])
                 else:
-                    self.assertIn('شنو القياس اللي يناسبك؟', result['reply'])
+                    self.assertRegex(result['reply'], 'شنو القياس اللي يناسب[جك]؟')
                 self.assertFalse(result['create_order'])
         self.m.save_delivery_settings(self.db, {'baghdad_fee': 4000, 'other_fee': 7000})
         known_province = self.m.transparent_price_reply({'sender_id': 'reply', 'text':
@@ -112,23 +112,24 @@ class SalesTurnPipelineTests(unittest.TestCase):
                 self.assertEqual(result['reply'], '')
                 self.assertFalse(result['create_order'])
 
-    def test_local_composer_preserves_price_group_and_later_scarcity(self):
+    def test_local_composer_keeps_approved_last_pieces_offer_and_price_together(self):
         product = dict(PRODUCT, offer='عرض خاص لفترة محدودة على اخر الكمية')
         result, provider = self.ask('سعره', product=product)
         provider.assert_not_called()
         self.assertNotIn('اختيارج فد شي حلو', result['reply'])
         self.assertNotIn('الكمية', result['reply'])
         plan = self.m.plan_sales_bubbles(result, result['reply'])
-        self.assertEqual(len(plan['reply_parts']), 3)
-        self.assertIn('عرض هالفترة', plan['reply_parts'][0])
-        for amount in ['15 ألف', '5 آلاف', '20 ألف']:
-            self.assertIn(amount, plan['reply_parts'][1])
+        self.assertEqual(len(plan['reply_parts']), 1)
+        self.assertIn('عليه عرض على آخر قطع، وصار سعره 15 ألف', plan['reply_parts'][0])
+        self.assertNotIn('التوصيل', result['reply'])
         self.message('reply', 'outgoing', result['reply'])
         context = self.m.sales_context.load(self.db, 'default', 'reply')
         later = self.m.transparent_price_reply({'sender_id': 'reply', 'text': 'سعره', '_sales_context': context},
                                               product, {}, [product], [])
         later_plan = self.m.plan_sales_bubbles(later, later['reply'])
-        self.assertTrue(any('الكمية الباقية' in part and 'عرض' not in part for part in later_plan['reply_parts']))
+        self.assertIn('سعره 15 ألف', ' '.join(later_plan['reply_parts']))
+        self.assertNotIn('آخر قطع', ' '.join(later_plan['reply_parts']))
+        self.assertNotIn('عرض', ' '.join(later_plan['reply_parts']))
         self.assertFalse(any(part.endswith('،') for part in later_plan['reply_parts']))
 
     def test_availability_can_close_on_known_size_without_forcing_province(self):

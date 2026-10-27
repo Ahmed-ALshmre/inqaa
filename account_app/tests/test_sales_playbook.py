@@ -128,7 +128,8 @@ class ReviewedLessonTests(unittest.TestCase):
             playbook.cue_line(sales_strategy.persuasion_cue(last_batch)), last_batch))
         original = 'سعره 18 ألف. عليه عرض خاص لفترة محدودة على آخر الكمية.'
         natural = playbook.naturalize_last_quantity_reply(original, last_batch)
-        self.assertIn('تره الكمية الباقية قليلة كلش، كم قطعة بس', natural)
+        self.assertIn('على آخر قطع', natural)
+        self.assertNotIn('قليلة كلش', natural)
         self.assertFalse(sales_strategy.persuasion_error(natural, last_batch))
         self.assertEqual(playbook.naturalize_last_quantity_reply(original, limited_offer), original)
 
@@ -300,7 +301,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.message('cart', 'incoming', 'اريد احجز الاسود قياس 44')
         self.message('cart', 'outgoing', 'حتى نكمل الحجز، دزيلي رقمك وعنوانك.', {'checkout_draft': order})
         self.message('cart', 'outgoing', 'التوصيل خمسة آلاف والدفع عند الاستلام.')
-        text = '07700000000 بغداد حي تجريبي قرب جامع الاختبار'
+        text = '07700000000 بغداد حي تجريبي'
         self.message('cart', 'incoming', text)
         result = {'reply': '', 'order': {}}
         self.m.restore_checkout_draft(self.db, {'sender_id': 'cart', 'text': text}, result, PRODUCT)

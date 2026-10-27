@@ -1764,6 +1764,17 @@ def get_ai_model(db, setting_name, default):
 
 def ai_failure_message(reason):
     code = str(reason or "")
+    local_errors = {
+        "catalog_color_conflict": "ألوان المنتج تحتاج مراجعة: ملاحظة المخزون تذكر لوناً خارج قائمة الألوان المسجلة.",
+        "forbidden_customer_placeholder": "الرد المقترح كان مجرد إشعار باستلام الصورة؛ لم يتضمن جواباً مفيداً عن المنتج.",
+        "invalid_ai_response": "وصل رد غير مكتمل أو بصيغة غير قابلة للقراءة من نموذج الذكاء الاصطناعي.",
+        "empty_reply": "أعاد نموذج الذكاء الاصطناعي رداً فارغاً؛ أعد المحاولة.",
+        "no_api_key": "مفتاح OpenRouter غير مهيأ على الخادم.",
+    }
+    if code in local_errors:
+        return local_errors[code]
+    if code.startswith('exception:'):
+        return "انقطع الاتصال بخدمة الذكاء الاصطناعي أو انتهت مهلة انتظارها؛ أعد المحاولة."
     if code == "provider_http_401":
         return "تعذر الاتصال بالذكاء الاصطناعي: تحقق من مفتاح OpenRouter."
     if code == "provider_http_402":
@@ -1772,7 +1783,7 @@ def ai_failure_message(reason):
         return "رفضت خدمة الذكاء الاصطناعي الطلب؛ تحقق من معرف النموذج وإعداداته في إعدادات المتجر."
     if code == "provider_http_429":
         return "خدمة الذكاء الاصطناعي مشغولة حالياً؛ أعد المحاولة بعد قليل."
-    return "تعذر توليد الرد من خدمة الذكاء الاصطناعي. أعد المحاولة أو راجع إعدادات المتجر."
+    return "تعذر إكمال الرد. سبب الفشل: " + (code[:160] or "لم يصل تشخيص من المزود")
 
 
 def get_ai_temperature(db, setting_name, default):
@@ -2321,7 +2332,7 @@ def find_product_by_id(product_id, include_inactive=False, store_id=None):
         if product.get("product_id") != product_id:
             continue
         if include_inactive or product.get("status") == "active":
-            return product
+            return product_albums.sales_product(product)
     return None
 
 
@@ -2659,7 +2670,7 @@ def load_customer_products(db, sender_id, limit=5):
         (sender_id,),
     ).fetchall()
     products_by_id = {
-        p.get("product_id"): p
+        p.get("product_id"): product_albums.sales_product(p)
         for p in load_products_from_file()
         if p.get("product_id")
     }
@@ -5106,7 +5117,7 @@ def detect_message_type(ev):
 
 def load_active_products(db):
     return [
-        product
+        product_albums.sales_product(product)
         for product in load_products_from_file()
         if product.get("status") == "active"
     ]
@@ -7396,7 +7407,7 @@ CONVERSATION_SALES_GUIDE = """
 بعد الحجز انتقل للخدمة، لا تبدأ بيعاً جديداً من تلقاء نفسك. المرفق المفهوم يعالج طبيعياً؛ غير المفهوم يحال للبشر دون مطالبة الزبون بإعادة كتابته.
 أرسل جواباً متماسكاً في رسالة واحدة غالباً عبر reply_parts، وهذه القاعدة لكل المتاجر. السؤال القصير والسعر مع التوصيل والمجموع والتحية والشكر والرفض والتأجيل رسالة واحدة. استخدم رسالتين عند وجود شرحين مستقلين وطويلين، وثلاثاً كحد أقصى للتفاصيل الطويلة الضرورية فقط. لا تجعل كل جملة أو موضوع إشعاراً منفصلاً ولا تملأ العدد بكلام إضافي.
 خطط لوظيفة كل جزء قبل صياغته: الأول جواب سؤال الزبون مباشرة مع تحية قصيرة إن لزمت؛ التالي يوضح الاختيار أو فائدة مثبتة مرتبطة بحاجته؛ معالجة الاعتراض أو سياسة الفحص تأتي فقط إذا احتاجها السياق؛ آخر جزء سؤال واحد سهل عن المعلومة الناقصة الأقرب لاتخاذ القرار. هذه وظائف اختيارية لا قالب إلزامي. لا تحول كل جملة إلى رسالة، ولا تقدم جدول المنتج كاملاً أو تعيد مزاياه التي عرفها.
-اجعل الرد مختصراً وكافياً لإجابة ما طُرح. غالباً يمكن جمع حتى 600 حرف في رسالة متماسكة، مع فقرات عند الحاجة. الاختصار لا يحذف سؤالاً أو شرطاً أو كلفة؛ التفاصيل الأطول تقسّم فقط عند حدود المعنى. اجمع التحية مع الجواب، والسعر وتوصيله وإجماليه عند حساب التكلفة، والقياس وتفسيره، وحقول الهاتف والمحافظة والعنوان؛ لا تقطع فكرة أو شرطاً أو رابطاً أو قائمة بين رسالتين. لا ترسل تحية أو رمزاً منفرداً.
+اجعل الرد مختصراً وكافياً لإجابة ما طُرح. قسمي الرد الطويل إلى رسائل قصيرة عند تغير الفكرة. الاختصار لا يحذف سؤالاً أو شرطاً أو كلفة؛ التفاصيل الأطول تقسّم فقط عند حدود المعنى. اجمع التحية مع الجواب، والسعر وتوصيله وإجماليه عند حساب التكلفة، والقياس وتفسيره، وحقول الهاتف والمحافظة والعنوان؛ لا تقطع فكرة أو شرطاً أو رابطاً أو قائمة بين رسالتين. لا ترسل تحية أو رمزاً منفرداً.
 ادمج سؤال المتابعة مع الجواب الذي يخصه غالباً. افصله فقط إذا تعذر جمع الشرح الطويل بشكل مقروء. اسأل عن القياس إن كان مجهولاً، أو اللون أو الاختيار الناقص حسب السياق؛ لا تكرر سؤالاً أجاب عنه ولا تطلب بيانات الحجز قبل رغبة واضحة. سؤال واحد فقط في كامل الرد، إلا إذا كان الزبون يريد جمع حقول التواصل المتبقية. لا تضف سؤال بيع بعد الشكر أو الرفض أو طلب المهلة. اجعل الترغيب بفائدة صحيحة مرتبطة بطلبه، دون إلحاح أو ندرة أو خصم مختلق.
 تجنب تكرار المعلومات والأسئلة والتحية بين الأجزاء. تأكيد تثبيت الحجز رسالة واحدة لا تقسم مطلقاً، يرسلها النظام بعد نجاح الحفظ بنص التثبيت والفحص فقط، دون إلحاق اسم القطعة أو اللون أو القياس أو الأسعار أو العنوان أو الهاتف أو مدة التوصيل. اجعل reply النص الكامل نفسه واجمع reply_parts بفاصل سطرين. الأجزاء ترسل بالترتيب مرة واحدة دون إعادة النص الكامل بعدها.
 نتائج بحث المنتجات اقتراحات فقط وليست اختيارات الزبون. لا تضف قطعة إلى order.items لمجرد السؤال عنها. لا تخمن المنتج من فستان أو أسود أو رقم قياس. املأ order بتفاصيل القطع التي طلبها الزبون حتى قبل اكتمال الهاتف والعنوان، مع ترك الناقص فارغاً. إذا وصلت البيانات بعد طلبها ورغبة الحجز واضحة فأنشئ الطلب دون إعادة سؤال التثبيت. القياس 50 أو 52 اختيار غير محسوم وليس وزناً 50؛ لا تحسم أحدهما تلقائياً.
@@ -8995,6 +9006,9 @@ def _call_main_ai_with_context(
 def call_main_ai(ev, message_type, customer, history, products, matched_product,
                  image_result, instructions_text, rules_list, fix_instruction=None,
                  customer_products=None, conversation_history=None, catalog_search_context=None):
+    products = [product_albums.sales_product(p) for p in products]
+    matched_product = product_albums.sales_product(matched_product) if matched_product else None
+    customer_products = [product_albums.sales_product(p) for p in customer_products or []]
     context = (sales_context.load(get_db(), current_store_id(), ev['sender_id'])
                if has_app_context() and ev.get('sender_id') else sales_context.advance({}, history))
     context = sales_context.advance(context, [{'direction': 'incoming', 'text': ev.get('text')}])
@@ -9004,6 +9018,7 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
         address = _customer_gender_from_db(get_db(), ev['sender_id'])
     customer = dict(customer or {}, gender=address)
     chosen = matched_product or (customer_products[0] if len(customer_products or []) == 1 else None)
+    ev['_reply_product'] = chosen
     if chosen and not ev.get('_post_order') and product_albums.color_conflict(chosen):
         return owner_sales.result(human='catalog_color_conflict', silent=True)
     continuation = sales_context.continuation(ev.get('text'), context)
@@ -9031,7 +9046,19 @@ def owner_result_surface(result, ev, customer=None, history=()):
     if not re.search(r'\w', original):
         return dict(result, reply='', reply_parts=[])
     if owner_sales.FORBIDDEN_REPLY.search(customer_copy.normalized(original)):
-        return owner_sales.result(human='forbidden_customer_placeholder', silent=True)
+        product = ev.get('_reply_product')
+        recovered = (known_product_questions_reply(ev.get('text') or '', product)
+                     or recover_factual_sales_reply(ev, product)) if product else None
+        if not recovered and product and not ev.get('_post_order'):
+            recovered = recover_factual_sales_reply(dict(ev, text='متوفر وشكد سعره؟'), product)
+        if not recovered or recovered.get('_needs_fact_review'):
+            return owner_sales.result(human='forbidden_customer_placeholder', silent=True)
+        result = dict(recovered, _placeholder_recovered=True)
+        original = str(result.get('reply') or '')
+    conversational = owner_sales.conversational_wording(original)
+    if conversational != original:
+        original = conversational
+        result.update(reply=original, reply_parts=[])
     filtered = owner_sales.delivery_wording(original, ev.get('text'))
     if filtered != original:
         original = filtered
@@ -9785,7 +9812,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     if not valid_phone:
         return None, "رقم الموبايل غير مكتمل؛ دزيلي رقم عراقي صحيح حتى أثبتلج الحجز."
     phone = order_data["phone"] = valid_phone
-    catalog_products = load_products_from_file()
+    catalog_products = [product_albums.sales_product(p) for p in load_products_from_file()]
     raw_items = checkout_lines(order_data, matched_product)
     if any(product_albums.color_conflict(product) for product in catalog_products
            if any(isinstance(item, dict) and item.get('product_id') == product.get('product_id') for item in raw_items)):
@@ -9834,8 +9861,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
             missing_options.append(f"قياس {item.get('product_name')}")
     if missing_options:
         return None, "باقي نحدد " + " و".join(missing_options) + " حتى أثبت الطلب 🌸"
-    if ai_result.get('_booking_actor') != 'staff' and not has_shipping_landmark(address):
-        return None, 'باقي بس أقرب نقطة دالة بالمنطقة حتى أثبت الطلب.'
+    # A usable delivery address completes checkout. A separate landmark is
+    # optional; repeatedly demanding one discarded valid districts and villages.
     product_id = ", ".join(item["product_id"] for item in items if item.get("product_id"))
     product_name = order_items_summary(items)
     try:
@@ -10477,10 +10504,20 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
             return None  # Keep every chosen color; never reduce a plural choice to one old line.
         colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
         color = selected.get('color') or (colors[0] if len(colors) == 1 else '')
+        if color and colors and color not in colors:
+            available = ' و'.join('ال' + value for value in colors)
+            replacement = (' تحبين ال' + colors[0] + ' بدل ال' + color + '؟') if len(colors) == 1 else ' أي لون تختارين بدله؟'
+            reply = 'ال' + color + ' خلص من هالموديل، المتوفر ' + available + '.' + replacement
+            return dict(reply=reply, reply_parts=[reply], create_order=False, order={},
+                        requires_human=False, _browse_only=True, _local_reply=True,
+                        _suppress_product_images=True)
         size = selected.get('size')
+        child_sizes = product_variants.size_data(product.get('sizes'))['years']
+        if child_sizes and selected.get('age') is not None and not size:
+            size = product_variants.age_text(selected['age'])
         if not size or sales_playbook.selection_conflicts(product, context, customer):
             return None
-        assessed = product_variants.assess(product, 'قياس ' + str(size))
+        assessed = product_variants.assess(product, ('عمر ' if child_sizes else 'قياس ') + str(size))
         if not assessed or assessed[0]['supported'] is not True:
             return None
         item = dict(product_id=product['product_id'], product_name=product['product_name'],

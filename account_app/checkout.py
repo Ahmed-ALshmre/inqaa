@@ -52,7 +52,8 @@ def invalid_shipping_address(text):
 def has_shipping_landmark(address):
     clean = normalized(address)
     return bool(re.search(r'(?<!\w)(?:قرب|مقابل|مقابيل|خلف|يم|مجاور|بجانب|بجوار)\s+\S{2,}', clean)
-                or re.search(r'نقط[ةه]\s+دال[ةه]\s*[:：-]?\s*\S{2,}', clean)
+                or re.search(r'(?:اقرب\s+)?نقط[ةه](?:\s+دال[ةه])?\s*[:：-]?\s*\S{2,}', clean)
+                or re.search(r'(?<!\w)(?:مدرس[ةه]|جامع[ةه]?|مستشفى|صيدلي[ةه]|مجمع)\s+\S{2,}', clean)
                 or (re.search(r'محل[ةه]\s*\d+', clean) and re.search(r'زقاق\s*\d+', clean)
                     and re.search(r'دار\s*\d+', clean)))
 
@@ -92,7 +93,7 @@ def contact_fields(text, previous=None):
             return {"address": address}
     without_phone = PHONE.sub("", original).strip(" ,،.\n")
     explicit = re.search(r"(?:عنواني|العنوان)\s*[:：-]?\s*(.+)", without_phone, re.S)
-    location_marker = re.search(r"\b(?:حي|قرب|شارع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|مستشفى|جامع|مدرسة|مدرسه|صيدلية|صيدليه|مول|محطة|محطه|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b", normalized(without_phone))
+    location_marker = re.search(r"\b(?:حي|قرب|شارع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|ناحية|ناحيه|مجمع|مستشفى|جامع|جامعة|جامعه|مدرسة|مدرسه|صيدلية|صيدليه|مول|محطة|محطه|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b|(?:رقم\s*(?:ال)?دار|دار|زقاق)\s*\d+", normalized(without_phone))
     if explicit:
         address = explicit.group(1).strip(" ,،.\n")
     elif not is_question and not re.search(r"\b(?:اريد|احجز|فستان|سوت|قميص|وزن|قياس)\b", clean) and (province or previous.get("province")) and (location_marker or province):
@@ -102,17 +103,20 @@ def contact_fields(text, previous=None):
     # A province on its own is not a delivery address.
     address_words = re.findall(r"\w+", normalized(address))
     province_only = any(re.sub(r"^محافظ[ةه]\s+", "", normalized(address)).replace('ة', 'ه') == normalized(alias).replace('ة', 'ه') for aliases in PROVINCES.values() for alias in aliases)
-    if address and not province_only and not invalid_shipping_address(address) and len(address_words) >= 2 and (location_marker or province or len(address_words) >= 3):
+    numbered_house = bool(re.search(r'(?:رقم\s*(?:ال)?دار|دار|زقاق)\s*\d+', normalized(address)))
+    if address and not province_only and not invalid_shipping_address(address) and (len(address_words) >= 2 or numbered_house) and (location_marker or province or len(address_words) >= 3):
         # A landmark sent in the next bubble supplements the established area.
         previous_address = str(previous.get("address") or "").strip()
         if (previous_address and previous.get('province') and not province
-                and re.match(r'^(?:جامع|مدرس[ةه]|صيدلي[ةه]|مستشفى|مول|محط[ةه])\s', normalized(address))
+                and re.match(r'^(?:جامع[ةه]?|مدرس[ةه]|صيدلي[ةه]|مستشفى|مول|محط[ةه])\s', normalized(address))
                 and normalized(address) not in normalized(previous_address)):
             address = 'قرب ' + address
         if (previous_address and not invalid_shipping_address(previous_address) and
-                not province and re.match(r"^(?:مقابل|قرب|خلف)\s", normalized(address)) and
+                not province and not explicit and re.match(r"^(?:(?:مقابل|قرب|خلف|يم|مجاور|بجانب|بجوار|اقرب\s+نقط[ةه]|نقط[ةه])\s|(?:رقم\s*(?:ال)?دار|دار|زقاق)\s*\d)", normalized(address)) and
                 normalized(address) not in normalized(previous_address)):
             address = previous_address + "، " + address
+        elif previous_address and normalized(address) in normalized(previous_address) and not explicit:
+            address = previous_address  # Repeating an area must not erase its landmark.
         result["address"] = address[:500]
     return result
 

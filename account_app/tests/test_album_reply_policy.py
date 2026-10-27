@@ -53,9 +53,9 @@ class AlbumCopyTests(unittest.TestCase):
         for original in result['reply_parts']:
             self.assertEqual(result['reply'].count(original), 1)
             self.assertTrue(any(original in part for part in delivered))
-        positions = [result['reply'].index(product_albums.reference(index)) for index in range(1, 8)]
-        self.assertEqual(positions, sorted(positions))
-        self.assertEqual(result['reply'].count('17,000'), 7)
+        self.assertNotIn('الأول', result['reply'])
+        self.assertEqual(result['reply'].count('كيلوت'), 1)
+        self.assertEqual(result['reply'].count('17,000'), 1)
 
     def test_single_model_answers_use_model_name_without_an_unrelated_first_photo_label(self):
         for images, question, expected in [
