@@ -149,3 +149,14 @@ class NegotiationCheckoutTests(unittest.TestCase):
         self.assert_confirmation(result)
         saved = self.db.execute('SELECT * FROM orders WHERE sender_id=?', (self.sender,)).fetchone()
         self.assertEqual(saved['address'], 'بغداد حي الاختبار')
+
+    def test_arrival_condition_explains_uncertainty_without_policy_filler(self):
+        self.link_cart()
+        for text in ('ثبتي اذا يوصل باجر فقط', '07701234567 بغداد حي الاختبار'):
+            result, model = self.process(text)
+            model.assert_not_called()
+            self.assertIn('ما أگدر أضمنه', result['reply'])
+            self.assertIn('موعد مو أكيد', result['reply'])
+            self.assertNotIn('حسم هالشرط', result['reply'])
+            self.assertFalse(result.get('create_order'))
+            self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)

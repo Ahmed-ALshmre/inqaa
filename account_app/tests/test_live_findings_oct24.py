@@ -83,7 +83,9 @@ class LiveFindingsPipelineTests(unittest.TestCase):
             result = self.call('هذا رقمي 07700000000', history)
         provider.assert_not_called()
         self.assertIn('رقمك وصل', result['reply'])
-        self.assertIn('الشرط', result['reply'])
+        self.assertIn('ما أگدر أضمنه', result['reply'])
+        self.assertIn('موعد مو أكيد', result['reply'])
+        self.assertNotIn('حسم هالشرط', result['reply'])
         self.assertNotIn('العنوان', result['reply'])
         self.assertFalse(result['create_order'])
 
