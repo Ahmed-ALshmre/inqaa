@@ -133,7 +133,12 @@ class ProductEditorBoundaryTests(unittest.TestCase):
                 if tag == 'input' and values.get('name') == 'sales_cues':
                     self.cues.append(values.get('value'))
         parser = Controls()
-        parser.feed((Path(__file__).resolve().parents[1] / 'templates/products.html').read_text(encoding='utf-8'))
+        from account_app import app as m, catalog_profile
+        with m.app.test_request_context('/products'):
+            page = m.render_template('products.html', catalog_schema=dict(audiences=catalog_profile.AUDIENCES,
+                product_types=catalog_profile.TYPES, size_systems=catalog_profile.SIZE_SYSTEMS,
+                occasions=catalog_profile.OCCASIONS))
+        parser.feed(page)
         self.assertEqual(len(parser.ids), len(set(parser.ids)))
         self.assertTrue({'relatedProductsSearch', 'relatedProductsOptions', 'relatedProductsSelected',
                          'relatedProductsCount', 'productSalesCues'}.issubset(parser.ids))
@@ -145,14 +150,14 @@ class ProductEditorBoundaryTests(unittest.TestCase):
         script = r'''
 const fs=require('fs'), vm=require('vm'), assert=require('assert');
 class Element {
- constructor(){this.value='';this.children=[];this.listeners={};this.style={};this.checked=false;}
+ constructor(){this.value='';this.children=[];this.listeners={};this.style={};this.checked=false;this.classList={toggle(){}};}
  append(...x){this.children.push(...x);} replaceChildren(...x){this.children=x;}
  addEventListener(k,v){this.listeners[k]=v;} setAttribute(k,v){this[k]=v;}
  reset(){for(const x of nodes.values()){x.value='';x.checked=false;}for(const x of cues)x.checked=false;}
 }
 const nodes=new Map(), cues=['limited_stock','high_demand','frequent_bookings','many_purchases'].map(value=>Object.assign(new Element(),{value}));
-const document={getElementById(id){if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);},createElement(){return new Element();},addEventListener(){},querySelectorAll(s){return s.endsWith(':checked')?cues.filter(x=>x.checked):cues;}};
-const sandbox={document,window:{location:{search:'?store_id=default'}},URLSearchParams,Set,console};vm.createContext(sandbox);
+const document={getElementById(id){if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);},createElement(){return new Element();},addEventListener(){},querySelectorAll(s){if(!s.includes('productSalesCues'))return [];return s.endsWith(':checked')?cues.filter(x=>x.checked):cues;}};
+const sandbox={document,window:{location:{search:'?store_id=default'}},URLSearchParams,Set,console,confirm:()=>true};vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),sandbox);
 vm.runInContext(`allProducts=[
 {product_id:'A',store_id:'default',product_name:'الأصل',related_product_ids:['B'],sales_cues:['high_demand'],stock_quantity:0,status:'active'},

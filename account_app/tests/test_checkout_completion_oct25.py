@@ -63,6 +63,31 @@ class CheckoutCompletionTests(unittest.TestCase):
         self.assertEqual(order['province'], 'البصرة')
         self.assertIn('الجزائر', order['address'])
 
+    def test_reported_landmark_before_province_is_saved_and_not_requested_again(self):
+        self.link_cart()
+        self.process('07701234567')
+        address_result, model = self.process('مجمع الزهور')
+        model.assert_not_called()
+        self.assertIn('المحافظة', address_result['reply'])
+        self.assertNotIn('العنوان', address_result['reply'])
+        self.assertNotIn('نقطة', address_result['reply'])
+        result, model = self.process('بغداد')
+        model.assert_not_called()
+        self.assert_confirmation(result)
+        order = self.db.execute('SELECT * FROM orders WHERE sender_id=?', (self.sender,)).fetchone()
+        self.assertEqual(order['address'], 'مجمع الزهور')
+        self.assertEqual(order['province'], 'بغداد')
+
+    def test_reported_landmark_after_province_does_not_repeat_location_request(self):
+        self.link_cart()
+        self.process('07701234567 بغداد')
+        result, model = self.process('مجمع الزهور ع سريع محمد القاسم')
+        model.assert_not_called()
+        self.assert_confirmation(result)
+        order = self.db.execute('SELECT * FROM orders WHERE sender_id=?', (self.sender,)).fetchone()
+        self.assertIn('مجمع الزهور', order['address'])
+        self.assertIn('محمد القاسم', order['address'])
+
     def test_full_details_book_selected_size_without_old_model_cart(self):
         self.m.bind_customer_to_product(self.db, self.sender, CATALOG[0], source='image_recognition')
         self.incoming('قياسي 44')

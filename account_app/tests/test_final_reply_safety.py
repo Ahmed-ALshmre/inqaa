@@ -41,7 +41,7 @@ class StructuredReplyTests(unittest.TestCase):
     def test_missing_numeric_size_and_color_are_answered_before_model_availability(self):
         product=fixtures.CATALOG[0]
         for question,expected in [('متوفر قياس 54؟','قياس 54 مو موجود'),
-                                  ('متوفر اللون الأصفر؟','اللون أصفر مو موجود')]:
+                                  ('متوفر اللون الأصفر؟','أما الأصفر فمو متوفر')]:
             reply=product_albums.response([{'product_found':True,'product_id':'A'}]*2,[product],question)
             self.assertIn(expected,reply['reply'])
             self.assertNotIn('متوفر عيني',reply['reply'])
@@ -56,8 +56,8 @@ class StructuredReplyTests(unittest.TestCase):
         self.assertTrue(product_variants.assess(product,'متوفر قياس ٤٠؟')[0]['supported'])
 
     def test_weights_and_age_ranges_are_not_silently_interpreted_as_size_numbers(self):
-        for value in ['من 55 كيلو إلى 85 كيلو','من 3 إلى 7 سنوات']:
-            self.assertIsNone(product_variants.assess(dict(fixtures.CATALOG[0],sizes=value),'متوفر قياس 54؟')[0]['supported'])
+        self.assertIsNone(product_variants.assess(dict(fixtures.CATALOG[0],sizes='من 55 كيلو إلى 85 كيلو'),'متوفر قياس 54؟')[0]['supported'])
+        self.assertFalse(product_variants.assess(dict(fixtures.CATALOG[0],sizes='من 3 إلى 7 سنوات'),'متوفر قياس 54؟')[0]['supported'])
         product=dict(fixtures.CATALOG[0],sizes='من 50 الى 100 كيلو و القياسات من 38 الى 52')
         self.assertEqual(customer_copy.fact(product['sizes'],'sizes'),'38 إلى 52')
         self.assertFalse(product_variants.assess(product,'متوفر قياس 54؟')[0]['supported'])

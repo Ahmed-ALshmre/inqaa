@@ -84,7 +84,8 @@ class SalesReplyPipelineTests(unittest.TestCase):
     def test_fabric_value_is_preserved_after_scarcity_repair(self):
         bad={'reply':'آخر قطعة، احجزي قبل ما يخلص','create_order':False}
         good={'reply':'قماشه باربي وسعره 15 ألف؛ الأسود والكريمي متوفرات.','create_order':False}
-        result,model=self.ask('غالي بس شنو قماشه؟',[bad,good])
+        with patch.dict(CHEAPER, recommendation_enabled=False):
+            result,model=self.ask('غالي بس شنو قماشه؟',[bad,good])
         self.assertEqual(result['reply'],good['reply'])
         self.assertEqual(model.call_count,2)
         self.assertIn('الندرة',model.call_args.kwargs['fix_instruction'])
@@ -93,7 +94,8 @@ class SalesReplyPipelineTests(unittest.TestCase):
         bad={'reply':'نعم يوصلك نفس الصورة بالضبط','create_order':False}
         result,_=self.ask('تضمنون الصورة؟',[bad,bad])
         self.assertNotIn('بالضبط',result['reply'])
-        self.assertTrue(result['_needs_fact_review'])
+        self.assertFalse(result['_needs_fact_review'])
+        self.assertIn('المندوب', result['reply'])
 
     def test_bad_model_cannot_book_against_explicit_refusal(self):
         bad={'reply':'تم تثبيت الطلب','create_order':True,'order':{'items':[{'product_id':'D1'}]}}
@@ -145,7 +147,7 @@ class SalesReplyPipelineTests(unittest.TestCase):
 
     def test_multi_variant_checkout_charges_shipping_once(self):
         self.customer('buyer')
-        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي قرب جامع الاختبار','items':[
+        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي','items':[
             dict(product_id='D1',product_name='فستان رباط',color='اسود',size='42',quantity=1),
             dict(product_id='D1',product_name='فستان رباط',color='كريمي',size='46',quantity=1)]}
         with patch.object(self.m,'load_products_from_file',return_value=[DRESS]),patch.object(self.m,'send_order_to_telegram',return_value=True),patch.object(self.m,'save_booking_to_file'):
@@ -157,7 +159,7 @@ class SalesReplyPipelineTests(unittest.TestCase):
 
     def test_bundle_quantity_is_three_items_with_free_delivery(self):
         self.customer('bundle')
-        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي قرب جامع الاختبار','items':[
+        data={'phone':'07700000000','province':'بغداد','address':'بغداد حي تجريبي','items':[
             dict(product_id='B1',product_name='سوت بهاري',color=color,size='سنة',quantity=1) for color in ('وردي','ماروني','تركوازي')]}
         with patch.object(self.m,'load_products_from_file',return_value=[BUNDLE]),patch.object(self.m,'send_order_to_telegram',return_value=True),patch.object(self.m,'save_booking_to_file'):
             created,_=self.m.create_order_if_valid(self.db,'bundle',{'order':data},BUNDLE)

@@ -65,7 +65,7 @@ class ConversationContextTests(unittest.TestCase):
         with m.app.app_context(), patch.object(m, 'current_store_id', return_value='default'):
             result = m.factual_customer_request({'text': 'شلون الدفع والتوصيل؟'}, products, products[0])
         self.assertIn('الدفع يصير عند الاستلام', result['reply'])
-        self.assertIn('الفحص عند الاستلام', result['reply'])
+        self.assertIn('الفحص بوجود المندوب قبل الدفع', result['reply'])
         self.assertNotIn('حسب سياسة المتجر', result['reply'])
     @classmethod
     def setUpClass(cls):
@@ -320,6 +320,16 @@ class ConversationContextTests(unittest.TestCase):
         content = post.call_args.kwargs['json']['messages'][-1]['content']
         self.assertIn('تريدين دانتيل ويا انيقة؟', content)
         self.assertIn('ماريده', content)
+
+    def test_truncated_selection_never_changes_saved_product_choices(self):
+        self.recognize()
+        before = [dict(row) for row in self.db.execute('SELECT * FROM customer_product_interests WHERE sender_id=?', (self.sender,))]
+        decision = '{"action":"change","reject_ids":["F2"],"select_ids":["F1"],"focus_id":"F1"}'
+        with patch.object(m, 'OPENROUTER_KEY', 'test'), patch.object(m.ai_transport, 'post') as post:
+            post.return_value.json.return_value = {'choices': [{'finish_reason': 'length', 'message': {'content': decision}}]}
+            m.resolve_contextual_product_selection(self.db, dict(self.ev, text='اريد دانتيل مو انيقة'), CATALOG)
+        after = [dict(row) for row in self.db.execute('SELECT * FROM customer_product_interests WHERE sender_id=?', (self.sender,))]
+        self.assertEqual(before, after)
     def test_default_applies_to_product_question_not_only_greeting(self):
         with patch.object(m,"generate_first_message_reply",return_value=("أرسلي صورة", "")) as first:
             result = self.event("ما هي مواصفات الفستان؟", model_reply="الفستان دانتيل بسعر 16000")
@@ -672,6 +682,19 @@ class ConversationContextTests(unittest.TestCase):
         self.assertIn('نحدد القطعة', result['reply'])
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
 
+    def test_reserved_for_you_is_not_delivered_before_checkout(self):
+        m.complete_customer_product_link(self.db, self.sender, CATALOG[0], 'manual', source='manual_admin')
+        for claim in ('الاسود محجوز الج', 'قياس 44 محجوز إلج', 'القطعة محجوزة لك'):
+            self.assertTrue(m.claims_order_created(claim), claim)
+        with patch.object(m, '_call_main_ai_once', return_value={
+                'reply': 'قماشه لينن، الاسود قياس 44 محجوز إلج، دزيلي رقم الموبايل.', 'create_order': False, 'order': {}}):
+            result = self.event('شنو قماشه؟')
+        self.assertIn('لينن', result['reply'])
+        self.assertFalse(m.claims_order_created(result['reply']))
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
+        for text in ('مو محجوز إلج', 'بعده ما محجوزة لك', 'الأسود محجوز لزبونة ثانية'):
+            self.assertFalse(m.claims_order_created(text), text)
+
     def test_album_links_both_products_and_preserves_image_order_in_reply(self):
         self.settings['enabled'] = False
         urls = ['https://images.test/first.jpg', 'https://images.test/second.jpg']
@@ -688,8 +711,8 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الصورة الأولى متوفرة والثانية متوفرة', 'create_order': False, 'order': {}}) as model:
             sent = m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
         model.assert_not_called()
-        self.assertIn('الأول متوفر، فستان دانتيل', sent['reply'])
-        self.assertIn('الثاني هم عدنا، فستان انيقة', sent['reply'])
+        self.assertIn('الأول، فستان دانتيل متوفر', sent['reply'])
+        self.assertIn('الثاني، فستان انيقة متوفر', sent['reply'])
         self.assertLess(sent['reply'].index('دانتيل'), sent['reply'].index('انيقة'))
 
     def test_repeated_product_keeps_both_image_positions(self):

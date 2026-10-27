@@ -117,7 +117,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
         result, send, model = self.process(results)
         reply = send.call_args.args[0]['reply']
         self.assertNotIn('الثاني', reply)
-        self.assertIn('الثالث هم عدنا، تنورة', reply)
+        self.assertIn('الثالث، تنورة متوفر', reply)
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'album-customer'))
         review = self.db.execute("SELECT image_url,status FROM human_reviews WHERE sender_id='album-customer'").fetchall()
         self.assertEqual([(x[0], x[1]) for x in review], [('https://images.test/1.jpg', 'pending')])
@@ -180,7 +180,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
 
     def test_separate_messages_are_collected_in_customer_order(self):
         result, send, model = self.process([dict(product_found=True, product_id=x['product_id']) for x in CATALOG], separate=True)
-        self.assertIn('الأول متوفر، كيلوت', send.call_args.args[0]['reply'])
+        self.assertIn('الأول، كيلوت متوفر', send.call_args.args[0]['reply'])
         self.assertIn('الثالث، قميص', send.call_args.args[0]['reply'])
 
     def test_recognized_album_recovers_image_pause_but_respects_manual_pause(self):
@@ -198,7 +198,7 @@ class OrderedSalesPipelineTests(unittest.TestCase):
     def test_repeated_product_photos_keep_positions_but_not_duplicate_cart_items(self):
         result, send, model = self.process([dict(product_found=True, product_id='A')] * 3)
         reply = send.call_args.args[0]['reply']
-        self.assertEqual(reply.count('كيلوت'), 3)
+        self.assertEqual(reply.count('كيلوت'), 1)
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM customer_product_interests WHERE status='active'").fetchone()[0], 1)
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 

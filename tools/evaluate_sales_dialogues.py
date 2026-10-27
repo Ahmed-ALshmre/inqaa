@@ -164,7 +164,10 @@ class HTTPGate:
             kwargs['json'] = payload
         messages = payload.get('messages') or []
         system = str(messages[0].get('content') or '') if messages else ''
-        kind = 'selection' if 'حلل اختيار المنتجات' in system else 'checker' if 'approved' in system and 'fix_instruction' in system and 'create_order' not in system else 'reply'
+        kind = ('customer_simulation' if '[QA_CUSTOMER]' in system else
+                'vision' if any(isinstance(message.get('content'), list) and any(part.get('type') == 'image_url' for part in message['content'] if isinstance(part, dict)) for message in messages) else
+                'selection' if 'حلل اختيار المنتجات' in system else
+                'checker' if 'approved' in system and 'fix_instruction' in system and 'create_order' not in system else 'reply')
         started = time.monotonic()
         record = dict(model=payload.get('model'), kind=kind, status=None, seconds=0,
                       prompt_tokens=None, completion_tokens=None, reported_cost_usd=None,
@@ -190,6 +193,13 @@ class HTTPGate:
             usage = body.get('usage') or {}
             record.update(status=response.status_code, prompt_tokens=usage.get('prompt_tokens'),
                           completion_tokens=usage.get('completion_tokens'), reported_cost_usd=usage.get('cost'))
+            record['finish_reasons'] = [choice.get('finish_reason') for choice in body.get('choices', [])]
+            record['response_text_chars'] = sum(len(str((choice.get('message') or {}).get('content') or '')) for choice in body.get('choices', []))
+            if kind == 'selection':
+                try:
+                    record['complete_selection_json'] = isinstance(json.loads(body['choices'][0]['message']['content']), dict) and body['choices'][0].get('finish_reason') != 'length'
+                except (ValueError, KeyError, IndexError, TypeError):
+                    record['complete_selection_json'] = False
             if isinstance(usage.get('cost'), (int, float)):
                 self.spent += usage['cost']
             if response.status_code in (401, 402, 403):
@@ -201,6 +211,9 @@ class HTTPGate:
             raise
         finally:
             record['seconds'] = round(time.monotonic() - started, 3)
+            if getattr(self, 'audit_path', None):
+                with self.audit_path.open('a', encoding='utf-8') as audit:
+                    audit.write(json.dumps(record, ensure_ascii=True) + '\n')
 
 
 def has_amount(text, amount):
@@ -221,7 +234,7 @@ def evaluate_turn(m, scenario, turn, texts, orders, sent):
                   no_internal_instructions=not m.customer_copy.has_instructions(reply),
                   no_known_product_reask=not m.reply_reasks_known_product(reply),
                   no_fake_confirmation=not (positive_confirmation and not orders))
-    if not scenario.get('album'):
+    if not scenario.get('album') and not turn.get('multiple_images_in_context'):
         checks['no_single_product_ordinal'] = not re.match(r'\s*(?:الاول|الأول|الثاني)[،\s]', reply)
     if scenario['id'] == 'conditional_deadline':
         checks['no_advance_before_condition_resolved'] = not re.search(
@@ -241,7 +254,7 @@ def evaluate_turn(m, scenario, turn, texts, orders, sent):
         checks['no_adult_weight'] = not re.search(r'وزن.{0,10}(?:[5-9]\d|1[0-3]\d)|وزنج|وزنك', m.sales_strategy.normalized(reply))
     if turn['checks'].get('no_phone_reask'):
         checks['no_phone_reask'] = not m.sales_context.reasks_contact(reply, dict(phone=PHONE))
-    if scenario['id'] != 'explicit_checkout_split_contact':
+    if not scenario.get('expected_orders'):
         checks['no_unauthorized_order'] = not orders
     if turn['checks'].get('allow_silent_duplicate_ack') and orders:
         checks.pop('response_sent')
@@ -303,9 +316,13 @@ def run(args):
                  for number in range(1, args.repeat + 1) for case in cases]
     original_request = requests.sessions.Session.request
     gate = HTTPGate(args.mode, original_request, args.max_live_requests, args.max_live_cost_usd)
+    gate.audit_path = args.output / 'http-requests.jsonl'
     source_db = sqlite3.connect(args.settings_db.resolve().as_uri() + '?mode=ro', uri=True)
     allowed = {'ai_main_model', 'ai_main_temperature', 'ai_main_max_tokens', 'delivery_baghdad_fee',
                'delivery_other_fee', 'delivery_time', 'delivery_inspection_message', 'checker_enabled'}
+    if getattr(args, 'copy_saved_prompts', False):
+        allowed |= {'prompt_main_system', 'prompt_main_rules', 'prompt_main_output',
+                    'ai_vision_model', 'ai_catalog_match_model', 'vision_enabled', 'catalog_match_enabled'}
     conditions, parameters = [], []
     for name in sorted(allowed):
         conditions += ['key=?', 'key LIKE ?']
@@ -318,7 +335,7 @@ def run(args):
             key = args.api_key_file.read_text(encoding='utf-8-sig').strip()
         else:
             from dotenv import dotenv_values
-            key = dotenv_values(args.env_file).get('OPENROUTER_API_KEY') or ''
+            key = os.environ.get('QA_OPENROUTER_API_KEY') or dotenv_values(args.env_file).get('OPENROUTER_API_KEY') or ''
         if not key:
             raise ValueError('Live mode: configured API key is absent')
     captured = []
@@ -383,6 +400,22 @@ def run(args):
             m = importlib.import_module('account_app.app')
             stack.enter_context(m.app.app_context())
             db = m.get_db()
+            if getattr(args, 'incoming_assets', None):
+                import base64
+                assets = dict(args.incoming_assets)
+                def local_image(reference):
+                    if str(reference).startswith('data:'):
+                        return reference
+                    path = assets.get(str(reference))
+                    if not path:
+                        path = snapshot_uploads / Path(urlsplit(str(reference)).path).name
+                    path = Path(path)
+                    if not path.is_file():
+                        raise FileNotFoundError('QA media is not available locally')
+                    mime = 'image/png' if path.suffix.lower() == '.png' else 'image/jpeg'
+                    return 'data:' + mime + ';base64,' + base64.b64encode(path.read_bytes()).decode('ascii')
+                stack.enter_context(patch.object(m, '_download_image_to_data_url', side_effect=local_image))
+                stack.enter_context(patch.object(m, '_image_ref_for_openrouter', side_effect=local_image))
             for setting, value in settings:
                 db.execute('INSERT INTO app_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', (setting, value))
             db.commit()
@@ -405,6 +438,9 @@ def run(args):
                     m.set_store_setting(db, setting, value)
                 sender = case['store'] + '::synthetic-qa-' + case['id']
                 m.get_or_create_customer(db, sender, 'synthetic-page', 'facebook')
+                if case.get('gender'):
+                    db.execute('UPDATE customers SET gender=? WHERE sender_id=?', (case['gender'], sender))
+                    db.commit()
                 if case.get('catalog_patch'):
                     scenario_catalog = copy.deepcopy(catalog)
                     for item in scenario_catalog:
@@ -415,8 +451,14 @@ def run(args):
                     (temp / 'products.json').write_text(json.dumps(catalog, ensure_ascii=False), encoding='utf-8')
                 products = m.load_active_products(db)
                 product = next(p for p in products if p['product_id'] == case['product'])
-                m.complete_customer_product_link(db, sender, product, 'manual', source='manual_admin')
-                if case.get('album'):
+                if not case.get('unlinked'):
+                    m.complete_customer_product_link(db, sender, product, 'manual', source='manual_admin')
+                for prior in case.get('history', []):
+                    m.save_message(db, sender, prior['direction'], 'text', prior['text'], None, None, None,
+                                   prior.get('metadata') or {})
+                    if prior['direction'] == 'incoming':
+                        m.capture_customer_contact(db, sender, prior['text'])
+                if case.get('album') and not case.get('unlinked'):
                     selected = [next(p for p in products if p['product_id'] == pid) for pid in case['album']]
                     for item in selected:
                         m.complete_customer_product_link(db, sender, item, 'manual', source='manual_admin', preserve_existing=True)
@@ -426,12 +468,18 @@ def run(args):
                 for index, turn in enumerate(case['turns']):
                     if args.mode == 'live' and (gate.unavailable or gate.budget_stopped):
                         break
+                    if getattr(args, 'turn_factory', None):
+                        turn = args.turn_factory(case, turn, index, turns, gate, m, db, sender)
+                    turn['multiple_images_in_context'] = sum(len(t.get('incoming_images') or []) for t in turns) + len(turn.get('incoming_images') or []) > 1
                     gate.turn = turn
                     start_capture, start_calls = len(captured), len(gate.calls)
                     started = time.monotonic()
                     event = dict(entry=[dict(id='synthetic-page', _store_id=case['store'], messaging=[dict(sender=dict(id=sender),
                         timestamp=1792800000000 + case_index * 100000 + index * 10000,
                         message=dict(mid=f'qa-{case_index}-{index}', text=turn['text']))])])
+                    if turn.get('incoming_images'):
+                        event['entry'][0]['messaging'][0]['message']['attachments'] = [
+                            dict(type='image', payload=dict(url=url)) for url in turn['incoming_images']]
                     error = None
                     try:
                         response = m.process_webhook(db, event, use_debounce=False)
@@ -441,7 +489,12 @@ def run(args):
                     orders = [dict(row) for row in db.execute('SELECT * FROM orders WHERE sender_id=?', (sender,))]
                     emitted = captured[start_capture:]
                     texts = [part['text'] for part in emitted if part['kind'] == 'text']
+                    sent = bool(sent or emitted)
                     checks = evaluate_turn(m, case, turn, texts, orders, sent)
+                    if getattr(args, 'turn_evaluator', None):
+                        checks.update(args.turn_evaluator(case, turn, index, turns, texts, orders, response if error is None else {}, m, db, sender))
+                        if turn.get('allow_handoff'):
+                            checks.pop('response_sent', None)
                     if case['id'].startswith('plan_'):
                         inspection_policy = (m.customer_copy.fact(product.get('inspection_policy')).strip()
                                              or m.get_delivery_settings(db).get('inspection_message') or '')
@@ -463,16 +516,27 @@ def run(args):
                         checks['correct_requested_product_images'] = bool(actual_urls) and all(url in expected_urls for url in actual_urls)
                         checks['no_duplicate_images'] = len(actual_urls) == len(set(actual_urls))
                     checks['no_pipeline_exception'] = error is None
+                    if getattr(args, 'require_complete_selection', False):
+                        checks['complete_internal_product_selection'] = all(call.get('complete_selection_json') for call in gate.calls[start_calls:] if call['kind'] == 'selection')
                     turns.append(dict(customer=clean(turn['text']), outgoing=texts, image_bubbles=sum(p['kind'] == 'image' for p in emitted),
+                        incoming_images=turn.get('incoming_images') or [], source_message_ids=turn.get('source_message_ids') or [],
+                        milestone=turn.get('milestone'), customer_simulation=turn.get('customer_simulation'),
+                        local_orders=len(orders), pending_human_review=bool(m.has_pending_human_review(db, sender)),
                         elapsed_seconds=round(time.monotonic() - started, 3), ai_requests=gate.calls[start_calls:], checks=checks, error_type=error))
                     completed_turns += 1
                     progress(case['id'], turns)
+                    if getattr(args, 'save_partial_transcripts', False):
+                        (args.output / 'partial-results.json').write_text(json.dumps(
+                            result_cases + [dict(id=case['id'], turns=turns, local_orders=len(orders))], ensure_ascii=False, indent=2), encoding='utf-8')
                 orders = [dict(row) for row in db.execute('SELECT * FROM orders WHERE sender_id=?', (sender,))]
                 checks = dict(expected_local_orders=len(orders) == case['expected_orders'], all_turns_completed=len(turns) == len(case['turns']))
+                if getattr(args, 'case_evaluator', None):
+                    checks.update(args.case_evaluator(case, turns, orders, m, db, sender))
                 if orders and case['id'] == 'explicit_checkout_split_contact':
                     parsed = json.loads(orders[0].get('order_items') or '[]')
                     checks['preserved_product_size_color'] = bool(parsed and parsed[0]['product_id'] == 'P002' and str(parsed[0]['size']) == '44' and 'اسود' in m.sales_strategy.normalized(parsed[0]['color']))
-                result_cases.append(dict(id=case['id'], purpose=case['purpose'], turns=turns, local_orders=len(orders), checks=checks))
+                order_details = [{key: row.get(key) for key in ('product_id', 'order_items', 'province', 'product_total', 'delivery_fee', 'total_amount')} for row in orders]
+                result_cases.append(dict(id=case['id'], purpose=case['purpose'], turns=turns, local_orders=len(orders), local_order_details=order_details, checks=checks))
                 progress(case['id'], turns, case_complete=True)
     all_checks = [v for case in result_cases for turn in case['turns'] for v in turn['checks'].values()]
     all_checks += [v for case in result_cases for v in case['checks'].values()]
@@ -486,7 +550,7 @@ def run(args):
         data_scope='Synthetic people/phones/addresses only. Catalog and whitelisted settings read from snapshot. No customer tables copied.',
         no_conversion_measurement=True, checks_passed=sum(all_checks), checks_total=len(all_checks),
         deterministic_pass=bool(all_checks and all(all_checks)), scenarios=result_cases,
-        ai_http_requests=len(gate.calls), provider_available=gate.unavailable is None, provider_error_status=gate.unavailable,
+        ai_http_requests=len(gate.calls), http_requests=gate.calls, provider_available=gate.unavailable is None, provider_error_status=gate.unavailable,
         live_budget_stopped=gate.budget_stopped, max_live_requests=args.max_live_requests, max_live_cost_usd=args.max_live_cost_usd,
         reported_cost_usd=sum(costs) if costs and all(isinstance(cost, (float, int)) for cost in costs) else None,
         cost_scope='fixture_zero_not_provider_billing' if args.mode == 'offline' else 'provider_reported_only_null_if_any_request_omits_cost',

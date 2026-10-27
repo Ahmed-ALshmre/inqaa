@@ -68,7 +68,7 @@ class DecisionMemoryTests(unittest.TestCase):
         self.assertEqual(sales_decision.budget_alternatives('اريد ارخص',{},[dict(candidate,category='فستان')],PRODUCT,5000),[])
 
     def test_child_age_requires_a_matching_recorded_age_range(self):
-        original=dict(PRODUCT,category='اطفال',sizes='1 إلى 7 سنوات')
+        original=dict(PRODUCT,product_name='بنطلون أطفال تجريبي',category='اطفال',sizes='1 إلى 7 سنوات')
         young=dict(original,product_id='Y',price='10000',sizes='1 إلى 3 سنوات')
         older=dict(original,product_id='O',price='12000',sizes='4 إلى 7 سنوات')
         result=sales_decision.budget_alternatives('اريد ارخص',{'evidence':[{'text':'عمر 6 سنوات'}]},[young,older],original,5000)

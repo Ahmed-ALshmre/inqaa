@@ -8,10 +8,10 @@ import re
 
 try:
     from . import customer_copy, product_variants, sales_answers, sales_strategy
-    from .pricing import terms, offer_tiers
+    from .pricing import terms, offer_tiers, quote
 except ImportError:
     import customer_copy, product_variants, sales_answers, sales_strategy
-    from pricing import terms, offer_tiers
+    from pricing import terms, offer_tiers, quote
 
 GUIDE = '''[سياسة المالك المعتمدة — تتقدم على صياغات البيع القديمة المتعارضة]
 اشتغلي بروح موظفة عراقية شاطرة بالمبيعات: جاوبي مباشرة وباختصار وحنية، وكملي من آخر نقطة بالمحادثة.
@@ -22,11 +22,13 @@ GUIDE = '''[سياسة المالك المعتمدة — تتقدم على صي�
 بمتاجر الأطفال نعتمد العمر فقط. لا تطلبي وزن الطفل أو طوله. سنة ونص لموديل يبدأ بسنتين: اشرحي بشكل مشروط إذا بنيتها خشنة ممكن يجي مناسب، مع الفحص؛ لا تسجلي السنتين بدل عمرها قبل قبولها.
 المنتج المربوط بالإعلان معروف: أجيبي باسمه وسعره الحالي من أول رد، دون طلب صورة أو قول مو متأكدة. فشل تحليل صورة لا يلغي ربط الإعلان. صورة تطابقت فعلاً مع منتج آخر أو تصحيح صريح من الزبونة يُحدّث الاختيار.
 لا تسردي سياسة المتجر كلها في كل دور. اذكري فقط السياسة التي سأل عنها الزبون أو تزيل تردده الحالي. نوّعي تركيب الجمل بصورة طبيعية من سياق المحادثة، دون تكرار التحية والعرض والسؤال المحسوم.
+طلب التخفيض مساومة طبيعية، وليس مشكلة نظام أو سبب تحويل أو شرطاً يعلق المحادثة. ارفضي التخفيض الإضافي بلطف واذكري السعر الحقيقي؛ قولي عليه عرض فقط إذا العرض مثبت. تابعي الاختيار الناقص دون إعادة الأسئلة المجابة. بعد توضيح السعر، موافقة الزبون أو إكمال بيانات الحجز يسمحان بالمتابعة بالسعر الحقيقي، دون مطالبته بعبارة «ألغي الشرط». لا تقبلي السعر الذي اقترحه من عندك ولا تثبتي خلال المساومة نفسها.
+لا تستخدمي «حسب سياسة المتجر» أو «بشرط» أو لغة العقود كحشو. اشرحي المعلومة مباشرة عند السؤال عنها. الصورة المتعرف عليها تحتاج جواباً مفيداً عن الموديل والسؤال المرافق، لا «وصلت الصورة» أو «اختيارج حلو» وحدها. حافظي على القياس واللون والاختيارات المعروفة، واطلبي فقط الناقص فعلاً.
 السعر مباشر؛ اذكري العرض وقلة الكمية وانتهاء العرض فقط إذا مؤكدات ببيانات المنتج. لا تعرضي فيديو من نفسج. إذا لا توجد صور إضافية قولي بس هاي الصورة متوفرة وطمئني بالفحص.
 الدفع عند الاستلام، والفحص بوجود المندوب قبل الدفع. إذا القطعة لا تناسب أو بيها إشكال ترجع مع المندوب مجاناً دون دفع أي شيء حتى أجور التوصيل. لا تمددي هذه السياسة لما بعد الدفع ومغادرة المندوب؛ تلك الحالات للبشر.
 الاستلام الجزئي مسموح للقطع المنفصلة ويحسب المستلم بسعر المفرد؛ البكجات والعروض المشروطة بعدد تُستلم كاملة أو ترجع كاملة، ولا تباع قطعة من بكج كامل فقط.
 الألوان: اذكري الموجود بنفس الموديل فقط. عند نفاد الموديل اقترحي غيره من نفس المتجر؛ قبل إرسال البدائل اسألي عن القياس أو العمر إن كان مجهولاً فقط. اجمعي صور الموديل نفسه وألوانه بوصف واحد، والموديلات المختلفة بفقرات واضحة داخل رسالة متماسكة؛ إذا كلها غير متوفرة اختصري ذلك مرة واحدة.
-لا تطلبي الاسم. عند شراء صريح وبيانات مكتملة ثبتي مباشرة، دون تأكيد شراء ثان. اطلبي الناقص فقط؛ رقم ناقص يصحح قبل التثبيت، والمحافظة وحدها لا تكفي: منطقة ونقطة دالة. آخر تصحيح للزبونة يتقدم على القديم لكل قطعة. رسالة التثبيت الحالية يرسلها النظام مرة واحدة بعد نجاح الحفظ، ولا تعاد بسبب سؤال لاحق.
+لا تطلبي الاسم. عند شراء صريح وبيانات مكتملة ثبتي مباشرة، دون تأكيد شراء ثان. اطلبي الناقص فقط؛ رقم ناقص يصحح قبل التثبيت، والمحافظة وحدها لا تكفي ويكفي عنوان منطقة أو قرية معروف؛ النقطة الدالة إضافة اختيارية وليست شرط حجز. ادمجي تفاصيل العنوان المتفرقة ولا تعيدي طلب المعلومة الموجودة. آخر تصحيح للزبونة يتقدم على القديم لكل قطعة. رسالة التثبيت الحالية يرسلها النظام مرة واحدة بعد نجاح الحفظ، ولا تعاد بسبب سؤال لاحق.
 الصوت الواضح يعالج مباشرة بنموذج المبيعات نفسه؛ الصوت غير الواضح أو غير القابل للقراءة يحوّل للتدخل البشري دون تخمين أو مطالبة الزبون بإعادته. حوّلي أيضاً عند طلب موظفة أو رقم المتجر أو اختلاف سعر الإعلان أو تفاصيل مجهولة مثل الطول والبطانة والمطاطية أو إلغاء أو تعديل أو إضافة بعد الحجز أو تأخر الطلب أو الشكاوى والإرجاع بعد الدفع. تفاصيل مجهولة وصوتيات غير مفهومة: لا رد بديل ولا كليشة انتظار. عند إجراء طلب/شكوى وبعد إنشاء المراجعة فعلاً: هسه أحوّل رسالتج للقسم المختص حبيبتي؛ عدلي الخطاب حسب الجنس.
 التوصيل حسب إعدادات المتجر، والمعتاد يوم أو يومان. طلب باچر ليس ضماناً: إن شاء الله يوصل بس مو أكيد، إحنا نسلمه لشركة التوصيل. إذا يشترط الوصول المضمون حوّلي للبشر قبل الحجز. لا تعدي بوصول باچر إذا الوقت الحالي أو السياسة لا يدعمان ذلك.
 سؤال أجور التوصيل العادي جوابه الأجور والمدة المطلوبة فقط. لا تقولي «الأجور لشركة التوصيل مو إلنا» إلا عند اعتراض صريح على الأجور أو طلب إعفائها. سؤال «السعر يشمل التوصيل؟» استيضاح وليس اعتراضاً. لا تخترعي إعفاءً. عند الاعتراض اشرحي السعر والعرض المثبت دون تغيير المنتج من نفسج.
@@ -39,7 +41,7 @@ FIT_QUESTION = re.compile(r'(?:تحبين|تحب|تريدين|تريد)\s*(?:ه|
 
 
 FORBIDDEN_REPLY = re.compile(
-    r'وصل(?:تني|نا)?\s*(?:المرفق|المرفقات|الصورة|الصوره)|تم استلام (?:الصورة|المرفق)|'
+    r'وصل(?:ت|تني|تنا|نا)?\s*(?:المرفق|المرفقات|الصورة|الصوره)|تم استلام (?:الصورة|المرفق)|'
     r'(?:الصورة|الصوره)\s*(?:وصلت|عندي)|'
     r'هذه التفاصيل تحتاج تاكيد|اخلي البني[ةه].{0,25}(?:تشيك|ترد)|هسه يفتح.{0,15}الالبوم')
 
@@ -89,6 +91,7 @@ def surface(text, gender='', seed='', *, warm=True):
     if not female:
         text = AFFECTION.sub('', text)
         for before, after in [('تدللين', 'تدلل'), ('تحبين', 'تحب'), ('تلبسين', 'تلبس'),
+                              ('تشوفين', 'تشوف'),
                               ('تريدين', 'تريد'), ('تكدرين', 'تكدر'), ('تفحصين', 'تفحص'),
                               ('تتأكدين', 'تتأكد'), ('تتاكدين', 'تتاكد'), ('ترجعين', 'ترجع'),
                               ('تدفعين', 'تدفع'), ('دزيلي', 'دزلي'), ('قياسج', 'قياسك'),
@@ -96,11 +99,17 @@ def surface(text, gender='', seed='', *, warm=True):
                               ('اختيارج', 'اختيارك'), ('يعجبج', 'يعجبك'), ('يناسبج', 'يناسبك'),
                               ('دزي', 'دز'), ('ارسلي', 'ارسل'), ('أرسلي', 'أرسل'),
                               ('تفضلي', 'تفضل'), ('تفضلين', 'تفضل'), ('تختارين', 'تختار'),
-                              ('لج', 'لك'), ('بيج', 'بيك')]:
-            text = re.sub(r'(?<!\w)(و?)' + before + r'(?!\w)', lambda match: match[1] + after, text)
+                              ('أدزلج', 'أدزلك'), ('ادزلج', 'ادزلك'), ('أشوفلج', 'أشوفلك'),
+                              ('اشوفلج', 'اشوفلك'), ('أرسلج', 'أرسلك'), ('ارسلج', 'ارسلك'),
+                              ('لج', 'لك')]:
+            text = re.sub(r'(?<!\w)(و?)' + before + r'(ه|ها|هم|هن)?(?!\w)',
+                          lambda match: match[1] + after + (match[2] or ''), text)
+        # "بيج" is also a catalog color; only change it in a greeting.
+        text = re.sub(r'(هلا\s+)بيج\b', r'\1بيك', text)
         text = text.replace('أحجزلج', 'أحجزلك').replace('أثبتلج', 'أثبتلك').replace('رسالتج', 'رسالتك')
     else:
         for before, after in [('تدلل', 'تدللين'), ('تحب', 'تحبين'), ('تلبس', 'تلبسين'),
+                              ('تشوف', 'تشوفين'),
                               ('تريد', 'تريدين'), ('تكدر', 'تكدرين'), ('تفحص', 'تفحصين'),
                               ('دزلي', 'دزيلي'), ('اختيارك', 'اختيارج'), ('يعجبك', 'يعجبج'),
                               ('يناسبك', 'يناسبج'), ('قياسك', 'قياسج'), ('عنوانك', 'عنوانج'),
@@ -196,6 +205,76 @@ def delivery_wording(reply, question):
         '', reply).strip()
 
 
+def conversational_wording(reply):
+    """Remove policy-label filler; retain the actual fee, inspection or condition."""
+    return re.sub(r'(?:حسب|وفق|ضمن|بموجب)\s+(?:سياس[ةه]|شروط)\s+(?:المتجر|المحل|الصفحة)(?:\s+المعتمدة)?[،,]?\s*',
+                  '', reply).strip()
+
+
+def negotiation_kind(text):
+    clean = customer_copy.normalized(text)
+    if re.search(r'ارخص|ميزاني|بديل|(?<!\w)(?:باجر|باچر|غدا)(?!\w)|يلحق|يوصل|موعد|لازم اليوم', clean):
+        return ''
+    if delivery_objection(clean):
+        return 'free_delivery'
+    if re.search(r'خصم|تخفيض|تنزل\w*.{0,15}سعر|تنقص\w*.{0,15}سعر|يصير\s*(?:اقل|ارخص)|'
+                 r'(?:اخر|آخر)\s*سعر|سعر\w*\s*نهائي|خلي\w*\s*(?:ب|بـ)\s*\d', clean):
+        return 'price'
+    return ''
+
+
+def negotiation_reply(ev, product, customer, context, history, *, delivery_options=(), kind=''):
+    """Decline ordinary haggling, quote current facts, then continue the dialogue."""
+    kind = kind or negotiation_kind(ev.get('text'))
+    if not kind or not product or ev.get('_post_order'):
+        return None
+    selected = set(sales_answers.topics(ev.get('text')))
+    if selected - {'price', 'delivery', 'fabric', 'colors', 'sizes'}:
+        return None  # Preserve the normal route for independent unknown facts.
+    try:
+        count, price, _ = terms(product)
+    except (ValueError, TypeError, KeyError):
+        return None
+    unit = 'البكج' if count > 1 else 'القطعة'
+    label = 'سعر البكج' if count > 1 else 'سعره'
+    if kind == 'price':
+        offered = bool(customer_copy.fact(product.get('offer')) or
+                       re.search(r'(?<!\w)بدل(?!\w)', customer_copy.normalized(product.get('price'))))
+        refusal = ('ما نكدر ننزل أكثر، عليه عرض حاليًا' if offered else 'هذا السعر النهائي، ما عدنا تخفيض حاليًا')
+        opening = f'{refusal}، {label} {customer_copy.chat_amount(price)} و{unit} تستاهل.'
+    elif kind == 'free_delivery' and delivery_options:
+        try:
+            fees = [(region, quote([dict(product_id=product['product_id'], quantity=count)], [product], fee)['delivery_fee'])
+                    for region, fee in delivery_options]
+        except (ValueError, TypeError, KeyError):
+            return None
+        if all(fee == 0 for _, fee in fees):
+            opening = f'إي، التوصيل مجاني بهذا العرض، {label} {customer_copy.chat_amount(price)}.'
+        else:
+            costs = ' و'.join('التوصيل' + region + ' ' + (customer_copy.chat_amount(fee) if fee else 'مجاني') for region, fee in fees)
+            opening = f'ما نكدر نخلي التوصيل مجاني، {costs}. {label} {customer_copy.chat_amount(price)}.'
+    else:
+        return None
+    parts = [opening]
+    detail_topics = selected - {'price', 'delivery'}
+    if detail_topics:
+        facts, gaps = sales_answers.product_fragments(ev.get('text'), product)
+        if gaps:
+            return None
+        parts.extend(fact for fact in facts if not re.search(r'سعر|توصيل|د\.\s*ع', fact))
+    if not sales_strategy.purchase_block_reason(ev.get('text')):
+        try:
+            from .sales_playbook import price_next_step
+        except ImportError:
+            from sales_playbook import price_next_step
+        step = price_next_step(product, context, customer, history)
+        if step:
+            parts.append(step)
+    reply = '\n'.join(parts)
+    return dict(result(reply), reply_parts=parts, _browse_only=True,
+                _negotiation_declined=kind, _semantic_parts=True)
+
+
 def reply(ev, product, customer, context, history, *, photo_count=0):
     """Narrow, owner-approved turns before generic generation/recovery."""
     text = customer_copy.normalized(ev.get('text')).strip(' .،!؟?')
@@ -245,7 +324,7 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
             return result('للأسف يجي بكج كامل، ما نكدر نبيعه مفرد، أحجزلج البكج؟')
     if re.search(r'صور.{0,20}(?:اكثر|اضافي|ثاني|غير)|غير.{0,15}صور|صوري|تصوير حقيقي|صورة حقيقية|تدزين نفس الصوره', text) and photo_count <= 1 and not re.search(r'قماش|خامة|سعر|طول|عرض|بطان|مطاط', text):
         return result('بس هاي الصورة متوفرة، بس تكدرين تفحصين الطلب بوجود المندوب قبل الدفع، وإذا بيه أي إشكال يرجع مجاناً بدون أجور توصيل. ' + step)
-    if re.search(r'دفع|مقدم|مقدّم|احول|تحويل مبلغ|اخاف|مو نفس الصور|يختلف.{0,12}الصور|افحص|فحص|ارجعه.{0,20}(?:اذا|لو)|(?:اذا|لو).{0,15}(?:يرجع|ترجع)', text) and not set(sales_answers.topics(text)) - {'payment', 'inspection', 'delivery'}:
+    if re.search(r'دفع|مقدم|مقدّم|احول|تحويل مبلغ|اخاف|مو نفس الصور|تضمن.{0,20}الصور|يختلف.{0,12}الصور|افحص|فحص|ارجعه.{0,20}(?:اذا|لو)|(?:اذا|لو).{0,15}(?:يرجع|ترجع)', text) and not set(sales_answers.topics(text)) - {'payment', 'inspection', 'delivery'}:
         return result('الدفع عند الاستلام، تفحصين القطعة وتتأكدين منها بوجود المندوب قبل الدفع، وإذا بيها أي إشكال ترجعينها مجاناً وما تدفعين أي شي حتى أجور التوصيل. ' + step)
     if delivery_objection(text):
         if not re.search(r'مجاني', str(product.get('delivery') or '')):
@@ -276,5 +355,6 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         if requested or range_match:
             choice = range_match[1] + '-' + range_match[2] if range_match else requested[-1]
             step = next_step(product, context, dict(customer or {}, size=choice))
+            return result('إي، قياس ' + choice + ' متوفر ويجي فيت ومرتب عالجسم، ' + step)
         return result('إي متوفر ويجي فيت ومرتب عالجسم، ' + step)
     return None

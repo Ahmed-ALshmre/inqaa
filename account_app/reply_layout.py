@@ -281,7 +281,7 @@ def plan_sales_bubbles(result, reply, image_urls=None):
     valid = (isinstance(proposed, list) and proposed
              and all(isinstance(part, str) and part.strip() for part in proposed)
              and compact(' '.join(proposed)) == compact(reply))
-    if kind or result.get('_single_message'):
+    if kind or (result.get('_single_message') and len(compact(reply)) <= 200):
         parts = [reply] if reply else []
     else:
         # Album descriptions are atomic. A model's arbitrary parts never alter
