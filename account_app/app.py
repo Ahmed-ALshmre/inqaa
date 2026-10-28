@@ -10562,20 +10562,32 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
             size = product_variants.age_text(selected['age'])
         if not size or sales_playbook.selection_conflicts(product, context, customer):
             return None
+        size_type, weight = 'size', ''
         assessed = product_variants.assess(product, ('عمر ' if child_sizes else 'قياس ') + str(size))
         if not assessed or assessed[0]['supported'] is not True:
-            return None
+            # Some catalogues sell solely by a kilogram range, not garment
+            # sizes. Carry the customer's existing numeric answer in that
+            # catalogue's unit; never convert kilograms to an invented size.
+            sizing = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))
+            numeric = sales_strategy.normalized(str(size)).strip()
+            weight_only = sizing['weights'] and not any(sizing[k] for k in ('ranges', 'numbers', 'years', 'labels'))
+            if (not weight_only or not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?', numeric)
+                    or not any(low <= float(numeric) <= high for low, high in sizing['weights'])):
+                return None
+            size, size_type, weight = numeric, 'weight', numeric
         item = dict(product_id=product['product_id'], product_name=product['product_name'],
-                    color=color, size=str(size), size_type='size', quantity=1)
+                    color=color, size=str(size), size_type=size_type, quantity=1)
+        if weight:
+            item['weight'] = weight
         if order_line_error([item], [product]):
             return None
         candidate['order'] = {'items': [item]}
     if not checkout_requested(db, ev, candidate):
         return None
     if (context or {}).get('open_details'):
-        # The owner accepts complete booking details as advancing past an old
-        # informational question. Do not turn a fresh question or an explicit
-        # product condition into an unconditional reservation.
+        # A later checkout/contact action can advance past an old information
+        # question. Fresh questions and explicit product conditions still need
+        # resolution before an unconditional reservation.
         if any(re.search(pattern, sales_strategy.normalized(text))
                for _, pattern in sales_decision.DETAILS.values()):
             return None
@@ -10584,11 +10596,11 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
         required = sales_decision.required_details(rows)
         if sales_decision.unresolved_purchase_questions({'open_details': required}, product):
             return None
-        contact = checkout_customer_data(db, ev['sender_id'], candidate['order'])
-        if (not phone_number(contact.get('phone')) or not contact.get('province')
-                or invalid_shipping_address(contact.get('address'))
-                or order_line_error(candidate['order'].get('items') or [], load_active_products(db))):
+        if order_line_error(candidate['order'].get('items') or [], load_active_products(db)):
             return None
+        # A contact reply advances an already requested checkout even while
+        # another contact field is missing. The order validator asks only for
+        # that field and still refuses to persist an incomplete order.
         candidate['_historical_details_nonblocking'] = True
     return dict(candidate, reply='وصلت تفاصيلج عيني.', reply_parts=['وصلت تفاصيلج عيني.'],
                 create_order=False, requires_human=False, intent='order', _local_reply=True,
