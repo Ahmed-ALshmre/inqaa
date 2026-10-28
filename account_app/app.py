@@ -8603,6 +8603,7 @@ def _call_main_ai_with_context(
     if (current_store_id() == baraah.STORE_ID and matched_product and not ev.get('_post_order')
             and not sales_strategy.purchase_block_reason(caption) and not unresolved_condition(history, caption)
             and not context.get('open_details')
+            and len(customer_products or []) <= 1
             and len({p.get('product_id') for p in positions if p.get('product_found')}) <= 1
             and not any(not p.get('product_found') for p in positions)):
         colors_reply = color_choices.reply(matched_product, caption, context, customer)
@@ -8785,7 +8786,9 @@ def _call_main_ai_with_context(
     browse_checkout = continuation and (result.get('create_order') or re.search(r'تم تثبيت|تم حجز|ثبتت|حجزت', str(result.get('reply') or '')))
     lost_context = bool(matched_product and not is_product_objection(question)
                         and reply_reasks_known_product(result.get("reply")))
-    needs_review = (bool(availability_problem) or internal_language or bool(grounding) or bool(missing_answers) or browse_checkout or repeated_contact or premature_close or lost_context or result.get("failed") or result.get("requires_human") is True
+    empty_checkout = bool(matched_product and has_app_context() and ev.get('sender_id')
+                          and unfulfilled_checkout_ack(get_db(), ev, result))
+    needs_review = (empty_checkout or bool(availability_problem) or internal_language or bool(grounding) or bool(missing_answers) or browse_checkout or repeated_contact or premature_close or lost_context or result.get("failed") or result.get("requires_human") is True
                     or is_ai_handoff_reply(result.get("reply")) or not str(result.get("reply") or "").strip())
     if has_app_context():
         for condition, code in [(availability_problem, 'stock_contradiction'), (internal_language, 'internal_language'),
@@ -8822,9 +8825,19 @@ def _call_main_ai_with_context(
             kwargs['fix_instruction'] += ' حذفت أجزاء مطلوبة من السؤال المركب: ' + '، '.join(missing_answers) + '. أجب عنها مع بقية الأسئلة دون إعادة سؤال الحجز أو حذف اختيارات السلة.'
         if browse_checkout:
             kwargs['fix_instruction'] += ' هذه موافقة على الصور أو البدائل فقط. أجب عن العرض السابق وأعد create_order=false وorder فارغاً، ولا تؤكد حجزاً.'
+        if empty_checkout:
+            kwargs['fix_instruction'] += (' بيانات التوصيل وصلت والزبون يكمل طلب شراء. الرد بإقرار مثل «نعتمد» دون سلة لا يثبت طلباً.'
+                ' أعد بناء order.items لكل القطع المختارة فعلاً من سجل المحادثة وربط الصور، مع لون وقياس وكمية كل قطعة.'
+                ' احتفظ بالقطعتين إذا اختارهما ولا تختزل الطلب إلى آخر منتج. إذا اكتملت الخيارات أعد create_order=true؛'
+                ' إذا بقي خيار مجهول اسأل عنه وحده، ولا تطلب بيانات الاتصال المعروفة أو موافقة ثانية ولا تخمن.')
         if format_failure:
             kwargs["fix_instruction"] += ' الرد السابق تعذر قراءته. أرجع كائن JSON صالح فقط بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder. لا تؤكد حجزاً دون بيانات مكتملة وموافقة الزبون.'
         result = _call_main_ai_once(*args, **kwargs)
+    if (empty_checkout and not result.get('failed')
+            and unfulfilled_checkout_ack(get_db(), ev, result)):
+        return dict(reply='', order={}, create_order=False, failed=True, requires_human=True,
+                    failure_reason='checkout_cart_not_built',
+                    handoff_reason='وصلت تفاصيل الحجز لكن لم تكتمل سلة القطع بعد إعادة المراجعة')
     if (sales_answers.missing_answers(result.get('reply'), question, matched_product) and not ev.get('_post_order')
             and not sales_strategy.premature_close(result.get('reply'), question)):
         recovered = recover_factual_sales_reply(ev, matched_product, order=result.get('order'))
@@ -10372,6 +10385,55 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, b
     return finish(reply, {"order_created": bool(created), "cart_confirmed": True})
 
 
+def recent_checkout_contact_action(db, sender_id):
+    """Recent delivery declarations are purchase evidence, unlike saved profiles."""
+    rows = db.execute("SELECT direction,message_type,text,created_at FROM messages WHERE sender_id=? AND "
+                      + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 60", (sender_id,)).fetchall()
+    recent = []
+    for row in rows:
+        created = sales_engagement.timestamp(row['created_at'])
+        if not created or datetime.now(BAGHDAD_TZ) - created > timedelta(hours=24):
+            break
+        if row['direction'] != 'incoming':
+            continue
+        if row['message_type'] not in {'text', 'emoji'}:
+            break  # A later picture starts a new product discussion.
+        if customer_declines_purchase(row['text']):
+            break
+        recent.append(row['text'])
+    fields = {}
+    for text in reversed(recent):
+        fields.update(contact_fields(text, fields))
+    return all(fields.get(key) for key in ('phone', 'province', 'address'))
+
+
+def checkout_selection_answer(text):
+    clean = sales_strategy.normalized(text)
+    if re.search(r'[؟?]|شكد|شوكت|يمتى|متى|شلون|شنو|افحص|اكدر|متوفر|موجود|بشرط|اذا|(?:ما|لا|مو)\s*(?:اريد|اخذ|لون|قياس)', clean):
+        return False
+    requested = product_variants.requested(text)
+    return bool(requested['colors'] or requested['sizes'] or conversation_quality.child_age(text) is not None)
+
+
+def unfulfilled_checkout_ack(db, ev, result):
+    """A plain acknowledgement must not silently end a real checkout action."""
+    order = result.get('order') if isinstance(result.get('order'), dict) else {}
+    if (ev.get('_post_order') or ev.get('_sales_continuation') or ev.get('image_url')
+            or ev.get('_image_matches') or result.get('_browse_only') or order.get('items') or order.get('product_id')
+            or result.get('failed') or pending_product_choice(db, ev['sender_id'])):
+        return False
+    customer = db.execute('SELECT phone,province,address FROM customers WHERE sender_id=?',
+                          (ev['sender_id'],)).fetchone()
+    if (not customer or not phone_number(customer['phone']) or not customer['province']
+            or invalid_shipping_address(customer['address'])):
+        return False
+    if not checkout_requested(db, ev, {'order': {'items': []}}):
+        return False
+    # A focused question about a genuinely missing option remains useful.
+    reply = sales_strategy.normalized(result.get('reply'))
+    return not re.search(r'[؟?]|باقي|ناقص|احتاج|نحتاج|حددي|اختاري|شنو|شكد|يا لون|اي لون|يا قياس|اي قياس', reply)
+
+
 def checkout_requested(db, ev, result):
     if result.get('_browse_only') or result.get('_needs_fact_review') or result.get('requires_human'):
         return False
@@ -10413,6 +10475,12 @@ def checkout_requested(db, ev, result):
         return True
     if not turn or sales_context.continuation('اي', {'last_staff_turn': turn}):
         return False
+    if ((result.get('order') or {}).get('items')
+            and (is_confirmation(text) or checkout_selection_answer(text))
+            and recent_checkout_contact_action(db, ev['sender_id'])):
+        # Contacts may precede the final age/color answer or a short acceptance
+        # of availability. Do not ask for all details or consent a second time.
+        return True
     checkout_words = r'(?:أثبت|اثبت|نثبت|أحجز|احجز|الحجز)'
     asked_checkout = bool(re.search(checkout_words, '\n'.join(item['text'] for item in turn)))
     if fields:
@@ -10514,12 +10582,19 @@ def restore_checkout_draft(db, ev, result, matched_product, *, for_negotiation=F
 
 def resume_known_checkout(db, ev, product, customer, customer_products, context):
     """Complete a known cart from contact replies before asking a model again."""
-    if (ev.get('_post_order') or ev.get('image_url') or ev.get('_image_matches')
+    images = ev.get('_image_matches') or []
+    linked_photo = (ev.get('_image_already_linked') and len(images) == 1
+                    and images[0].get('product_found')
+                    and images[0].get('product_id') == (product or {}).get('product_id')
+                    and images[0].get('image_url') == ev.get('image_url'))
+    if (ev.get('_post_order') or ((ev.get('image_url') or images) and not linked_photo)
             or ev.get('_sales_continuation')):
         return None
     text = str(ev.get('text') or '')
     fields = contact_fields(text, customer)
-    if not fields and not is_confirmation(text):
+    explicit_purchase = checkout_requested(db, ev, {'order': {}})
+    selection_answer = checkout_selection_answer(text) and recent_checkout_contact_action(db, ev['sender_id'])
+    if not fields and not is_confirmation(text) and not explicit_purchase and not selection_answer:
         return None
     if re.search(r'[؟?]|شكد|شوكت|يمتى|متى|شلون|شنو|افحص|اكدر', sales_strategy.normalized(text)):
         return None  # Answer a new independent question through the normal path.
@@ -10545,8 +10620,8 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
                for item in (context or {}).get('evidence', [])):
             return None
         selected = sales_playbook.customer_selection(context, customer)
-        if len(selected['colors']) > 1:
-            return None  # Keep every chosen color; never reduce a plural choice to one old line.
+        if len(selected['colors']) > 1 or len(selected['ages']) > 1:
+            return None  # Never reduce multiple colors or children to one old line.
         colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
         color = selected.get('color') or (colors[0] if len(colors) == 1 else '')
         if color and colors and color not in colors:
