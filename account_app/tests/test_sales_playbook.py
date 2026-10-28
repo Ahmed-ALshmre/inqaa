@@ -222,7 +222,7 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         product = dict(PRODUCT, fabric='القماش تركي', offer='عرض خاص الكمية محدودة')
         result, model = self.ask('سلام عليكم شنهو نوع القماش', product=product)
         model.assert_not_called()
-        for value in ['وعليكم السلام', 'هلا بيك', 'قماشه تركي', 'عرض هالفترة', 'شكد قياس تلبس']:
+        for value in ['وعليكم السلام', 'هلا بيج', 'قماشه تركي', 'عرض هالفترة', 'شكد قياس تلبسين']:
             self.assertIn(value, result['reply'])
         for value in ['ممتازة', 'درجة أولى', '38', '52', 'آخر قطعة']:
             self.assertNotIn(value, result['reply'])

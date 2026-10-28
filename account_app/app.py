@@ -3017,36 +3017,38 @@ def _customer_name_from_db(db, sender_id: str) -> str:
         return ""
 
 
-def _customer_gender_from_db(db, sender_id: str) -> str:
-    """يختار صيغة الخطاب: الاختيار الصريح أولاً، ثم ترجيح الاسم دون تخزينه كهوية مؤكدة."""
+def _customer_gender_from_db(db, sender_id: str, *, text='', history=(), customer=None, use_store_default=True) -> str:
+    """Resolve wording from customer evidence and store context; never persist a guess."""
     try:
         row = db.execute(
-            "SELECT gender,name FROM customers WHERE sender_id=?",
+            "SELECT gender,name,store_id FROM customers WHERE sender_id=?",
             (sender_id,),
         ).fetchone()
-        return owner_sales.address_gender(row["name"], (row["gender"] or "").strip().lower()) if row else ""
+        profile = dict(row) if row else {}
+        profile.update({k: v for k, v in (customer or {}).items() if k in {'name', 'gender'} and v})
+        incoming = db.execute(
+            "SELECT text,direction FROM messages WHERE sender_id=? AND direction='incoming' "
+            "ORDER BY id DESC LIMIT 20", (sender_id,),
+        ).fetchall()
+        evidence = [dict(m) for m in reversed(incoming)] + list(history or ())
+        return owner_sales.address_gender(profile.get('name'), (profile.get('gender') or '').strip().lower(),
+            text=text, history=evidence, store_id=(profile.get('store_id') or current_store_id()) if use_store_default else '')
     except Exception:
-        return ""
+        return owner_sales.address_gender((customer or {}).get('name'), (customer or {}).get('gender') or '',
+            text=text, history=history, store_id=current_store_id() if use_store_default else '')
+
+
+def customer_address_gender(ev, customer=None, history=(), *, use_store_default=True):
+    if has_app_context() and ev.get('sender_id'):
+        return _customer_gender_from_db(get_db(), ev['sender_id'], text=ev.get('text'),
+                                        history=history, customer=customer, use_store_default=use_store_default)
+    return owner_sales.address_gender((customer or {}).get('name'), (customer or {}).get('gender') or '',
+        text=ev.get('text'), history=history, store_id=current_store_id() if use_store_default else '')
 
 
 def infer_explicit_customer_gender(text):
     """Infer only explicit self-identification; never guess from a purchase recipient."""
-    normalized = re.sub(r"[ـًٌٍَُِّْ]", "", str(text or "").strip().lower())
-    female_patterns = (
-        r"\b(?:اني|انا|أنا)\s+(?:بنت|بنية|امرأة|امراة|حرمة|زوجه|زوجة)\b",
-        r"\b(?:مو|لست)\s+(?:رجل|رجال|ولد|شاب)\b.*\b(?:بنت|بنية|امرأة|امراة)\b",
-        r"\bخاطبني\s+(?:كمؤنث|بصيغة المؤنث)\b",
-    )
-    male_patterns = (
-        r"\b(?:اني|انا|أنا)\s+(?:رجل|رجال|ولد|شاب|زوج)\b",
-        r"\b(?:مو|لست)\s+(?:بنت|بنية|امرأة|امراة)\b.*\b(?:رجل|ولد|شاب)\b",
-        r"\bخاطبني\s+(?:كمذكر|بصيغة المذكر)\b",
-    )
-    if any(re.search(pattern, normalized) for pattern in female_patterns):
-        return "female"
-    if any(re.search(pattern, normalized) for pattern in male_patterns):
-        return "male"
-    return ""
+    return owner_sales.explicit_gender(text)
 
 
 def capture_customer_contact(db, sender_id, text):
@@ -3132,18 +3134,18 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
     customer_text = (ev.get("text") or "").strip()
     detected_context = _detect_model_context(customer_text)
     customer_name = _customer_name_from_db(db, ev["sender_id"])
-    customer_gender = _customer_gender_from_db(db, ev["sender_id"])  # 'male' | 'female' | ''
+    customer_gender = customer_address_gender(ev)
 
     policy = store_policy_question_reply(customer_text)
     if policy:
-        return policy['reply'], detected_context
+        return policy['reply'], customer_gender or 'unknown'
 
     opening = sales_strategy.normalized(customer_text).strip(' ؟?!.،🌸')
     if re.fullmatch(r'(?:هلو|مرحبا|السلام عليكم|سلام عليكم|الو)', opening):
-        return 'هلا ومرحبا 🌸 شنو حاب تشوف من الموديلات؟', detected_context
+        return 'هلا ومرحبا 🌸 شنو حاب تشوف من الموديلات؟', customer_gender or 'unknown'
 
     if not OPENROUTER_KEY:
-        return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), detected_context
+        return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), customer_gender or 'unknown'
 
     base_prompt = render_setting_template(db, "prompt_first_message_system", DEFAULT_FIRST_MESSAGE_SYSTEM_PROMPT)
     first_rules = render_setting_template(
@@ -3167,23 +3169,23 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
 
     if customer_gender == "male":
         gender_rule = (
-            "جنس الزبون: ذكر. خاطبه بصيغة المذكر بأسلوب محترم ورسمي (أستاذ/تفضّل/تأمر). "
+            "صيغة خطاب الزبون: مذكر. خاطبه بأسلوب محترم ورسمي (أستاذ/تفضّل/تأمر). "
             "⚠️ ممنوع منعاً باتاً استخدام 'حبيبي' أو 'عيني' أو أي كلمة عاطفية. استبدلها دائماً بـ 'أستاذ'."
         )
     elif customer_gender == "female":
         gender_rule = (
-            "جنس الزبون: أنثى. خاطبيها بصيغة المؤنث، مع ود طبيعي ومتنوع عند الحاجة مثل حبيبتي أو عمري أو حياتي أو يا روحي أو عيني، دون جمعها أو تكرارها في كل رد."
+            "صيغة خطاب الزبون: مؤنث. استخدمي ودّاً طبيعياً ومتنوعاً عند الحاجة مثل حبيبتي أو عمري أو حياتي أو يا روحي أو عيني، دون جمعها أو تكرارها في كل رد. هذه صيغة مخاطبة وليست إثباتاً للجنس."
         )
     else:
         gender_rule = (
-            "جنس الزبون غير محدد. استخدم صياغة محايدة (تفضّل/أهلاً)؛ لا تستخدم 'حبيبي' للذكور ولا تفترض الجنس."
+            "صيغة الخطاب غير محددة. استخدم صياغة محايدة (أهلاً/شنو القياس المطلوب؟)، ولا تستخدم تفضل أو تلبس كصيغة محايدة."
         )
 
     system_prompt = (
         f"{base_prompt}\n\n"
         f"{name_context}\n"
         f"{gender_rule}\n\n{sales_engagement.ADDRESS_GUIDE}\n\n"
-        f"{first_rules}\n\n"
+        f"{first_rules}\n\n{owner_sales.address_guidance(customer_gender)}\n\n"
         "تعليمات الإدارة:\n"
         f"{instructions_text or 'لا توجد تعليمات إضافية.'}\n\n"
         "القواعد المحظورة:\n"
@@ -3226,16 +3228,16 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         raw = payload["choices"][0]["message"]["content"]
         parsed = _parse_ai_json(raw) if isinstance(raw, str) else (raw or {})
         reply = sales_engagement.natural_address((parsed.get("reply") or "").strip())
-        gender = infer_explicit_customer_gender(customer_text) or "unknown"
+        gender = customer_gender or "unknown"
         if not reply:
-            return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), detected_context
+            return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), customer_gender or 'unknown'
         if re.search(r'(?:قياس|مقاس)\s*[0-9٠-٩]{2}', customer_text) and re.search(r'(?:شكد|شنو|دزيلي|ارسلي|أرسلي|أو|او).{0,30}(?:قياس|وزن)', reply):
             reply = sales_context.opening_reply(customer_text, reply)
         print(f"[FirstMsgAI] name={customer_name!r} context={gender} | reply={reply[:80]}", flush=True)
         return reply, gender
     except Exception as exc:
         print(f"[FirstMsgAI] Error: {exc} → falling back to default greeting.", flush=True)
-        return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), detected_context
+        return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), customer_gender or 'unknown'
 
 
 def build_safe_fallback_reply(matched_product, customer_text=""):
@@ -3435,6 +3437,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
         f"{render_setting_template(db, 'prompt_followup_system', DEFAULT_FOLLOWUP_SYSTEM_PROMPT)}\n\n"
         f"{sales_engagement.guide(current_store_id())}\n\n"
         f"{sales_engagement.FOLLOWUP_GUIDE}\n\n"
+        f"{owner_sales.address_guidance(_customer_gender_from_db(db, sender_id))}\n\n"
         'إذا بقي سؤال عن طول القطعة أو البطانة أو الإغلاق فلا تعد لسؤال الحجز أو الوزن. '
         'استخدم المعلومة الجديدة إن أصبحت متوفرة؛ إذا ما زالت مجهولة اترك reply فارغاً لتُحسم مراجعتها أولاً. '
         'لا تستخدم مجرد تذكير العميل بما اختاره كدليل أنك أضفت فائدة جديدة.\n'
@@ -3493,7 +3496,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
             if problem or repeated or conversation_quality.grounded_error(reply, product, load_active_products(db)):
                 sales_learning.record(db, current_store_id(), 'stock_contradiction' if problem else 'repeated_contact' if repeated else 'unsupported_claim')
                 return None
-            return reply[:500].strip()
+            return owner_sales.surface(reply[:500].strip(), _customer_gender_from_db(db, sender_id), warm=False, store_id=current_store_id())
         return None
     except Exception as exc:
         print(f"[FollowUpAI] error for {sender_id}: {exc}", flush=True)
@@ -9050,10 +9053,7 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
                if has_app_context() and ev.get('sender_id') else sales_context.advance({}, history))
     context = sales_context.advance(context, [{'direction': 'incoming', 'text': ev.get('text')}])
     ev = dict(ev, text=product_variants.normalize_size_words(ev.get('text')), _sales_context=context)
-    address = infer_explicit_customer_gender(ev.get('text')) or owner_sales.address_gender((customer or {}).get('name'), (customer or {}).get('gender'))
-    if not address and has_app_context() and ev.get('sender_id'):
-        address = _customer_gender_from_db(get_db(), ev['sender_id'])
-    customer = dict(customer or {}, gender=address)
+    customer = dict(customer or {})
     chosen = matched_product or (customer_products[0] if len(customer_products or []) == 1 else None)
     ev['_reply_product'] = chosen
     if chosen and not ev.get('_post_order') and product_albums.color_conflict(chosen):
@@ -9105,17 +9105,16 @@ def owner_result_surface(result, ev, customer=None, history=()):
         original = filtered
         result['reply_parts'] = []
         result['reply'] = filtered
-    gender = infer_explicit_customer_gender(ev.get('text')) or owner_sales.address_gender((customer or {}).get('name'), (customer or {}).get('gender'))
-    if not gender and has_app_context() and ev.get('sender_id'):
-        gender = _customer_gender_from_db(get_db(), ev['sender_id'])
+    gender = customer_address_gender(ev, customer, history)
+    warm = customer_address_gender(ev, customer, history, use_store_default=False) == 'female'
     seed = str(ev.get('message_id') or ev.get('text') or '') + str(len(history))
-    reply = owner_sales.surface(original, gender, seed)
+    reply = owner_sales.surface(original, gender, seed, warm=warm, store_id=current_store_id())
     parts = result.get('reply_parts')
     if isinstance(parts, list) and parts and all(isinstance(p, str) for p in parts) and \
             re.sub(r'\s+', ' ', ' '.join(parts)).strip() == re.sub(r'\s+', ' ', original).strip():
         # A delimiter preserves boundaries while the full-turn guard limits
         # endearments and emoji globally, rather than once per bubble.
-        joined = owner_sales.surface('\n␞\n'.join(parts), gender, seed)
+        joined = owner_sales.surface('\n␞\n'.join(parts), gender, seed, warm=warm, store_id=current_store_id())
         result['reply_parts'] = [part.strip() for part in joined.split('␞') if part.strip()]
         reply = '\n\n'.join(result['reply_parts'])
     else:
@@ -9132,6 +9131,7 @@ def _call_main_ai_once(
     fix_instruction=None, customer_products=None, conversation_history=None,
     catalog_search_context=None,
 ):
+    customer = dict(customer or {}, gender=customer_address_gender(ev, customer, history))
     if ev.get('_voice_sales_result') and not fix_instruction:
         return dict(ev['_voice_sales_result'])
     db = get_db()
@@ -9346,6 +9346,7 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + sales_engagement.ADDRESS_GUIDE
     system_prompt += "\n\n" + catalog_truth.GUIDE
     system_prompt += "\n\n" + owner_sales.GUIDE
+    system_prompt += "\n\n" + owner_sales.address_guidance(customer['gender'])
     if not post_order and matched_product:
         system_prompt += "\n\n" + sales_strategy.persuasion_guidance(
             matched_product,
@@ -10913,7 +10914,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         cancel_followups_for_sender(db, ev['sender_id'], 'customer_requested_human')
         set_customer_ai_enabled(db, ev['sender_id'], False, reason='customer_requested_human')
         return saved_checkout_reply(db, ev,
-            owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي', customer.get('gender')),
+            owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي', customer_address_gender(ev, customer)),
             {'needs_human': True, 'human_review_id': review_id, 'customer_requested_human': True})
 
     owner_reason = owner_sales.human_reason(ev.get('text'))
@@ -10923,7 +10924,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         review_id = has_pending_human_review(db, ev['sender_id']) or create_human_review(db, ev, owner_reason)
         cancel_followups_for_sender(db, ev['sender_id'], owner_reason)
         return saved_checkout_reply(db, ev,
-            owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي', customer.get('gender')),
+            owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي', customer_address_gender(ev, customer)),
             {'needs_human': True, 'human_review_id': review_id, 'owner_handoff': owner_reason})
 
     # ── STEP 07: Load products ────────────────────────────────────────────────
@@ -11209,7 +11210,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         first_reply_text, detected_gender = generate_first_message_reply(
             db, ev, products, first_instructions, first_rules,
         )
-        first_reply_text = owner_sales.surface(first_reply_text, _customer_gender_from_db(db, ev['sender_id']), ev.get('text'))
+        first_reply_text = owner_sales.surface(first_reply_text, _customer_gender_from_db(db, ev['sender_id']), ev.get('text'), store_id=current_store_id())
         if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
             return {"sender_id": ev["sender_id"], "page_id": ev["page_id"],
                     "platform": ev["platform"], "reply": "", "send_image": False,

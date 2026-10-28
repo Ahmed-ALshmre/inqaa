@@ -18,7 +18,7 @@ class OwnerPolicyTests(unittest.TestCase):
         for gender in ('male', '', 'unknown'):
             reply = owner_sales.surface('حبيبتي عمري روحي حياتي عيني متوفر، شكد قياس تلبسين؟', gender)
             self.assertFalse(owner_sales.AFFECTION.search(reply), reply)
-            self.assertIn('تلبس؟', reply)
+            self.assertIn('تلبس؟' if gender == 'male' else 'القياس المطلوب؟', reply)
         self.assertEqual(len(owner_sales.EMOJI.findall(owner_sales.surface('متوفر 🌷 🌸 ❤️ ✨', 'female'))), 2)
 
     def test_names_are_address_hints_and_explicit_choice_wins(self):

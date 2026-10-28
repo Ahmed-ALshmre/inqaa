@@ -111,7 +111,7 @@ class CarrierDeliveryPipelineTests(unittest.TestCase):
         self.save('incoming', 'اريد وردي عمر سنة')
         reply = self.visible(self.call('شكد التوصيل؟'))
         self.assertNotIn(CARRIER, reply)
-        self.assertTrue(reply.endswith(('أثبتلج حجز؟', 'أثبتلك حجز؟')), reply)
+        self.assertTrue(reply.endswith('أثبت الحجز؟'), reply)
         self.assertEqual(reply.count('؟'), 1)
 
     def test_regional_actual_fee_and_product_free_shipping_are_preserved(self):
