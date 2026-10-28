@@ -82,7 +82,7 @@ class LiveFindingsPipelineTests(unittest.TestCase):
         with patch.object(self.m, '_call_main_ai_once') as provider:
             result = self.call('هذا رقمي 07700000000', history)
         provider.assert_not_called()
-        self.assertIn('رقمك وصل', result['reply'])
+        self.assertIn('رقمج وصل', result['reply'])
         self.assertIn('ما أگدر أضمنه', result['reply'])
         self.assertIn('موعد مو أكيد', result['reply'])
         self.assertNotIn('حسم هالشرط', result['reply'])

@@ -90,7 +90,7 @@ class SalesTurnPipelineTests(unittest.TestCase):
                 self.assertNotIn('نكمل اختيارج', result['reply'])
                 self.assertNotIn('شامل', result['reply'])
                 if 'قياسات' in text:
-                    self.assertIn('قياساته من 70 الى 130 كيلو، شكد تلبس؟', result['reply'])
+                    self.assertIn('قياساته من 70 الى 130 كيلو، شكد تلبسين؟', result['reply'])
                     self.assertIn('وعليكم السلام', result['reply'])
                 else:
                     self.assertRegex(result['reply'], 'شنو القياس اللي يناسب[جك]؟')
@@ -136,7 +136,7 @@ class SalesTurnPipelineTests(unittest.TestCase):
         product = dict(PRODUCT, colors='اسود')
         result, provider = self.ask('متوفر', product=product, customer={'size': '44'})
         provider.assert_not_called()
-        self.assertIn('أثبتلك حجز؟', result['reply'])
+        self.assertIn('أثبتلج حجز؟', result['reply'])
         self.assertNotIn('محافظ', result['reply'])
         self.assertNotIn('اختيارج فد شي حلو', result['reply'])
         self.assertEqual(len(self.m.plan_sales_bubbles(result, result['reply'])['reply_parts']), 2)

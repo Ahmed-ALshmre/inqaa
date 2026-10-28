@@ -556,8 +556,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         first.assert_not_called()
         model.assert_called_once()
         self.assertNotIn("فستان دانتيل", response["reply"])
-        self.assertIn("تفضل", response["reply"])
-        self.assertNotIn("تفضلي", response["reply"])
+        self.assertIn("تفضلي", response["reply"])
         self.assertNotIn("صورة", response["reply"])
 
     def test_existing_enabled_auto_binding_is_visible_to_ai(self):

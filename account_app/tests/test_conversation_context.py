@@ -25,8 +25,8 @@ class ConversationContextTests(unittest.TestCase):
                   color='اسود', size='44', quantity=1)]}}
         with patch.object(m, '_call_main_ai_once', return_value=result):
             response = self.event('ثبتي\nزين افحصها كدام المندوب؟')
-        self.assertIn('تفحص القطعة', response['reply'])
-        self.assertIn('حتى أثبتلك الحجز', response['reply'])
+        self.assertIn('تفحصين القطعة', response['reply'])
+        self.assertIn('حتى أثبتلج الحجز', response['reply'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
     def test_september29_short_photo_reply_uses_saved_staff_offer(self):
@@ -46,7 +46,7 @@ class ConversationContextTests(unittest.TestCase):
         self.db.commit()
         result = self.event('بلا زحمه شوكت يوصلني الطلب؟')
         self.assertTrue(result['meta']['existing_order_followup'])
-        self.assertIn('رقمك موجود', result['reply'])
+        self.assertIn('رقمج موجود', result['reply'])
         self.assertNotIn('دزيلي رقم', result['reply'])
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
 
@@ -443,7 +443,7 @@ class ConversationContextTests(unittest.TestCase):
         first = self.recognize()
         self.assertTrue(first["meta"].get("product_choice_pending"), first)
         result = self.event("اي", model_reply="تفضلي عيني")
-        self.assertNotIn("أثبتلك", result["reply"])
+        self.assertNotIn("أثبتلج", result["reply"])
         self.assertIsNotNone(m.pending_product_choice(self.db,self.sender))
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?",(self.sender,)).fetchone()[0],0)
 
@@ -667,7 +667,7 @@ class ConversationContextTests(unittest.TestCase):
         fabric=self.event("شنو القماش؟")["reply"]
         self.assertIn("باربي",fabric)
         result=self.event("ثبتي الطلب")
-        self.assertIn("أثبتلك",result["reply"])
+        self.assertIn("أثبتلج",result["reply"])
         self.assertIn("دانتيل",result["reply"])
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?",(self.sender,)).fetchone()[0],0)
         self.event("بس هذا")

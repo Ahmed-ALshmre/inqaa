@@ -15,7 +15,7 @@ except ImportError:
 
 GUIDE = '''[سياسة المالك المعتمدة — تتقدم على صياغات البيع القديمة المتعارضة]
 اشتغلي بروح موظفة عراقية شاطرة بالمبيعات: جاوبي مباشرة وباختصار وحنية، وكملي من آخر نقطة بالمحادثة.
-للأنثى المعروفة نوّعي بصورة طبيعية بين حبيبتي، عمري، روحي، حياتي، عيني؛ كلمة واحدة عادةً تكفي. هذه الألقاب للإناث فقط. للرجل استخدمي أستاذ/تفضل وخطاب المذكر، ولغير المعروف خطاباً محايداً. رجّحي صيغة الخطاب من الاسم الأول الواضح فقط، والأسماء المشتركة أو المستعارة تبقى محايدة. كلام الزبون الصريح يتقدم على الاسم؛ جنس الطفل أو نوع الملابس لا يحدد خطاب المشتري. لا تدعي أنك إنسان إذا سئلت عن هويتك.
+نوّعي الود بصورة طبيعية دون تكراره بكل رد. تصريح الزبون وتصحيحه لصيغة الخطاب يتقدمان على الاسم. عند غياب تصريح اعتمدي كلامه عن نفسه ثم الاسم الأول الواضح. في متاجر لمسة والفاتنة وخيوط النسائية صيغة الخطاب الافتراضية مؤنثة عند غياب دليل أوضح؛ هذا تفضيل مخاطبة من المالك وليس جنساً مؤكداً ولا يُحفظ كهوية. للرجل المعروف خطاب المذكر المحترم. في الأطفال والجملة وغيرهما، المجهول بصيغة محايدة فعلية مثل «شنو القياس المطلوب؟»، لا «شكد تلبس؟». جنس الطفل أو المستفيد من الهدية لا يحدد خطاب المشتري. لا تدعي أنك إنسان إذا سئلت عن هويتك.
 يمكن إيموجي واحد أو اثنين في بعض الردود عند الحاجة فقط، وليس بكل رسالة أو بعد الشكوى.
 الرد من رسالة إلى أربع رسائل قصيرة حسب الحاجة، لكل رسالة معنى كامل. لا تحولي كلمة أو رمزاً إلى إشعار منفصل. جاوبي كل الأسئلة، وآخر رسالة أثناء البيع تنتهي بسؤال واحد يناسب الناقص: قياس، لون إذا متعدد، محافظة، أو أحجزلج؟ لا سؤال بيع بعد التثبيت أو الشكر أو الرفض أو التحويل.
 ممنوع نهائياً سؤال تحبينه مضبوط لو واسع أو أي مرادف له. رغبة الزبونة بالوسع ليست طلب قياس عرض بالسنتيمتر ولا تستدعي التدخل. قياسات متاجر الملابس النسائية متاحة من S إلى 5XL وفق تأكيد المالك، وليست تحويلاً عالمياً إلى وزن. XXL وإكسين نفس التسمية. استخدمي قياس الزبونة مباشرة ولا تعيدي سؤال الوزن بعده. 50،52 نطاق قياس للزبونة وليس طلب قطعتين أو ضرورة سؤالها أيهما.
@@ -49,25 +49,69 @@ FORBIDDEN_REPLY = re.compile(
 # Addressing hints only: never persist an inferred identity in customers.gender.
 FEMALE_NAMES = set('ساره سارة زينب فاطمه فاطمة مريم هدى زهراء دعاء اسراء ايات آيات رقيه رقية حوراء سعاد سحر امل عبير اريج بتول حنان حنين مها رنا رشا ريم رحاب رباب شيماء شهد شذى علياء غاده غادة دلال دانيا دانيه دانية ضحى نسرين ندى نوال هناء هبه هبة هاجر ياسمين يسرى بشرى خديجه خديجة عائشه عائشة اسماء اسيل جنات سوسن لقاء ليلى لينا روان رؤى رفيف رغد'.split())
 MALE_NAMES = set('احمد محمد محمود علي حسن حسين حيدر مصطفى عمر عثمان خالد وليد كريم مهدي عادل ياسر ياسين قاسم عباس عبدالعزيز عبدالله عبدالرحمن ابراهيم اسماعيل اسحاق يوسف يعقوب زكريا حامد ماجد امجد مؤيد رائد ثائر سامر ماهر طارق لؤي اكرم حمزه حمزة هاشم صادق عمار اسامه اسامة ناصر ناظم نبيل يحيى بلال اسعد سعد سيف'.split())
-FEMALE_LATIN = set('sara sarah zainab zaynab fatima fatimah maryam mariam huda zahraa zahra rania rasha reem nada noorhan shahad shaimaa shayma'.split())
+FEMALE_LATIN = set('sara sarah zainab zaynab fatima fatimah maryam mariam huda zahraa zahra rania rasha reem nada noorhan shahad shaimaa shayma hiba heba haneen hanan esraa israa aya ayat duaa doaa raghad rafif rafeef hajar hajer batool batul ruba lubna asmaa aseel yasmin yasmine nourhan nora nura'.split())
 MALE_LATIN = set('ahmed ahmad mohamed mohammad mohammed muhammad ali hassan hasan hussein hussain haider hayder mustafa omar osman khaled waleed kareem karim mahdi adel yasser ibrahim ismail youssef yusuf'.split())
 
 FEMALE_NAMES = {customer_copy.normalized(n) for n in FEMALE_NAMES}
 MALE_NAMES = {customer_copy.normalized(n) for n in MALE_NAMES}
 
 
-def address_gender(name, explicit=''):
+WOMENS_STORES = frozenset({'default', 'al-fatena', 'khuyoot'})
+
+
+def explicit_gender(text):
+    """Only a direct self-identification/address request may be persisted."""
+    clean = customer_copy.normalized(text)
+    hits = []
+    for gender, nouns, request in (
+        ('female', r'بنت|بني[هة]|امرا[هة]|حرم[هة]|زوج[هة]|انثي', r'ك(?:مؤنث|مونث)|بصيغ[هة] ال(?:مؤنث|مونث)'),
+        ('male', r'رجل|رجال|ولد|شاب|زوج', r'كمذكر|بصيغه المذكر|بصيغة المذكر'),
+    ):
+        pattern = r'(?<!\w)(?:(?:اني|انا)\s+(?:' + nouns + r')|خاطب(?:ني|يني)\s+(?:' + request + r'))(?!\w)'
+        hits.extend((m.start(), gender) for m in re.finditer(pattern, clean))
+    return max(hits)[1] if hits else ''
+
+
+def self_address_hint(text):
+    """Grammatical self-description, never a recipient or address to the agent."""
+    clean = customer_copy.normalized(text)
+    for gender, adjectives in (
+        ('female', r'محتار[هة]|متردد[هة]|خايف[هة]|لابس[هة]|محتاج[هة]|مستعجل[هة]|حامل|مرضع[هة]|موظف[هة]|طالب[هة]|متاكد[هة]|حاجز[هة]'),
+        ('male', r'محتار|متردد|خايف|لابس|محتاج|مستعجل|موظف|طالب|متاكد|حاجز'),
+    ):
+        if re.search(r'(?<!\w)(?:اني|انا)\s+(?:مو\s+)?(?:' + adjectives + r')(?!\w)', clean):
+            return gender
+    return ''
+
+
+def address_gender(name, explicit='', *, text='', history=(), store_id=''):
     """Conservative name hint for wording; explicit customer/staff choice wins.
 
-    Shared names (Noor, Islam, Malak), aliases and business names stay neutral.
+    Shared names and aliases use the store's wording default, never an identity.
     A female customer's father's name later in the display name never wins.
     """
+    latest = explicit_gender(text)
+    if latest:
+        return latest
     if explicit in {'male', 'female'}:
         return explicit
+    incoming = [str(m.get('text') or m.get('content') or '') for m in history
+                if isinstance(m, dict) and (m.get('direction') == 'incoming' or m.get('role') == 'user')]
+    for previous in reversed(incoming):
+        stated = explicit_gender(previous)
+        if stated:
+            return stated
+    for previous in [text] + list(reversed(incoming)):
+        hint = self_address_hint(previous)
+        if hint:
+            return hint
     clean = customer_copy.normalized(name)
     words = re.findall(r'[^\W\d_]+', clean)
+    fallback = 'female' if store_id in WOMENS_STORES else ''
     if not words or any(w in {'متجر', 'ستور', 'store', 'shop', 'بوتيك', 'شركة', 'مؤسسة'} for w in words):
-        return ''
+        return fallback
+    if words[0] in {'its', 'mrs', 'ms', 'miss'} and len(words) > 1:
+        words = words[1:]
     # Honorifics must be standalone words: أمجد is not أم + a child's name.
     if words[0] in {'ام', 'umm', 'um'} and len(words) > 1:
         return 'female'
@@ -78,17 +122,40 @@ def address_gender(name, explicit=''):
         return 'female'
     if first in MALE_NAMES or first in MALE_LATIN:
         return 'male'
-    return ''
+    return fallback
 
 
-def surface(text, gender='', seed='', *, warm=True):
+def address_guidance(gender):
+    if gender == 'female':
+        return 'صيغة الخطاب المعتمدة لهذه المحادثة: مؤنث. قولي «شكد قياس تلبسين؟» و«قياسج» و«تحبين». لا ترجعي للمذكر بسبب اسم حساب مستعار أو مجهول.'
+    if gender == 'male':
+        return 'صيغة الخطاب المعتمدة لهذه المحادثة: مذكر محترم. احترمي تصريح الزبون ولا تحوّلي خطابه للمؤنث بسبب الملابس النسائية أو جنس الطفل.'
+    return 'صيغة الخطاب غير محددة: استخدمي جملاً محايدة مثل «شنو القياس المطلوب؟» و«من يا محافظة؟». «تلبس» و«تحب» و«تفضل» خطاب مذكر وليست صيغة محايدة.'
+
+
+def neutral_address(text):
+    text = AFFECTION.sub('', text)
+    text = re.sub(r'(هلا)\s+بي[كج](?!\w)', r'\1', text)
+    text = re.sub(r'شنو\s+حاب[هة]?\s+تشوف(?:ين)?(?:\s+من\s+الموديلات)?[؟?]?', 'أكو موديل معين؟', text)
+    text = re.sub(r'(?:شكد|شنو)\s+(?:(?:القياس|قياس)\s+)?تلبس(?:ين)?(?:\s+قياس)?[؟?]?',
+                  'شنو القياس المطلوب؟', text)
+    text = re.sub(r'تحب(?:ين)?\s+تشوف(?:ين)?', 'أعرض', text)
+    for before, after in [('قياس[كج]', 'القياس'), ('عنوان[كج]', 'العنوان'), ('رقم[كج]', 'رقم الموبايل'),
+                          ('اختيار[كج]', 'الاختيار'), ('رسالت[كج]', 'الرسالة'),
+                          ('(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+حجز)?', 'أثبت الحجز'),
+                          ('(?:دزي|دز|ارسلي|ارسل|أرسلي)(?:لي)?', 'ممكن إرسال')]:
+        text = re.sub(r'(?<!\w)' + before + r'(?!\w)', after, text)
+    return text
+
+
+def surface(text, gender='', seed='', *, warm=True, store_id=''):
     """One coherent surface for local and model replies; never alters receipts."""
     text = str(text or '').strip()
     if not text or re.match(r'^تم\s+(?:تثبيت|تسجيل|حجز|تأكيد|تاكيد)', text):
         return text
     text = FIT_QUESTION.sub('', text).strip()
     female = gender == 'female'
-    if not female:
+    if gender == 'male':
         text = AFFECTION.sub('', text)
         for before, after in [('تدللين', 'تدلل'), ('تحبين', 'تحب'), ('تلبسين', 'تلبس'),
                               ('تشوفين', 'تشوف'),
@@ -107,22 +174,36 @@ def surface(text, gender='', seed='', *, warm=True):
         # "بيج" is also a catalog color; only change it in a greeting.
         text = re.sub(r'(هلا\s+)بيج\b', r'\1بيك', text)
         text = text.replace('أحجزلج', 'أحجزلك').replace('أثبتلج', 'أثبتلك').replace('رسالتج', 'رسالتك')
-    else:
+    elif female:
         for before, after in [('تدلل', 'تدللين'), ('تحب', 'تحبين'), ('تلبس', 'تلبسين'),
+                              ('حاب', 'حابة'), ('محتاج', 'محتاجة'),
                               ('تشوف', 'تشوفين'),
                               ('تريد', 'تريدين'), ('تكدر', 'تكدرين'), ('تفحص', 'تفحصين'),
                               ('دزلي', 'دزيلي'), ('اختيارك', 'اختيارج'), ('يعجبك', 'يعجبج'),
                               ('يناسبك', 'يناسبج'), ('قياسك', 'قياسج'), ('عنوانك', 'عنوانج'),
+                              ('لك', 'لج'), ('عندك', 'عندج'), ('بيك', 'بيج'),
+                              ('أحجزلك', 'أحجزلج'), ('أثبتلك', 'أثبتلج'),
+                              ('أدزلك', 'أدزلج'), ('ادزلك', 'ادزلج'), ('أشوفلك', 'أشوفلج'),
+                              ('اشوفلك', 'اشوفلج'), ('تتأكد', 'تتأكدين'), ('تتاكد', 'تتاكدين'),
+                              ('ترجع', 'ترجعين'), ('تدفع', 'تدفعين'),
                               ('رقمك', 'رقمج'), ('عليك', 'عليج'), ('رسالتك', 'رسالتج'),
-                              ('ارسل', 'ارسلي'), ('أرسل', 'أرسلي'), ('دز', 'دزي'),
+                              ('ارسل', 'ارسلي'), ('دز', 'دزي'),
                               ('تفضل', 'تفضلي')]:
-            text = re.sub(r'(?<!\w)(و?)' + before + r'(?!\w)', lambda match: match[1] + after, text)
+            text = re.sub(r'(?<!\w)(و?)' + before + r'(ه|ها|هم|هن)?(?!\w)',
+                          lambda match: match[1] + after + (match[2] or ''), text)
         choice = ('حبيبتي', 'عمري', 'روحي', 'حياتي', 'عيني')[int(hashlib.sha256(str(seed).encode()).hexdigest()[:8], 16) % 5]
         matches = list(AFFECTION.finditer(text))
         if matches:
             text = AFFECTION.sub(lambda m: choice if m.start() == matches[0].start() else '', text)
         elif warm:
             text = choice + '، ' + text
+    else:
+        text = neutral_address(text)
+    if gender == 'male' and store_id in WOMENS_STORES:
+        # A man buying women's clothing need not be the wearer. Ask for the
+        # requested size without turning his own address feminine.
+        text = re.sub(r'(?:شكد|شنو)\s+(?:قياس\s+)?تلبس(?:\s+قياس)?\s*[؟?]',
+                      'شنو القياس المطلوب؟', text)
     # Across the entire turn, not two emoji per bubble.
     count = 0
     def limit_emoji(match):
