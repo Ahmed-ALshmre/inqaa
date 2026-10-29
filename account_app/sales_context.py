@@ -15,7 +15,7 @@ PRODUCT_KNOWLEDGE_FIELDS = (
     'lining', 'transparency', 'stretch', 'closure', 'measurements', 'fit_notes',
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
 )
-EVIDENCE_VERSION = 3
+EVIDENCE_VERSION = 4
 
 
 def browse_request(text):

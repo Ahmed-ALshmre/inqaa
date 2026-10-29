@@ -276,7 +276,7 @@ def next_step(product, context, customer):
     elif not years and not known['size']:
         return 'شكد قياس تلبسين؟'
     colors = product_variants.colors((product or {}).get('colors'))
-    if len(colors) > 1 and not known['color']:
+    if len(colors) > 1 and not known['color'] and not known['colors']:
         return 'أي لون تحبين؟'
     if not (customer or {}).get('province'):
         return 'من يا محافظة؟'

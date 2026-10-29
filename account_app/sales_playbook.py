@@ -188,7 +188,7 @@ def size_range_question(product):
     data = product_variants.size_data(customer_copy.fact(product.get('sizes')))
     if len(data['weights']) == 1 and not any(data[key] for key in ('ranges', 'years', 'numbers', 'labels')):
         low, high = data['weights'][0]
-        return f'الأوزان المذكورة من {low} الى {high} كيلو، شكد الوزن بالكيلو؟'
+        return f'الأوزان المذكورة من {low} الى {high} كيلو، شنو القياس المطلوب؟'
     return ''
 
 
@@ -277,9 +277,11 @@ def customer_selection(context, customer=None):
         labels = product_variants.requested(text)['sizes']
         if labels and not any(size.isdigit() for size in labels) and not re.search(r'(?<!\w)(?:لو|او|مو)(?!\w)|ما اريد', text):
             selected['size'] = labels[-1]
-            chosen_colors = product_variants.requested(text)['colors']
-            if len(chosen_colors) == 1:
-                selected['color'] = chosen_colors[0]
+            chosen_colors = product_variants.chosen_colors(text)
+            if chosen_colors:
+                selected['colors'] = chosen_colors
+                selected['color'] = chosen_colors[0] if len(chosen_colors)==1 else None
+                selected['color_options'] = []
             continue
         if re.search(r'\d{1,2}\s*(?:لو|او|/)\s*(?:(?:قياس|مقاس)\s*)?\d{1,2}', text) or len(set(sizes)) > 1:
             selected['size'] = None
@@ -348,13 +350,17 @@ def weight_cart_choices(product, context, customer=None, current_text=''):
     ranges=product_variants.weight_only_ranges(product)
     if not ranges:return None
     selected=customer_selection(context,customer)
-    weight=selected.get('weight')
-    if selected['size'] and (not str(selected['size']).isdigit() or not any(lo<=float(selected['size'])<=hi for lo,hi in ranges)):
-        return None  # Explicit garment choices retain the regular inventory path.
-    weight=weight or (str(selected['size']) if selected['size'] else None)
-    if not weight:return {'question':'شكد الوزن بالكيلو برقم واحد؟'}
-    if not any(lo<=float(weight)<=hi for lo,hi in ranges):
-        return {'question':'الوزن اللي ذكرتيه مو ضمن مجال هالموديل، ما أگدر أضمن ملاءمته.'}
+    size=selected.get('size');weight=selected.get('weight');size_type='weight'
+    if size and not str(size).isdigit():
+        if product_variants.order_choice_error(product,'size',str(size)):return None
+        size_type='size';weight=None  # A chosen garment label never requires a body weight.
+    else:
+        if size and not any(lo<=float(size)<=hi for lo,hi in ranges):return None
+        weight=weight or (str(size) if size else None)
+        if not weight:return {'question':'شنو القياس المطلوب؟'}
+        if not any(lo<=float(weight)<=hi for lo,hi in ranges):
+            return {'question':'الوزن اللي ذكرتيه مو ضمن مجال هالموديل، ما أگدر أضمن ملاءمته.'}
+        size=str(weight)
     offered=product_variants.colors(customer_copy.fact(product.get('colors'),'colors'))
     chosen=selected['colors'] or ([selected['color']] if selected['color'] else [])
     if not chosen and len(offered)==1:chosen=offered
@@ -372,7 +378,8 @@ def weight_cart_choices(product, context, customer=None, current_text=''):
     elif chosen[0] in counts and not counts[chosen[0]]:
         return {'question':'شكد قطعة من ال'+chosen[0]+'؟'}
     items=[dict(product_id=product['product_id'],product_name=product['product_name'],
-                color=color,size=str(weight),size_type='weight',weight=str(weight),quantity=counts.get(color,1))
+                color=color,size=str(size),size_type=size_type,quantity=counts.get(color,1),
+                **({'weight':str(weight)} if size_type=='weight' else {}))
            for color in chosen]
     return {'items':items,'weight':weight}
 
