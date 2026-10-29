@@ -15,7 +15,7 @@ PRODUCT_KNOWLEDGE_FIELDS = (
     'lining', 'transparency', 'stretch', 'closure', 'measurements', 'fit_notes',
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
 )
-EVIDENCE_VERSION = 2
+EVIDENCE_VERSION = 3
 
 
 def browse_request(text):
@@ -91,6 +91,9 @@ def context_evidence(text, turn):
         return True
     question = question_from_turn(turn)
     if is_confirmation(text) and product_variants.color_replacement(question):
+        return True
+    if is_confirmation(text) and re.fullmatch(r'قطع[ةه]\s+من\s+كل\s+لون[؟?\s]*',
+                                              re.split(r'[.\n]',normalized(question))[-1].strip()):
         return True
     # Preserve the raw answer with its question; never turn it into a guessed
     # size/age/quantity. Ignore small-talk and follow-up questions as answers.

@@ -69,7 +69,7 @@ class SalesTurnSelectionTests(unittest.TestCase):
         self.assertIn('18 ألف و500', precise)
         self.assertIn('5 آلاف و500', precise)
         self.assertEqual(sales_playbook.size_range_question(dict(product, sizes='من 70 الى 130 كيلو')),
-                         'قياساته من 70 الى 130 كيلو، شكد تلبسين؟')
+                         'الأوزان المذكورة من 70 الى 130 كيلو، شكد الوزن بالكيلو؟')
 
 
 class SalesTurnPipelineTests(unittest.TestCase):
@@ -90,10 +90,11 @@ class SalesTurnPipelineTests(unittest.TestCase):
                 self.assertNotIn('نكمل اختيارج', result['reply'])
                 self.assertNotIn('شامل', result['reply'])
                 if 'قياسات' in text:
-                    self.assertIn('قياساته من 70 الى 130 كيلو، شكد تلبسين؟', result['reply'])
+                    self.assertIn('الأوزان المذكورة من 70 الى 130 كيلو، شكد الوزن بالكيلو؟', result['reply'])
                     self.assertIn('وعليكم السلام', result['reply'])
                 else:
-                    self.assertRegex(result['reply'], 'شنو القياس اللي يناسب[جك]؟')
+                    self.assertIn('شكد الوزن بالكيلو برقم واحد؟', result['reply'])
+                    self.assertNotIn('شنو القياس', result['reply'])
                 self.assertFalse(result['create_order'])
         self.m.save_delivery_settings(self.db, {'baghdad_fee': 4000, 'other_fee': 7000})
         known_province = self.m.transparent_price_reply({'sender_id': 'reply', 'text':

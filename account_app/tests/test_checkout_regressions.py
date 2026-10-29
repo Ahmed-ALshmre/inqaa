@@ -396,7 +396,8 @@ class CheckoutRegressionTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertFalse(meta["order_created"])
         self.assertNotIn("تم تثبيت", reply)
-        self.assertIn("أحتاج", reply)
+        self.assertIn("نحدد القطعة المطلوبة", reply)
+        self.assertNotIn("رقم الموبايل", reply)
 
     def test_dashboard_stale_draft_is_rejected(self):
         self.cache_dashboard_draft({"reply": "تم تثبيت الطلب", "create_order": True, "order": self.data()})

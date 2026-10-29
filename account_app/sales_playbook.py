@@ -188,7 +188,7 @@ def size_range_question(product):
     data = product_variants.size_data(customer_copy.fact(product.get('sizes')))
     if len(data['weights']) == 1 and not any(data[key] for key in ('ranges', 'years', 'numbers', 'labels')):
         low, high = data['weights'][0]
-        return f'قياساته من {low} الى {high} كيلو، شكد تلبسين؟'
+        return f'الأوزان المذكورة من {low} الى {high} كيلو، شكد الوزن بالكيلو؟'
     return ''
 
 
@@ -200,10 +200,16 @@ def requested_quantity(text):
     return int(match[1]) if match and 2 <= int(match[1]) <= 20 else None
 
 
+def selection_evidence(context):
+    for item in (context or {}).get('evidence',[]):
+        for line in str(item.get('text') or '').splitlines():
+            if line.strip():yield dict(item,text=line.strip())
+
+
 def customer_selection(context, customer=None):
     """Read customer answers; a staff question never supplies a missing size."""
     context, customer = context or {}, customer or {}
-    selected = {key: customer.get(key) for key in ('size', 'age', 'color')}
+    selected = {key: customer.get(key) for key in ('size', 'age', 'color', 'weight')}
     selected['colors'] = []
     selected['color_options'] = []
     selected['ages'] = []
@@ -211,9 +217,11 @@ def customer_selection(context, customer=None):
     if len(stored_colors) == 1:
         selected['color'] = stored_colors[0]
     selected['colors'] = stored_colors
-    for item in context.get('evidence', []):
+    for item in selection_evidence(context):
         text = sales_strategy.normalized(product_variants.normalize_size_words(item.get('text')))
         question = sales_strategy.normalized(item.get('in_reply_to'))
+        weight=product_variants.weight_answer(text,question)
+        if weight is not None:selected['weight']=weight['value']
         replacement = product_variants.color_replacement(text)
         proposed = product_variants.color_replacement(question)
         if proposed and (is_confirmation(text) or product_variants.chosen_colors(text) == [proposed[0]]):
@@ -283,16 +291,90 @@ def customer_selection(context, customer=None):
         if age is not None and (not sizes or re.search(r'عمر', text)):
             selected['age'] = age
             selected['ages'] = product_variants.child_ages(text) or [age]
-        colors = product_variants.requested(text)['colors']
+        colors = product_variants.requested(text)['colors'] or list(product_variants.color_quantities(text))
         if len(colors) == 1:
+            if (len(selected['colors'])>1 and product_variants.color_quantities(text)
+                    and colors[0] in selected['colors'] and not re.search(r'(?<!\w)(?:بس|فقط|عوفي|بدل)(?!\w)',text)):
+                continue  # A count for one line does not remove the other selected color.
             selected['color'] = colors[0]
             selected['colors'] = colors
             selected['color_options'] = []
-        elif product_variants.colors(text):
+        elif colors or product_variants.colors(text):
             selected['color'] = None
-            selected['colors'] = product_variants.chosen_colors(text)
+            selected['colors'] = product_variants.chosen_colors(text) or list(product_variants.color_quantities(text))
             selected['color_options'] = colors if colors and not selected['colors'] else []
     return selected
+
+
+def quantities_for_colors(context, customer=None, current_text=''):
+    try:
+        from . import color_choices, sales_context
+    except ImportError:
+        import color_choices, sales_context
+    prefix=[];counts={}
+    for item in selection_evidence(context):
+        prefix.append(item)
+        chosen=customer_selection({'evidence':prefix},customer)['colors']
+        text=item.get('text') or ''
+        question=item.get('in_reply_to') or ''
+        if len(chosen)>1:
+            for color in chosen:counts.setdefault(color,None)
+        replacement=product_variants.color_replacement(text)
+        proposed=product_variants.color_replacement(question)
+        if proposed and is_confirmation(text):replacement=proposed
+        if replacement and replacement[1] in counts:
+            new,old=replacement
+            count=counts.pop(old)
+            if new in counts:count=(counts[new]+count) if counts[new] and count else None
+            counts[new]=count
+        counts.update(product_variants.color_quantities(text))
+        if color_choices.one_each(text,{'last_staff_turn':[{'text':question}]}):
+            counts.update({color:1 for color in chosen})
+        number=product_variants.quantity_number(text)
+        asked=product_variants.requested(question)['colors']
+        if number and len(asked)==1 and re.search(r'عدد|كمية|قطعة|قطعه|قطع',question):
+            counts[asked[0]]=number
+    chosen=customer_selection(context,customer)['colors']
+    counts.update(product_variants.color_quantities(current_text))
+    if color_choices.one_each(current_text,context):counts.update({color:1 for color in chosen})
+    question=sales_context.question_from_turn((context or {}).get('last_staff_turn') or [])
+    asked=product_variants.requested(question)['colors']
+    number=product_variants.quantity_number(current_text)
+    if number and len(asked)==1 and re.search(r'عدد|كمية|قطعة|قطعه|قطع',question):counts[asked[0]]=number
+    return {color:count for color,count in counts.items() if color in chosen}
+
+
+def weight_cart_choices(product, context, customer=None, current_text=''):
+    ranges=product_variants.weight_only_ranges(product)
+    if not ranges:return None
+    selected=customer_selection(context,customer)
+    weight=selected.get('weight')
+    if selected['size'] and (not str(selected['size']).isdigit() or not any(lo<=float(selected['size'])<=hi for lo,hi in ranges)):
+        return None  # Explicit garment choices retain the regular inventory path.
+    weight=weight or (str(selected['size']) if selected['size'] else None)
+    if not weight:return {'question':'شكد الوزن بالكيلو برقم واحد؟'}
+    if not any(lo<=float(weight)<=hi for lo,hi in ranges):
+        return {'question':'الوزن اللي ذكرتيه مو ضمن مجال هالموديل، ما أگدر أضمن ملاءمته.'}
+    offered=product_variants.colors(customer_copy.fact(product.get('colors'),'colors'))
+    chosen=selected['colors'] or ([selected['color']] if selected['color'] else [])
+    if not chosen and len(offered)==1:chosen=offered
+    if not chosen:
+        return {'question':('تفضلين '+' لو '.join('ال'+c for c in selected['color_options'])+'؟')
+                if selected['color_options'] else 'شنو اللون اللي تختارينه؟'}
+    if any(color not in offered for color in chosen):
+        missing=[color for color in chosen if color not in offered]
+        return {'question':'ال'+' وال'.join(missing)+' مو متوفر بهالموديل؛ المتوفر ال'+' وال'.join(offered)+'.'}
+    counts=quantities_for_colors(context,customer,current_text)
+    if len(chosen)>1:
+        missing=[color for color in chosen if not counts.get(color)]
+        if len(missing)==len(chosen):return {'question':'قطعة من كل لون؟'}
+        if missing:return {'question':'شكد قطعة من ال'+missing[0]+'؟'}
+    elif chosen[0] in counts and not counts[chosen[0]]:
+        return {'question':'شكد قطعة من ال'+chosen[0]+'؟'}
+    items=[dict(product_id=product['product_id'],product_name=product['product_name'],
+                color=color,size=str(weight),size_type='weight',weight=str(weight),quantity=counts.get(color,1))
+           for color in chosen]
+    return {'items':items,'weight':weight}
 
 
 def selection_conflicts(product, context, customer=None):
@@ -329,6 +411,10 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
         chosen_year_size = product_variants.child_age(selected['size'])
     if age_based and selected['age'] is None and chosen_year_size is None:
         return 'شكد العمر المطلوب؟'
+    weight_ranges=product_variants.weight_only_ranges(product)
+    if not age_based and not selected['size'] and weight_ranges:
+        plan=weight_cart_choices(product,context,customer)
+        return plan.get('question') or booking_invitation(context,history)
     if not age_based and not selected['size']:
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
             if not province and delivery_requires_province and 'محافظ' not in recent:
@@ -478,9 +564,36 @@ def personalize_specifications(reply, question):
     return re.sub(r'\.{2,}', '.', cleaned).strip()
 
 
+def assistant_identity_question(text):
+    """Questioning who is replying routes to staff; photo provenance does not."""
+    clean = ' '.join(sales_strategy.normalized(text).split())
+    identity = (r'ذكاء|روبوت|بوت|بشر|انسان[ةه]?|موظف[ةه]?|حقيقي[ةه]|برنامج|تلقائي[ةه]?|'
+                r'(?:شات|تشات)\s*(?:جي\s*بي\s*تي|gpt)|chatgpt|'
+                r'(?:ال)?مساعد[ةه]?\s*(?:المبيعات\s*)?(?:ال)?(?:الي[ةه]?|افتراضي[ةه]?|رقمي[ةه]?)|(?:ال)?الي[ةه]|'
+                r'الي(?=\s*(?:لو|او|[؟?]|$))')
+    subject = (r'انت[يىه]?|انتم|حضرت[كجچ]|رد(?:ود)?(?:[كجچ]م?|\s*مال[كجچ])?|'
+               r'(?:هذا|هاي|هذي)\s*(?:ال)?(?:رد(?:ود)?|نظام|برنامج)|الرد(?:ود)?|'
+               r'(?:اللي|منو)\s*(?:يرد|يحجي|يجاوب)(?:ني)?')
+    for match in re.finditer(r'(?<!\w)(?:' + subject + r')(?!\w)(?P<gap>[^؟?\n.!]{0,40}?)(?:' + identity + r')(?!\w)', clean):
+        if not re.search(r'صور|فيديو|تصوير|اعلان', match['gap']):
+            return True
+    return bool(re.search(r'\bare you\s+(?:(?:a|an)\s+)?(?:bot|robot|human|ai|real person|chatgpt)|'
+                          r'\bis this\s+(?:(?:a|an)\s+)?(?:ai|bot|automated reply|real person)|'
+                          r'\bwho is replying.{0,20}(?:person|human|ai|bot)', clean))
+
+
+def assistant_identity_statement(text):
+    clean = ' '.join(sales_strategy.normalized(text).split())
+    return assistant_identity_question(re.sub(r'(?<!\w)(?:انا|اني|نحن)(?!\w)', 'انتي', clean)) or bool(
+        re.search(r"\bi(?: am|'m)\s+(?:(?:a|an)\s+)?(?:ai|bot|robot|automated assistant|virtual assistant|language model|artificial intelligence|chatgpt|human|real person|not\s+(?:a\s+)?human)|"
+                  r'\bas\s+(?:a|an)\s+(?:ai|language model|virtual assistant)|'
+                  r'(?<!\w)(?:بصفتي|كوني|باعتباري)\s*(?:ال)?(?:مساعد|نموذج|ذكاء|برنامج|روبوت)|'
+                  r'(?:تم\s*تطويري|تم\s*تدريبي).{0,30}(?:ذكاء|نموذج\s*لغ[ةه])', clean))
+
+
 def human_requested(text):
     text = sales_strategy.normalized(text)
-    return bool(re.search(
+    return assistant_identity_question(text) or bool(re.search(
         r'(?:ما\s*اريد|ماريد|لا اريد).{0,10}(?:ذكاء|بوت|روبوت|الي)\s*(?:يرد|يحجي|يجاوب)|'
         r'(?:اريد|ممكن|خليني|خلوني|خلي).{0,22}(?:احجي|احچي|اتكلم|اتواصل|اتحدث|يوصلني).{0,15}(?:موظف|بشر|انسان|ادار)|'
         r'(?:اريد|اربطني|وصلني|حولني|تحويل).{0,10}(?:موظف|انسان|بشر)', text))

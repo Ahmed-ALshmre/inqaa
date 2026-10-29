@@ -218,6 +218,12 @@ def _product_sizes(product):
 
 def size_data(value):
     text=normalized(value)
+    # Written year endpoints carry an age unit even when the other end is numeric.
+    text=re.sub(r'(?<!\w)(سن[هة]|سنتين|سنتان)\s*(?:الي|لحد|[-–—])\s*'
+                r'(\d{1,2}|سنتين|سنتان)(?:\s*(?:سنوات|سن[هة]|سنين|اعوام|عام))?(?!\w)'
+                r'(?!\s*(?:اشهر|شهر|شهور|كيلو|كغم|كغ))',
+                lambda m: ('2' if m[1] in {'سنتين','سنتان'} else '1')+' الي '+
+                          ('2' if m[2] in {'سنتين','سنتان'} else m[2])+' سنوات',text)
     ranges, years, weights = [], [], []
     spans=[]
     for match in RANGE_RE.finditer(text):
@@ -264,6 +270,58 @@ def display(value,field):
     if data['weights']:
         return 'يناسب تقريباً وزن ' + '، '.join(f'{lo} إلى {hi} كيلو' for lo,hi in data['weights'])
     return ''
+
+
+def weight_only_ranges(product):
+    data=_product_sizes(product or {})
+    return data['weights'] if not any(data[k] for k in ('ranges','numbers','years','labels')) else []
+
+
+def weight_answer(value, question=''):
+    """Return a declared kilogram value, or an explicit unresolved answer."""
+    text=normalized(value).strip()
+    explicit=bool(re.search(r'وزن(?:ي|ه|ها)?\s*[:=]?\s*\d|\d\s*(?:كيلو|كغم|كغ)',text))
+    bare=bool(re.fullmatch(r'\d{1,3}(?:[.,]\d{1,2})?',text) and
+              re.search(r'وزن|كيلو|كغم',normalized(question)) and
+              not re.search(r'عمر|عدد|كمية|قطعة',normalized(question)))
+    if not explicit and not bare:return None
+    if re.search(r'\d\s*(?:لو|او|/|الي|لحد|[-–—])\s*\d',text):
+        return {'value':None,'ambiguous':True}
+    hits=(re.findall(r'وزن(?:ي|ه|ها)?\s*[:=]?\s*(\d{1,3}(?:[.,]\d{1,2})?)(?!\d)',text)
+          or re.findall(r'(?<!\d)(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:كيلو|كغم|كغ)',text)
+          or ([text] if bare else []))
+    values=list(dict.fromkeys(hit.replace(',','.') for hit in hits))
+    if len(values)!=1 or not 1<=float(values[0])<=300:return {'value':None,'ambiguous':True}
+    return {'value':values[0],'ambiguous':False}
+
+
+def quantity_number(value):
+    text=normalized(value).strip(' .،!')
+    words={'قطعة':1,'قطعه':1,'واحدة':1,'واحده':1,'واحد':1,'وحدة':1,'وحده':1,
+           'قطعتين':2,'اثنين':2,'ثنين':2,'ثنتين':2,'ثلاث':3,'ثلاثة':3}
+    if text in words:return words[text]
+    hit=re.fullmatch(r'(?:عدد\s*)?(\d{1,2})(?:\s*قطع[ةه]?)?',text)
+    return int(hit[1]) if hit and 1<=int(hit[1])<=20 else None
+
+
+def color_quantities(value):
+    text=re.sub(r'(?<=[\u0600-\u06ff])(?=\d)|(?<=\d)(?=[\u0600-\u06ff])',' ',normalized(value))
+    hits=list(COLOR_RE.finditer(text));result={}
+    requested_colors=requested(text)['colors']
+    quantity=r'قطعتين|اثنين|ثنين|ثنتين|قطع[ةه]\s*واحد[ةه]?|قطع[ةه]|واحد[ةه]?|وحد[ةه]|\d{1,2}'
+    for index,hit in enumerate(hits):
+        color=ALIASES[hit[1]]
+        if color not in requested_colors:continue
+        tail=text[hit.end():hits[index+1].start() if index+1<len(hits) else len(text)]
+        after=re.match(r'\s*(?:عدد\s*)?('+quantity+r')(?!\w)',tail)
+        before=text[hits[index-1].end() if index else 0:hit.start()]
+        preceding=re.search(r'(قطعتين|ثنتين|اثنين|ثنين|قطع[ةه]\s*واحد[ةه]?|قطع[ةه])\s*$',before)
+        token=after[1] if after else preceding[1] if preceding else ''
+        if token.startswith(('قطعة واحد','قطعه واحد')):token='واحدة'
+        if not token:continue
+        unresolved=bool(re.search(r'[؟?]|(?<!\w)(?:لو|او)(?!\w)|ما\s*اريد|ماريد',text))
+        result[color]=None if unresolved else quantity_number(token)
+    return result
 
 
 def requested(question):

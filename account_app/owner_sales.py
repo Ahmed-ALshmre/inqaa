@@ -142,18 +142,34 @@ def neutral_address(text):
     text = re.sub(r'تحب(?:ين)?\s+تشوف(?:ين)?', 'أعرض', text)
     for before, after in [('قياس[كج]', 'القياس'), ('عنوان[كج]', 'العنوان'), ('رقم[كج]', 'رقم الموبايل'),
                           ('اختيار[كج]', 'الاختيار'), ('رسالت[كج]', 'الرسالة'),
-                          ('(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+حجز)?', 'أثبت الحجز'),
+                          (r'(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+(?:ال)?حجز)?', 'أثبت الحجز'),
                           ('(?:دزي|دز|ارسلي|ارسل|أرسلي)(?:لي)?', 'ممكن إرسال')]:
         text = re.sub(r'(?<!\w)' + before + r'(?!\w)', after, text)
     return text
 
 
-def surface(text, gender='', seed='', *, warm=True, store_id=''):
+def warmth_allowed(question, history=()):
+    clean=customer_copy.normalized(question)
+    if re.search(r'شكوي|شكوى|انزعج|زعلان|ليش.*(?:طلب|رد|ثبت)|ما وصل|تاخر|رسمي|بدون.*(?:القاب|ألقاب|حبيبتي|عمري)|بلا.*(?:القاب|ألقاب)',clean):
+        return False
+    incoming=[str(m.get('text') or m.get('content') or '') for m in history
+              if m.get('direction')=='incoming' or m.get('role')=='user']
+    if any(re.search(r'رسمي|(?:بدون|بلا).*(?:القاب|ألقاب|حبيبتي|عمري)',customer_copy.normalized(t)) for t in incoming[-20:]):
+        return False
+    outgoing=[str(m.get('text') or m.get('content') or '') for m in history
+              if m.get('direction')=='outgoing' or m.get('role')=='assistant']
+    return not any(AFFECTION.search(t) for t in outgoing[-4:])
+
+
+def surface(text, gender='', seed='', *, warm=True, store_id='', allow_endearments=True):
     """One coherent surface for local and model replies; never alters receipts."""
     text = str(text or '').strip()
     if not text or re.match(r'^تم\s+(?:تثبيت|تسجيل|حجز|تأكيد|تاكيد)', text):
         return text
     text = FIT_QUESTION.sub('', text).strip()
+    if not allow_endearments:
+        text=AFFECTION.sub('',text).strip(' ،,')
+        warm=False
     female = gender == 'female'
     if gender == 'male':
         text = AFFECTION.sub('', text)
@@ -247,14 +263,17 @@ def result(text='', *, human='', silent=False):
 
 def next_step(product, context, customer):
     try:
-        from .sales_playbook import customer_selection
+        from .sales_playbook import customer_selection, weight_cart_choices
     except ImportError:
-        from sales_playbook import customer_selection
+        from sales_playbook import customer_selection, weight_cart_choices
     known = customer_selection(context, customer)
     years = product_variants.size_data((product or {}).get('sizes'))['years']
     if years and known['age'] is None:
         return 'شكد العمر المطلوب؟'
-    if not years and not known['size']:
+    if not years and not known['size'] and product_variants.weight_only_ranges(product):
+        plan=weight_cart_choices(product,context,customer)
+        if plan and plan.get('question'):return plan['question']
+    elif not years and not known['size']:
         return 'شكد قياس تلبسين؟'
     colors = product_variants.colors((product or {}).get('colors'))
     if len(colors) > 1 and not known['color']:
@@ -288,6 +307,7 @@ def delivery_wording(reply, question):
 
 def conversational_wording(reply):
     """Remove policy-label filler; retain the actual fee, inspection or condition."""
+    reply=re.sub(r'((?:التوصيل|الشحن)\s+)بالعالم\s+العادي(?!\w)',r'\1بالوضع العادي',reply)
     return re.sub(r'(?:حسب|وفق|ضمن|بموجب)\s+(?:سياس[ةه]|شروط)\s+(?:المتجر|المحل|الصفحة)(?:\s+المعتمدة)?[،,]?\s*',
                   '', reply).strip()
 

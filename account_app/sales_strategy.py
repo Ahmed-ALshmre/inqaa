@@ -438,10 +438,16 @@ def reply_error(reply, question, product=None):
         return 'لا تضمن تطابق الصورة أو ملاءمة القياس؛ وضح البيانات وسياسة الفحص دون ضمان مختلق.'
     if re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',text) and not re.search(r'(?:تصوير|صور|صوره|صورة).{0,15}حقيقي',evidence) and not re.search(r'ما عندي|ما متوفر|غير متوفر|لا يوجد|لا املك|مو متوفر',text):
         return 'مصدر التصوير غير موثق؛ لا تدع أن الصور حقيقية. اعترف بعدم وجود فيديو موثق إذا لا يوجد.'
-    if (re.search(r'وزن|كيلو', normalized(question))
-            and re.search(r'(?:يناسب|البس|تلبس|يلبس).{0,20}قياس\s*\d+', text)
+    if ((re.search(r'وزن|كيلو', normalized(question)) or re.search(r'وزن|كيلو',normalized((product or {}).get('sizes'))))
+            and re.search(r'(?:يناسب|البس|تلبس|يلبس).{0,20}قياس\s*\d+|قياس\s*\d+.{0,25}(?:تمام|مضبوط|مناسب|يناسب|يرهم)', text)
             and not _has_weight_size_table(product)
             and not _declared_size(question)):
+        try:
+            from . import product_variants
+        except ImportError:
+            import product_variants
+        if product_variants.weight_only_ranges(product):
+            return 'لا يوجد جدول يربط الوزن بقياس ملابس لهذا المنتج. احتفظ بالوزن بالكيلو كما ذكره الزبون، واجمع اللون والكمية الناقصين فقط دون اختراع قياس أو ضمان ملاءمة.'
         return 'لا يوجد جدول يربط الوزن بقياس محدد لهذا المنتج. اسأل عن قياس الملابس المعتاد أو القياس المطلوب ولا تخترع 42 أو 44 من الوزن.'
     if signals(question) == ['refusal'] and re.search(r'احجز|اثبت|نثبت|تحب|تحبين|اريد رقم|دز.{0,8}عنوان',text):
         return 'الزبون رفض الشراء؛ اختم بلطف دون سؤال بيع أو جمع بيانات.'
