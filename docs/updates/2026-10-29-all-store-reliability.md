@@ -36,6 +36,8 @@ endearments, and a written child-age range falling into a generic model question
 - Recognize “شنو الموديل المطلوب؟” as another known-product re-ask. Reduce
   repeated endearments across replies, respect formal requests/complaints, and
   avoid the duplicated “الحجز الحجز” wording without changing facts.
+- Correct the generated delivery phrase “التوصيل بالعالم العادي” to
+  “التوصيل بالوضع العادي”, preserving the stated duration and other facts.
 - Earlier changes in the same PR keep color-photo browsing on the known catalog
   model, label general albums honestly, and route responder-identity questions
   to a protected staff pause with no acknowledgement or identity claim.
@@ -48,6 +50,8 @@ endearments, and a written child-age range falling into a generic model question
 - A further focused run of the 27 new regression cases passed after adding the
   mixed-unit age-range guard. The affected child/review/identity/checkout group
   also passed (138 tests).
+- The delivery-phrase correction passed a direct wording/fact-preservation
+  check and 64 affected delivery, negotiation and checkout regression tests.
 - Real-provider acceptance uses synthetic conversations and catalog facts only,
   disposable storage, a bounded OpenRouter HTTP gate and mocked final delivery
   adapters. Main provider/parser, webhook routing, validation, order persistence

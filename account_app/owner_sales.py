@@ -307,6 +307,7 @@ def delivery_wording(reply, question):
 
 def conversational_wording(reply):
     """Remove policy-label filler; retain the actual fee, inspection or condition."""
+    reply=re.sub(r'((?:التوصيل|الشحن)\s+)بالعالم\s+العادي(?!\w)',r'\1بالوضع العادي',reply)
     return re.sub(r'(?:حسب|وفق|ضمن|بموجب)\s+(?:سياس[ةه]|شروط)\s+(?:المتجر|المحل|الصفحة)(?:\s+المعتمدة)?[،,]?\s*',
                   '', reply).strip()
 
