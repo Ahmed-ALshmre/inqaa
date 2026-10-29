@@ -141,9 +141,9 @@ class ReviewedLessonTests(unittest.TestCase):
 
     def test_human_request_is_distinct_from_request_for_real_product_photos(self):
         for text in ['ماريد ذكاء يرد', 'ما اريد ذكاء يرد', 'اريد احجي ويا موظف',
-                     'ممكن اتكلم ويا انسان', 'حولني لموظف']:
+                     'ممكن اتكلم ويا انسان', 'حولني لموظف', 'انتي ذكاء لو بشر؟']:
             self.assertTrue(playbook.human_requested(text), text)
-        for text in ['ما اريد صور ذكاء اريد صور حقيقية', 'انتي ذكاء لو بشر؟',
+        for text in ['ما اريد صور ذكاء اريد صور حقيقية',
                      'عندكم موظف توصيل؟', 'اريد قياس 44']:
             self.assertFalse(playbook.human_requested(text), text)
 
@@ -362,12 +362,12 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.m.set_customer_ai_enabled(self.db, 'human', True, allow_manual_resume=True)
         self.assertTrue(self.m.is_customer_ai_enabled(self.db, 'human'))
 
-    def test_repeated_human_identity_claim_recovers_truth_and_requested_facts(self):
+    def test_identity_question_routes_before_generating_identity_or_product_facts(self):
         self.customer('identity')
         with patch.object(self.m, '_call_main_ai_once', return_value={'reply': 'لا حبيبتي وياج موظفة المبيعات، قماشه باربي', 'order': {}}) as model:
             result = self.m.call_main_ai({'sender_id': 'identity', 'text': 'انتي ذكاء لو بشر وشنو قماشه؟'}, 'text', {}, [], [PRODUCT], PRODUCT, None, '', [], customer_products=[PRODUCT])
-        self.assertEqual(model.call_count, 2)
-        self.assertIn('المساعد الآلي للمتجر', result['reply'])
-        self.assertIn('باربي', result['reply'])
-        self.assertNotIn('وياج موظفة', result['reply'])
+        model.assert_not_called()
+        self.assertFalse(result['reply'])
+        self.assertTrue(result['requires_human'])
+        self.assertFalse(self.m.is_customer_ai_enabled(self.db,'identity'))
         self.assertFalse(result['create_order'])

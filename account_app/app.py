@@ -2229,6 +2229,8 @@ def send_due_followups(db=None, limit=25):
                     else:
                         message = build_followup_message(db, sender_id, row['stage'], product)
                 # Generation can take time; recheck opt-out/window/booking/turn.
+                if sales_playbook.assistant_identity_statement(message):
+                    customer_identity_handoff({'sender_id': sender_id, 'text': ''})
                 reason = _followup_block_reason(db, sender_id)
                 latest = _latest_incoming_message(db, sender_id)
                 if metadata.get('incoming_id') and (not latest or latest['id'] != metadata['incoming_id']):
@@ -3486,6 +3488,9 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
         reason = str(parsed.get("silent_reason") or "").strip()
         reply = str(parsed.get("reply") or "").strip()
         if reason == "rejection" or _looks_like_customer_rejection(reply):
+            return None
+        if sales_playbook.assistant_identity_statement(reply):
+            customer_identity_handoff({'sender_id': sender_id, 'text': ''})
             return None
         if reply:
             problem = product_albums.availability_error(reply, product, load_active_products(db),
@@ -6895,6 +6900,14 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
         return False
     if has_app_context() and (not is_ai_enabled(get_db()) or not is_customer_ai_enabled(get_db(), sender_id)):
         return False
+    planned = result.get('_planned_sales_layout')
+    planned_parts = (planned.get('parts') or []) if isinstance(planned, dict) else []
+    identity_texts = [text for text in [reply, *(result.get('reply_parts') or []), *planned_parts] if isinstance(text,str)]
+    if any(sales_playbook.assistant_identity_statement(text) for text in
+           [*identity_texts, ' '.join(identity_texts)]):
+        customer_identity_handoff({'sender_id': sender_id, 'page_id': page_id,
+                                   'platform': platform, 'text': ''})
+        return False
     if customer_copy.has_instructions(reply):
         print('[WebhookSend] Blocked internal instructions in generated reply.', flush=True)
         if has_app_context():
@@ -9012,10 +9025,7 @@ def _call_main_ai_with_context(
     if (conversation_quality.grounded_error(result.get("reply"), matched_product, products)
             or sales_strategy.reply_error(result.get("reply"), question, matched_product)):
         if 'المساعد الآلي للمتجر' in sales_strategy.reply_error(result.get('reply'), question, matched_product):
-            identity = 'أنا المساعد الآلي للمتجر، أساعدك بمعلومات المنتجات والحجز.'
-            recovered = recover_factual_sales_reply(ev, matched_product, extra=identity)
-            return recovered or {'reply': identity, 'reply_parts': [identity],
-                                 'create_order': False, 'order': {}, '_local_reply': True}
+            return customer_identity_handoff(ev)
         if sales_strategy.signals(question) == ['refusal']:
             return {"reply": "تدلل، شكراً لتواصلك ويانا.", "create_order": False, "order": {}}
         if 'جدول يربط الوزن' in sales_strategy.reply_error(result.get('reply'),question,matched_product):
@@ -9111,9 +9121,31 @@ def _call_main_ai_with_context(
     return result
 
 
+def customer_identity_handoff(ev):
+    """Queue real staff work and persist the pause before allowing any reply."""
+    review_id = None
+    if has_app_context() and ev.get('sender_id'):
+        db = get_db()
+        review_id = create_human_review(db, ev, 'customer_requested_human')
+        cancel_followups_for_sender(db, ev['sender_id'], 'customer_requested_human')
+        set_customer_ai_enabled(db, ev['sender_id'], False, reason='customer_requested_human')
+    return dict(owner_sales.result(human='customer_requested_human', silent=True),
+                _direct_fact_handoff=True, _customer_handoff_review_id=review_id)
+
+
+def silent_customer_handoff(db, ev):
+    review_id = customer_identity_handoff(ev)['_customer_handoff_review_id']
+    return dict(sender_id=ev['sender_id'], page_id=ev.get('page_id'), platform=ev.get('platform'),
+                reply='', reply_parts=[], send_image=False, image_urls=[], attachments=[], messages=[],
+                meta={'needs_human': True, 'human_review_id': review_id,
+                      'customer_requested_human': True, 'skipped': True, 'reason': 'customer_requested_human'})
+
+
 def call_main_ai(ev, message_type, customer, history, products, matched_product,
                  image_result, instructions_text, rules_list, fix_instruction=None,
                  customer_products=None, conversation_history=None, catalog_search_context=None):
+    if sales_playbook.human_requested(ev.get('text')):
+        return customer_identity_handoff(ev)
     products = [product_albums.sales_product(p) for p in products]
     matched_product = product_albums.sales_product(matched_product) if matched_product else None
     customer_products = [product_albums.sales_product(p) for p in customer_products or []]
@@ -9144,6 +9176,9 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
             matched_product, image_result, instructions_text, rules_list,
             fix_instruction=fix_instruction, customer_products=customer_products,
             conversation_history=conversation_history, catalog_search_context=catalog_search_context)
+    identity_texts = [text for text in [result.get('reply'), *(result.get('reply_parts') or [])] if isinstance(text,str)]
+    if any(sales_playbook.assistant_identity_statement(text) for text in [*identity_texts, ' '.join(identity_texts)]):
+        return customer_identity_handoff(ev)
     return owner_result_surface(result, ev, customer, history)
 
 
@@ -11052,12 +11087,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         customer = get_or_create_customer(db, ev['sender_id'], ev['page_id'], ev['platform'])
 
     if sales_playbook.human_requested(ev.get('text')):
-        review_id = create_human_review(db, ev, 'customer_requested_human')
-        cancel_followups_for_sender(db, ev['sender_id'], 'customer_requested_human')
-        set_customer_ai_enabled(db, ev['sender_id'], False, reason='customer_requested_human')
-        return saved_checkout_reply(db, ev,
-            owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي', customer_address_gender(ev, customer)),
-            {'needs_human': True, 'human_review_id': review_id, 'customer_requested_human': True})
+        return silent_customer_handoff(db, ev)
 
     owner_reason = owner_sales.human_reason(ev.get('text'))
     if sales_decision.price_mismatch(ev.get('text')):
@@ -11352,6 +11382,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         first_reply_text, detected_gender = generate_first_message_reply(
             db, ev, products, first_instructions, first_rules,
         )
+        if sales_playbook.assistant_identity_statement(first_reply_text):
+            return silent_customer_handoff(db, ev)
         first_reply_text = owner_sales.surface(first_reply_text, _customer_gender_from_db(db, ev['sender_id']), ev.get('text'), store_id=current_store_id())
         if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
             return {"sender_id": ev["sender_id"], "page_id": ev["page_id"],

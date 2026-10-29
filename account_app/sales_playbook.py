@@ -478,9 +478,36 @@ def personalize_specifications(reply, question):
     return re.sub(r'\.{2,}', '.', cleaned).strip()
 
 
+def assistant_identity_question(text):
+    """Questioning who is replying routes to staff; photo provenance does not."""
+    clean = ' '.join(sales_strategy.normalized(text).split())
+    identity = (r'ذكاء|روبوت|بوت|بشر|انسان[ةه]?|موظف[ةه]?|حقيقي[ةه]|برنامج|تلقائي[ةه]?|'
+                r'(?:شات|تشات)\s*(?:جي\s*بي\s*تي|gpt)|chatgpt|'
+                r'(?:ال)?مساعد[ةه]?\s*(?:المبيعات\s*)?(?:ال)?(?:الي[ةه]?|افتراضي[ةه]?|رقمي[ةه]?)|(?:ال)?الي[ةه]|'
+                r'الي(?=\s*(?:لو|او|[؟?]|$))')
+    subject = (r'انت[يىه]?|انتم|حضرت[كجچ]|رد(?:ود)?(?:[كجچ]م?|\s*مال[كجچ])?|'
+               r'(?:هذا|هاي|هذي)\s*(?:ال)?(?:رد(?:ود)?|نظام|برنامج)|الرد(?:ود)?|'
+               r'(?:اللي|منو)\s*(?:يرد|يحجي|يجاوب)(?:ني)?')
+    for match in re.finditer(r'(?<!\w)(?:' + subject + r')(?!\w)(?P<gap>[^؟?\n.!]{0,40}?)(?:' + identity + r')(?!\w)', clean):
+        if not re.search(r'صور|فيديو|تصوير|اعلان', match['gap']):
+            return True
+    return bool(re.search(r'\bare you\s+(?:(?:a|an)\s+)?(?:bot|robot|human|ai|real person|chatgpt)|'
+                          r'\bis this\s+(?:(?:a|an)\s+)?(?:ai|bot|automated reply|real person)|'
+                          r'\bwho is replying.{0,20}(?:person|human|ai|bot)', clean))
+
+
+def assistant_identity_statement(text):
+    clean = ' '.join(sales_strategy.normalized(text).split())
+    return assistant_identity_question(re.sub(r'(?<!\w)(?:انا|اني|نحن)(?!\w)', 'انتي', clean)) or bool(
+        re.search(r"\bi(?: am|'m)\s+(?:(?:a|an)\s+)?(?:ai|bot|robot|automated assistant|virtual assistant|language model|artificial intelligence|chatgpt|human|real person|not\s+(?:a\s+)?human)|"
+                  r'\bas\s+(?:a|an)\s+(?:ai|language model|virtual assistant)|'
+                  r'(?<!\w)(?:بصفتي|كوني|باعتباري)\s*(?:ال)?(?:مساعد|نموذج|ذكاء|برنامج|روبوت)|'
+                  r'(?:تم\s*تطويري|تم\s*تدريبي).{0,30}(?:ذكاء|نموذج\s*لغ[ةه])', clean))
+
+
 def human_requested(text):
     text = sales_strategy.normalized(text)
-    return bool(re.search(
+    return assistant_identity_question(text) or bool(re.search(
         r'(?:ما\s*اريد|ماريد|لا اريد).{0,10}(?:ذكاء|بوت|روبوت|الي)\s*(?:يرد|يحجي|يجاوب)|'
         r'(?:اريد|ممكن|خليني|خلوني|خلي).{0,22}(?:احجي|احچي|اتكلم|اتواصل|اتحدث|يوصلني).{0,15}(?:موظف|بشر|انسان|ادار)|'
         r'(?:اريد|اربطني|وصلني|حولني|تحويل).{0,10}(?:موظف|انسان|بشر)', text))

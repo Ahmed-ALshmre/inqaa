@@ -90,8 +90,8 @@ class CatalogColorPhotoTests(unittest.TestCase):
         ev=dict(self.ev,text='اشوف صور الوردي',_sales_context={'offer_interrupted':True})
         self.assertIsNone(self.m.offered_product_photo_reply(ev,self.catalog,self.product))
 
-    def test_identity_question_is_not_an_explicit_human_transfer_request(self):
-        self.assertFalse(self.m.sales_playbook.human_requested('انتي مساعدة آلية لو موظفة حقيقية؟'))
+    def test_identity_question_routes_to_human_review_per_owner_instruction(self):
+        self.assertTrue(self.m.sales_playbook.human_requested('انتي مساعدة آلية لو موظفة حقيقية؟'))
 
     def offer_two_models(self):
         other=dict(self.product,product_id='C2',product_name='طقم بناتي',colors='أسود',
