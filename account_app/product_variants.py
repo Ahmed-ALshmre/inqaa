@@ -277,16 +277,47 @@ def weight_only_ranges(product):
     return data['weights'] if not any(data[k] for k in ('ranges','numbers','years','labels')) else []
 
 
+_WEIGHT_TENS={'خمسين':50,'ستين':60,'سبعين':70,'ثمانين':80,'تسعين':90}
+_WEIGHT_UNITS={'واحد':1,'واحده':1,'واحدة':1,'اثنين':2,'اثنان':2,'ثنين':2,
+               'ثلاث':3,'ثلاثه':3,'ثلاثة':3,'اربع':4,'اربعه':4,'اربعة':4,
+               'خمس':5,'خمسه':5,'خمسة':5,'ست':6,'سته':6,'ستة':6,
+               'سبع':7,'سبعه':7,'سبعة':7,'ثمان':8,'ثمانيه':8,'ثمانية':8,
+               'تسع':9,'تسعه':9,'تسعة':9}
+
+
+def _written_weight_values(text):
+    """Parse common Iraqi written kilogram values only inside weight answers."""
+    tens='|'.join(_WEIGHT_TENS)
+    units='|'.join(_WEIGHT_UNITS)
+    values=[]
+    occupied=[]
+    for match in re.finditer(rf'(?<!\w)({units})\s*و\s*({tens})(?!\w)',text):
+        values.append(_WEIGHT_UNITS[match[1]]+_WEIGHT_TENS[match[2]])
+        occupied.append(match.span())
+    for match in re.finditer(rf'(?<!\w)({tens})(?:\s*و\s*({units}))?(?!\w)',text):
+        if any(start<=match.start()<end for start,end in occupied):continue
+        values.append(_WEIGHT_TENS[match[1]]+(_WEIGHT_UNITS.get(match[2],0) if match[2] else 0))
+    for match in re.finditer(r'(?<!\w)(ميه|مية|مئه|مئة)(?:\s*و\s*(عشره|عشرة|عشرون|عشرين))?(?!\w)',text):
+        values.append(100+(20 if match[2] in {'عشرون','عشرين'} else 10 if match[2] else 0))
+    return list(dict.fromkeys(values))
+
+
 def weight_answer(value, question=''):
     """Return a declared kilogram value, or an explicit unresolved answer."""
     text=normalized(value).strip()
-    explicit=bool(re.search(r'وزن(?:ي|ه|ها)?\s*[:=]?\s*\d|\d\s*(?:كيلو|كغم|كغ)',text))
+    written=_written_weight_values(text)
+    explicit=bool(re.search(r'وزن(?:ي|ه|ها)?\s*[:=]?\s*\d|\d\s*(?:كيلو|كغم|كغ)',text)
+                  or written and re.search(r'وزن|كيلو|كغم|كغ',text))
     bare=bool(re.fullmatch(r'\d{1,3}(?:[.,]\d{1,2})?',text) and
               re.search(r'وزن|كيلو|كغم',normalized(question)) and
               not re.search(r'عمر|عدد|كمية|قطعة',normalized(question)))
     if not explicit and not bare:return None
     if re.search(r'\d\s*(?:لو|او|/|الي|لحد|[-–—])\s*\d',text):
         return {'value':None,'ambiguous':True}
+    if written:
+        if len(written)!=1 or re.search(r'(?<!\w)(?:لو|او)(?!\w)',text):
+            return {'value':None,'ambiguous':True}
+        return {'value':str(written[0]),'ambiguous':False}
     hits=(re.findall(r'وزن(?:ي|ه|ها)?\s*[:=]?\s*(\d{1,3}(?:[.,]\d{1,2})?)(?!\d)',text)
           or re.findall(r'(?<!\d)(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:كيلو|كغم|كغ)',text)
           or ([text] if bare else []))

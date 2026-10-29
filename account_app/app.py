@@ -9173,9 +9173,10 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     pending_terms = unresolved_condition(history, ev.get('text'))
     result = (natural_negotiation_reply(ev, chosen, customer, context, history)
               if not pending_terms or pending_terms['kind'] != 'arrival' else None)
-    if (result is None and has_app_context() and ev.get('sender_id')
-            and checkout_selection_answer(ev.get('text') or '')
-            and recent_checkout_contact_action(get_db(),ev['sender_id'])):
+    # The product can be known only through the saved conversation binding.
+    # Resume a weight-only selection with that resolved product before generic
+    # missing-fact logic asks for a garment size that this catalogue does not use.
+    if result is None and has_app_context() and ev.get('sender_id') and chosen:
         result=resume_weight_checkout(get_db(),ev,chosen,customer,customer_products,context,history)
     if result is None:
         result = owner_sales.reply(ev, chosen, customer, context, history,

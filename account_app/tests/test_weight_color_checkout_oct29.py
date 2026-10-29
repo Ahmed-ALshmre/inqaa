@@ -27,6 +27,12 @@ class WeightMemoryTests(unittest.TestCase):
             {'direction':'incoming','text':'2'}])
         self.assertEqual(sales_playbook.customer_selection(context).get('weight'),'80')
 
+    def test_written_weight_is_kept_as_kilograms(self):
+        for text,expected in [('وزني سبعين كيلو تقريباً','70'),('اني خمسة وسبعين كيلو','75'),
+                              ('وزنها تسعين كغم','90'),('وزني مية كيلو','100')]:
+            self.assertEqual(product_variants.weight_answer(text)['value'],expected,text)
+        self.assertTrue(product_variants.weight_answer('وزني سبعين لو ثمانين كيلو')['ambiguous'])
+
     def test_ambiguous_weight_does_not_reuse_the_previous_single_value(self):
         context=sales_context.advance({},[{'direction':'incoming','text':'وزني 80'},
             {'direction':'incoming','text':'وزني 75 لو 80 مو متأكدة'}])
@@ -77,6 +83,20 @@ class WeightColorCheckoutTests(unittest.TestCase):
                          {('ماروني',1,'weight','80'),('رصاصي',1,'weight','80')})
         self.assertEqual(row['product_total'],36000)
         self.process('07701234567');self.assertEqual(self.order_count(),1)
+
+    def test_known_product_weight_answer_advances_when_match_is_loaded_from_memory(self):
+        """The live inbox can resolve the product from memory after call_main_ai starts."""
+        self.save('outgoing','شكد الوزن بالكيلو برقم واحد؟')
+        self.save('outgoing','الدشداشة تلبس من 55 لحد 90 كيلو، يناسب وزنج؟')
+        history=self.m.load_history(self.db,self.sender)
+        ev=dict(self.ev,text='اني سبعين كيلو تقريباً')
+        with patch.object(self.m,'_call_main_ai_once') as model:
+            result=self.m.call_main_ai(
+                ev,'text',{},history,[self.product],None,None,'',[],
+                customer_products=[self.product],conversation_history=history)
+        model.assert_not_called()
+        self.assertNotIn('شكد قياس',result['reply'])
+        self.assertIn('لون',result['reply'])
 
     def test_explicit_different_quantities_are_preserved(self):
         self.save('incoming','وزني 80');self.save('incoming','الماروني والرمادي')

@@ -139,7 +139,8 @@ class SalesContextTests(unittest.TestCase):
         self.assertNotIn('قياس', sales_context.opening_reply('مرحبا', 'قياس'))
 
     def test_tracking_variants_do_not_capture_conditional_purchase(self):
-        for text in ['بلا زحمه شوكت يوصلني الطلب ؟', 'شوكت يوصل طلبي', 'يمته توصل الطلبيه', 'طلبي متى يوصل']:
+        for text in ['بلا زحمه شوكت يوصلني الطلب ؟', 'شوكت يوصل طلبي', 'يمته توصل الطلبيه', 'طلبي متى يوصل',
+                     'سلام عليكم حجزت ٢ بارحه بس بلا زحمه شوكت يوصلن']:
             self.assertTrue(checkout.is_existing_order_followup(text), text)
         for text in ['اذا احجز شوكت يوصل الطلب', 'لو اطلب اليوم متى يوصل الطلب', 'اريد احجز شوكت يوصل الطلب']:
             self.assertFalse(checkout.is_existing_order_followup(text), text)
