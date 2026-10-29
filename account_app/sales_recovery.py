@@ -82,7 +82,17 @@ def simple_photo_request(text):
     clean = re.sub(r'(?:\s+(?:حبيبتي|عيني|حبي|حياتي|بلا زحمة|لو سمحتي))+$', '', clean)
     if explicit_photo_followup(clean):
         return True
-    return bool(re.fullmatch(r'(?:(?:ممكن|اريد)\s+)?(?:اشوف|دزيلي|دزي|دزلي|ارسلي|شوفيني|وريني)\s+(?:الصور|صور|صوره|صورة|صورته|صورتها|صورهم|صورهن)', clean))
+    # Color alternatives describe which pictures to inspect, not purchase
+    # quantities. Mixed factual/booking requests still need the full answer.
+    try:
+        from . import product_variants
+    except ImportError:
+        import product_variants
+    if (product_variants.requested(clean)['colors']
+            and re.search(r'اشوف|شوفيني|وريني|(?:دزي|دزلي|دزيلي|ارسلي|ممكن|اريد).{0,30}صور', clean)
+            and not re.search(r'قماش|خام|بطان|سحاب|طول|عرض|قياس|عمر|سعر|شكد|بكم|توصيل|شحن|دفع|ثبت|احجز|اطلب|اذا|بشرط|حقيقي|المحل|تصوير|ما\s*اريد|لا\s*(?:اريد|تدز|ترسل)',clean)):
+        return True
+    return bool(re.fullmatch(r'(?:(?:ممكن|اريد)\s+)?(?:اشوف|دزيلي|دزي|دزلي|ارسلي|شوفيني|وريني)\s+(?:الصور|صور|صوره|صورة|صورته|صورتها|صورهم|صورهن)(?:\s+(?:كلهن|كلهم|ثنينهن|ثنينهم|الاثنين))?', clean))
 
 
 def claims_sent_models(text):

@@ -8187,17 +8187,59 @@ def offered_product_photo_reply(ev, products, matched, continuation=None):
     offer = '\n'.join(row.get('text') or '' for row in context.get('last_staff_turn') or [])
     offered, offered_ambiguous = (photo_products_named(offer, products)
                                  if not context.get('offer_interrupted') else ([], False))
+    requested_colors = product_variants.requested(text)['colors']
+    if requested_colors and not named and not context.get('offer_interrupted'):
+        # A turn may describe two models then ask for one model's color. The
+        # answer to that last question must not filter both models by its color.
+        question = sales_context.question_from_turn(context.get('last_staff_turn') or [])
+        question_products, question_ambiguous = photo_products_named(question, products)
+        if len(question_products) == 1 and not question_ambiguous:
+            offered, offered_ambiguous = question_products, False
     if named_ambiguous or (not named and offered_ambiguous):
         return None
     selected = selected_related or named or offered or ([matched] if matched and not context.get('offer_interrupted') else [])
     selected = [p for p in selected if _stock_state(p) == 'available' and product_image_urls(p)]
     if not selected:
         return None
+    if requested_colors:
+        if len(selected) != 1:
+            return None  # Resolve each product's color in the full context path.
+        product = selected[0]
+        offered_colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
+        if not offered_colors:
+            return None
+        available = [color for color in requested_colors if color in offered_colors]
+        missing = [color for color in requested_colors if color not in offered_colors]
+        parts = []
+        if missing:
+            parts.append('ال' + ' وال'.join(missing) + ' مو متوفر بهالموديل، المتوفر ال' + ' وال'.join(offered_colors) + '.')
+        if not available:
+            return dict(reply=' '.join(parts), reply_parts=[' '.join(parts)],
+                        create_order=False, order={}, requires_human=False,
+                        _browse_only=True, _local_reply=True, _suppress_product_images=True)
+        exact = all(select_product_image_urls(product, color) for color in available)
+        if exact:
+            parts.append('هاي صور ' + product['product_name'] + ' بال' + ' وال'.join(available) + '، شوفيهن براحتج 🌷')
+        else:
+            parts.append('ما عندي صورة منفصلة مؤكدة لل' + ' وال'.join(available)
+                         + '؛ هاي صور الموديل ' + product['product_name'] + ' حتى تشوفين شكله 🌷')
+        return dict(reply=' '.join(parts), reply_parts=[' '.join(parts)],
+                    image_product_ids=[product['product_id']], image_color=' و'.join(available) if exact else '',
+                    _catalog_model_album=not exact, _local_reply=True, _catalog_fallback=True,
+                    create_order=False, order={}, requires_human=False, _browse_only=True)
     result = {'reply':'تدللين عيني، هاي صور ' + '، '.join(p['product_name'] for p in selected) + ' اللي طلبتيها. شوفيها براحتج 🌷',
               'image_product_ids':[p['product_id'] for p in selected],
               'create_order':False,'order':{},'requires_human':False,
-              '_browse_only':True,'_catalog_fallback':True}
-    return result if requested_reply_images(result, products, matched, text, result['reply']) else None
+              '_browse_only':True,'_catalog_fallback':True,'_local_reply':True}
+    if 1 < len(selected) <= 4 and sum(len(product_image_urls(p)) for p in selected) > 4:
+        # Show every requested model within the notification budget, with an
+        # honest preview caption rather than dropping a model or promising all angles.
+        result.update(reply='هاي صورة لكل موديل: ' + '، '.join(p['product_name'] for p in selected) + '. شوفيهن براحتج 🌷',
+                      _photo_preview_per_product=True)
+    images = requested_reply_images(result, products, matched, text, result['reply'])
+    if result.get('_photo_preview_per_product') and len(images) != len(selected):
+        return None  # Do not promise a preview for a model with no safe current photo.
+    return result if images else None
 
 
 def factual_customer_request(ev, products, matched_product=None, *, customer=None, history=None):
@@ -8258,6 +8300,11 @@ def factual_customer_request(ev, products, matched_product=None, *, customer=Non
 
 def photo_products_named(text, products, product_ids=None):
     """Separate models sharing a name by their offered price/fabric, then ids."""
+    text = sales_strategy.normalized(text)
+    for product in products:
+        name = sales_strategy.normalized(product.get('product_name'))
+        if name:
+            text = re.sub(r'(?<!\w)[بل](?=' + re.escape(name) + r'(?!\w))', '', text)
     groups = {}
     for product in first_message_named_products(text, products):
         groups.setdefault(sales_strategy.normalized(product.get('product_name')), []).append(product)
@@ -8312,7 +8359,14 @@ def requested_reply_images(result, products, matched, text, reply):
                     continue
             except ValueError:
                 continue
-        urls.extend(select_product_image_urls(product, str(result.get("image_color") or "")))
+        color = '' if result.get('_catalog_model_album') and result.get('_local_reply') else str(result.get('image_color') or '')
+        images = select_product_image_urls(product, color)
+        if result.get('_photo_preview_per_product') and result.get('_local_reply'):
+            catalog_colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
+            if not color and len(catalog_colors) == 1:
+                images = select_product_image_urls(product, catalog_colors[0])
+            images = images[:1]
+        urls.extend(images)
     return list(dict.fromkeys(urls))
 
 
@@ -8603,6 +8657,7 @@ def _call_main_ai_with_context(
     if (current_store_id() == baraah.STORE_ID and matched_product and not ev.get('_post_order')
             and not sales_strategy.purchase_block_reason(caption) and not unresolved_condition(history, caption)
             and not context.get('open_details')
+            and not sales_recovery.simple_photo_request(caption)
             and len(customer_products or []) <= 1
             and len({p.get('product_id') for p in positions if p.get('product_found')}) <= 1
             and not any(not p.get('product_found') for p in positions)):
@@ -11872,7 +11927,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     if order_created or ai_result.get("_checkout_proposal") or ai_result.get("_suppress_product_images"):
         send_img = False
     requested_image_color = str(ai_result.get("image_color") or "").strip()
-    if not requested_image_color:
+    if not requested_image_color and not (ai_result.get('_catalog_model_album') and ai_result.get('_local_reply')):
         color_context = " ".join(filter(None, (ev.get("text"), reply)))
         normalized_context = _normalize_color_match_text(color_context)
         for variant in product_image_variants(matched_product):
