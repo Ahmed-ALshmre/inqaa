@@ -63,6 +63,10 @@ def main():
       ('identity-silent','baraah-kids',child,['أنتي روبوت لو موظفة؟'],0),
       ('ambiguous-count','default',weight,['وزني 80','الماروني والرمادي','الماروني قطعتين لو ثلاث مو متأكدة',
         '07701234567 بغداد حي الاختبار'],0),
+      ('garment-size-last','default',weight,['شتنصحيني أنتبه له قبل اختيار الموديل؟',
+        'الماروني والرمادي قطعة من كل لون','07701234567 بغداد حي الاختبار','ثلاث اكسات'],1),
+      ('garment-size-first','default',weight,['شتنصحيني أنتبه له قبل اختيار الموديل؟',
+        'ثبتي دبل اكس ماروني ورمادي قطعة من كل لون','07701234567','بغداد حي الاختبار'],1),
     ]
     observations=[]
     with tempfile.TemporaryDirectory(prefix='live-oct29-',dir=ROOT/'outputs') as temporary:
@@ -130,6 +134,12 @@ def main():
           if case_id=='replace-color':checks['replacement']=len(items)==1 and items[0]['quantity']==2 and items[0]['color']=='ماروني'
           if case_id=='child-age':checks['no_adult_weight']=all('كيلو' not in t['reply'] for t in turns)
           if case_id=='numbered':checks['real_size']=bool(items) and all(i['size']=='44' for i in items)
+          if case_id in {'garment-size-last','garment-size-first'}:
+            expected='3XL' if case_id=='garment-size-last' else 'XXL'
+            checks['garment_labels_without_weight']=len(items)==2 and all(
+                i['size']==expected and i['size_type']=='size' and not i.get('weight') for i in items)
+            checks['no_mandatory_numeric_weight']=all('برقم واحد' not in t['reply'] for t in turns)
+            checks['real_provider_used']=len(gate.calls)>before
           if case_id=='identity-silent':
             reviews=db.execute("SELECT COUNT(*) FROM human_reviews WHERE sender_id=? AND status='pending'",(sender,)).fetchone()[0]
             checks['silent_review']=turns[0]['reply']=='' and bool(turns[0]['meta'].get('customer_requested_human')) and reviews==1 and len(gate.calls)==before

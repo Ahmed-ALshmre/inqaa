@@ -7891,7 +7891,7 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer, accepted,
         delivery_requires_province=settings['baghdad_fee'] != settings['other_fee'])
     if size_step and step in {'شكد قياس تلبسين؟', 'شنو القياس اللي يناسبج؟', 'تحبينه يطلع مضبوط لو واسع؟',
-                              'شكد الوزن بالكيلو برقم واحد؟'}:
+                              'شكد الوزن بالكيلو برقم واحد؟', 'شنو القياس المطلوب؟'}:
         step = size_step
     elif delivered_question and step == 'شكد قياس تلبسين؟':
         step = 'شنو القياس اللي يناسبج؟'
@@ -9173,6 +9173,10 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     pending_terms = unresolved_condition(history, ev.get('text'))
     result = (natural_negotiation_reply(ev, chosen, customer, context, history)
               if not pending_terms or pending_terms['kind'] != 'arrival' else None)
+    if (result is None and has_app_context() and ev.get('sender_id')
+            and checkout_selection_answer(ev.get('text') or '')
+            and recent_checkout_contact_action(get_db(),ev['sender_id'])):
+        result=resume_weight_checkout(get_db(),ev,chosen,customer,customer_products,context,history)
     if result is None:
         result = owner_sales.reply(ev, chosen, customer, context, history,
                                   photo_count=len(product_image_urls(chosen)) if chosen else 0)
@@ -10736,9 +10740,10 @@ def resume_weight_checkout(db, ev, product, customer, customer_products, context
     quantity_answer=(product_variants.quantity_number(latest_text) is not None
                      and len(product_variants.requested(question)['colors'])==1
                      and re.search(r'عدد|كمية|قطع',question))
+    selection_answer=checkout_selection_answer(latest_text) and recent_checkout_contact_action(db,ev['sender_id'])
     if not (contact_fields(text,customer) or is_confirmation(text) or weight_answer is not None
             or product_variants.chosen_colors(text) or color_choices.one_each(text,context)
-            or quantity_answer or checkout_requested(db,ev,{'order':{}})):
+            or quantity_answer or selection_answer or checkout_requested(db,ev,{'order':{}})):
         return None
     historical=False
     if (context or {}).get('open_details'):
@@ -10763,7 +10768,8 @@ def resume_weight_checkout(db, ev, product, customer, customer_products, context
                      _confirmed_color_quantities=candidate['_confirmed_color_quantities'],
                      _historical_details_nonblocking=historical)
     step=sales_playbook.booking_invitation(context,history)
-    fact='هالوزن ضمن المجال المذكور للموديل، والملاءمة تتأكد بالفحص.' if weight_answer is not None else 'اختياراتج محفوظة.'
+    fact=('هالوزن ضمن المجال المذكور للموديل، والملاءمة تتأكد بالفحص.'
+          if weight_answer is not None and plan.get('weight') else 'اختياراتج محفوظة.')
     return local(fact+(' '+step if step else ''),_browse_only=True)
 
 
