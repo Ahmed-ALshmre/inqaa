@@ -64,7 +64,7 @@ class ReviewedLessonTests(unittest.TestCase):
     def test_price_reply_uses_one_relevant_selection_step(self):
         self.assertIn('شكد قياس تلبس', playbook.price_next_step(PRODUCT, {}))
         self.assertIn('العمر المطلوب', playbook.price_next_step(dict(PRODUCT, sizes='من سنة إلى 3 سنوات'), {}))
-        self.assertIn('شكد قياس تلبس', playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}))
+        self.assertIn('الوزن بالكيلو', playbook.price_next_step(dict(PRODUCT, sizes='وزن 70 إلى 130 كيلو'), {}))
 
     def test_customer_size_advances_to_color_but_staff_question_is_not_an_answer(self):
         context = {'evidence': [{'text': '44', 'in_reply_to': 'شنو قياسك؟'}]}

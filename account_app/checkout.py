@@ -325,6 +325,9 @@ def order_line_error(raw_items, catalog):
             return f'حتى نسجل {label} بصورة صحيحة، شكد الوزن بالكيلو برقم واحد؟ النطاق وحده ما يكفي لتسجيل الطلب.'
         if item.get('size_type') == 'weight' and not weight:
             return f'باقي الوزن بالكيلو برقم واحد لـ{label} حتى نكمل تسجيل الطلب.'
+        bounds=product_variants.weight_only_ranges(product)
+        if bounds and weight and not any(low<=float(weight)<=high for low,high in bounds):
+            return f'الوزن المذكور مو ضمن مجال {label}؛ نحتاج نراجع الاختيار قبل التثبيت.'
         for key, field, name in (("color", "colors", "لون"), ("size", "sizes", "قياس")):
             value = str(item.get(key) or "").strip()
             if product.get(field) and (not value or ambiguous_measurement(value)):
