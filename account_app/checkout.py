@@ -28,7 +28,7 @@ PROVINCES = {
     "صلاح الدين": ("صلاح الدين", "تكريت"), "ديالى": ("ديالى",),
 }
 DISTRICT_PROVINCES = {
-    "بغداد": ("الكرادة", "كرادة", "الدورة", "دوره ميكانيك", "ميكانيك الدورة", "المنصور",
+    "بغداد": ("الكرادة", "كرادة", "الدورة", "دوره ميكانيك", "ميكانيك الدورة",
               "الاعظمية", "الكاظمية", "الزعفرانية", "البنوك", "العامرية", "الغزالية",
               "الحارثية", "البياع", "السيدية", "زيونة", "مدينة الصدر", "الشعلة",
               "ابو غريب", "المحمودية", "اليوسفية", "اللطيفية", "المدائن", "النهروان", "التاجي", "الطارمية"),
@@ -360,6 +360,8 @@ def order_line_error(raw_items, catalog):
         if weight and (not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?', weight) or float(weight) <= 0):
             return f'حتى نسجل {label} بصورة صحيحة، شكد الوزن بالكيلو برقم واحد؟ النطاق وحده ما يكفي لتسجيل الطلب.'
         if item.get('size_type') == 'weight' and not weight:
+            if product_variants.owner_adult_labels(product):
+                return f'باقي نحدد قياس {label} بشكل واضح حتى أثبت الطلب.'
             return f'باقي الوزن بالكيلو برقم واحد لـ{label} حتى نكمل تسجيل الطلب.'
         bounds=product_variants.weight_only_ranges(product)
         if bounds and weight and not any(low<=float(weight)<=high for low,high in bounds):

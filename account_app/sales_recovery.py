@@ -78,6 +78,7 @@ def explicit_photo_followup(text):
 
 def simple_photo_request(text):
     clean = normalized(text).strip(' ؟?!.،\n')
+    clean = re.sub(r'^(?:(?:تمام|اوكي|اوك|ماشي|زين|طيب|اي|نعم|عيني|حبيبتي|حبي|عمري)\s+)*(?:بس\s+)?', '', clean).strip(' ،')
     clean = re.sub(r'\s+(?:بدون\s+(?:اي\s*)?حجز|بس\s+للمشاهد[هة]|(?:بس\s+)?ما\s*اريد\s*احجز)$', '', clean).strip(' ،')
     clean = re.sub(r'(?:\s+(?:حبيبتي|عيني|حبي|حياتي|بلا زحمة|لو سمحتي))+$', '', clean)
     if explicit_photo_followup(clean):
@@ -128,7 +129,9 @@ def checkout_reply(answer, notice, question):
 
 def disputed_product_photo(text):
     clean = normalized(text)
-    if re.search(r'(?:اذا|لو|في حال).{0,80}(?:ارجع|يرجع|نرجع|ترجع|مو نفس|ما طابق)', clean):
+    if re.search(r'(?:اذا|لو|في حال).{0,80}(?:ارجع|يرجع|نرجع|ترجع|مو نفس|ما طابق)|'
+                 r'(?:خاف|اخاف).{0,40}(?:تطلع|يطلع|مو نفس|مش نفس)|'
+                 r'(?:افحص|فحص).{0,35}(?:المندوب|استلم|الاستلام|ادفع|الدفع)', clean):
         return False
     return bool(re.search(r'(?:مو نفس|مش نفس).{0,30}(?:الصور|الصوره|الصورة|موديل)|'
                           r'(?:ادزلج|ادزلك|دزيت\w*).{0,55}(?:غير موديل|موديل ثاني)|'

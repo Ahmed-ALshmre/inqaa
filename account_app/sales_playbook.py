@@ -355,6 +355,8 @@ def weight_cart_choices(product, context, customer=None, current_text=''):
     if not ranges:return None
     selected=customer_selection(context,customer)
     size=selected.get('size');weight=selected.get('weight');size_type='weight'
+    if not size and not weight and product_variants.is_free_size_product(product):
+        size='فري سايز'
     if size and not str(size).isdigit():
         if product_variants.order_choice_error(product,'size',str(size)):
             if not weight:return None
@@ -373,10 +375,11 @@ def weight_cart_choices(product, context, customer=None, current_text=''):
     offered=product_variants.colors(customer_copy.fact(product.get('colors'),'colors'))
     chosen=selected['colors'] or ([selected['color']] if selected['color'] else [])
     if not chosen and len(offered)==1:chosen=offered
+    if not chosen and not offered:chosen=['']
     if not chosen:
         return {'question':('تفضلين '+' لو '.join('ال'+c for c in selected['color_options'])+'؟')
                 if selected['color_options'] else 'شنو اللون اللي تختارينه؟'}
-    if any(color not in offered for color in chosen):
+    if offered and any(color not in offered for color in chosen):
         missing=[color for color in chosen if color not in offered]
         return {'question':'ال'+' وال'.join(missing)+' مو متوفر بهالموديل؛ المتوفر ال'+' وال'.join(offered)+'.'}
     counts=quantities_for_colors(context,customer,current_text)
@@ -435,11 +438,20 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
     weight_ranges=product_variants.weight_only_ranges(product)
     if not age_based and weight_ranges and (not selected['size'] or (selected.get('weight') and product_variants.order_choice_error(product,'size',str(selected['size'])))):
         plan=weight_cart_choices(product,context,customer)
-        return (plan.get('question') or booking_invitation(context,history)) if plan else ''
+        q = (plan.get('question') or booking_invitation(context,history)) if plan else ''
+        if q == 'شنو القياس المطلوب؟' and 'شنو القياس المطلوب' in recent:
+            if 'يا قياس تحبين نعتمدلج' in recent:
+                return ''
+            if 'شنو القياس اللي يناسبج' in recent:
+                return 'يا قياس تحبين نعتمدلج؟'
+            return 'شنو القياس اللي يناسبج؟'
+        return q
     if not age_based and not selected['size']:
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
             if not province and delivery_requires_province and 'محافظ' not in recent:
                 return 'من يا محافظة حتى أحسبلج أجور التوصيل؟'
+            if 'يا قياس تحبين نعتمدلج' in recent:
+                return ''
             if 'شنو القياس اللي يناسبج' in recent and 'مضبوط لو واسع' not in recent:
                 return 'يا قياس تحبين نعتمدلج؟'
             return 'شنو القياس اللي يناسبج؟'

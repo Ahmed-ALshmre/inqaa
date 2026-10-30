@@ -8,19 +8,21 @@ except ImportError:
 COLORS = {
     'أسود': ('اسود', 'اسودا', 'black'), 'أبيض': ('ابيض', 'white'),
     'أحمر': ('احمر', 'red'), 'أزرق ملكي': ('ازرق ملكي', 'ملكي'),
-    'أزرق': ('ازرق', 'blue'), 'سماوي': ('سماوي', 'سماي'),
+    'أزرق': ('ازرق', 'blue'), 'سماوي': ('سماوي', 'سماي', 'سمائي'),
     'وردي': ('وردي', 'pink'), 'بيج': ('بيج', 'بيجي', 'beige'),
     'زيتي': ('زيتي', 'زيتوني'), 'بنفسجي': ('بنفسجي', 'purple'),
     'أخضر': ('اخضر', 'اخظر', 'green'), 'جوزي': ('جوزي', 'بني', 'brown'),
     'رصاصي': ('رصاصي', 'رمادي', 'gray', 'grey'), 'نيلي': ('نيلي', 'كحلي', 'navy'),
     'كريمي': ('كريمي', 'كريم', 'cream'), 'ماروني': ('ماروني', 'maroon'),
     'تركوازي': ('تركوازي', 'تركواز', 'turquoise'), 'أصفر': ('اصفر', 'yellow'),
+    'خردلي': ('خردلي', 'mustard'),
     'برتقالي': ('برتقالي', 'orange'), 'ذهبي': ('ذهبي', 'gold'),
     'فضي': ('فضي', 'silver'), 'خمري': ('خمري', 'عنابي'),
 }
 ALIASES = {alias: color for color, aliases in COLORS.items() for alias in aliases}
 COLOR_RE = re.compile(r'(?<!\w)(?:و?ال|و?لل|و?ل|و)?(' + '|'.join(re.escape(x) for x in sorted(ALIASES,key=len,reverse=True)) + r')(?!\w)', re.I)
 SIZE_RE = re.compile(r'(?<!\w)(?:[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',re.I)
+FREE_SIZE_RE = re.compile(r'(?<!\w)(?:فري\s*سايز|free\s*size|قياس\s*موحد|مقاس\s*موحد)(?!\w)', re.I)
 RANGE_RE = re.compile(r'(\d{1,3})\s*(?:كيلو\s*)?(?:الي|[-–—]|لحد)\s*(\d{1,3})')
 
 
@@ -30,13 +32,18 @@ ADULT_LABELS = ('S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL')
 def normalize_size_words(value):
     text = str(value or '')
     for pattern, label in (
-        (r'(?<!\w)(?:اكسين(?:\s+لارج)?|اكس\s+اكس(?:\s+لارج)?|(?:دبل|دوبل|دابل|تو)\s*اكس(?:ات)?(?:\s+لارج)?)(?!\w)', 'XXL'),
-        (r'(?<!\w)ثلاث[ةه]?\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '3XL'),
-        (r'(?<!\w)اربع[ةه]?\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '4XL'),
-        (r'(?<!\w)خمس[ةه]?\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '5XL'),
-        (r'(?<!\w)(?:اكس\s*لارج|اكسترا لارج)(?!\w)', 'XL')):
+        (r'(?<!\w)(?:[2٢]\s*اكس(?:ات)?(?:\s+لارج)?|اكسين(?:\s+لارج)?|اكس\s+اكس(?:\s+لارج)?|(?:دبل|دوبل|دابل|تو)\s*اكس(?:ات)?(?:\s+لارج)?)(?!\w)', 'XXL'),
+        (r'(?<!\w)(?:[3٣]|ثلاث[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '3XL'),
+        (r'(?<!\w)(?:[4٤]|اربع[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '4XL'),
+        (r'(?<!\w)(?:[5٥]|خمس[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '5XL'),
+        (r'(?<!\w)(?:[6٦]|ست[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '6XL'),
+        (r'(?<!\w)(?:[1١]\s*اكس(?:\s+لارج)?|اكس\s*لارج|اكسترا لارج)(?!\w)', 'XL')):
         text = re.sub(pattern, label, text, flags=re.I)
     return text
+
+
+def is_free_size_product(product):
+    return bool(FREE_SIZE_RE.search(normalized((product or {}).get('sizes'))))
 
 
 def owner_adult_labels(product):
@@ -360,6 +367,8 @@ def requested(question):
     sizes=list(dict.fromkeys(m[1].upper() for m in re.finditer(
         r'(?:قياس(?:ه|ها)?|مقاس(?:ه|ها)?|سايز)\s*(\d{1,3}|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',text)))
     sizes = list(dict.fromkeys(sizes + [m[0].upper() for m in SIZE_RE.finditer(text)]))
+    if FREE_SIZE_RE.search(text) and 'فري سايز' not in sizes:
+        sizes.append('فري سايز')
     choices=[]
     for match in COLOR_RE.finditer(text):
         before=text[max(0,match.start()-22):match.start()]
@@ -400,7 +409,9 @@ def assess(product,question):
         supported=None
         age_based = bool(data['years'] and not data['known'])
         numeric_known = bool(data['ranges'] or data['numbers'])
-        if (numeric_known if size.isdigit() else bool(data['labels'])):
+        if size == 'فري سايز' and is_free_size_product(product):
+            supported = True
+        elif (numeric_known if size.isdigit() else bool(data['labels'])):
             supported=(int(size) in data['numbers'] or any(lo<=int(size)<=hi for lo,hi in data['ranges'])) if size.isdigit() else size in data['labels']
         elif age_based:
             value = float(size) if re.fullmatch(r'\d+(?:\.\d+)?', size) else None
@@ -455,6 +466,8 @@ def order_choice_error(product,field,value):
             return 'اللون '+str(value)+' مو موجود بهالموديل، المتوفر '+ '، '.join(offered)
     else:
         data=size_data(customer_copy.fact(product.get('sizes'),'sizes'))
+        if FREE_SIZE_RE.fullmatch(text) and is_free_size_product(product):
+            return ''
         if data['years'] and not data['known']:
             age = child_age(value)
             if age is None:

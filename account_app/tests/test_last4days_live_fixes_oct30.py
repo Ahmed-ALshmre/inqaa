@@ -9,6 +9,7 @@ from account_app import (
     product_links,
     sales_context,
     sales_playbook,
+    sales_recovery,
     sales_strategy,
 )
 from account_app.tests import test_stale_detail_checkout_oct28 as fixtures
@@ -342,3 +343,190 @@ class Last4DaysPipelineTests(unittest.TestCase):
         result, model = self.process("أي نعم")
         model.assert_not_called()
         self.assertIn("سوت ملكي بديل", result["reply"])
+
+    def test_unknown_model_opening_message_is_friendly_photo_prompt(self):
+        """User requirement: اول رساله تكون اذا لم يعرف الموديل تكون ودوده : حبيبتي ممكن صورة للموديل لي رايدته ؟"""
+        self.assertEqual(
+            self.m.DEFAULT_FIRST_MESSAGE_REPLY,
+            "حبيبتي ممكن صورة للموديل لي رايدته ؟",
+        )
+        self.assertEqual(
+            sales_context.opening_reply("مرحبا", self.m.DEFAULT_FIRST_MESSAGE_REPLY),
+            "حبيبتي ممكن صورة للموديل لي رايدته ؟",
+        )
+        reply, _ = self.m.generate_first_message_reply(
+            self.db, {"sender_id": self.sender, "text": "مرحبا"}, [], "", []
+        )
+        self.assertEqual(reply, "حبيبتي ممكن صورة للموديل لي رايدته ؟")
+        surfaced = owner_sales.surface(reply, "female", "مرحبا", store_id="default")
+        self.assertEqual(surfaced, "حبيبتي ممكن صورة للموديل لي رايدته ؟")
+
+    def test_f1_numeric_arabic_size_3x_books_with_full_catalog(self):
+        """F1 (real-numeric-arabic-label): 'اريد 3اكس ماروني قطعة وحدة' parses 3اكس as 3XL and books."""
+        self.product.update(
+            product_name="دشداشة قديفة تطريز",
+            category="دشداشة نسائية",
+            colors="ماروني رمادي",
+            sizes="من 55 كيلو الى 90",
+            price="18000",
+            stock="متوفر",
+            status="active",
+        )
+        other = dict(
+            self.product,
+            product_id="OTHER_1",
+            product_name="موديل ثاني ماروني",
+            colors="ماروني اسود",
+        )
+        for name in ("load_products_from_file", "load_active_products"):
+            p = patch.object(self.m, name, return_value=[self.product, other])
+            p.start()
+            self.patches.append(p)
+        self.m.bind_customer_to_product(self.db, self.sender, self.product, source="image_recognition")
+        r1, m1 = self.process("اريد 3اكس ماروني قطعة وحدة")
+        m1.assert_not_called()
+        self.assertNotIn("شنو القياس", r1["reply"])
+        self.assertIn("رقم الموبايل", r1["reply"])
+        r2, m2 = self.process("07701234567")
+        m2.assert_not_called()
+        r3, m3 = self.process("بغداد حي التجربة قرب مدرسة الاختبار")
+        m3.assert_not_called()
+        self.assert_confirmation(r3)
+        self.assertEqual(self.order_count(), 1)
+        items = json.loads(self.db.execute("SELECT order_items FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0])
+        self.assertEqual(items[0]["size"], "3XL")
+
+    def test_f2_mustard_color_books_with_full_catalog(self):
+        """F2 (declared-mustard-color): 'خردلي' is recognized in product_variants.COLORS and books."""
+        self.product.update(
+            product_name="فستان خردلي شتوي",
+            category="فستان نسائي",
+            colors="خردلي اسود ماروني",
+            sizes="من 55 كيلو الى 90",
+            price="25000",
+            stock="متوفر",
+            status="active",
+        )
+        self.m.bind_customer_to_product(self.db, self.sender, self.product, source="image_recognition")
+        r1, m1 = self.process("ثبتي خردلي ثلاث اكسات قطعة وحدة 07701234567 بغداد حي التجربة قرب مدرسة الاختبار")
+        m1.assert_not_called()
+        self.assert_confirmation(r1)
+        self.assertEqual(self.order_count(), 1)
+        items = json.loads(self.db.execute("SELECT order_items FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0])
+        self.assertEqual(items[0]["color"], "خردلي")
+        self.assertEqual(items[0]["size"], "3XL")
+
+    def test_f3_saved_album_reference_resolves_second_product_for_photo_followup(self):
+        """F3 (saved_album_reference): 'شكد سعر الاول والثاني؟' -> 'الثاني قماشه شنو؟' -> 'تمام بس دزيلي صورته بدون حجز'."""
+        p1 = dict(
+            self.product,
+            product_id="ALB_1",
+            product_name="سوت اول",
+            fabric="كريب",
+            image_url="https://example.com/alb1.jpg",
+            _has_image_positions=True,
+            image_positions=[1],
+        )
+        p2 = dict(
+            self.product,
+            product_id="ALB_2",
+            product_name="سوت ثاني",
+            fabric="باربي",
+            image_url="https://example.com/alb2.jpg",
+            _has_image_positions=True,
+            image_positions=[2],
+        )
+        # Multi-ordinal question must not lock onto the first product
+        self.assertIsNone(self.m.select_customer_context_product("شكد سعر الاول والثاني؟", [p1, p2]))
+        # Single-ordinal follow-up selects the second product
+        self.assertEqual(
+            self.m.select_customer_context_product("الثاني قماشه شنو؟", [p1, p2])["product_id"],
+            "ALB_2",
+        )
+        # Pronoun photo follow-up resolves to the second product from history and passes simple_photo_request
+        self.assertTrue(sales_recovery.simple_photo_request("تمام بس دزيلي صورته بدون حجز"))
+        history = [
+            {"direction": "incoming", "text": "شكد سعر الاول والثاني؟"},
+            {"direction": "outgoing", "text": "الأول بـ18 ألف والثاني بـ20 ألف."},
+            {"direction": "incoming", "text": "الثاني قماشه شنو؟"},
+            {"direction": "outgoing", "text": "قماشه باربي."},
+        ]
+        resolved = self.m.select_customer_context_product_from_history([p1, p2], history=history)
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved["product_id"], "ALB_2")
+
+    def test_f4_label_last_two_colors_asks_for_garment_size_not_numeric_weight(self):
+        """F4 (label-last-two-colors): choosing 2 colors + contact before size asks for garment size, not 'برقم واحد'."""
+        self.product.update(
+            product_name="دشداشة قديفة تطريز",
+            category="دشداشة نسائية",
+            colors="ماروني رمادي",
+            sizes="من 55 كيلو الى 90",
+            price="18000",
+            stock="متوفر",
+            status="active",
+        )
+        other = dict(
+            self.product,
+            product_id="OTHER_2",
+            product_name="دشداشة ثانية",
+            colors="ماروني اسود",
+        )
+        for name in ("load_products_from_file", "load_active_products"):
+            p = patch.object(self.m, name, return_value=[self.product, other])
+            p.start()
+            self.patches.append(p)
+        self.m.bind_customer_to_product(self.db, self.sender, self.product, source="image_recognition")
+        r1, m1 = self.process("الماروني والرمادي قطعة من كل لون")
+        m1.assert_not_called()
+        self.assertIn("شنو القياس المطلوب؟", r1["reply"])
+        self.assertNotIn("برقم واحد", r1["reply"])
+        r2, m2 = self.process("07701234567 بغداد حي التجربة قرب مدرسة الاختبار")
+        m2.assert_not_called()
+        self.assertIn("قياس", r2["reply"])
+        self.assertNotIn("برقم واحد", r2["reply"])
+        r3, m3 = self.process("ثلاث اكسات")
+        m3.assert_not_called()
+        self.assert_confirmation(r3)
+        self.assertEqual(self.order_count(), 1)
+
+    def test_f5_pre_purchase_inspection_fear_is_not_disputed_product_photo(self):
+        """F5 (adaptive-trust-and-hesitation): 'خاف تطلع مو نفس الصورة؟ اكو مجال افحص...' answers policy instead of handoff."""
+        text = "بس عيني خاف تطلع مو نفس الصورة؟ اكو مجال افحص القطعة يم المندوب قبل لا استلم؟"
+        self.assertFalse(sales_recovery.disputed_product_photo(text))
+
+    def test_f6_free_size_whole_pack_books_cleanly(self):
+        """F6 (free-size-whole-pack): 'اريد احجز بكج البرنص كامل فري سايز على العرض اللي عندكم' books without false width handoff."""
+        self.product.update(
+            product_name="بكج برنص",
+            category="برنص",
+            colors="",
+            sizes="فري سايز من 50 كيلو لحد 120 كيلو",
+            price="65000",
+            offer="عرض خاص الكمية محدودة",
+            stock="متوفر",
+            status="active",
+        )
+        self.m.bind_customer_to_product(self.db, self.sender, self.product, source="image_recognition")
+        r1, m1 = self.process("اريد احجز بكج البرنص كامل فري سايز على العرض اللي عندكم")
+        m1.assert_not_called()
+        self.assertIn("رقم الموبايل", r1["reply"])
+        r2, m2 = self.process("07701234567")
+        m2.assert_not_called()
+        r3, m3 = self.process("بغداد حي التجربة قرب مدرسة الاختبار")
+        m3.assert_not_called()
+        self.assert_confirmation(r3)
+        self.assertEqual(self.order_count(), 1)
+        items = json.loads(self.db.execute("SELECT order_items FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0])
+        self.assertEqual(items[0]["size"], "فري سايز")
+
+    def test_f7_long_compound_question_splits_into_two_bubbles_and_f9_strips_unverified_reality_claim(self):
+        """F7 & F9: compound product+policy questions split into 2 bubbles; unverified reality claims are stripped."""
+        question = "شنو القماش والسعر والالوان والقياسات والتوصيل لبغداد وشلون الدفع واكدر افحص قبل ما ادفع؟"
+        recovered = self.m.recover_factual_sales_reply({"text": question, "sender_id": self.sender}, self.product)
+        self.assertIsNotNone(recovered)
+        self.assertFalse(recovered["_single_message"])
+        self.assertEqual(len(recovered["reply_parts"]), 2)
+        cleaned = owner_sales.conversational_wording("هاي صور الموديل المتوفرة، وهو نفسه بالضبط بالواقع.")
+        self.assertNotIn("نفسه بالضبط بالواقع", cleaned)
+

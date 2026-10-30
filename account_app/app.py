@@ -479,7 +479,7 @@ DEFAULT_FIRST_MESSAGE_RULES_PROMPT = """قواعد صارمة:
 6) اسأل فقط عن صورة الموديل أو القياس أو اطلب الصورة. ممنوع منعاً باتاً السؤال عن سياق الموديل.
 7) إذا الزبون ذكر سياق الموديل من نفسه، استخدمه طبيعياً.
 8) ممنوع الأدعية أو المجاملات الزائدة (تسلمين، فدوة لعمرج، يرزقج، تدللين بأي وقت...). كلمة ودّ واحدة خفيفة فقط (تأمرين/من عيوني/تفضّل) ضمن نفس الجملة.
-9) اختم بسؤال قصير واحد يحفّز الزبون للرد (مثلاً: شنو القياس؟ أو دزّيلي صورة الموديل).
+9) اختم بسؤال قصير واحد يحفّز الزبون للرد (إذا لم يُعرف الموديل قل بودّ: حبيبتي ممكن صورة للموديل لي رايدته ؟).
 
 سياق الموديل أو القطعة المستنتج من رسالة الزبون: {detected_context} (لا تسأل عنه، فقط استخدمه في الصياغة لو كان معروفاً)."""
 DEFAULT_FIRST_MESSAGE_OUTPUT_PROMPT = """أجب بـ JSON فقط بدون أي نص آخر:
@@ -574,7 +574,7 @@ DEFAULT_VISION_PRODUCT_ID_PROMPT = """أنت خبير تطابق صور منتج
 إذا صورة الزبون ليست نفس المنتج تماماً أو تشبهه فقط، أجب NONE.
 لا تشرح ولا ترجع JSON. أجب بسطر واحد فقط: product_id أو NONE."""
 DEFAULT_PENDING_IMAGE_REPLY = ""
-DEFAULT_FIRST_MESSAGE_REPLY = "يا هلا بيج عيني 🌸 دزيلي صورة الموديل أو القياس حتى أتأكدلج."
+DEFAULT_FIRST_MESSAGE_REPLY = "حبيبتي ممكن صورة للموديل لي رايدته ؟"
 DEFAULT_PRODUCT_LINK_INSTRUCTION = """تم ربط الصورة/المحادثة الآن بهذا المنتج من قبل الإدارة.
 راجع سجل المحادثة بالكامل واستخرج آخر سؤال أو طلب واضح من الزبون قبل الرد.
 يجب أن يكون الرد جواباً مباشراً على سؤال الزبون بالتحديد، وليس وصفاً عاماً للمنتج.
@@ -3144,7 +3144,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
 
     opening = sales_strategy.normalized(customer_text).strip(' ؟?!.،🌸')
     if re.fullmatch(r'(?:هلو|مرحبا|السلام عليكم|سلام عليكم|الو)', opening):
-        return 'هلا ومرحبا 🌸 شنو حاب تشوف من الموديلات؟', customer_gender or 'unknown'
+        return 'حبيبتي ممكن صورة للموديل لي رايدته ؟', customer_gender or 'unknown'
 
     if not OPENROUTER_KEY:
         return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), customer_gender or 'unknown'
@@ -5268,7 +5268,10 @@ _GENERIC_PRODUCT_TERMS = {"ملابس", "موديل", "موديلات", "منت�
 
 _COLOR_TERMS = {
     "اسود", "أسود", "ابيض", "أبيض", "احمر", "أحمر", "ازرق", "أزرق",
-    "وردي", "بنفسجي", "اصفر", "أصفر", "رصاصي", "كحلي", "اخضر", "أخضر",
+    "وردي", "بنفسجي", "اصفر", "أصفر", "رصاصي", "رمادي", "كحلي", "نيلي",
+    "اخضر", "أخضر", "ماروني", "خردلي", "بيج", "بيجي", "زيتي", "زيتوني",
+    "جوزي", "بني", "كريمي", "تركوازي", "تركواز", "برتقالي", "ذهبي", "فضي",
+    "خمري", "عنابي", "سماوي", "سماي", "سمائي",
 }
 
 _PRODUCT_SEARCH_WORDS = {
@@ -5520,14 +5523,20 @@ def select_customer_context_product(text, customer_products):
     ordered = _customer_products_display_order(customer_products)
     words = _context_product_words(text)
     feminine = {1: 'الأولى', 2: 'الثانية', 3: 'الثالثة', 4: 'الرابعة', 5: 'الخامسة'}
+    matched_ordinals = []
     for index, aliases in _ORDINAL_WORDS.items():
         ordinal_aliases = _context_product_words(' '.join(
             [alias for alias in aliases if alias.startswith("ال")] + [feminine[index]]))
         if ordinal_aliases & words:
-            if any(p.get('_has_image_positions') for p in ordered):
-                return next((p for p in ordered if index in p.get('image_positions', [])), None)
-            if len(ordered) >= index:
-                return ordered[index - 1]
+            matched_ordinals.append(index)
+    if len(matched_ordinals) == 1:
+        index = matched_ordinals[0]
+        if any(p.get('_has_image_positions') for p in ordered):
+            return next((p for p in ordered if index in p.get('image_positions', [])), None)
+        if len(ordered) >= index:
+            return ordered[index - 1]
+    elif len(matched_ordinals) > 1:
+        return None
 
     explicit = _text_match_product(text or "", ordered)
     if explicit:
@@ -5558,6 +5567,24 @@ def select_customer_context_product(text, customer_products):
         if len(matches) == 1:
             return matches[0]["product"]
     return ordered[0] if len(ordered) == 1 else None
+
+
+def select_customer_context_product_from_history(customer_products, history=None, context=None):
+    """Resolve singular pronoun follow-ups ('صورته', 'قماشه') to the last single product selected in history."""
+    if not customer_products or len(customer_products) <= 1:
+        return None
+    candidates = []
+    for item in reversed(list(history or [])):
+        if isinstance(item, dict) and (item.get("direction") == "incoming" or item.get("role") == "user"):
+            candidates.append(str(item.get("text") or item.get("content") or ""))
+    for item in reversed(list((context or {}).get("evidence") or [])):
+        if isinstance(item, dict) and item.get("text"):
+            candidates.append(str(item.get("text") or ""))
+    for past_text in candidates:
+        chosen = select_customer_context_product(past_text, customer_products)
+        if chosen:
+            return chosen
+    return None
 
 
 def is_product_detail_followup(text):
@@ -8211,6 +8238,12 @@ def offered_product_photo_reply(ev, products, matched, continuation=None):
             offered, offered_ambiguous = question_products, False
     if named_ambiguous or (not named and offered_ambiguous):
         return None
+    if not selected_related and not named and not offered and not matched and ev.get('sender_id') and has_app_context():
+        remembered = load_customer_products(get_db(), ev['sender_id'])
+        chosen = (select_customer_context_product(text, remembered)
+                  or select_customer_context_product_from_history(remembered, context=context))
+        if chosen:
+            matched = next((p for p in products if p.get('product_id') == chosen.get('product_id')), chosen)
     selected = selected_related or named or offered or ([matched] if matched and not context.get('offer_interrupted') else [])
     selected = [p for p in selected if _stock_state(p) == 'available' and product_image_urls(p)]
     if not selected:
@@ -8431,10 +8464,22 @@ def recover_factual_sales_reply(ev, product, *, extra='', order=None):
     if parts and name and not customer_copy.has_instructions(name) and len(name) < 80:
         parts[0] = name + '، ' + parts[0]
     has_policy = bool(set(selected) & {'delivery', 'payment', 'inspection', 'delivery_time'})
+    has_product_details = bool(set(selected) & {'fabric', 'colors', 'sizes', 'specifications', 'composition'})
     if has_policy and not gaps and not extra and not re.search(r'[؟?]', ' '.join(parts)):
         step = policy_next_question(ev, product)
         if step:
             parts.append(step)
+    if has_policy and has_product_details and len(parts) >= 2:
+        policy_idx = next((i for i, p in enumerate(parts) if i > 0 and re.search(r'توصيل|شحن|دفع|فحص|المجموع', p)), None)
+        if policy_idx:
+            bubble1 = '\n'.join(parts[:policy_idx]).strip()
+            bubble2 = delivery_copy.compact_repetition(delivery_copy.join_policy(parts[policy_idx:])).strip()
+            if bubble1 and bubble2:
+                reply = f"{bubble1}\n\n{bubble2}"
+                return {'reply': reply, 'reply_parts': [bubble1, bubble2], '_single_message': False,
+                        '_semantic_parts': True, 'create_order': False, 'requires_human': False,
+                        'order': order or {}, '_local_reply': True, '_factual_recovery': True,
+                        '_needs_fact_review': bool(gaps), '_suppress_product_images': True}
     reply = delivery_copy.compact_repetition(delivery_copy.join_policy(parts) if has_policy else '\n'.join(parts))
     return {'reply': reply, 'reply_parts': [reply], '_single_message': bool(set(selected) & {'delivery', 'payment', 'inspection', 'delivery_time'}),
             'create_order': False, 'requires_human': False,
@@ -8645,7 +8690,8 @@ def _call_main_ai_with_context(
             and not ev.get('image_url') and not ev.get('_image_matches')
             and not is_product_objection(ev.get('text'))):
         focus = (customer_product_target(ev.get('text', ''), products)
-                 or select_customer_context_product(ev.get('text', ''), customer_products))
+                 or select_customer_context_product(ev.get('text', ''), customer_products)
+                 or select_customer_context_product_from_history(customer_products, history=history, context=context))
         if focus:
             matched_product = next((p for p in products if p.get('product_id') == focus.get('product_id')), None)
     if matched_product:
@@ -9256,7 +9302,7 @@ def _call_main_ai_once(
 
     if image_result and image_result.get("waiting_for_image"):
         return {
-            "reply": "حبيبتي دزيلي صورة الموديل حتى أتأكدلج إذا متوفر عدنا 🌸",
+            "reply": "حبيبتي ممكن صورة للموديل لي رايدته ؟",
             "intent": "image_check",
             "create_order": False,
             "order": {},
@@ -10621,6 +10667,10 @@ def checkout_requested(db, ev, result):
         return True
     if re.search(r"(?:ثبتي|ثبتلي|ثبتوا|احجزي|احجزلي|اريد\s+(?:احجز|اطلب|اشتري|هذا|هاي|هذ[ايولهني]*)|(?:اخذ|اخذه|اخذها|اخذهم|اخذهن)(?:\s|$))", clean) and not re.search(r"(?:لا|مو|ما)\s*(?:ثبتي|ثبتلي|احجزي|احجزلي|اريد|اخذ)", clean):
         return True
+    if (re.search(r"(?<!\w)اريد\b", clean)
+            and bool(product_variants.color_quantities(text))
+            and not re.search(r"[؟?]|(?<!\w)(?:لا|مو|ما|لو|او)(?!\w)", clean)):
+        return True
     if not result.get("order"):
         return False
     customer = db.execute('SELECT phone,province,address FROM customers WHERE sender_id=?',
@@ -10787,7 +10837,7 @@ def resume_weight_checkout(db, ev, product, customer, customer_products, context
                   and images[0].get('product_id')==product['product_id']
                   and images[0].get('image_url')==ev.get('image_url'))
     if (ev.get('image_url') or images) and not linked_photo:return None
-    if db.execute('SELECT COUNT(DISTINCT product_id) FROM customer_product_interests WHERE sender_id=?',
+    if db.execute("SELECT COUNT(DISTINCT product_id) FROM customer_product_interests WHERE sender_id=? AND COALESCE(status,'active')!='suggested'",
                   (ev['sender_id'],)).fetchone()[0]!=1:return None
     linked={p.get('product_id') for p in load_customer_products(db,ev['sender_id'])}
     if product['product_id'] not in linked:return None
@@ -10801,7 +10851,7 @@ def resume_weight_checkout(db, ev, product, customer, customer_products, context
     if ((blocked and not (blocked=='undecided' and quantity_clarification)) or unresolved_purchase_terms(text)
             or unresolved_condition(history,text)):
         return None
-    if re.search(r'صور|اشوف|فيديو|قماش|بطان|سحاب|مطاط|طول|عرض|سعر|شكد سعر|توصيل|شحن|دفع|افحص',clean):
+    if re.search(r'صور|اشوف|فيديو|قماش|بطان|سحاب|مطاط|طول|عرض(?:ه|ها)|(?<!\w)(?<!على\s)(?<!علي\s)(?<!حسب\s)(?<!ضمن\s)(?<!هذا\s)(?<!بهذا\s)و?العرض(?!\s*(?:اللي|الي|الخاص|الحالي|مال|عدكم|عندكم|الموجود))(?!\w)|عرض\s+(?:القطعة|الصدر)|سعر|شكد سعر|توصيل|شحن|دفع|افحص',clean):
         return None
     if any(p.get('product_id')!=product['product_id'] for p in first_message_named_products(text,load_active_products(db))):
         return None
@@ -10871,7 +10921,7 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
     if not candidate['order']:
         if not product or len(customer_products or []) != 1 or pending_product_choice(db, ev['sender_id']):
             return None
-        prior_products = db.execute('SELECT COUNT(DISTINCT product_id) FROM customer_product_interests WHERE sender_id=?',
+        prior_products = db.execute("SELECT COUNT(DISTINCT product_id) FROM customer_product_interests WHERE sender_id=? AND COALESCE(status,'active')!='suggested'",
                                     (ev['sender_id'],)).fetchone()[0]
         if prior_products != 1:
             return None  # Unscoped older size evidence cannot select a different product.
@@ -11504,7 +11554,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         skip_search_for_current_context = bool(
             customer_products and (_is_contextual_product_question(ev.get("text", "")) or
                 (is_product_detail_followup(ev.get("text", "")) and select_customer_context_product(ev.get("text", ""), customer_products))
-                or photo_fit_followup)
+                or photo_fit_followup
+                or (not asks_for_another_model and not sales_context.browse_request(text) and not request_info.get("product_terms")))
         )
         if request_info.get("is_search") and not skip_search_for_current_context and matches:
             remember_product_search_results(db, ev["sender_id"], matches, request_info)
@@ -11730,7 +11781,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                                       preserve_existing=(image_selection_intent(ev.get("text")) != "replace" and (match_method == "customer_memory" or matched_product.get("product_id") in {p.get("product_id") for p in customer_products} or image_selection_intent(ev.get("text")) == "add")))
         customer_products = load_customer_products(db, ev["sender_id"])
     elif customer_products and not (image_result or {}).get("waiting_for_image"):
-        matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
+        matched_product = (select_customer_context_product(ev.get("text", ""), customer_products)
+                           or select_customer_context_product_from_history(customer_products, history=conversation_history))
         match_method = "customer_memory"
     log(8, "CUSTOMER PRODUCTS", f"Remembered customer products count = {len(customer_products)}", [
         {
@@ -11750,7 +11802,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # إذا طلب الزبون صورة/تفاصيل، ربط المنتج من الذاكرة إن لم يكن محدداً
     _image_requested = _is_product_info_request(ev.get("text", ""))
     if not matched_product and _image_requested and customer_products:
-        matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
+        matched_product = (select_customer_context_product(ev.get("text", ""), customer_products)
+                           or select_customer_context_product_from_history(customer_products, history=conversation_history))
         log(10, "PRODUCT INFO", "Using remembered product for image/details request", {
             "product_id": (matched_product or {}).get("product_id"),
         })
@@ -11761,7 +11814,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         and customer_products
         and _is_contextual_product_question(ev.get("text", ""))
     ):
-        matched_product = select_customer_context_product(ev.get("text", ""), customer_products)
+        matched_product = (select_customer_context_product(ev.get("text", ""), customer_products)
+                           or select_customer_context_product_from_history(customer_products, history=conversation_history))
         log(10, "PRODUCT CONTEXT", "Using remembered product for contextual question", {
             "product_id": (matched_product or {}).get("product_id"),
             "text": ev.get("text"),

@@ -166,6 +166,8 @@ def surface(text, gender='', seed='', *, warm=True, store_id='', allow_endearmen
     text = str(text or '').strip()
     if not text or re.match(r'^تم\s+(?:تثبيت|تسجيل|حجز|تأكيد|تاكيد)', text):
         return text
+    if text == 'حبيبتي ممكن صورة للموديل لي رايدته ؟':
+        return 'ممكن صورة للموديل اللي رايده؟' if gender == 'male' else text
     text = FIT_QUESTION.sub('', text).strip()
     if not allow_endearments:
         text=AFFECTION.sub('',text).strip(' ،,')
@@ -278,6 +280,8 @@ def next_step(product, context, customer, history=()):
     if not years and weight_ranges and (not known['size'] or (known.get('weight') and product_variants.order_choice_error(product, 'size', str(known['size'])))):
         plan = weight_cart_choices(product, context, customer)
         if plan and plan.get('question'):
+            if plan['question'] == 'شنو القياس المطلوب؟' and 'شنو القياس المطلوب' in recent:
+                return 'شنو القياس اللي يناسبج؟'
             return plan['question']
     elif not years and not known['size']:
         if 'شكد قياس تلبسين' in recent:
@@ -322,6 +326,7 @@ def delivery_wording(reply, question):
 def conversational_wording(reply):
     """Remove policy-label filler; retain the actual fee, inspection or condition."""
     reply=re.sub(r'((?:التوصيل|الشحن)\s+)بالعالم\s+العادي(?!\w)',r'\1بالوضع العادي',reply)
+    reply=re.sub(r'[،,]?\s*(?:و)?(?:هو|هي)\s+نفس(?:ه|ها)\s+بالضبط\s+بالواقع', '', reply)
     return re.sub(r'(?:حسب|وفق|ضمن|بموجب)\s+(?:سياس[ةه]|شروط)\s+(?:المتجر|المحل|الصفحة)(?:\s+المعتمدة)?[،,]?\s*',
                   '', reply).strip()
 
