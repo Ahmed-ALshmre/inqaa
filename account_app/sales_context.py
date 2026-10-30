@@ -204,7 +204,7 @@ def continuation(text, state):
     if state.get('offer_interrupted'):
         return None
     clean = normalized(text).strip(' .!،؟?\n')
-    short = bool(re.fullmatch(r'(?:اي+|ي+|نعم|تمام|اوكي|دزيلي|دزي|دزو|دزوا|دزيهن|دزهن|دزهم|ارسلي|ارسلهم|شوفينياهن|اشوفهن|اشوف)(?:\s+(?:حبيبتي|عيني|حبي|حياتي|عمري|صورهم|الصور))*', clean))
+    short = bool(re.fullmatch(r'(?:👍|(?:اي+|ي+|ايوه|نعم|تمام|اوكي|اوك|ماشي|عادي|يا\s*ريت|ياريت|دزيلي|دزي|دزو|دزوا|دزيهن|دزهن|دزهم|ارسلي|ارسلهم|شوفينياهن|شوفيني|اشوفهن|اشوف|اقترحي|اقترحيلي)(?:\s+(?:اي+|ي+|نعم|تمام|اوكي|اوك|ماشي|عادي|والله|اكيد|يا\s*ريت|ياريت|فدوه|فدوة|بلا\s*زحمه|بلا\s*زحمة|دزيلي|دزي|ارسلي|اشوف|شوفيني|حبيبتي|عيني|حبي|حياتي|عمري|صورهم|الصور|غيره|غيرها))*)', clean))
     if not short:
         return None
     turn = state.get('last_staff_turn') or []
@@ -213,7 +213,7 @@ def continuation(text, state):
     # Resolve the last explicit question, not an earlier question in the turn.
     question = question_from_turn(turn)
     q = normalized(question)
-    if re.search(r'صور|تشوف|اشوف|ادزل|موديل ثاني|موديلات ثاني|بديل|اقترح', q):
+    if re.search(r'صور|تشوف|اشوف|ادزل|موديل ثاني|موديلات ثاني|موديل مشابه|بديل|اقترح|غيره|غيرهن', q):
         intent = 'clarify' if re.search(r'احجز|اثبت|نثبت|حجز', q) else 'browse'
         return {'intent': intent, 'offer': '\n'.join(x['text'] for x in turn),
                 'question': question}

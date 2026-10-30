@@ -275,8 +275,12 @@ def customer_selection(context, customer=None):
                 selected['color'] = chosen_colors[0]
             continue
         labels = product_variants.requested(text)['sizes']
-        if labels and not any(size.isdigit() for size in labels) and not re.search(r'(?<!\w)(?:لو|او|مو)(?!\w)|ما اريد', text):
-            selected['size'] = labels[-1]
+        letter_labels = [s for s in labels if not s.isdigit()]
+        digit_labels = [s for s in labels if s.isdigit()]
+        numbers = re.findall(r'(?<!\d)\d{2}(?!\d)', text)
+        if letter_labels and ((not digit_labels and not re.search(r'(?<!\w)(?:لو|او|مو)(?!\w)|ما اريد', text))
+                              or (len(letter_labels) == 1 and len(numbers) == 1 and not re.search(r'(?<!\w)مو(?!\w)|ما اريد', text))):
+            selected['size'] = letter_labels[-1]
             chosen_colors = product_variants.chosen_colors(text)
             if chosen_colors:
                 selected['colors'] = chosen_colors
@@ -352,13 +356,18 @@ def weight_cart_choices(product, context, customer=None, current_text=''):
     selected=customer_selection(context,customer)
     size=selected.get('size');weight=selected.get('weight');size_type='weight'
     if size and not str(size).isdigit():
-        if product_variants.order_choice_error(product,'size',str(size)):return None
-        size_type='size';weight=None  # A chosen garment label never requires a body weight.
-    else:
-        if size and not any(lo<=float(size)<=hi for lo,hi in ranges):return None
+        if product_variants.order_choice_error(product,'size',str(size)):
+            if not weight:return None
+        elif weight and (not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?',str(weight)) or not any(lo<=float(weight)<=hi for lo,hi in ranges)):
+            return {'question':'الوزن اللي ذكرتيه مو ضمن مجال هالموديل، ما أگدر أضمن ملاءمته.'}
+        else:
+            size_type='size';weight=None  # A chosen garment label never requires a body weight.
+    if size_type == 'weight':
+        if size and not weight and (not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?',str(size))
+                                    or not any(lo<=float(size)<=hi for lo,hi in ranges)):return None
         weight=weight or (str(size) if size else None)
         if not weight:return {'question':'شنو القياس المطلوب؟'}
-        if not any(lo<=float(weight)<=hi for lo,hi in ranges):
+        if not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?',str(weight)) or not any(lo<=float(weight)<=hi for lo,hi in ranges):
             return {'question':'الوزن اللي ذكرتيه مو ضمن مجال هالموديل، ما أگدر أضمن ملاءمته.'}
         size=str(weight)
     offered=product_variants.colors(customer_copy.fact(product.get('colors'),'colors'))
@@ -390,6 +399,9 @@ def selection_conflicts(product, context, customer=None):
         return True
     for field in ('size', 'color'):
         if selected[field] and product_variants.order_choice_error(product, field, str(selected[field])):
+            if field == 'size' and product_variants.weight_only_ranges(product) and selected.get('weight') and any(
+                    lo <= float(selected['weight']) <= hi for lo, hi in product_variants.weight_only_ranges(product)):
+                continue
             return True
     years = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))['years']
     if years and selected['age'] is not None and not selected['size']:
@@ -417,15 +429,19 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
     if sizes['years'] and chosen_year_size is None and selected['size']:
         chosen_year_size = product_variants.child_age(selected['size'])
     if age_based and selected['age'] is None and chosen_year_size is None:
+        if 'شكد العمر المطلوب' in recent:
+            return 'يا عمر مطلوب للطفل؟'
         return 'شكد العمر المطلوب؟'
     weight_ranges=product_variants.weight_only_ranges(product)
-    if not age_based and not selected['size'] and weight_ranges:
+    if not age_based and weight_ranges and (not selected['size'] or (selected.get('weight') and product_variants.order_choice_error(product,'size',str(selected['size'])))):
         plan=weight_cart_choices(product,context,customer)
-        return plan.get('question') or booking_invitation(context,history)
+        return (plan.get('question') or booking_invitation(context,history)) if plan else ''
     if not age_based and not selected['size']:
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
             if not province and delivery_requires_province and 'محافظ' not in recent:
                 return 'من يا محافظة حتى أحسبلج أجور التوصيل؟'
+            if 'شنو القياس اللي يناسبج' in recent and 'مضبوط لو واسع' not in recent:
+                return 'يا قياس تحبين نعتمدلج؟'
             return 'شنو القياس اللي يناسبج؟'
         return 'شكد قياس تلبسين؟'
     if age_based:
@@ -449,6 +465,8 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
             return ''
         return 'تفضلين ' + ' لو '.join('ال' + color for color in selected['color_options']) + '؟'
     if not selected['color'] and len(colors) > 1:
+        if 'شنو اللون اللي يعجبج' in recent:
+            return 'أي لون تحبين نعتمدلج؟'
         return 'شنو اللون اللي يعجبج؟' if colors else ''
     if len(colors) == 1 or selected['color'] in colors:
         if not province and delivery_requires_province:

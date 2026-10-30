@@ -261,25 +261,39 @@ def result(text='', *, human='', silent=False):
                 _semantic_parts=True)
 
 
-def next_step(product, context, customer):
+def next_step(product, context, customer, history=()):
     try:
         from .sales_playbook import customer_selection, weight_cart_choices
     except ImportError:
         from sales_playbook import customer_selection, weight_cart_choices
     known = customer_selection(context, customer)
+    recent = ' '.join(str(item.get('text') or '') for item in (list(history or [])[-6:] + list((context or {}).get('last_staff_turn') or []))
+                      if item.get('direction', 'outgoing') == 'outgoing')
     years = product_variants.size_data((product or {}).get('sizes'))['years']
     if years and known['age'] is None:
+        if 'شكد العمر المطلوب' in recent:
+            return 'يا عمر مطلوب للطفل؟'
         return 'شكد العمر المطلوب؟'
-    if not years and not known['size'] and product_variants.weight_only_ranges(product):
-        plan=weight_cart_choices(product,context,customer)
-        if plan and plan.get('question'):return plan['question']
+    weight_ranges = product_variants.weight_only_ranges(product)
+    if not years and weight_ranges and (not known['size'] or (known.get('weight') and product_variants.order_choice_error(product, 'size', str(known['size'])))):
+        plan = weight_cart_choices(product, context, customer)
+        if plan and plan.get('question'):
+            return plan['question']
     elif not years and not known['size']:
+        if 'شكد قياس تلبسين' in recent:
+            return 'شنو القياس اللي يناسبج؟'
         return 'شكد قياس تلبسين؟'
     colors = product_variants.colors((product or {}).get('colors'))
     if len(colors) > 1 and not known['color'] and not known['colors']:
+        if 'أي لون تحبين' in recent:
+            return 'شنو اللون اللي يعجبج؟'
         return 'أي لون تحبين؟'
     if not (customer or {}).get('province'):
+        if 'من يا محافظة' in recent:
+            return 'أثبّت لج حجز؟'
         return 'من يا محافظة؟'
+    if 'أثبّت لج حجز' in recent or 'أثبتلج حجز' in recent:
+        return 'تحبين نثبت الحجز هسه؟'
     return 'أثبّت لج حجز؟'
 
 
@@ -392,7 +406,7 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         from product_albums import stock_state
     if re.search(r'احجز|ثبت|اطلب|اشتري|07[0-9]{7,}', text):
         return None
-    step = next_step(product, context, customer)
+    step = next_step(product, context, customer, history)
     try:
         from .conversation_quality import child_ages
     except ImportError:
@@ -401,7 +415,14 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         return None
     if re.search(r'غيره|غيرها|غير موديل|بديل|موديلات|موديل ثاني', text):
         return None  # Search the catalogue instead of repeating the rejected model.
-    if stock_state(product) == 'out' and not re.fullmatch(r'(?:اي|نعم|تمام|دزيلي|دزي|ارسلي)[ ؟?!.،]*', text):
+    if stock_state(product) == 'out':
+        recent_out = ' '.join(str(item.get('text') or '') for item in (list(history or [])[-4:] + list((context or {}).get('last_staff_turn') or []))
+                              if item.get('direction', 'outgoing') == 'outgoing')
+        if (re.match(r'^(?:👍|اي+|ي+|ايوه|نعم|تمام|اوكي|اوك|ماشي|عادي|يا\s*ريت|ياريت|دزي|ارسل|اشوف|شوفيني|اقترح)(?:\b|\s|$)', text)
+                and not re.search(r'\b(?:لا|ما\s*اريد|ماريد|مو\s*هسه)\b', text)):
+            return None
+        if re.search(r'(?:ما|مو|غير)\s*متوفر.{0,30}(?:اقترح|غيره|بديل)', customer_copy.normalized(recent_out)):
+            return None
         return result('للأسف هذا الموديل ما متوفر، تحبين أقترحلج غيره؟')
     if stock_state(product) != 'available':
         return None
@@ -455,7 +476,7 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
             return None
         if requested or range_match:
             choice = range_match[1] + '-' + range_match[2] if range_match else requested[-1]
-            step = next_step(product, context, dict(customer or {}, size=choice))
+            step = next_step(product, context, dict(customer or {}, size=choice), history)
             return result('إي، قياس ' + choice + ' متوفر ويجي فيت ومرتب عالجسم، ' + step)
         return result('إي متوفر ويجي فيت ومرتب عالجسم، ' + step)
     return None

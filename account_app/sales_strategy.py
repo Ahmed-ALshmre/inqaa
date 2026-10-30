@@ -402,6 +402,52 @@ def signals(text):
     return result or ['discovery']
 
 
+def analyze_customer_behavior(ev, customer, history=()):
+    """Infer customer behavioral profile across history for tailored sales psychology."""
+    ev = ev or {}
+    context = ev.get('_sales_context') or {}
+    question = normalized(ev.get('text') or '')
+    evidence = [normalized(item.get('text') or '') for item in (context.get('evidence') or [])]
+    incoming_msgs = [normalized(m.get('text') or '') for m in (history or []) if m.get('direction') == 'incoming' and m.get('text')]
+    all_customer_text = ' '.join(incoming_msgs + evidence + ([question] if question else []))
+    image_count = len(ev.get('_image_matches') or [])
+    profiles = []
+    if image_count > 1 or re.search(r'الاول|الثاني|الثالث|الفرق|ايهما|ياهو احلى|غيرهن|موديلات', question):
+        profiles.append(
+            'سلوك الزبون: مستكشف/مقارن بين عدة صور أو موديلات (Multi-Model Explorer) -> '
+            'طبّق «هندسة الاختيار والإغلاق التخييري المزدوج (Choice Architecture & Double-Bind)»: '
+            'اربط بين الموديلات التي أرسلها، وضّح المتوفر منها على قياسه ولونه، وإذا كان أحدها نافداً اعرض البديل المطابق من الكتالوج فوراً، '
+            'ثم اختم بتخيير ذكي يقربه للحسم («تحبين نثبتلج الأول لو الثاني، لو ناخذهن سوة بتوصيل واحد؟»).'
+        )
+    if re.search(r'اخاف|خاف|فحص|ارجع|يرجع|نفس الصور|حقيقي|قماش|خام[هة]|بطان|شفاف|يطلع ضيق|يطلع صغير', all_customer_text):
+        profiles.append(
+            'سلوك الزبون: حذر يبحث عن الأمان والجودة (Risk-Averse / Quality Seeker) -> '
+            'طبّق «عكس المخاطرة وبناء الثقة (Risk Reversal)»: طمئنه بالمعلومة الموثقة عن الخامة والقصة وذكّره بأن له حق فحص القطعة بوجود المندوب قبل الدفع، ثم انتقل بخطوة هادئة نحو الاختيار.'
+        )
+    if re.search(r'غالي|ارخص|ميزاني|خصم|تخفيض|بي مجال|توصيل مجاني|شكد السعر|بشكد', all_customer_text):
+        profiles.append(
+            'سلوك الزبون: حساس للسعر ويبحث عن القيمة (Value-Conscious Buyer) -> '
+            'طبّق «تأطير القيمة وتفكيك الكلفة (Value Framing)»: اربط السعر بميزة حقيقية في القطعة أو العرض المتاح، وبيّن تفاصيل السعر مع التوصيل بوضوح، وعند اهتمامه بقطعتين ذكّره بأن طلبهما معاً يوفر عليه أجور توصيل ثانية.'
+        )
+    if (len(question.split()) <= 4 and re.search(r'\d{2}|xl|xxl|اسود|ابيض|ماروني|وردي|بيج|زيتي|احمر|ازرق|بغداد|بصره|اربيل|نجف|كربلاء|موصل', question)
+            and not re.search(r'[؟?]|شكد|شنو|شلون', question)):
+        profiles.append(
+            'سلوك الزبون: عملي وحاسم سريع الاستجابة (Decisive / Fast-Moving Buyer) -> '
+            'طبّق «الإغلاق الافتراضي السلس (Assumptive Close)»: لا تطيل المقدمات؛ اعتمد اختياره فوراً واطلب المعلومة الوحيدة المتبقية لإتمام الحجز مباشرة.'
+        )
+    if evidence and re.search(r'[؟?]|شكد|شوكت|يمتى|توصيل|قماش', question) and not explicit_pause(question):
+        profiles.append(
+            'سلوك الزبون: مهتم وحسم جزءاً من اختياره لكن لديه استفسار جانبي قبل القرار (Side-Question Near Close) -> '
+            'طبّق «الجواب ثم الجسر ثم الخطوة المخططة (Answer-Bridge-Close)»: أجب عن سؤاله الجانبي بوضوح تام، ثم ابنِ جسراً نحو اختياره المحفوظ (القياس/اللون) وقرّبه خطوة واحدة مدروسة نحو تثبيت الطلب دون تكرار سؤال قديم.'
+        )
+    if not profiles:
+        profiles.append(
+            'سلوك الزبون: باحث عن تفاعل ودود ومساعدة استشارية -> '
+            'طبّق «البيع الاستشاري الدافئ (Consultative Selling)»: أجب بود عراقي طبيعي متجدد، قدم ميزة حقيقية تهمه من بيانات الموديل، واختم بسؤال واحد سهل يفتح الخطوة التالية نحو الحجز.'
+        )
+    return '\n'.join('- ' + p for p in profiles)
+
+
 def guidance(ev, customer, history):
     if ev.get('_post_order'):
         return ''
@@ -421,6 +467,8 @@ def guidance(ev, customer, history):
             'لا تكرر طلب الحجز بعد كل جملة؛ اجعل سؤال الخطوة التالية مفيداً بعد جواب مكتمل. الحيرة تسمح بمساعدة واحدة، أما الرفض أو طلب المهلة الصريح أو الشكر فلا يحتاج سؤال بيع. لا تستخدم ندرة أو تقييمات أو ضمانات أو هدايا غير معتمدة. '
             'عند شرط شراء لم يحسم مثل وصول باجر أو عرض بالسنتيمتر، احسمه أو وضح حاجته للتأكيد قبل طلب البيانات؛ رقم الهاتف وحده لا يلغي الشرط.\n'
             + '\n'.join(METHODS[key] for key in selected)
+            + '\n[تحليل سلوك الزبون وتكتيك البيع النفسي المخطط لهذه الرسالة]\n'
+            + analyze_customer_behavior(ev, customer, history)
             + '\nحقول التواصل الناقصة من الملف (قد تكون وصلت بالرسالة الحالية؛ اقرأها قبل السؤال): '
             + json.dumps(missing,ensure_ascii=False)
             + '\nاحتفظ بخيارات السلة في order.items أثناء الإجابة عن استفسارات جانبية، لكن لا تضف مجرد البدائل المعروضة إليها.')

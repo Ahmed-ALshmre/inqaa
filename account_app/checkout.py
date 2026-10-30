@@ -27,6 +27,30 @@ PROVINCES = {
     "المثنى": ("المثنى", "السماوة", "سماوة"), "الديوانية": ("الديوانية", "ديوانية", "القادسية"),
     "صلاح الدين": ("صلاح الدين", "تكريت"), "ديالى": ("ديالى",),
 }
+DISTRICT_PROVINCES = {
+    "بغداد": ("الكرادة", "كرادة", "الدورة", "دوره ميكانيك", "ميكانيك الدورة", "المنصور",
+              "الاعظمية", "الكاظمية", "الزعفرانية", "البنوك", "العامرية", "الغزالية",
+              "الحارثية", "البياع", "السيدية", "زيونة", "مدينة الصدر", "الشعلة",
+              "ابو غريب", "المحمودية", "اليوسفية", "اللطيفية", "المدائن", "النهروان", "التاجي", "الطارمية"),
+    "صلاح الدين": ("طوزخورماتو", "طوز خورماتو", "سامراء", "بلد", "بيجي", "الدجيل", "الشرقاط", "الضلوعية", "ضلوعية"),
+    "الأنبار": ("الرمادي", "رمادي", "الفلوجة", "فلوجة", "هيت", "حديثة", "القائم", "راوه", "راوة", "عنه", "عانة", "الرطبة", "الكرمة", "الخالدية", "الحبانية"),
+    "نينوى": ("تلعفر", "سنجار", "الحمدانية", "برطلة", "تلكيف", "بعشيقة", "القيارة", "مخمور", "ربيعة", "الشيخان"),
+    "البصرة": ("الزبير", "ابو الخصيب", "شط العرب", "القرنة", "الفاو", "سفوان", "ام قصر", "الهارثة"),
+    "ذي قار": ("الشطرة", "شطرة", "الرفاعي", "رفاعي", "سوق الشيوخ", "الجبايش", "الغراف", "قلعة سكر"),
+    "ميسان": ("المجر الكبير", "قلعة صالح", "علي الغربي", "الكحلاء", "الميمونة", "ناحية السلام", "ناحيه سلام", "قلعة قصاب", "قلعه قصاب"),
+    "واسط": ("الصويرة", "صويرة", "العزيزية", "النعمانية", "بدرة", "جصان", "شيخ سعد"),
+    "بابل": ("المسيب", "مسيب", "المحاويل", "محاويل", "الهاشمية", "القاسم", "الحمزة الغربي", "الاسكندرية", "سدة الهندية"),
+    "ديالى": ("بعقوبة", "بعقوبه", "الخالص", "خالص", "خانقين", "بلدروز", "المقدادية", "مقدادية", "شهربان", "جلولاء", "بني سعد", "كنعان"),
+    "النجف": ("الكوفة", "كوفة", "المناذرة", "المشخاب", "مشخاب"),
+    "كربلاء": ("طويريج", "عين التمر", "الحر"),
+    "الديوانية": ("الشامية", "شامية", "عفك", "غماس", "السنية", "الدغارة"),
+    "المثنى": ("الرميثة", "رميثة", "الخضر", "السلمان", "الوركاء"),
+    "دهوك": ("زاخو", "عقرة", "العمادية", "عمادية", "سميل", "بردرش"),
+    "أربيل": ("سوران", "شقلاوة", "كويسنجق", "خبات", "جومان", "عينكاوة"),
+    "السليمانية": ("حلبجة", "كلار", "رانية", "جمجمال", "دوكان", "قلعة دزة", "دربندخان"),
+    "كركوك": ("الحويجة", "حويجة", "داقوق", "دبس"),
+
+}
 
 
 def phone_number(text):
@@ -85,6 +109,12 @@ def contact_fields(text, previous=None):
                 province = canonical
                 result["province"] = canonical
                 break
+        if not province:
+            for canonical, aliases in DISTRICT_PROVINCES.items():
+                if any(re.search(r"(?<!\w)(?:بال|ب)?" + re.escape(alias).replace('ة', '[ةه]') + r"(?!\w)", locality) for alias in aliases):
+                    province = canonical
+                    result["province"] = canonical
+                    break
     removal = re.fullmatch(r"(?:احذف|احذفي|شيل|شيلي)\s+(?:كلمة\s+)?(.+?)(?:\s+من العنوان)?[.!]?$", original.strip())
     if removal and previous.get("address"):
         token = removal.group(1).strip()
@@ -103,7 +133,7 @@ def contact_fields(text, previous=None):
     if province and address and not explicit:
         # Mixed bargaining + contact messages must not print the proposed price
         # or purchase instruction on the courier's address label.
-        for alias in PROVINCES[province]:
+        for alias in (*PROVINCES.get(province, ()), *DISTRICT_PROVINCES.get(province, ())):
             match = re.search(r'(?<!\w)(?:بال|ب)?' + re.escape(alias).replace('ة', '[ةه]') + r'(?!\w)', address)
             if match and re.search(r'اذا|ثبتي|احجزي|تخفيض|خصم|سعر', normalized(address[:match.start()])):
                 address = address[match.start():].strip()
@@ -132,8 +162,8 @@ def contact_fields(text, previous=None):
 def is_confirmation(text):
     # Only affirmative words and courtesy fillers; corrections, questions and
     # negations must still invalidate a pending cart, including mixed bursts.
-    affirmative = r"(?:اي+|يي+|نعم|تمام|موافق|موافقة|اوكي|اوك|ثبتي|ثبت|ثبتيه|ثبتوا)"
-    filler = r"(?:عيني|حياتي|حبيبتي|حبي|عمري|يمعوده|يمعودة|الطلب|الحجز|هسه|رجاء|شكرا)"
+    affirmative = r"(?:اي+|يي+|نعم|تمام|موافق|موافقة|اوكي|اوك|ثبتي|ثبت|ثبتيه|ثبتوا|اعتمدي|اعتمديه|اعتمدها)"
+    filler = r"(?:عيني|حياتي|حبيبتي|حبي|عمري|يمعوده|يمعودة|الطلب|الحجز|هسه|رجاء|شكرا|والله|اكيد|بسرعه|بسرعة|زاد|فدوه|فدوة|بلا زحمه|بلا زحمة|ياريت|يا ريت|عادي|ماشي)"
     return bool(re.fullmatch(affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*", normalized(text).strip()))
 
 
@@ -248,6 +278,8 @@ def measurement_history_error(items, messages):
     """An unresolved customer size alternative cannot be settled by model output."""
     kinds = ("فستان", "سوت", "قميص", "عباء", "تنورة")
     for item in items:
+        if item.get("size_type") == "weight":
+            continue
         name = normalized(item.get("product_name"))
         kind = next((k for k in kinds if k in name), "")
         unresolved = False

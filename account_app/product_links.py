@@ -202,7 +202,7 @@ def catalog_alternatives(product, products, *, size='', age_years=None, color=''
     for category in dict.fromkeys(allowed):
         source = dict(product, category=category, related_product_ids=[str(p['product_id']) for p in candidates])
         for candidate in candidates:
-            if not eligible_related_products(source, [candidate], size=size, age_years=age_years, limit=1):
+            if not eligible_related_products(source, [candidate], size=size, age_years=age_years, audience=_audience(product), limit=1):
                 continue
             if color and any(v['supported'] is not True for v in product_variants.assess(candidate, 'لون ' + color)):
                 continue
@@ -213,3 +213,99 @@ def catalog_alternatives(product, products, *, size='', age_years=None, color=''
             if candidate['product_id'] not in {p['product_id'] for p in result}:
                 result.append(candidate)
     return result[:limit]
+
+
+def correlate_multi_products(models, products, *, size='', age_years=None, color='',
+                             request='', excluded=(), limit=2):
+    """Correlate multiple customer-sent models/images and suggest matching catalog alternatives."""
+    seen_ids = set()
+    unique_models = []
+    for item in models or []:
+        if isinstance(item, dict) and item.get('product_id') and item['product_id'] not in seen_ids:
+            seen_ids.add(str(item['product_id']))
+            unique_models.append(item)
+    if not unique_models:
+        return None
+    available_models = []
+    unavailable_models = []
+    models_summary = []
+    categories = []
+    for idx, model in enumerate(unique_models, 1):
+        state = product_albums.stock_state(model)
+        cat = _category(model)
+        if cat and cat not in categories:
+            categories.append(cat)
+        size_ok = True
+        if size and state == 'available':
+            checks = product_variants.assess(model, 'قياس ' + str(size))
+            if checks and any(c['supported'] is False for c in checks):
+                size_ok = False
+        if age_years is not None and state == 'available':
+            years = _size_data(model)['years']
+            if years and not any(lo <= float(age_years) <= hi for lo, hi in years):
+                size_ok = False
+        info = {
+            'order': idx,
+            'product_id': model.get('product_id'),
+            'product_name': _facts(model, 'product_name'),
+            'category': cat,
+            'price': _facts(model, 'price'),
+            'available': state == 'available' and size_ok,
+            'stock_state': state,
+            'size_match': size_ok,
+        }
+        models_summary.append(info)
+        if info['available']:
+            available_models.append(info['product_name'])
+        else:
+            unavailable_models.append(info['product_name'])
+
+    blocked = set(excluded or ()) | seen_ids
+    suggested = []
+    for model in unique_models:
+        if len(suggested) >= limit:
+            break
+        alts = catalog_alternatives(
+            model, products, size=size, age_years=age_years, color=color,
+            request=request, excluded=blocked | {p['product_id'] for p in suggested},
+            limit=limit - len(suggested),
+        )
+        for alt in alts:
+            if alt['product_id'] not in {p['product_id'] for p in suggested}:
+                suggested.append(alt)
+
+    if len(available_models) >= 2:
+        coaching = (
+            f"الزبون أرسل/اختار أكثر من موديل متوفر ({'، '.join(available_models)}). "
+            "اربط بينها بوضوح، وطبّق الإغلاق التخييري المزدوج: خيّره بلطف بين تثبيت أحدهما أو أخذهما معاً في طلب واحد لتوفير أجور التوصيل."
+        )
+    elif len(available_models) == 1 and unavailable_models:
+        coaching = (
+            f"من بين الموديلات التي أرسلها الزبون، الموديل المتوفر والمناسب هو «{available_models[0]}»، "
+            f"بينما «{'، '.join(unavailable_models)}» غير متوفر حالياً. وجّه قرار الزبون بذكاء نحو الموديل المتوفر الذي اختاره بنفسه، "
+            "أو اعرض عليه البديل المطابق من الكتالوج."
+        )
+    elif unavailable_models and suggested:
+        coaching = (
+            "الموديلات التي أرسلها الزبون غير متوفرة حالياً؛ اعرض عليه فوراً البدائل المطابقة لنفس الفئة والقياس من القائمة المرفقة."
+        )
+    else:
+        coaching = "اربط بين اختيارات الزبون وساعده على حسم الموديل الأنسب لقياسه ولونه."
+
+    return {
+        'models_summary': models_summary,
+        'shared_categories': categories,
+        'available_models': available_models,
+        'unavailable_models': unavailable_models,
+        'suggested_alternatives': [
+            {
+                'product_id': p.get('product_id'),
+                'product_name': _facts(p, 'product_name'),
+                'price': _facts(p, 'price'),
+                'sizes': _facts(p, 'sizes'),
+                'colors': _facts(p, 'colors'),
+            }
+            for p in suggested
+        ],
+        'coaching': coaching,
+    }
