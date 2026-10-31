@@ -53,7 +53,8 @@ class OwnerPolicyTests(unittest.TestCase):
         self.assertNotIn('width', sales_answers.topics('واسع'))
         self.assertIn('width', sales_answers.topics('عرضه بالسنتيمتر؟'))
         result = owner_sales.reply({'text':'واسع'}, PRODUCT, {'size':'XXL'}, {}, [])
-        self.assertIn('فيت', result['reply'])
+        self.assertIn('متوفر', result['reply'])
+        self.assertNotIn('فيت', result['reply'])  # No cut/fit fact was provided in this fixture.
         self.assertNotIn('مضبوط لو واسع', sales_playbook.price_next_step(PRODUCT, {}, history=[{'direction':'outgoing','text':'شكد قياس تلبسين؟'}]))
         self.assertNotIn('مضبوط لو واسع', owner_sales.surface('متوفر. تحبينه مضبوط لو واسع؟', 'female'))
 
@@ -153,7 +154,7 @@ class OwnerPostOrderTests(unittest.TestCase):
             result,calls=self.handle({'reply':'must not be used'},text=text)
             self.assertEqual(calls,0)
             self.assertTrue(result['meta']['human_review_id'])
-            self.assertIn('المختص',result['reply'])
+            self.assertEqual(result['reply'], '')
             self.assertEqual(self.m.get_latest_customer_order(self.db,self.sender),original)
             self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],1)
 

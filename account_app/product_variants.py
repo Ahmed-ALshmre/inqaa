@@ -24,13 +24,19 @@ COLOR_RE = re.compile(r'(?<!\w)(?:و?ال|و?لل|و?ل|و)?(' + '|'.join(re.esc
 SIZE_RE = re.compile(r'(?<!\w)(?:[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',re.I)
 FREE_SIZE_RE = re.compile(r'(?<!\w)(?:فري\s*سايز|free\s*size|قياس\s*موحد|مقاس\s*موحد)(?!\w)', re.I)
 RANGE_RE = re.compile(r'(\d{1,3})\s*(?:كيلو\s*)?(?:الي|[-–—]|لحد)\s*(\d{1,3})')
+WIDTH_REQUEST_PATTERN = (r'(?<!\w)(?:و?ال)?عرض(?:ه|ها)(?!\w)|'
+                        r'(?<!\w)و?العرض\s+(?:شكد|كم|اشكد)(?!\w)|'
+                        r'عرض\s+(?:القطعة|الصدر|الورك|الخصر|الكتف)|'
+                        r'عرض.{0,25}(?<!\w)(?:سم|سانتي|سنتيمتر)(?!\w)|تحت الابط|محيط الصدر')
 
 
 ADULT_LABELS = ('S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL')
 
 
 def normalize_size_words(value):
-    text = str(value or '')
+    text = str(value or '').translate(str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'))
+    text = re.sub(r'(?<!\w)2\s*xl(?!\w)', 'XXL', text, flags=re.I)
+    text = re.sub(r'(?<!\w)xxxl(?!\w)', '3XL', text, flags=re.I)
     for pattern, label in (
         (r'(?<!\w)(?:[2٢]\s*اكس(?:ات)?(?:\s+لارج)?|اكسين(?:\s+لارج)?|اكس\s+اكس(?:\s+لارج)?|(?:دبل|دوبل|دابل|تو)\s*اكس(?:ات)?(?:\s+لارج)?)(?!\w)', 'XXL'),
         (r'(?<!\w)(?:[3٣]|ثلاث[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '3XL'),
@@ -40,6 +46,58 @@ def normalize_size_words(value):
         (r'(?<!\w)(?:[1١]\s*اكس(?:\s+لارج)?|اكس\s*لارج|اكسترا لارج)(?!\w)', 'XL')):
         text = re.sub(pattern, label, text, flags=re.I)
     return text
+
+
+def size_choice_text(value):
+    """Keep the new label in an explicit correction, without guessing alternatives."""
+    text = normalized(normalize_size_words(value))
+    if re.search(r'[؟?]|(?<!\w)(?:اذا|لو|او)(?!\w)', text):
+        return text
+    atom = r'(?:[2-6]xl|xxl|xl|xs|[sml]|\d{2})(?!\w)'
+    label = r'(?:(?:ال)?(?:قياس|مقاس|سايز)\s*)?'
+    # "46 بدل 44" and "قياس 46 مو 44" explicitly reject the second label.
+    pattern = r'(?<!\w)' + label + '(' + atom + r')\s+(?:بدل|مو|وليس)\s+' + label + atom
+    matches = list(re.finditer(pattern, text, re.I))
+    if len(matches) == 1:
+        hit = matches[0]
+        return text[:hit.start()] + 'قياس ' + hit[1] + text[hit.end():]
+    # "غيري قياس 44 إلى 46" explicitly chooses the second label.
+    pattern = r'(?:غيري|بدلي|عدلي)\s+' + label + atom + r'\s+(?:الي|لـ?|الى)\s*(' + atom + ')'
+    matches = list(re.finditer(pattern, text, re.I))
+    if len(matches) == 1:
+        hit = matches[0]
+        return text[:hit.start()] + 'قياس ' + hit[1] + text[hit.end():]
+    return text
+
+
+def normalize_age_words(value):
+    """Written numbers need an age unit; prices and unrelated counts stay intact."""
+    text = normalized(value)
+    words = {'ثلاث': 3, 'ثلاثه': 3, 'اربع': 4, 'اربعه': 4, 'خمس': 5, 'خمسه': 5,
+             'ست': 6, 'سته': 6, 'سبع': 7, 'سبعه': 7, 'ثمان': 8, 'ثماني': 8,
+             'ثمانيه': 8, 'تسع': 9, 'تسعه': 9, 'عشر': 10, 'عشره': 10}
+    return re.sub(r'(?<!\w)(و?)(' + '|'.join(sorted(words, key=len, reverse=True)) +
+                  r')(?=\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)(?!\w))',
+                  lambda hit: hit[1] + str(words[hit[2]]), text)
+
+
+def age_choice_text(value):
+    """Remove only a rejected age, retaining every other child's declaration."""
+    text = normalize_age_words(value)
+    if re.search(r'[؟?]|(?<!\w)(?:اذا|لو|او)(?!\w)', text):
+        return text
+    atom = r'(?:\d{1,2}(?:\.\d+)?\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)|سنتين|سنتان|سن[هة])'
+    return re.sub(r'(?<!\w)(?:عمر(?:ه|ها)?\s*)?(' + atom + r')\s+(?:بدل|مو|وليس)\s*(?:عمر(?:ه|ها)?\s*)?' + atom + r'(?!\w)',
+                  lambda hit: 'عمر ' + hit[1], text)
+
+
+def child_age_correction(value):
+    text = normalize_age_words(value)
+    if age_choice_text(text) == text:
+        return None
+    atom = r'(?:\d{1,2}(?:\.\d+)?\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)|سنتين|سنتان|سن[هة])'
+    hit = re.search('(' + atom + r')\s+(?:بدل|مو|وليس)\s*(?:عمر(?:ه|ها)?\s*)?(' + atom + ')', text)
+    return (child_age(hit[1]), child_age(hit[2])) if hit else None
 
 
 def is_free_size_product(product):
@@ -93,7 +151,7 @@ def color_replacement(value):
 
 def child_age(value):
     """Read the whole age expression; years and months belong to the same child."""
-    text = normalized(value)
+    text = age_choice_text(value)
     if re.search(r'\d+\s*(?:سنوات|سنه|سنة|سنين|اشهر|شهر|شهور)?\s*(?:الي|لحد|[-–—])\s*\d+', text):
         return None
     if re.search(r'سن[هة]\s*(?:الي|لحد)\s*سنتين', text):
@@ -146,16 +204,26 @@ def age_text(value):
     return ' و'.join(parts)
 
 
-def child_ages(value):
-    """Collect distinct requested ages while keeping a year-and-month age intact."""
-    text = normalized(value)
-    pieces = re.split(r'[\n،؛;]+|\s*و(?=عمر|سنتين|سنتان|سن[هة](?:\W|$)|\d+\s*(?:سنوات|سن[هة]|سنين))', text)
+def child_age_mentions(value):
+    """Keep year-and-month expressions together, including in multi-child turns."""
+    text = age_choice_text(value)
+    unit = r'(?:سنوات|سنين|سن[هة]|اعوام|عام|اشهر|شهور|شهر)'
+    text = re.sub(r'\d+\s*(?:' + unit + r')?\s*(?:الي|لحد|[-–—])\s*\d+\s*' + unit, '', text)
+    text = re.sub(r'سن[هة]\s*(?:الي|لحد)\s*سنتين', '', text)
+    amount = r'(?:\d{1,2}(?:\.\d+)?\s*' + unit + r'|سنتين|سنتان|عامين|سن[هة]|شهرين|شهر)'
+    extra = r'(?:\s*و\s*(?:\d+\s*(?:اشهر|شهور|شهر)|شهرين|شهر|نصف|نص|ربع))?'
+    expression = r'(?:(?:[لب]?عمر(?:ه|ها)?\s*)?' + amount + extra + r'|[لب]?عمر(?:ه|ها)?\s*\d{1,2}(?:\.\d+)?)'
     ages = []
-    for piece in pieces:
-        age = child_age(piece)
-        if age is not None and age not in ages:
+    for hit in re.finditer(r'(?<!\w)(?:و)?' + expression + r'(?=\W|$|و)', text):
+        age = child_age(hit[0][1:] if hit[0].startswith('و') else hit[0])
+        if age is not None:
             ages.append(age)
     return ages
+
+
+def child_ages(value):
+    """Distinct requested ages; quantity-bearing callers can retain mentions."""
+    return list(dict.fromkeys(child_age_mentions(value)))
 
 
 def age_wording(value):
@@ -224,7 +292,7 @@ def _product_sizes(product):
 
 
 def size_data(value):
-    text=normalized(value)
+    text=normalized(normalize_size_words(value))
     # Written year endpoints carry an age unit even when the other end is numeric.
     text=re.sub(r'(?<!\w)(سن[هة]|سنتين|سنتان)\s*(?:الي|لحد|[-–—])\s*'
                 r'(\d{1,2}|سنتين|سنتان)(?:\s*(?:سنوات|سن[هة]|سنين|اعوام|عام))?(?!\w)'
@@ -363,9 +431,9 @@ def color_quantities(value):
 
 
 def requested(question):
-    text=normalized(normalize_size_words(question))
+    text=size_choice_text(question)
     sizes=list(dict.fromkeys(m[1].upper() for m in re.finditer(
-        r'(?:قياس(?:ه|ها)?|مقاس(?:ه|ها)?|سايز)\s*(\d{1,3}|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',text)))
+        r'(?:قياس(?:ي|ه|ها)?|مقاس(?:ي|ه|ها)?|سايز)\s*(\d{1,3}|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',text)))
     sizes = list(dict.fromkeys(sizes + [m[0].upper() for m in SIZE_RE.finditer(text)]))
     if FREE_SIZE_RE.search(text) and 'فري سايز' not in sizes:
         sizes.append('فري سايز')

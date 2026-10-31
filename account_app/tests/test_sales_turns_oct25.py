@@ -155,12 +155,12 @@ class SalesTurnPipelineTests(unittest.TestCase):
         self.assertNotIn('المحافظة', message)
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
-    def test_simple_size_confirmation_uses_owner_fit_and_next_missing_step(self):
+    def test_simple_size_confirmation_uses_availability_and_next_missing_step(self):
         product = dict(PRODUCT, colors='اسود', offer='عرض خاص')
         result, provider = self.ask('قياسي 44', product=product)
         provider.assert_not_called()
         self.assertIn('متوفر', result['reply'])
-        self.assertIn('فيت', result['reply'])
+        self.assertNotIn('فيت', result['reply'])  # Availability is not evidence of fit on this customer's body.
         self.assertIn('محافظة', result['reply'])
         self.assertNotIn('وزن', result['reply'])
         self.assertFalse(result['create_order'])

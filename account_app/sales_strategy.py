@@ -2,11 +2,11 @@
 import json
 import re
 try:
-    from .checkout import normalized
-    from . import customer_copy
+    from .checkout import normalized, explicit_purchase
+    from . import customer_copy, product_variants
 except ImportError:
-    from checkout import normalized
-    import customer_copy
+    from checkout import normalized, explicit_purchase
+    import customer_copy, product_variants
 
 
 SALES_CUES = {
@@ -255,8 +255,8 @@ def explicit_pause(question):
     """Immediate dialogue interpretation; does not change follow-up eligibility."""
     text = normalized(question)
     return bool(_opted_out(text) or _declined(text) or re.search(
-        r'خل(?:ي|يني).{0,20}(?:افكر|استلم الراتب)|بعدين اطلب|مو هس[هة]|بعد الشهر|'
-        r'(?:افكر|اشاور|اسال).{0,18}(?:ارجع|اردل|بعدين)|ذكرني|ذكريني|'
+        r'خل(?:ي|يني)?.{0,20}(?:افكر|استلم الراتب)|بعدين اطلب|مو هس[هة]|بعد الشهر|'
+        r'(?:افكر|اشاور|اسال).{0,18}(?:ارجع|اردل|بعدين)|ارجعلكم\s+بعد|ذكرني|ذكريني|'
         r'(?:لا|مو|ما)\s*(?:تثبت\w*|ثبتي|تحجز\w*|احجزي)|بدون.{0,12}(?:تثبيت|تثبت|حجز)|'
         r'(?:لا|ما)\s*(?:اريد\s*)?(?:اطلب|احجز|اشتري)\s*(?:هسه|هسة)', text))
 
@@ -269,7 +269,7 @@ def _courtesy_only(question):
 def soft_indecision(question):
     text = normalized(question)
     return bool(not explicit_pause(text) and not _explicit_purchase(text)
-                and re.search(r'افكر|محتار|متردد|ما قررت|مو متاكد|مو متاكده', text))
+                and re.search(r'افكر|محتار|متردد|ما قررت|ممقرر|مو متاكد|مو متاكده', text))
 
 
 METHODS = {
@@ -291,6 +291,11 @@ METHODS = {
 def upgrade_legacy_rules(text):
     """Replace only known obsolete built-in advice; retain custom store facts."""
     replacements = {
+        'أنتِ موظفة مبيعات بشرية محترفة جداً (تعتبرين أفضل موظفة مبيعات في العالم)': 'أنتِ مساعدة مبيعات للمتجر بأسلوب موظفة عراقية محترفة',
+        'هدفك الأول والأخير في كل رد: إقناع الزبون، مدح المنتج بقوة، واستدراجه بلطف واحترافية لإكمال الحجز (أخذ رقم الهاتف والعنوان لتثبيت الطلب).': 'ساعدي الزبون يفهم الخيارات ويختار المناسب؛ أجيبي عن سؤاله واعتراضه أولاً، وأكملي الحجز عند موافقته الصريحة مع طلب البيانات الناقصة فقط.',
+        'أسلوبك: بشوشة، ذكية بيعياً، تستخدمين تكتيكات الندرة والكمية القليلة، ومحفزة جداً على سرعة الشراء.': 'أسلوبك ود عراقي طبيعي، اهتمام بالاحتياج، وفائدة موثقة تناسبه؛ لا تختلقي ندرة أو استعجالاً ولا تضغطي بعد الرفض.',
+        "لا تختمي أبداً بسؤال عام مثل 'شنو تحبين تعرفين؟' — اختمي دائماً بسؤال بيع واضح يحفز الحجز ويجلب العنوان والرقم، مثل: 'باقي قطع قليلة، دزيلي عنوانج ورقمج حتى أثبته إلج؟'.": 'أجيبي عن المطلوب ثم اسألي خطوة واحدة مفيدة إن لزمت؛ اجمعي بيانات التواصل بعد رغبة شراء واضحة فقط. لا تسألي سؤال بيع بعد الشكر أو الرفض أو التأجيل.',
+        'كل رد يجب أن يدفع المحادثة بقوة نحو الحجز: امدحي الموديل، اذكري أن الكمية على وشك النفاذ، واطلبي البيانات (موبايل/عنوان) لتثبيت الطلب.': 'قربي القرار بإزالة سبب الحيرة وبمعلومة صحيحة؛ المدح والندرة لا يعوضان الجواب. لا تطلبي رقماً وعنواناً قبل موافقة الشراء.',
         "الرد يجب أن يكون قصيراً جداً (جملة إلى جملتين، لا يتجاوز 30 كلمة).": "اكتب رداً عراقياً دافئاً ومختصراً يجيب جميع الأسئلة، دون سقف كلمات يحذف معلومة مفيدة.",
         "لا تنهي رسالتك بنقطة أبداً، اختميها دائماً بسؤال (قياس، محافظة، أو حجز) لتبقى الزبونة متفاعلة.": "اختم بخطوة واحدة مفيدة فقط عند الحاجة، وبعد الرفض أو التأجيل أو الشكر اختم بلطف دون سؤال بيع.",
         "طول الرد إلزامي: من جملة إلى جملتين قصيرتين فقط (≤ 25 كلمة). ممنوع الإطالة.": "اجعل الرد مختصراً، لكن أجب جميع الأسئلة المهمة دون حد كلمات يحذف جواباً أو سعراً.",
@@ -308,6 +313,57 @@ def upgrade_legacy_rules(text):
     for old,new in replacements.items():
         text=str(text or '').replace(old,new)
     return text
+
+
+def choice_question_dimension(text):
+    text = normalized(text)
+    if not re.search(r'[؟?]', text):
+        return ''
+    for dimension, pattern in (
+        ('size', r'(?:شكد|شنو|اي|يا)\s+(?:ال)?(?:قياس|مقاس|سايز)|(?:قياسج|قياسك)\s+(?:شكد|شنو)'),
+        ('age', r'(?:شكد|شنو|اي|يا)\s+(?:ال)?عمر|عمر\w*\s+(?:شكد|شنو)'),
+        ('quantity', r'(?:شكد|شنو|كم|اي|يا).{0,30}(?:كمي[هة]|عدد)|كمي[هة].{0,25}(?:تحتاج|تناسب|تفضل|تحب)'),
+        ('color', r'(?:شنو|اي|يا)\s+(?:ال)?لون')):
+        if re.search(pattern, text):
+            return dimension
+    return ''
+
+
+def repeated_choice_dimensions(history):
+    counts = {}
+    for message in list(history or [])[-12:]:
+        if message.get('direction') == 'outgoing':
+            dimension = choice_question_dimension(message.get('text'))
+            if dimension:
+                counts[dimension] = counts.get(dimension, 0) + 1
+    return {key for key, count in counts.items() if count >= 2}
+
+
+def turn_plan(ev, history=()):
+    """Choose a response objective from observable turns, never a personality guess."""
+    question = normalized(ev.get('text'))
+    if ev.get('_post_order'):
+        objective = 'خدمة طلب محفوظ: أجيبي السؤال، وميزي المعلومة عن طلب تعديل يحتاج تنفيذاً فعلياً. لا تعرضي حجزاً مكرراً.'
+    elif explicit_pause(question) or _courtesy_only(question):
+        objective = 'احترمي المهلة أو الرفض أو الشكر؛ جواب ودود خفيف بلا سؤال بيع وبلا متابعة ملحّة.'
+    elif _explicit_purchase(question) and not purchase_block_reason(question):
+        objective = 'الزبون يريد الشراء: احتفظي بالقطع وخياراتها واجمعي الناقص فقط؛ لا تعيدي عرض الحجز أو سؤال القياس المعروف.'
+    elif re.search(r'غالي|خصم|تخفيض|ميزاني|مجاني', question):
+        objective = 'ناقشي التكلفة التي يقصدها: اذكري السعر والعرض المعتمد باختصار؛ لا تتعاملي مع المساومة كخطأ أو ترفضي مواصلة البيع. اقترحي بديلاً مناسباً موجوداً إن طلبه.'
+    elif re.search(r'اخاف|متردد|محتار|مو نفس|يختلف|ما ناس|راهي|ضيق', question):
+        objective = 'احسمي سبب التردد نفسه بمعلومة موثقة أو صورة موجودة أو سياسة فحص فعلية؛ لا تستبدلي الجواب بمديح أو بطلب موبايل.'
+    else:
+        objective = 'جاوبي كل ما سأل عنه حالياً أولاً، ثم خطوة اختيار واحدة سهلة تفيد قراره إن بقي شيء مجهول.'
+    incoming = [normalized(item.get('text')) for item in history if item.get('direction') == 'incoming']
+    repeated = bool(question and (question in incoming[:-1] or re.search(r'سالت|سألت|جاوبيني|ما رديت|مجاي تجاوب|الوو', question)))
+    if repeated:
+        objective += ' الزبون يعيد الطلب أو ينبه لغياب جواب: اعترفي بطلبه باختصار ثم قدمي الجواب الناقص، دون تكرار المقدمة أو نفس السؤال.'
+    if repeated_choice_dimensions(history) and not _explicit_purchase(question):
+        objective += ' سبق سؤال اختيارات أكثر من مرة دون جواب؛ جاوبي الاستفسار الحالي دون إعادة استجوابه عن نفس القياس أو العمر أو اللون الآن.'
+    return ('[هدف الرد الحالي؛ مرجع النص والسياق وليس تشخيص شخصية الزبون]\n' + objective +
+            '\nتسلسل طبيعي: جواب مباشر، توضيح يرتبط بحاجته عند الحاجة، ثم خطوة واحدة مناسبة. '
+            'لا تقسمي الجملة بين فكرتها وتكملتها، ولا ترسلي مديحاً بلا فائدة. '
+            'اختصري المعلوم ولا تختصري جواب سؤال مستقل. الأمثلة أسلوب وليست قوالب تكرر حرفياً.')
 
 
 def _opted_out(text):
@@ -467,7 +523,9 @@ def guidance(ev, customer, history):
             'لا تكرر طلب الحجز بعد كل جملة؛ اجعل سؤال الخطوة التالية مفيداً بعد جواب مكتمل. الحيرة تسمح بمساعدة واحدة، أما الرفض أو طلب المهلة الصريح أو الشكر فلا يحتاج سؤال بيع. لا تستخدم ندرة أو تقييمات أو ضمانات أو هدايا غير معتمدة. '
             'عند شرط شراء لم يحسم مثل وصول باجر أو عرض بالسنتيمتر، احسمه أو وضح حاجته للتأكيد قبل طلب البيانات؛ رقم الهاتف وحده لا يلغي الشرط.\n'
             + '\n'.join(METHODS[key] for key in selected)
+            + '\n' + turn_plan(ev, history)
             + '\n[تحليل سلوك الزبون وتكتيك البيع النفسي المخطط لهذه الرسالة]\n'
+            + 'إشارات الحاجة المحتملة من النص فقط؛ لا تفترضي شخصية أو دوافع خفية.\n'
             + analyze_customer_behavior(ev, customer, history)
             + '\nحقول التواصل الناقصة من الملف (قد تكون وصلت بالرسالة الحالية؛ اقرأها قبل السؤال): '
             + json.dumps(missing,ensure_ascii=False)
@@ -497,13 +555,14 @@ def reply_error(reply, question, product=None):
         if product_variants.weight_only_ranges(product):
             return 'لا يوجد جدول يربط الوزن بقياس ملابس لهذا المنتج. احتفظ بالوزن بالكيلو كما ذكره الزبون، واجمع اللون والكمية الناقصين فقط دون اختراع قياس أو ضمان ملاءمة.'
         return 'لا يوجد جدول يربط الوزن بقياس محدد لهذا المنتج. اسأل عن قياس الملابس المعتاد أو القياس المطلوب ولا تخترع 42 أو 44 من الوزن.'
-    if signals(question) == ['refusal'] and re.search(r'احجز|اثبت|نثبت|تحب|تحبين|اريد رقم|دز.{0,8}عنوان',text):
+    pressure_text = re.sub(r'(?:ما\s+راح|لن|لا)\s+(?:اثبت|نثبت|احجز|نحجز)[^.!؟?،\n]*[.!،]?', '', text)
+    if signals(question) == ['refusal'] and re.search(r'احجز|اثبت|نثبت|تحب|تحبين|اريد رقم|دز.{0,8}عنوان',pressure_text):
         return 'الزبون رفض الشراء؛ اختم بلطف دون سؤال بيع أو جمع بيانات.'
     return ''
 
 
 def _explicit_purchase(text):
-    return bool(re.search(r'(?<!\w)(?:ثبت(?:ي|يه|يهن|يهم|لي|ولي)|احجز(?:ي|يلي|لي|ولي)|اريد\s+(?:اطلب|احجز|اشتري))(?!\w)', text))
+    return explicit_purchase(text)
 
 
 def premature_close(reply, question):
@@ -618,7 +677,7 @@ def missing_fact_reply(question, product):
                     'أخلّي البنية تشيّك عرضه من القطعة نفسها. تحبينه واسع شوي لو هواية؟')
         return (f'فهمتج عيني، تريدين {part} يطلع واسع ومريح 🌷.\n'
                 'شنو قياس الملابس اللي ترتاحين بيه عادة؟')
-    if re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',text) and not measurement_fact(product, 'width'):
+    if re.search(product_variants.WIDTH_REQUEST_PATTERN, text) and not measurement_fact(product, 'width'):
         return 'عرض القطعة بالسنتيمتر يحتاج قياس من المتجر حتى نتأكد من الرقم الصحيح.'
     return ''
 
@@ -629,5 +688,5 @@ def fact_requires_human(question, product):
         return False
     if re.search(r'لاستيك|استيك|(?<!\w)(?:دگم|دكم)(?!\w)', text) and missing_fact_reply(question, product):
         return True
-    return (bool(re.search(r'عرض(?:ه|ها)|(?<!\w)و?العرض(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر|عريض|واسع|ضيق', text))
+    return (bool(re.search(product_variants.WIDTH_REQUEST_PATTERN + r'|عريض|واسع|ضيق', text))
             and not measurement_fact(product, 'width'))

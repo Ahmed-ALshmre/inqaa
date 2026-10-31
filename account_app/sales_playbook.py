@@ -8,11 +8,11 @@ import re
 try:
     from . import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from .pricing import terms, quote, offer_tiers
-    from .checkout import is_confirmation
+    from .checkout import is_confirmation, delivered_total_inquiry
 except ImportError:
     import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from pricing import terms, quote, offer_tiers
-    from checkout import is_confirmation
+    from checkout import is_confirmation, delivered_total_inquiry
 
 REVIEWED_LESSONS = {
     'cost': (
@@ -155,6 +155,8 @@ def price_question(text):
 
 
 def delivery_price_question(text):
+    if delivered_total_inquiry(text):
+        return True
     text = sales_strategy.normalized(text).strip(' ؟?!.،')
     text = re.sub(r'^(?:السلام عليكم|سلام عليكم)\s*[،,]?\s*', '', text)
     return bool(re.fullmatch(
@@ -218,8 +220,13 @@ def customer_selection(context, customer=None):
         selected['color'] = stored_colors[0]
     selected['colors'] = stored_colors
     for item in selection_evidence(context):
-        text = sales_strategy.normalized(product_variants.normalize_size_words(item.get('text')))
+        text = product_variants.size_choice_text(item.get('text'))
         question = sales_strategy.normalized(item.get('in_reply_to'))
+        age_correction = product_variants.child_age_correction(text)
+        declared_ages = product_variants.child_ages(text)
+        if age_correction and age_correction[1] in selected['ages']:
+            declared_ages = list(dict.fromkeys(age_correction[0] if age == age_correction[1] else age
+                                               for age in selected['ages']))
         weight=product_variants.weight_answer(text,question)
         if weight is not None:selected['weight']=weight['value']
         replacement = product_variants.color_replacement(text)
@@ -256,6 +263,7 @@ def customer_selection(context, customer=None):
             age = conversation_quality.child_age(text)
             if age is not None:
                 selected['age'] = age
+                selected['ages'] = declared_ages or [age]
             numeric_range = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/]\s*(\d{2})(?!\d)', text)
             if numeric_range:
                 selected['size'] = numeric_range[1] + '-' + numeric_range[2]
@@ -296,7 +304,7 @@ def customer_selection(context, customer=None):
         age = conversation_quality.child_age(text)
         if age is not None and (not sizes or re.search(r'عمر', text)):
             selected['age'] = age
-            selected['ages'] = product_variants.child_ages(text) or [age]
+            selected['ages'] = declared_ages or [age]
         colors = product_variants.requested(text)['colors'] or list(product_variants.color_quantities(text))
         if len(colors) == 1:
             if (len(selected['colors'])>1 and product_variants.color_quantities(text)
@@ -432,11 +440,15 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
     if sizes['years'] and chosen_year_size is None and selected['size']:
         chosen_year_size = product_variants.child_age(selected['size'])
     if age_based and selected['age'] is None and chosen_year_size is None:
+        if 'age' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         if 'شكد العمر المطلوب' in recent:
             return 'يا عمر مطلوب للطفل؟'
         return 'شكد العمر المطلوب؟'
     weight_ranges=product_variants.weight_only_ranges(product)
     if not age_based and weight_ranges and (not selected['size'] or (selected.get('weight') and product_variants.order_choice_error(product,'size',str(selected['size'])))):
+        if 'size' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         plan=weight_cart_choices(product,context,customer)
         q = (plan.get('question') or booking_invitation(context,history)) if plan else ''
         if q == 'شنو القياس المطلوب؟' and 'شنو القياس المطلوب' in recent:
@@ -447,6 +459,8 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
             return 'شنو القياس اللي يناسبج؟'
         return q
     if not age_based and not selected['size']:
+        if 'size' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
             if not province and delivery_requires_province and 'محافظ' not in recent:
                 return 'من يا محافظة حتى أحسبلج أجور التوصيل؟'
@@ -477,6 +491,8 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
             return ''
         return 'تفضلين ' + ' لو '.join('ال' + color for color in selected['color_options']) + '؟'
     if not selected['color'] and len(colors) > 1:
+        if 'color' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         if 'شنو اللون اللي يعجبج' in recent:
             return 'أي لون تحبين نعتمدلج؟'
         return 'شنو اللون اللي يعجبج؟' if colors else ''

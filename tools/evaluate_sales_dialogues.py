@@ -27,6 +27,7 @@ import shutil
 import sys
 import tempfile
 import time
+import traceback
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
@@ -463,7 +464,7 @@ def run(args):
                     for item in selected:
                         m.complete_customer_product_link(db, sender, item, 'manual', source='manual_admin', preserve_existing=True)
                     m.customer_image_positions(db, sender, [dict(image_index=i + 1, product_id=p['product_id'], product_found=True,
-                        product_name=p['product_name'], image_url=p.get('image_url')) for i, p in enumerate(selected)])
+                        product_name=p['product_name'], image_url=next(iter(m.product_image_urls(p)), '')) for i, p in enumerate(selected)])
                 turns = []
                 for index, turn in enumerate(case['turns']):
                     if args.mode == 'live' and (gate.unavailable or gate.budget_stopped):
@@ -481,11 +482,13 @@ def run(args):
                         event['entry'][0]['messaging'][0]['message']['attachments'] = [
                             dict(type='image', payload=dict(url=url)) for url in turn['incoming_images']]
                     error = None
+                    error_traceback = None
                     try:
                         response = m.process_webhook(db, event, use_debounce=False)
                         sent = m.send_webhook_result_to_facebook(response, sender)
                     except Exception as exc:
                         error = type(exc).__name__; sent = False
+                        error_traceback = traceback.format_exc(limit=16).replace(key, '[REDACTED_KEY]')
                     orders = [dict(row) for row in db.execute('SELECT * FROM orders WHERE sender_id=?', (sender,))]
                     emitted = captured[start_capture:]
                     texts = [part['text'] for part in emitted if part['kind'] == 'text']
@@ -522,7 +525,9 @@ def run(args):
                         incoming_images=turn.get('incoming_images') or [], source_message_ids=turn.get('source_message_ids') or [],
                         milestone=turn.get('milestone'), customer_simulation=turn.get('customer_simulation'),
                         local_orders=len(orders), pending_human_review=bool(m.has_pending_human_review(db, sender)),
-                        elapsed_seconds=round(time.monotonic() - started, 3), ai_requests=gate.calls[start_calls:], checks=checks, error_type=error))
+                        elapsed_seconds=round(time.monotonic() - started, 3), ai_requests=gate.calls[start_calls:], checks=checks,
+                        error_type=error, error_traceback=error_traceback,
+                        review_reasons=[row[0] for row in db.execute('SELECT reason FROM human_reviews WHERE sender_id=? AND status=\'pending\' ORDER BY id DESC LIMIT 5', (sender,))]))
                     completed_turns += 1
                     progress(case['id'], turns)
                     if getattr(args, 'save_partial_transcripts', False):

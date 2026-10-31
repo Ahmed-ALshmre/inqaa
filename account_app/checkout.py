@@ -15,6 +15,20 @@ def normalized(value):
     return re.sub(r"[ـ\u064b-\u065f\u0670]", "", text).replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").lower()
 
 
+def explicit_purchase(value):
+    """Direct Iraqi purchase requests; capability questions and negation are not consent."""
+    text = normalized(value)
+    if re.search(r'(?<!\w)(?:ما\s*اريد|ماريد|لا\s*اريد|ما|مو|لا)\s*(?:ت?حجز\w*|ت?ثبت\w*|احجز\w*)(?!\w)', text):
+        return False
+    if re.search(r'(?<!\w)(?:شلون|كيف|اكدر|اگدر|يصير|ممكن)\s+(?:احجز|اطلب|اشتري)(?!\w)|'
+                 r'(?<!\w)(?:اذا|لو)\s+(?:اريد|احجز|اطلب|اشتري)(?!\w)', text):
+        return False
+    direct = r'(?<!\w)(?:ثبتي(?:لي|ه|ها|هن|هم)?|ثبت(?:لي|ولي|وا)|احجز(?:يلي|ي|لي|ولي|وا)?)(?!\w)'
+    requested = (r'(?<!\w)(?:اريد(?:ج|ك)?|ممكن)\s+(?:ان\s+)?'
+                 r'(?:ت?حجز(?:ينلي|يلي|لي|ولي|ين|ون)?|ت?ثبت(?:ينلي|يلي|لي|ولي|ين|ون|ي)?|اطلب|احجز|اشتري)(?!\w)')
+    return bool(re.search(direct + '|' + requested + r'|(?<!\w)ثبت\s+(?:الطلب|الحجز)(?!\w)', text))
+
+
 PHONE = re.compile(r"(?<!\d)(?:(?:\+?964|00964)[\s()-]*7|07)(?:[\s()-]*\d){9}(?!\d)")
 PROVINCES = {
     "بغداد": ("بغداد",), "البصرة": ("البصرة", "البصره", "بصره", "بصرة"),
@@ -178,6 +192,23 @@ def delivery_fee_inquiry(text):
                           r'(?<!\w)اذا\s*(?:بس\s*)?(?:قطع[هة]|وحد[هة]|1)(?!\w)', clean))
 
 
+def delivered_total_inquiry(text):
+    """Checking item + shipping arithmetic is a question, not a lower-price demand."""
+    clean = normalized(text)
+    if (not re.search(r'توصيل|شحن', clean)
+            or re.search(r'بشرط|(?<!\w)شرط(?!\w)|فقط|لازم|خصم|تخفيض|مجاني|بلاش|'
+                         r'خلي|تحسب|تنزل|تنقص|اقل|ارخص|ثبتي|ثبتلي|احجزي|احجزلي|'
+                         r'باجر|باچر|غدا|اليوم|يلحق|لا\s*تحجز|ما\s*ادفع|غير\s*هذا', clean)):
+        return False
+    # Require the shipping-inclusive result after shipping, plus a clarification
+    # cue. "إذا السعر 10 ثبتي" and arrival conditions keep their existing guards.
+    return bool(re.search(r'يعني|المجموع|كلتو|قلت[وي]|تكول|تقول|'
+                          r'اذا\s+(?:اطلب|اخذ|اشتري)\s+(?:قطع[ةه]|وحد[ةه]|قطعتين|\d+\s*قطع)', clean)
+                and (re.search(r'(?:توصيل|شحن).{0,35}(?:ح\s*)?(?:يصير|تصير|يطلع|تطلع|يكون)\s*'
+                               r'(?:ب\s*)?\d+(?:[,.٬]\d+)*', clean)
+                     or re.search(r'المجموع.{0,45}(?:يصير|يطلع|هو|نفسه|هم)\s*\d+', clean)))
+
+
 def unresolved_purchase_terms(text):
     """Do not treat price questions or conditional terms as purchase consent.
 
@@ -191,10 +222,10 @@ def unresolved_purchase_terms(text):
     if (re.search(r'ارجع|يرجع|ترجع|رجع|فحص|افحص', clean)
             and not re.search(r'خصم|تخفيض|تحسب|تخلي|بشرط.{0,20}(?:سعر|يوصل|يلحق)', clean)):
         return ''
-    if delivery_fee_inquiry(text):
+    if delivery_fee_inquiry(text) or delivered_total_inquiry(text):
         return 'unanswered_price_or_shipping'
     if re.search(
-            r'(?:شكد|كم|بشكد|بيش|شنو).{0,22}(?:سعر|المجموع|توصيل|تحسب|يطلع)|'
+            r'(?:شكد|كم|بشكد|بيش|شنو).{0,22}(?:سعر|المجموع|توصيل|تحسب|يطلع|حساب)|'
             r'(?:سعر|توصيل|المجموع).{0,16}(?:شكد|كم|بيش)|'
             r'(?:شكد|بشكد|بيش)(?:\s+(?:هذا|هاي|هذ|الموديل|الحجز|حساب))?\s*[؟?]', clean):
         return 'unanswered_price_or_shipping'

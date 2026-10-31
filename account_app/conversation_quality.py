@@ -39,14 +39,40 @@ def one_next_question(reply):
 
 
 def defer_contact_until_consent(reply):
-    """After a booking offer, wait for the answer before collecting contacts."""
+    """Called only without purchase consent: remove requests, retain factual answers."""
     text = str(reply or '')
-    if not re.search(r'(?:تحبين|تحب|تريدين|تريد).{0,24}(?:نثبت|نحجز|احجز|اثبت)[^؟?]*[؟?]', normalized(text)):
-        return text
-    parts = re.split(r'(?<=[.!؟?\n])', text)
-    kept = [part for part in parts if not re.fullmatch(
-        r'(?:بس\s*)?(?:دزيلي|دزي|ارسلي|انطيني)\s*(?:رقم|عنوان|محافظ|موبايل|تلفون)[^.؟?]*[.؟?]?', normalized(part).strip())]
-    return ''.join(kept).strip()
+    pattern = (r'(?<!\w)(?:دزيلي|دزي|[اأ]رسلي|انطيني|[اأ]حتاج(?:\s+منج)?|نحتاج|محتاج[هة](?:\s+منج)?|ممكن\s+[اإ]رسال)'
+               r'\s+(?:بس\s*)?(?:رقم|عنوان|المحافظ[هة]|محافظتج|موبايل|تلفون|هاتف)[^.!؟?\n]*[.!؟?]?')
+    text = re.sub(pattern, '', text)
+    return re.sub(r'\n\s*\n+', '\n\n', text).strip()
+
+
+def booking_status_question(text):
+    """An ordinary saved-order status question, without a new action or complaint."""
+    clean = normalized(text).strip(' ؟?!.،')
+    return bool(re.fullmatch(r'(?:يعني\s+|زين\s+|هسه\s+)?(?:صار\s+الحجز|تم\s+الحجز|تثبت\s+(?:الطلب|الحجز)|'
+                             r'ثبتتوا\s+(?:الطلب|الحجز|طلبي)|سجلتوا\s+طلبي|طلبي\s+(?:ثبت|تثبت|مسجل))', clean))
+
+
+def defer_repeated_choice_questions(reply, history):
+    try:
+        from .sales_strategy import repeated_choice_dimensions, choice_question_dimension
+    except ImportError:
+        from sales_strategy import repeated_choice_dimensions, choice_question_dimension
+    repeated = repeated_choice_dimensions(history)
+    if not repeated:
+        return reply
+    parts = re.split(r'(?<=[.!؟?\n])\s*', str(reply or ''))
+    kept = []
+    for part in parts:
+        # Remove only a repeated selection question, never a factual sentence
+        # containing a question, a quote, or an explanation of available sizes.
+        factual = re.search(r'\d|سعر|قماش|خام[ةه]|توصيل|المجموع|قياسات|الوانه|ألوانه', part)
+        if choice_question_dimension(part) in repeated and len(part) <= 130 and not factual:
+            continue
+        kept.append(part)
+    result = ' '.join(part.strip() for part in kept if part.strip())
+    return result if result and re.search(r'\w', result) else reply
 
 
 def budget(text):
@@ -60,10 +86,11 @@ def budget(text):
 
 def child_ages(text):
     """Explicit ages in a turn, in order; never clothing sizes or prices."""
-    clean = normalized(text)
-    matches = re.finditer(r'(?:ل?عمر(?:ه|ها)?\s*\d{1,2}(?:\s*(?:اشهر|شهر|سنوات|سن[ةه]))?(?:\s*و?نص)?|'
-                          r'\d{1,2}\s*(?:اشهر|شهر|سنوات|سن[ةه])|ل?عمر(?:ه|ها)?\s*سن(?:تين|[ةه](?:\s*و?نص)?))', clean)
-    return [age for match in matches if (age := child_age(match[0])) is not None]
+    try:
+        from .product_variants import child_age_mentions
+    except ImportError:
+        from product_variants import child_age_mentions
+    return child_age_mentions(text)
 
 
 def child_age(text):
@@ -95,6 +122,8 @@ def operational_request(text):
 
 def unsupported_claim(reply):
     text = normalized(reply)
+    if re.search(r'(?:من|اول\s*ما|بس|لما)\s+(?:تتوفر|يتوفر|ينزل|تنزل|نوفر|تجي|يجي).{0,65}(?:ابلغ|نبلغ|ادزلج|ندزلج|نراسلك|نتواصل)', text):
+        return True  # No automatic restock-notification subscription exists.
     return bool(re.search(r"(?:بلغت|بلغنا|استعجلت|استعجلنا|اتصلت|اتصلنا|دا اتابع|هسه اتابع).{0,45}(?:شرك|مندوب)|(?:سجلت|ثبتت).{0,35}(?:نبلغ|نوفر|قياسات اكبر)|(?:تم الغاء|الغيت|الغينا|عدلت|غيرت).{0,25}(?:طلب|حجز)", text))
 
 

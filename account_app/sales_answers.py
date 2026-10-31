@@ -4,12 +4,12 @@ import re
 try:
     from . import customer_copy, sales_strategy, product_variants
     from .checkout import normalized
-    from .pricing import terms, offer_tiers, quote
+    from .pricing import terms, offer_tiers, quote, money
     from .sales_playbook import requested_quantity
 except ImportError:
     import customer_copy, sales_strategy, product_variants
     from checkout import normalized
-    from pricing import terms, offer_tiers, quote
+    from pricing import terms, offer_tiers, quote, money
     from sales_playbook import requested_quantity
 
 
@@ -17,21 +17,27 @@ def topics(question):
     text = normalized(question)
     result = []
     patterns = {
-        'price': r'سعر|بشكد|بكم|بيش|غالي|ميزاني|خصم|تخفيض|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)|(?:شكد|اشكد|كم)\s*(?:ثنين|قطعتين|\d+\s*قطع)',
+        'price': r'سعر|بشكد|بكم|بيش|حساب|غالي|ميزاني|خصم|تخفيض|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)|(?:شكد|اشكد|كم)\s*(?:ثنين|قطعتين|\d+\s*قطع)',
         'colors': r'الوان|(?<!\w)(?:و?ال)?لون(?:ه|ها)?(?!\w)|الاسود|الابيض|الوردي|الجوزي',
         'sizes': r'قياس|مقاس|سايز',
         'fabric': r'قماش|خام[ةهت]',
+        'fabric_feel': r'(?:قماش|خام[ةهت]|سمك|ملمس).{0,45}(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم)|'
+                       r'(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم).{0,20}(?:القماش|خامته|باللبس)',
+        'season': r'شتوي|صيفي|بهاري|خريفي|الموسم|يدفي',
+        'care': r'غسل|غسيل|يكش|ينكمش|يذب\s*لون|يثبت\s*لون|كوي|يتعكش|يتجعد|يتكرمش',
         'delivery': r'توصيل|شحن',
         'payment': r'دفع|ادفع',
         'delivery_time': r'(?:شوكت|يمتى|متى|كم يوم|شكد وقت).{0,30}(?:يوصل|توصيل|الطلب)',
         'inspection': r'فحص|افحص|ارجع|يرجع',
         'video': r'فيديو',
+        'photo_source': r'(?:صور[ةه]?|فيديو|اعلان).{0,30}(?:ذكاء|مولد|تصوير|حقيقي)|(?:ذكاء|تصوير|حقيقي).{0,30}(?:صور[ةه]?|فيديو|اعلان)',
+        'wholesale': r'درزن|دزين|سيري[ةه]|البيع\s+بالجمل[ةه]',
         'weight_fit': r'وزن|كيلو|كغم',
-        'width': r'عرض(?:ه|ها)|(?<!\w)(?<!على\s)(?<!علي\s)(?<!حسب\s)(?<!ضمن\s)(?<!هذا\s)(?<!بهذا\s)و?العرض(?!\s*(?:اللي|الي|الخاص|الحالي|مال|عدكم|عندكم|الموجود))(?!\w)|عرض\s+(?:القطعة|الصدر)|عرض.{0,25}(?:سم|سانتي|سنتيمتر)|تحت الابط|محيط الصدر',
+        'width': product_variants.WIDTH_REQUEST_PATTERN,
         'length': r'طول(?:ه|ها)|(?<!\w)الطول(?!\w)|طول (?:القطعة|الفستان|القميص|الموديل|البنطرون|البنطلون|الكيلوت|اكيلوت|التنورة|العباءة)',
         'lining': r'بطان|مبطن',
         'stretch': r'مطاط|ليكرا|يتمدد',
-        'closure': r'ينفتح|سحاب|سح?اب|اغلاق|ازرار|زرار|كبس|لاستيك|استيك|(?<!\w)(?:دگم|دكم)(?!\w)',
+        'closure': r'ينفتح|سحاب|(?<!\w)(?:و?ال)?سح?اب(?!\w)|اغلاق|ازرار|زرار|كبس|لاستيك|استيك|(?<!\w)(?:و?ال)?(?:دگم|دكم)(?!\w)',
         'location': r'وين\s+(?:المحل|محلكم|موقعكم)|عنوان\s+المحل|موقع\s+المحل',
         'checkout_help': r'شلون\s+(?:اطلب|احجز)|كيف\s+(?:اطلب|احجز)|طريقة\s+(?:الطلب|الحجز)',
         'specifications': r'مواصفات|تفاصيل\s+(?:الموديل|الفستان|القطعة)',
@@ -40,6 +46,10 @@ def topics(question):
     for key, pattern in patterns.items():
         if re.search(pattern, text):
             result.append(key)
+    if 'care' in result and 'colors' in result:
+        color_question = re.sub(r'(?:يذب|يثبت|ثبات|يغير)\s*(?:ال)?لون', '', text)
+        if not re.search(patterns['colors'], color_question):
+            result.remove('colors')
     if re.search(r'(?:سعر|بشكد|بكم|بيش)\s*(?:ال)?(?:توصيل|شحن)', text) and not re.search(
             r'(?:سعر(?:ه|ها)|سعر\s+(?:القطعة|الموديل|الفستان)|السعر\s*و)', text):
         result = [key for key in result if key != 'price']
@@ -71,16 +81,39 @@ def product_fragments(question, product):
     if 'price' in selected:
         try:
             count, price, _ = terms(product)
-            facts.append((f'سعر البكج من {count} قطع: {price:,} د.ع.' if count > 1
-                          else f'سعر الموديل: {price:,} د.ع.'))
+            unit = wholesale_unit(product)
+            if not (unit and 'wholesale' in selected):
+                facts.append((f'سعر البكج من {count} قطع: {price:,} د.ع.' if count > 1
+                              else f'سعر {unit}: {price:,} د.ع.' if unit else f'سعر الموديل: {price:,} د.ع.'))
             for quantity, amount in offer_tiers(product):
                 facts.append(f'عرض {quantity} قطع: {amount:,} د.ع.')
             requested = requested_quantity(question)
-            if requested:
+            if requested and not unit:
                 amount = quote([{'product_id': product['product_id'], 'quantity': requested}], [product], 0)['product_total']
                 facts.append(f'سعر {requested} قطع: {amount:,} د.ع.')
         except (ValueError, TypeError, KeyError):
             gaps.append('سعر الموديل يحتاج تأكيد من المتجر.')
+    if 'wholesale' in selected:
+        lines = wholesale_lines(product)
+        if lines:
+            facts.extend(lines)
+        else:
+            gaps.append('عدد قطع وحدة البيع بالجملة يحتاج تأكيد من المتجر.')
+    if 'photo_source' in selected:
+        source = customer_copy.fact(product.get('real_photo_notes'), 'real_photo_notes').strip()
+        facts.append(source if source and len(source) <= 220 and not customer_copy.has_instructions(source)
+                     else 'طريقة إعداد الصورة مو موضحة عندي، فما أگدر أأكد إذا تصوير أو مولدة.')
+    if 'season' in selected:
+        recorded_season = season_fact(product)
+        if recorded_season:
+            facts.append(recorded_season)
+        else:
+            fabric = customer_copy.fact(product.get('fabric'), 'fabric').strip()
+            facts.append((f'قماشه {fabric}، ' if fabric else '') + 'بس إذا شتوي لو صيفي هالتفصيل مو موضح عندي لهالموديل.')
+    if 'care' in selected:
+        facts.append(care_fact(product) or 'تفاصيل العناية بالقماش مو موضحة عندي لهالموديل، فما أگدر أضمن نتيجة الغسل أو الكوي.')
+    if 'fabric_feel' in selected:
+        facts.append(fabric_feel_fact(product) or 'سمك القماش وملمسه مو موضحين بتفاصيل هالموديل، فما أگدر أأكد إذا خفيف وبارد باللبس.')
     fields = [('colors', 'ألوان الموديل'), ('sizes', 'قياسات الموديل'),
               ('fabric', 'القماش'), ('lining', 'البطانة'),
               ('stretch', 'المطاط'), ('closure', 'الإغلاق')]
@@ -113,6 +146,54 @@ def product_fragments(question, product):
             gaps.append('بقية التفاصيل المطلوبة تحتاج تأكيد من المتجر.')
             break
     return list(dict.fromkeys(facts)), list(dict.fromkeys(gaps))
+
+
+def wholesale_lines(product):
+    """Only explicit unit/count declarations; no inferred retail or quarter price."""
+    text = customer_copy.fact((product or {}).get('description'), 'description')
+    return [line.strip(' .') + '.' for line in text.splitlines()
+            if len(line) <= 220 and re.match(r'\s*(?:سعر\s+(?:ال)?(?:درزن|سيري[ةه])|أ?قل\s+كمي[ةه]\s+للطلب)\s*[:：]', line)
+            and re.search(r'\d', line) and not customer_copy.has_instructions(line)]
+
+
+def fabric_feel_fact(product):
+    recorded = '\n'.join(customer_copy.fact((product or {}).get(key), key)
+                         for key in ('fabric', 'description', 'fit_notes'))
+    return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
+                     if len(part) <= 220 and re.search(r'ثقيل|ثخين|سميك|خفيف|بارد|ناعم', part)
+                     and not customer_copy.has_instructions(part))
+
+
+def care_fact(product):
+    recorded = '\n'.join(customer_copy.fact((product or {}).get(key), key)
+                         for key in ('fabric', 'description', 'fit_notes', 'faq', 'care_instructions'))
+    return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
+                     if len(part) <= 220 and re.search(r'غسل|غسيل|يكش|ينكمش|يذب\s*لون|ثبات\s*اللون|كوي|يتعكش|يتجعد|يتكرمش', part)
+                     and not customer_copy.has_instructions(part))
+
+
+def season_fact(product):
+    recorded = ' '.join(customer_copy.fact((product or {}).get(key), key)
+                        for key in ('fabric', 'description', 'fit_notes', 'faq'))
+    return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
+                     if len(part) <= 220 and re.search(r'(?<!\w)(?:شتوي[هة]?|صيفي[هة]?|بهاري[هة]?|خريفي[هة]?)(?!\w)', part)
+                     and not customer_copy.has_instructions(part))
+
+
+def wholesale_unit(product):
+    try:
+        _, price, _ = terms(product)
+    except (ValueError, TypeError):
+        return ''
+    for line in wholesale_lines(product):
+        hit = re.match(r'سعر\s+((?:ال)?(?:درزن|سيري[ةه]))\s*[:：]\s*(\d[\d,٬.]*(?:\s*(?:ألف|الف|آلاف|الاف))?)', line)
+        if hit:
+            try:
+                if money(hit[2]) == price:
+                    return hit[1]
+            except (ValueError, TypeError):
+                pass
+    return ''
 
 
 def evidence_text(item):
@@ -153,7 +234,7 @@ def missing_answers(reply, question, product):
     that a generic size range answers a personal fit question.
     """
     selected = topics(question)
-    if len(selected) < 2 or not product:
+    if (len(selected) < 2 and not set(selected) & {'photo_source', 'wholesale'}) or not product:
         return []
     text, clean = normalized(question), normalized(reply)
     missing = []
@@ -177,6 +258,10 @@ def missing_answers(reply, question, product):
             missing.append('القماش')
     if 'video' in selected and not product.get('video_url') and 'فيديو' not in clean:
         missing.append('عدم توفر فيديو حالياً')
+    if 'photo_source' in selected and not re.search(r'مصدر|طريق[ةه]|تصوير|مولد|مو موضح|ما عندي', clean):
+        missing.append('مصدر الصورة أو عدم توثيقه')
+    if 'wholesale' in selected and wholesale_lines(product) and not re.search(r'\d+\s*قطع', clean):
+        missing.append('عدد القطع في وحدة البيع بالجملة')
     if 'delivery' in selected and not re.search(r'توصيل|شحن|مجاني', clean):
         missing.append('التوصيل')
     # Check coverage separately from factual accuracy. A fee alone does not

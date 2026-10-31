@@ -205,7 +205,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         result = {"order": {"items": self.data()["items"]}}
         created, reply = self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
         self.assertTrue(created)
-        self.assertEqual(reply, "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي تفحصين الطلب قبل دفع المبلغ.")
+        self.assertEqual(reply, "تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. أهم شي فحص الطلب قبل دفع المبلغ.")
         self.assertEqual(self.m.approved_reply_parts(result, reply), [reply])
 
     def test_new_contact_triggers_checkout_despite_false_model_flag(self):
