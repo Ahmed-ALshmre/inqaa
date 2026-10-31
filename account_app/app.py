@@ -13066,8 +13066,9 @@ def health():
         "public_product_images": bool(PUBLIC_URL),
         "order_notifications": bool(TELEGRAM_BOT_TOKEN and (TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID)),
     }
-    if zernio.enabled_for_store('al-fatena'):
-        readiness['zernio_al_fatena'] = zernio.configuration()['ready']
+    for store in zernio.STORE_FLAGS:
+        if zernio.enabled_for_store(store):
+            readiness['zernio_' + store.replace('-', '_')] = zernio.configuration(store)['ready']
     return jsonify({
         "status"        : "ok",
         "code_version"  : code_version,

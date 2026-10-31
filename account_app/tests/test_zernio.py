@@ -22,6 +22,7 @@ class ZernioTests(unittest.TestCase):
         self.facebook, self.instagram = 'a' * 24, 'b' * 24
         self.env = patch.dict(os.environ, {
             'MESSAGING_PROVIDER': 'chatwoot', 'ZERNIO_AL_FATENA_ENABLED': '1',
+            'ZERNIO_BARAAH_KIDS_ENABLED': '0',
             'ZERNIO_API_KEY': 'test-zernio-key', 'ZERNIO_WEBHOOK_SECRET': 'test-zernio-secret',
             'ENABLE_BACKGROUND_JOBS': '0', 'CHATWOOT_ACCOUNT_ID': '1',
             'CHATWOOT_WEBHOOK_SECRET': 'test-cw-secret',

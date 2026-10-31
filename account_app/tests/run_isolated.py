@@ -33,6 +33,7 @@ def main():
             ENABLE_BACKGROUND_JOBS="0",
             DISABLE_CLIP="1",
             ZERNIO_AL_FATENA_ENABLED="0",
+            ZERNIO_BARAAH_KIDS_ENABLED="0",
             # Synthetic fixture credentials; the Session.request patch below
             # blocks every real request. Tests must not depend on live keys.
             OPENROUTER_API_KEY="offline-test-only",
