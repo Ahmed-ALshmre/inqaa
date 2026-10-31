@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="/static/css/theme.css?v=1">
   <link rel="stylesheet" href="/static/css/ui.css?v=1">
   <link rel="stylesheet" href="/static/css/inbox.css?v=1">
+  <link rel="stylesheet" href="/static/css/store-ai.css?v=1">
   <script defer src="/static/js/ui.js?v=1"></script>
 </head>
 <body class="messenger-page">
@@ -45,6 +46,9 @@
     <button class="dashboard-drawer-toggle" type="button" onclick="toggleDashboardDrawer()" title="القائمة">
       <i class="bi bi-grid-3x3-gap"></i>
       <span>القائمة</span>
+    </button>
+    <button class="store-ai-shortcut" type="button" onclick="openStoreAIControls()" aria-controls="storeAIControls" aria-label="التحكم بذكاء جميع المتاجر" title="تشغيل الذكاء الاصطناعي لكل متجر">
+      <i class="bi bi-toggles" aria-hidden="true"></i><span>ذكاء المتاجر</span><small id="storeAIQuickCount">…</small>
     </button>
   </div>
 {% include "_rewards_bar.html" %}
@@ -71,11 +75,12 @@
     <span class="badge bg-light text-dark fs-7" id="statMessages">0 رسالة</span>
   </div>
 
-  <div class="drawer-section-title">الذكاء الاصطناعي</div>
-  <button class="drawer-action ai-toggle-btn" id="aiToggleBtn" onclick="toggleGlobalAI()" title="إيقاف/تشغيل AI لمتجر المحادثة المفتوحة" disabled>
-    <i class="bi bi-robot"></i>
-    <span id="aiToggleText">اختر محادثة لتحديد المتجر</span>
-  </button>
+  <section class="store-ai-panel" id="storeAIControls" aria-labelledby="storeAIHeading" tabindex="-1">
+    <div class="store-ai-heading"><div><span class="store-ai-eyebrow">الرد التلقائي</span><h2 id="storeAIHeading">ذكاء المتاجر</h2></div><button type="button" class="store-ai-refresh" onclick="refreshStoreAIStates()" aria-label="تحديث حالة ذكاء المتاجر"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button></div>
+    <p class="store-ai-description">تحكّم بكل متجر مباشرة، دون فتح محادثة.</p>
+    <div id="storeAIList" class="store-ai-list" aria-busy="true"></div>
+    <p id="storeAIStatus" class="store-ai-status" role="status" aria-live="polite">جارٍ تحميل المتاجر…</p>
+  </section>
 
   <div class="drawer-section-title">الصفحات</div>
   {% if staff_person and staff_person.owner %}<a class="drawer-link" href="/settings/staff"><i class="bi bi-people"></i><span>الموظفون والصلاحيات</span></a>{% endif %}
@@ -645,7 +650,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=3"></script>
-<script src="/static/js/dashboard.js?v=35"></script>
+<script src="/static/js/dashboard.js?v=36"></script>
 <script src="/static/js/conversation_tools.js?v=3"></script>
 <script>
   if ('serviceWorker' in navigator) {

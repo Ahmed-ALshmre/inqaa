@@ -35,6 +35,10 @@ let allProducts       = [];
 let productRequestVersion = 0;
 let globalAIEnabled   = true;
 const storeAIStates = new Map();
+let storeAICatalog = [];
+let storeAIRevision = 0;
+const storeAIWriteVersions = new Map();
+const storeAIPending = new Set();
 let currentConversationAIEnabled = true;
 let audioUnlocked     = false;
 const messageSound    = new Audio('/aud/cheerful-527.mp3');
@@ -70,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (custEl) custEl.addEventListener('scroll', onCustomerListScroll);
   syncConversationFilterUI();
   loadInboxStores();
+  setInterval(() => { if (!document.hidden) refreshStoreAIStates(false); }, 15000);
   loadConversations();
   loadStats();
   loadProducts();
@@ -383,11 +388,12 @@ function inboxQuery() {
   return params;
 }
 async function loadInboxStores() {
+  const revision = storeAIRevision;
   try {
     const res = await apiFetch('/api/stores');
     if (!res.ok) throw new Error('stores');
     const data = await res.json();
-    for (const store of data.stores || []) storeAIStates.set(store.store_id, store.ai_enabled !== false);
+    applyStoreAIStates(data.stores || [], revision);
     syncActiveStoreAI();
     const select = document.getElementById('conversationStoreFilter');
     const statsSelect = document.getElementById('dashboardStatsStore');
@@ -397,7 +403,7 @@ async function loadInboxStores() {
     select.value = currentStoreFilter;
     statsSelect.value = currentStoreFilter;
     loadStats();
-  } catch { showToast('تعذر تحميل قائمة المتاجر؛ أعد تحديث الصفحة', 'warning'); }
+  } catch { setStoreAIStatus('تعذّر تحميل المتاجر. اضغط تحديث لإعادة المحاولة.'); showToast('تعذر تحميل قائمة المتاجر؛ أعد تحديث الصفحة', 'warning'); }
 }
 function refreshInboxFilters() {
   clearTimeout(inboxSearchTimer);
@@ -1847,14 +1853,7 @@ function renderTopProducts(products) {
 }
 
 function renderAIToggle() {
-  const btn = document.getElementById('aiToggleBtn');
-  const txt = document.getElementById('aiToggleText');
-  if (!btn || !txt) return;
-  const storeName = currentCustomer?.store_name || 'هذا المتجر';
-  btn.disabled = !currentSenderId;
-  btn.classList.toggle('off', !globalAIEnabled);
-  txt.textContent = !currentSenderId ? 'اختر محادثة لتحديد المتجر' : globalAIEnabled ? `AI يعمل في ${storeName}` : `AI متوقف في ${storeName}`;
-  btn.title = !currentSenderId ? 'اختر محادثة أو افتح صفحة المتاجر' : globalAIEnabled ? `إيقاف AI في جميع محادثات ${storeName}` : `تشغيل AI في ${storeName}`;
+  renderStoreAIControls();
   renderAskAIButton();
   renderAIActionButtons();
 }
@@ -1867,13 +1866,106 @@ function syncActiveStoreAI() {
 }
 
 async function refreshActiveStoreAI() {
-  const storeId = currentCustomer?.store_id;
-  if (!storeId) return;
-  const response = await apiFetch('/api/stores');
-  if (!response.ok) return;
-  const data = await response.json();
-  for (const store of data.stores || []) storeAIStates.set(store.store_id, store.ai_enabled !== false);
-  if (currentCustomer?.store_id === storeId) syncActiveStoreAI();
+  return refreshStoreAIStates(false);
+}
+
+function canControlStoreAI() {
+  const person = window.workspacePerson;
+  return Boolean(person && (person.owner || person.permissions?.includes('reply') || person.permissions?.includes('settings')));
+}
+
+function setStoreAIStatus(message) {
+  const node = document.getElementById('storeAIStatus');
+  if (node) node.textContent = message;
+}
+
+function applyStoreAIStates(stores, revision) {
+  storeAICatalog = stores.filter(store => store.active !== false && store.active !== 0);
+  for (const store of storeAICatalog) {
+    if (!storeAIPending.has(store.store_id) && (storeAIWriteVersions.get(store.store_id) || 0) <= revision)
+      storeAIStates.set(store.store_id, store.ai_enabled !== false && store.ai_enabled !== 0);
+  }
+  renderStoreAIControls();
+  setStoreAIStatus(storeAICatalog.length ? (canControlStoreAI() ? 'كل مفتاح يتحكم بمتجره فقط.' : 'عرض الحالات فقط؛ التحكم غير متاح لحسابك.') : 'لا توجد متاجر فعّالة.');
+}
+
+function renderStoreAIControls() {
+  const list = document.getElementById('storeAIList');
+  if (!list) return;
+  const ids = new Set(storeAICatalog.map(store => store.store_id));
+  for (const row of [...list.children]) if (!ids.has(row.dataset.storeId)) row.remove();
+  for (const store of storeAICatalog) {
+    let row = [...list.children].find(node => node.dataset.storeId === store.store_id);
+    if (!row) {
+      row = document.createElement('div'); row.className = 'store-ai-row'; row.dataset.storeId = store.store_id;
+      const info = document.createElement('div'); info.className = 'store-ai-info';
+      const name = document.createElement('strong'); name.className = 'store-ai-name';
+      const status = document.createElement('span'); status.className = 'store-ai-state';
+      info.append(name, status);
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'store-ai-switch'; button.setAttribute('role', 'switch');
+      button.addEventListener('click', () => toggleStoreAI(store.store_id));
+      const thumb = document.createElement('span'); thumb.setAttribute('aria-hidden', 'true'); button.append(thumb);
+      row.append(info, button); list.append(row);
+    }
+    const enabled = storeAIStates.get(store.store_id) === true;
+    const busy = storeAIPending.has(store.store_id);
+    row.dataset.state = enabled ? 'on' : 'off';
+    row.querySelector('.store-ai-name').textContent = store.name;
+    row.querySelector('.store-ai-state').textContent = busy ? 'جارٍ الحفظ…' : enabled ? 'يعمل · الرد التلقائي مفعّل' : 'متوقف · الردود الآلية متوقفة';
+    const button = row.querySelector('button');
+    button.disabled = busy || !canControlStoreAI() || !storeAIStates.has(store.store_id);
+    button.setAttribute('aria-checked', String(enabled)); button.setAttribute('aria-busy', String(busy));
+    button.setAttribute('aria-label', 'الذكاء الاصطناعي لمتجر ' + store.name);
+    button.title = canControlStoreAI() ? (enabled ? 'إيقاف' : 'تشغيل') + ' الذكاء الاصطناعي في ' + store.name : 'التحكم غير متاح لحسابك';
+  }
+  list.setAttribute('aria-busy', 'false');
+  const count = document.getElementById('storeAIQuickCount');
+  if (count) count.textContent = storeAICatalog.length ? `${storeAICatalog.filter(store => storeAIStates.get(store.store_id)).length}/${storeAICatalog.length}` : '—';
+}
+
+async function refreshStoreAIStates(notify = true) {
+  const revision = storeAIRevision;
+  try {
+    const response = await apiFetch('/api/stores');
+    if (!response.ok) throw new Error('تعذّر تحديث حالة المتاجر');
+    const data = await response.json();
+    applyStoreAIStates(data.stores || [], revision);
+    syncActiveStoreAI();
+    return true;
+  } catch (error) {
+    setStoreAIStatus('تعذّر تحديث الحالات. اضغط تحديث لإعادة المحاولة.');
+    if (notify) showToast('تعذّر تحديث حالة المتاجر', 'warning');
+    return false;
+  }
+}
+
+function openStoreAIControls() {
+  if (!document.getElementById('dashboardDrawer')?.classList.contains('open')) toggleDashboardDrawer();
+  document.getElementById('storeAIControls')?.focus({preventScroll: true});
+  refreshStoreAIStates(false);
+}
+
+async function toggleStoreAI(storeId) {
+  if (!canControlStoreAI() || storeAIPending.has(storeId) || !storeAIStates.has(storeId)) return;
+  const next = !storeAIStates.get(storeId);
+  storeAIPending.add(storeId); storeAIWriteVersions.set(storeId, ++storeAIRevision);
+  renderStoreAIControls();
+  try {
+    const response = await apiFetch(`/api/stores/${encodeURIComponent(storeId)}/ai`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({enabled: next}),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok || typeof data.ai_enabled !== 'boolean') throw new Error(data.error || 'تعذّر حفظ الحالة');
+    storeAIStates.set(storeId, data.ai_enabled);
+    const name = storeAICatalog.find(store => store.store_id === storeId)?.name || 'المتجر';
+    showToast((data.ai_enabled ? 'تم تشغيل الذكاء الاصطناعي في ' : 'تم إيقاف الذكاء الاصطناعي في ') + name, data.ai_enabled ? 'success' : 'warning');
+  } catch (error) {
+    showToast(error.message || 'تعذّر حفظ الحالة، أعد المحاولة', 'danger');
+  } finally {
+    storeAIPending.delete(storeId); storeAIWriteVersions.set(storeId, ++storeAIRevision);
+    syncActiveStoreAI();
+    refreshStoreAIStates(false);
+  }
 }
 
 function renderConversationAIToggle() {
@@ -1932,27 +2024,7 @@ function renderAIActionButtons() {
 }
 
 async function toggleGlobalAI() {
-  const storeId = currentCustomer?.store_id;
-  if (!storeId) { showToast('اختر محادثة من المتجر أولاً', 'warning'); return; }
-  const next = !globalAIEnabled;
-  const button = document.getElementById('aiToggleBtn');
-  if (button) button.disabled = true;
-  try {
-    const res = await apiFetch(`/api/stores/${encodeURIComponent(storeId)}/ai`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: next }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      storeAIStates.set(storeId, data.ai_enabled);
-      syncActiveStoreAI();
-      showToast(data.ai_enabled ? 'تم تشغيل AI لهذا المتجر' : 'تم إيقاف AI لهذا المتجر وإلغاء متابعاته المعلّقة', data.ai_enabled ? 'success' : 'warning');
-    } else {
-      showToast('فشل تغيير حالة AI', 'danger');
-    }
-  } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
-  finally { syncActiveStoreAI(); }
+  openStoreAIControls();
 }
 
 async function toggleConversationAI() {
