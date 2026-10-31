@@ -1,4 +1,4 @@
-"""Zernio transport for the explicitly migrated al-fatena store only."""
+"""Zernio transport with explicit, isolated per-store migrations."""
 import hashlib
 import hmac
 import json
@@ -17,6 +17,8 @@ except ImportError:
     from delivery_state import ANSWERED_SQL
 
 STORE_ID = 'al-fatena'
+STORE_FLAGS = {'al-fatena': 'ZERNIO_AL_FATENA_ENABLED',
+               'baraah-kids': 'ZERNIO_BARAAH_KIDS_ENABLED'}
 API_URL = 'https://zernio.com/api/v1'
 
 
@@ -27,7 +29,7 @@ def account_bindings():
             return {}
         return {key: value for key, value in entries.items()
                 if re.fullmatch(r'[a-fA-F0-9]{24}', key)
-                and isinstance(value, dict) and value.get('store_id') == STORE_ID
+                and isinstance(value, dict) and value.get('store_id') in STORE_FLAGS
                 and value.get('platform') in ('facebook', 'instagram')}
     except (ValueError, TypeError):
         return {}
@@ -35,20 +37,22 @@ def account_bindings():
 
 def enabled_for_store(store):
     # A broken mapping must fail closed, never silently return a migrated store to Chatwoot.
-    return store == STORE_ID and os.environ.get('ZERNIO_AL_FATENA_ENABLED', '0') == '1'
+    flag = STORE_FLAGS.get(store)
+    return bool(flag and os.environ.get(flag, '0') == '1')
 
 
 def sender_store(sender_id):
     return str(sender_id or '').partition('::')[0] if '::' in str(sender_id or '') else ''
 
 
-def configuration():
+def configuration(store=STORE_ID):
     config = {
-        'enabled': enabled_for_store(STORE_ID), 'store_id': STORE_ID,
+        'enabled': enabled_for_store(store), 'store_id': store,
         'key_present': bool(os.environ.get('ZERNIO_API_KEY', '').strip()),
         'webhook_secret_present': bool(os.environ.get('ZERNIO_WEBHOOK_SECRET', '').strip()),
-        'accounts': account_bindings(),
-        'webhook_url': os.environ.get('PUBLIC_URL', '').rstrip('/') + '/zernio/webhook',
+        'accounts': {key: value for key, value in account_bindings().items()
+                     if value['store_id'] == store},
+        'webhook_url': os.environ.get('PUBLIC_URL', '').rstrip('/') + '/zernio/webhook/' + store,
     }
     config['ready'] = bool(config['enabled'] and config['key_present']
                            and config['webhook_secret_present'] and config['accounts'])
@@ -79,7 +83,7 @@ def event_time(value):
         raise ValueError('Invalid event timestamp')
 
 
-def _binding(module, data):
+def _binding(module, data, store_key=''):
     account, conversation = data.get('account'), data.get('conversation')
     if not isinstance(account, dict) or not isinstance(conversation, dict):
         raise ValueError('Missing account or conversation')
@@ -89,6 +93,9 @@ def _binding(module, data):
     config = account_bindings().get(account_id)
     if not config or not enabled_for_store(config['store_id']):
         raise ValueError('Unmapped Zernio account')
+    store = config['store_id']
+    if store_key and store_key != store:
+        raise ValueError('Account does not belong to webhook store')
     if account.get('platform') != config['platform']:
         raise ValueError('Unexpected account platform')
     conv_id = str(conversation.get('id') or '').strip()
@@ -105,17 +112,17 @@ def _binding(module, data):
         raise ValueError('Missing conversation or participant identity')
     # Account and platform-scoped participant IDs, never names, identify a customer.
     identity = hashlib.sha256(participant.encode()).hexdigest()[:32]
-    sender_id = f'{STORE_ID}::zn-{account_id}-{identity}'
+    sender_id = f'{store}::zn-{account_id}-{identity}'
     db = module.get_db()
-    if not db.execute('SELECT 1 FROM stores WHERE store_id=?', (STORE_ID,)).fetchone():
+    if not db.execute('SELECT 1 FROM stores WHERE store_id=?', (store,)).fetchone():
         raise ValueError('Store is not configured')
     old = db.execute('SELECT * FROM zernio_conversations WHERE sender_id=?', (sender_id,)).fetchone()
     if old and (old['account_id'] != account_id or old['participant_id'] != participant):
         raise ValueError('Conversation identity conflict')
     db.execute('''INSERT INTO zernio_conversations VALUES(?,?,?,?,?,?)
         ON CONFLICT(sender_id) DO UPDATE SET conversation_id=excluded.conversation_id''',
-        (sender_id, account_id, conv_id, participant, config['platform'], STORE_ID))
-    module._current_store_id.set(STORE_ID)
+        (sender_id, account_id, conv_id, participant, config['platform'], store))
+    module._current_store_id.set(store)
     module.get_or_create_customer(db, sender_id, 'zernio-' + account_id, config['platform'])
     name = sender.get('name') or conversation.get('participantName')
     if isinstance(name, str) and name.strip():
@@ -178,7 +185,7 @@ def _unmapped_referral_belongs_to_image_turn(module, db, sender_id, text, captur
 
     photo = next((row for row in db.execute('''SELECT id,created_at,image_url,media_json,raw_payload,direction,message_type
         FROM messages WHERE sender_id=? AND COALESCE(store_id,'default')=? AND direction='incoming' ORDER BY id DESC''',
-        (sender_id, STORE_ID)) if any(item.get('type') == 'image' and item.get('url') in urls
+        (sender_id, sender_store(sender_id))) if any(item.get('type') == 'image' and item.get('url') in urls
                                    for item in module.message_media(row))), None)
     photo_at = moment(photo['created_at']) if photo else None
     chosen_at = moment(binding.get('last_seen_at'))
@@ -186,7 +193,7 @@ def _unmapped_referral_belongs_to_image_turn(module, db, sender_id, text, captur
         return False
     for answer in db.execute("SELECT created_at FROM messages WHERE sender_id=? AND COALESCE(store_id,'default')=? AND id>? "
                              "AND direction='outgoing' AND message_type='text' AND " + ANSWERED_SQL + ' ORDER BY id',
-                             (sender_id, STORE_ID, photo['id'])):
+                             (sender_id, sender_store(sender_id), photo['id'])):
         answered_at = moment(answer['created_at'])
         if answered_at and answered_at >= chosen_at:
             return captured <= answered_at
@@ -197,11 +204,12 @@ def _unmapped_referral_belongs_to_image_turn(module, db, sender_id, text, captur
 def product_event(module, db, event, products):
     """Use saved attribution once it is newer than the customer's product decisions."""
     sender_id = event.get('sender_id') or ''
-    if not enabled_for_store(sender_store(sender_id)):
+    store = sender_store(sender_id)
+    if not enabled_for_store(store):
         return event
     # Historical Chatwoot customers and other stores must never inherit this context.
     if not db.execute('SELECT 1 FROM zernio_conversations WHERE sender_id=? AND store_id=?',
-                      (sender_id, STORE_ID)).fetchone():
+                      (sender_id, store)).fetchone():
         return event
     context = module.ad_attribution.load(db, sender_id)
     if not context or not (context.get('ad_id') or context.get('ref')):
@@ -243,7 +251,7 @@ def product_event(module, db, event, products):
         source['resolution'] = 'customer_choice'
         return result
     candidates = [product for product in products
-                  if product.get('store_id', STORE_ID) == STORE_ID and any(
+                  if product.get('store_id', store) == store and any(
                       context.get(key) and str(product.get(key) or '').strip() == str(context[key]).strip()
                       for key in ('ad_id', 'ref'))]
     if len(candidates) != 1:
@@ -264,8 +272,9 @@ def product_event(module, db, event, products):
 
 def send(module, sender_id, messages):
     result = {'ok': False, 'status_code': 0, 'status': 'configuration_error', 'message': '', 'response': None}
-    if not enabled_for_store(sender_store(sender_id)):
-        return dict(result, status='wrong_store', message='Zernio is enabled for al-fatena only')
+    store = sender_store(sender_id)
+    if not enabled_for_store(store):
+        return dict(result, status='wrong_store', message='Zernio is disabled for this store')
     token = os.environ.get('ZERNIO_API_KEY', '').strip()
     if not token:
         return dict(result, status='missing_key', message='Configure ZERNIO_API_KEY')
@@ -274,7 +283,8 @@ def send(module, sender_id, messages):
         return dict(result, status='unmapped_conversation',
                     message='تحتاج هذه المحادثة رسالة واردة عبر Zernio قبل الإرسال؛ المحادثة القديمة محفوظة.')
     binding = account_bindings().get(row['account_id'])
-    if not binding or binding['platform'] != row['platform'] or row['store_id'] != STORE_ID:
+    if (not binding or binding['platform'] != row['platform']
+            or binding['store_id'] != store or row['store_id'] != store):
         return dict(result, status='wrong_account', message='Zernio account is not mapped to this store')
     if not messages:
         return dict(result, status='empty_messages')
@@ -336,10 +346,10 @@ def install(module):
     @module.app.post('/zernio/webhook')
     @module.app.post('/zernio/webhook/<store_key>')
     def zernio_webhook(store_key=''):
-        if not enabled_for_store(STORE_ID):
+        if store_key and store_key not in STORE_FLAGS:
+            return jsonify(error='Unsupported Zernio store'), 403
+        if not (enabled_for_store(store_key) if store_key else any(enabled_for_store(store) for store in STORE_FLAGS)):
             return jsonify(error='Zernio migration is disabled'), 409
-        if store_key and store_key != STORE_ID:
-            return jsonify(error='Zernio is enabled for al-fatena only'), 403
         secret = os.environ.get('ZERNIO_WEBHOOK_SECRET', '').strip()
         if not secret:
             return jsonify(error='Configure ZERNIO_WEBHOOK_SECRET'), 503
@@ -375,7 +385,7 @@ def install(module):
                 if not isinstance(message.get('text') or '', str) or not isinstance(message.get('attachments', []), list):
                     raise ValueError('Invalid message content')
                 event_time(message.get('sentAt') or data['timestamp'])
-            sender_id, account_id, platform = _binding(module, data)
+            sender_id, account_id, platform = _binding(module, data, store_key)
         except (ValueError, TypeError, KeyError, AttributeError):
             return jsonify(error='Invalid or unmapped Zernio event'), 422
         _save_ad(module, sender_id, data, occurred_at)
@@ -397,7 +407,7 @@ def install(module):
         context = _ad_context(module, data, occurred_at)
         native_id = str(message.get('platformMessageId') or message['id'])
         body = {'_ad_context': context, 'object': 'page' if platform == 'facebook' else platform,
-                'entry': [{'id': 'zernio-' + account_id, '_store_id': STORE_ID, 'messaging': [{
+                'entry': [{'id': 'zernio-' + account_id, '_store_id': sender_store(sender_id), 'messaging': [{
                     'sender': {'id': sender_id}, 'recipient': {'id': 'zernio-' + account_id},
                     'timestamp': int(datetime.fromisoformat(event_time(message.get('sentAt') or data['timestamp'])).timestamp() * 1000),
                     'message': {'mid': 'zernio-' + account_id + '-' + native_id, 'text': text, 'attachments': attachments},
@@ -409,4 +419,4 @@ def install(module):
     @module.app.get('/api/zernio/diag')
     @module._dash_require
     def zernio_diag():
-        return jsonify(configuration())
+        return jsonify(dict(configuration(), stores={store: configuration(store) for store in STORE_FLAGS}))
