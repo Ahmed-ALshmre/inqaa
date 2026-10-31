@@ -15,7 +15,7 @@ PRODUCT_KNOWLEDGE_FIELDS = (
     'lining', 'transparency', 'stretch', 'closure', 'measurements', 'fit_notes',
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
 )
-EVIDENCE_VERSION = 4
+EVIDENCE_VERSION = 6
 
 
 def browse_request(text):
@@ -86,6 +86,8 @@ def question_from_turn(turn):
 
 def context_evidence(text, turn):
     clean = normalized(product_variants.normalize_size_words(text))
+    if product_variants.size_choice_text(clean) != clean:
+        return True
     declarations = r'قياس|مقاس|سايز|فري سايز|قياس موحد|وزن|عمر|سنوات|سنه|سنة|لون|اسود|ابيض|احمر|ازرق|اخضر|اصفر|خردلي|سماوي|سماي|سمائي|رصاصي|رمادي|جوزي|نيلي|كحلي|وردي|بيج|بيجي|زيتي|تركواز|بنفسجي|كريمي|ماروني|خمري|عنابي|برتقالي|ذهبي|فضي|ميزاني|غالي|احجز|حجزت|ما اريد|مو هذا|مو هاي|اقصد|غيره|غيرها|الاول|الثاني|الثالث|قطعتين|قطعه|قطعة'
     if re.search(declarations + r'|قماش|شتوي|خريفي|اثخن|ثخين|صيفي', clean) or re.fullmatch(r'(?:xs|s|m|l|xl|xxl|xxxl|[2-6]xl)', clean):
         return True

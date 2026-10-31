@@ -141,10 +141,13 @@ def neutral_address(text):
                   'شنو القياس المطلوب؟', text)
     text = re.sub(r'تحب(?:ين)?\s+تشوف(?:ين)?', 'أعرض', text)
     for before, after in [('قياس[كج]', 'القياس'), ('عنوان[كج]', 'العنوان'), ('رقم[كج]', 'رقم الموبايل'),
+                          ('طلب[كج]', 'الطلب'), ('براحت[كج]', 'براحتكم'),
+                          ('تدللين', 'تدللون'), ('تفحصين', 'تفحصون'),
+                          ('تتأكدين', 'تتأكدون'), ('تدفعين', 'تدفعون'), ('ترجعينها', 'ترجعونها'),
                           ('اختيار[كج]', 'الاختيار'), ('رسالت[كج]', 'الرسالة'),
                           (r'(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+(?:ال)?حجز)?', 'أثبت الحجز'),
                           ('(?:دزي|دز|ارسلي|ارسل|أرسلي)(?:لي)?', 'ممكن إرسال')]:
-        text = re.sub(r'(?<!\w)' + before + r'(?!\w)', after, text)
+        text = re.sub(r'(?<!\w)(و?)' + before + r'(?!\w)', lambda hit: hit[1] + after, text)
     return text
 
 
@@ -176,7 +179,8 @@ def surface(text, gender='', seed='', *, warm=True, store_id='', allow_endearmen
     if gender == 'male':
         text = AFFECTION.sub('', text)
         for before, after in [('تدللين', 'تدلل'), ('تحبين', 'تحب'), ('تلبسين', 'تلبس'),
-                              ('تشوفين', 'تشوف'),
+                              ('تشوفين', 'تشوف'), ('شوفي', 'شوف'), ('براحتج', 'براحتك'),
+                              ('طلبج', 'طلبك'), ('طلبتي', 'طلبت'),
                               ('تريدين', 'تريد'), ('تكدرين', 'تكدر'), ('تفحصين', 'تفحص'),
                               ('تتأكدين', 'تتأكد'), ('تتاكدين', 'تتاكد'), ('ترجعين', 'ترجع'),
                               ('تدفعين', 'تدفع'), ('دزيلي', 'دزلي'), ('قياسج', 'قياسك'),
@@ -269,30 +273,52 @@ def next_step(product, context, customer, history=()):
     except ImportError:
         from sales_playbook import customer_selection, weight_cart_choices
     known = customer_selection(context, customer)
+    if sales_answers.wholesale_unit(product):
+        outgoing = [str(item.get('text') or '') for item in list(history or [])[-12:]
+                    if item.get('direction') == 'outgoing']
+        if any(re.search(r'كمي[هة]|كم\s+قطعة|شكد\s+.*(?:اطلب|تطلب)', customer_copy.normalized(text)) for text in outgoing):
+            return ''
+        return 'شنو الكمية المطلوبة للمحل؟'
     recent = ' '.join(str(item.get('text') or '') for item in (list(history or [])[-6:] + list((context or {}).get('last_staff_turn') or []))
                       if item.get('direction', 'outgoing') == 'outgoing')
     years = product_variants.size_data((product or {}).get('sizes'))['years']
     if years and known['age'] is None:
+        if 'age' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         if 'شكد العمر المطلوب' in recent:
             return 'يا عمر مطلوب للطفل؟'
         return 'شكد العمر المطلوب؟'
     weight_ranges = product_variants.weight_only_ranges(product)
     if not years and weight_ranges and (not known['size'] or (known.get('weight') and product_variants.order_choice_error(product, 'size', str(known['size'])))):
+        if 'size' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         plan = weight_cart_choices(product, context, customer)
         if plan and plan.get('question'):
             if plan['question'] == 'شنو القياس المطلوب؟' and 'شنو القياس المطلوب' in recent:
                 return 'شنو القياس اللي يناسبج؟'
             return plan['question']
     elif not years and not known['size']:
+        if 'size' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         if 'شكد قياس تلبسين' in recent:
             return 'شنو القياس اللي يناسبج؟'
         return 'شكد قياس تلبسين؟'
     colors = product_variants.colors((product or {}).get('colors'))
     if len(colors) > 1 and not known['color'] and not known['colors']:
+        if 'color' in sales_strategy.repeated_choice_dimensions(history):
+            return ''
         if 'أي لون تحبين' in recent:
             return 'شنو اللون اللي يعجبج؟'
         return 'أي لون تحبين؟'
-    if not (customer or {}).get('province'):
+    province = (customer or {}).get('province')
+    if not province:
+        try:
+            from .sales_recovery import policy_province
+        except ImportError:
+            from sales_recovery import policy_province
+        province = next((policy_province(m.get('text')) for m in reversed(list(history or []))
+                         if m.get('direction') == 'incoming' and policy_province(m.get('text'))), None)
+    if not province:
         if 'من يا محافظة' in recent:
             return 'أثبّت لج حجز؟'
         return 'من يا محافظة؟'
@@ -482,6 +508,6 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         if requested or range_match:
             choice = range_match[1] + '-' + range_match[2] if range_match else requested[-1]
             step = next_step(product, context, dict(customer or {}, size=choice), history)
-            return result('إي، قياس ' + choice + ' متوفر ويجي فيت ومرتب عالجسم، ' + step)
-        return result('إي متوفر ويجي فيت ومرتب عالجسم، ' + step)
+            return result('إي، قياس ' + choice + ' متوفر، ' + step)
+        return result('إي متوفر، ' + step)
     return None

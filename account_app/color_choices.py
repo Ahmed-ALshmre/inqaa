@@ -49,6 +49,9 @@ def reply(product, text, context, customer=None):
     # A question can supply an age for availability without becoming a purchase choice.
     age = product_variants.child_age(text)
     ages = product_variants.child_ages(text)
+    if len(selected['ages']) > 1 and (product_variants.child_age_correction(text)
+            or re.search(r'اصغر|صغير[هة]?|كبير[هة]?|اول[ىي]|ثاني[هة]?', clean)):
+        return None  # Child references and corrections need the full conversation, not one shared age.
     if age is None:
         age, ages = selected['age'], selected['ages']
     bounds = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))['years']
@@ -73,6 +76,15 @@ def reply(product, text, context, customer=None):
     elif age is None:
         parts = ['ال' + ' وال'.join(colors) + ' متوفرات. شكد العمر المطلوب؟']
     elif len(ages) > 1:
+        allocation_text = product_variants.age_choice_text(text)
+        hits = list(product_variants.COLOR_RE.finditer(allocation_text))
+        # Rich explicit allocations belong to the semantic cart parser. This
+        # shortcut cannot turn two already-labelled ages into a missing-age question.
+        if (len(hits) == len(colors)
+                and all(len(product_variants.child_ages(allocation_text[hit.end():
+                    hits[index + 1].start() if index + 1 < len(hits) else len(allocation_text)])) == 1
+                    for index, hit in enumerate(hits))):
+            return None
         parts = ['اختيارج ' + ' و'.join(colors) + ' واضح. يا عمر مطلوب لكل لون؟']
     elif not age_ok:
         parts = ['الألوان المطلوبة متوفرة، بس عمر ' + age_label + ' مو ضمن قياسات هالموديل.']

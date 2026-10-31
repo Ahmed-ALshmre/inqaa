@@ -235,9 +235,12 @@ def _sales_units(reply):
                 r'الألوان|الالوان|ألوانه|التوصيل|الفحص|المجموع|الإجمالي|الاجمالي)\b|'
                 r'شنو\b|شكد\b|تحبين\b|تحب\b|تكدرين\b|تقدرين\b|ممكن\b|حتى نكمل\b)', piece))
             unfinished = not re.search(r'[.!؟?؛:،,]$', previous) and not fresh_function
+            dependent_intro = bool(not re.search(r'[.!؟?؛]$', previous) and (
+                re.search(r'(?:بس\s+)?(?:يا\s*ريت\s+)?(?:توضحلي|توضحين|كليلي|قوليلي)\s*[،,:]?$', previous)
+                or (len(compact(previous)) <= 70 and re.match(r'^(?:بس\s+)?حتى\s', previous))))
             soft_intro = (len(compact(previous)) <= 24 and not topic(previous)
                           and not re.search(r'[؟?]', previous))
-            if is_greeting(previous) or soft_intro or costs or contact_fields or fit_explanation or continuation or unfinished:
+            if is_greeting(previous) or soft_intro or costs or contact_fields or fit_explanation or continuation or unfinished or dependent_intro:
                 atomic[-1] = previous + '\n\n' + piece
                 continue
         atomic.append(piece)
