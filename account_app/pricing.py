@@ -27,6 +27,39 @@ def money(value):
     return int(amount)
 
 
+_PRICE_AMOUNT = r"\d+(?:[,.٬]\d{3})*(?:\.\d+)?\s*(?:الف|الاف|آلاف)?"
+_SINGLE_PRICE = re.compile(
+    r"(?<!\w)و?(?:سعر\s+)?(?:ال)?قطع[ةه]\s*"
+    r"(?:(?:ال)?(?:واحد[ةه]|مفرد[ةه])\s*)?(?:بسعر\s*|بـ?\s*)?"
+    r"(" + _PRICE_AMOUNT + r")(?![\w.,٬])"
+)
+_OFFER_QUANTITY = re.compile(
+    r"(?<!\w)و?(?:(\d+)\s*قطع(?:ة)?|(?:ال)?قطعتين|(?:ال)?قطعتان)\s*"
+    r"(?:بسعر\s*|بـ?\s*|سعر(?:ه|ها|هن|هم)?\s*(?:بـ?\s*)?)"
+    r"(\d+(?:[,.٬]\d{3})*(?:\.\d+)?)\s*(الف|الاف|آلاف)?"
+)
+
+
+def _retail_price(raw):
+    """Read a labelled single price beside quantity offers, never the first number."""
+    offers = list(_OFFER_QUANTITY.finditer(raw))
+    singles = [match for match in _SINGLE_PRICE.finditer(raw)
+               if not any(offer.start() <= match.start() < offer.end() for offer in offers)]
+    if offers and not singles:
+        raise ValueError("سعر القطعة غير واضح؛ حدّث السعر قبل تثبيت الطلب")
+    if not singles or not offers:
+        return None
+    prices = {money(match[1]) for match in singles}
+    if len(prices) != 1:
+        raise ValueError("أسعار القطعة متعارضة؛ راجع بيانات المنتج قبل تثبيت الطلب")
+    # Every number must belong to an explicit price/quantity clause. An extra
+    # unlabelled amount could be a conflicting price, not an approved discount.
+    remainder = _SINGLE_PRICE.sub('', _OFFER_QUANTITY.sub('', raw))
+    if re.search(r'\d', remainder):
+        raise ValueError("سعر المنتج غير واضح؛ حدّث السعر قبل تثبيت الطلب")
+    return prices.pop()
+
+
 def terms(product):
     raw = clean(product.get("price"))
     # The price field defines the sale unit. Notes and offers may describe the
@@ -37,19 +70,14 @@ def terms(product):
         raise ValueError("عدد قطع البكج غير واضح؛ راجع بيانات المنتج")
     size = counts.pop() if bundle else 1
     # Remove the piece count, never concatenate it with the monetary amount.
-    price = money(re.sub(r"\d+\s*قطع", "", raw))
+    price = _retail_price(raw) if not bundle else None
+    if price is None:
+        price = money(re.sub(r"\d+\s*قطع", "", raw))
     if price <= 0 or size <= 0:
         raise ValueError("سعر المنتج أو عدد قطع البكج غير صحيح")
     shipping = clean(product.get("delivery"))
     free = bool(re.search(r"توصيل\s+مجاني", shipping + " " + clean(product.get("offer"))))
     return size, price, free
-
-
-_OFFER_QUANTITY = re.compile(
-    r"(?<!\w)(?:(\d+)\s*قطع(?:ة)?|(?:ال)?قطعتين|(?:ال)?قطعتان)\s*"
-    r"(?:بسعر\s*|بـ?\s*|سعر(?:ه|ها|هن|هم)?\s*(?:بـ?\s*)?)"
-    r"(\d+(?:[,.٬]\d{3})*(?:\.\d+)?)\s*(الف|الاف|آلاف)?"
-)
 
 
 def offer_tiers(product):
@@ -58,7 +86,7 @@ def offer_tiers(product):
     if size != 1:
         return []
     tiers = {}
-    for key in ("offer", "bundle_contents", "notes"):
+    for key in ("price", "offer", "bundle_contents", "notes"):
         source = clean(product.get(key)).replace("،", " ")
         for match in _OFFER_QUANTITY.finditer(source):
             count = int(match[1]) if match[1] else 2
