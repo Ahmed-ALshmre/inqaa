@@ -6,7 +6,7 @@ import time
 from flask import g, jsonify, redirect, render_template, request, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
-PERMISSIONS = {'reply': 'الرد والصور وربط المنتجات', 'orders': 'إنشاء وإدارة الطلبات',
+PERMISSIONS = {'reply': 'الرد والصور وربط المنتجات وتشغيل AI للمتاجر', 'orders': 'إنشاء وإدارة الطلبات',
                'products': 'إدارة المنتجات', 'advisor': 'المستشار وذاكرته',
                'settings': 'إعدادات المتاجر والذكاء الاصطناعي'}
 
@@ -69,6 +69,9 @@ def required_permission(path, method):
     if path in {'/rewards', '/api/rewards'} and read: return 'read'
     if path == '/api/rewards/withdraw' and method == 'POST': return 'read'
     if path == '/api/dashboard_stats': return 'read'
+    if (method == 'POST' and path.startswith('/api/stores/') and path.endswith('/ai')
+            and len(path.strip('/').split('/')) == 4):
+        return 'reply|settings'
     if path == '/orders' or path.startswith('/api/orders'): return 'orders'
     if path == '/products' or path.startswith('/api/products/manage'): return 'products'
     if path == '/advisor' or path == '/settings/advisor' or path.startswith('/api/advisor'): return 'advisor'

@@ -46,7 +46,6 @@ class StaffAccessTests(unittest.TestCase):
     def test_orders_permission_separate_from_reply(self):
         self.employee()
         self.assertEqual(self.client.post('/api/conversations/test/create_order',json={},headers=self.headers).status_code,403)
-        self.assertEqual(self.client.post('/api/stores/default/ai',json={'enabled': False},headers=self.headers).status_code,403)
         self.assertEqual(self.client.delete('/api/conversations/test',headers=self.headers).status_code,403)
         self.assertEqual(self.client.get('/api/products').status_code,200)
         for store in self.client.get('/api/stores').get_json()['stores']:
@@ -58,6 +57,32 @@ class StaffAccessTests(unittest.TestCase):
         with patch.object(m, 'apply_dashboard_ai_checkout', return_value=('hello',{},None)), patch.object(m, 'send_reply_via_manychat',return_value=True):
             # A reply permission cannot be promoted via a supplied JSON field.
             self.assertEqual(self.client.put('/api/staff/'+str(self.id),json=dict(self.data,permissions=['settings']),headers=self.headers).status_code,403)
+
+    def test_reply_staff_controls_each_store_without_a_conversation_and_is_audited(self):
+        db = m.get_db()
+        m.ensure_store(db, 'al-fatena', 'الفاتنة')
+        self.employee()
+        self.assertEqual(self.client.post('/api/stores/default/ai', json={'enabled': False}).status_code, 403)
+        stopped = self.client.post('/api/stores/al-fatena/ai', json={'enabled': False}, headers=self.headers)
+        self.assertEqual(stopped.status_code, 200)
+        states = {s['store_id']: s['ai_enabled'] for s in self.client.get('/api/stores').json['stores']}
+        self.assertFalse(states['al-fatena'])
+        self.assertTrue(states['default'])
+        self.assertEqual(self.client.get('/api/settings/ai').status_code, 403)
+        self.assertEqual(self.client.post('/api/stores', json={'name': 'غير مسموح'}, headers=self.headers).status_code, 403)
+        self.assertEqual(self.client.post('/api/stores/al-fatena/test-telegram', json={}, headers=self.headers).status_code, 403)
+        resumed = self.client.post('/api/stores/al-fatena/ai', json={'enabled': True}, headers=self.headers)
+        self.assertEqual(resumed.status_code, 200)
+        self.assertTrue(resumed.json['ai_enabled'])
+        rows = db.execute("SELECT staff_id,path FROM staff_audit WHERE path='/api/stores/al-fatena/ai'").fetchall()
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(r['staff_id'] == self.id for r in rows))
+
+    def test_view_only_staff_cannot_toggle_store_ai(self):
+        self.client.put('/api/staff/'+str(self.id), json=dict(self.data, password='', permissions=[]), headers=self.headers)
+        self.employee()
+        self.assertEqual(self.client.get('/api/stores').status_code, 200)
+        self.assertEqual(self.client.post('/api/stores/default/ai', json={'enabled': False}, headers=self.headers).status_code, 403)
 
     def test_reply_permission_cannot_create_order_through_ai_draft(self):
         self.employee()
