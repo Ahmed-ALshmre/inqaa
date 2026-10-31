@@ -7849,6 +7849,11 @@ def requests_alternative_photo(text):
 
 def transparent_price_reply(ev, product, customer, customer_products, positions):
     """Answer a narrow single-selection price inquiry with the full current cost."""
+    text = ev.get('text') or ''
+    total_inquiry = sales_playbook.delivered_total_inquiry(text)
+    if (total_inquiry
+            and set(sales_answers.topics(text)) - {'price', 'delivery'}):
+        return None  # Compound questions still need all of their independent facts.
     if (not has_app_context() or not product or ev.get('_post_order')
             or ev.get('image_url') or ev.get('_image_matches')
             or not (sales_playbook.price_question(ev.get('text'))
@@ -7911,7 +7916,7 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     if not delivered_question and fabric and not fabric_seen and len(fabric) <= 60 and not customer_copy.has_instructions(fabric):
         parts[0] += ' وقماشه ' + fabric + '.'
     parts = [natural_total] if natural_total else ['\n'.join(part.rstrip(' .') + '.' for part in parts)]
-    cue = ('' if sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
+    cue = ('' if total_inquiry or sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
            else sales_playbook.next_sales_message(product, accepted))
     if cue:
         parts.insert(0, cue) if 'عرض' in cue else parts.append(cue)

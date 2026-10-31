@@ -8,11 +8,11 @@ import re
 try:
     from . import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from .pricing import terms, quote, offer_tiers
-    from .checkout import is_confirmation
+    from .checkout import is_confirmation, delivered_total_inquiry
 except ImportError:
     import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from pricing import terms, quote, offer_tiers
-    from checkout import is_confirmation
+    from checkout import is_confirmation, delivered_total_inquiry
 
 REVIEWED_LESSONS = {
     'cost': (
@@ -155,6 +155,8 @@ def price_question(text):
 
 
 def delivery_price_question(text):
+    if delivered_total_inquiry(text):
+        return True
     text = sales_strategy.normalized(text).strip(' ؟?!.،')
     text = re.sub(r'^(?:السلام عليكم|سلام عليكم)\s*[،,]?\s*', '', text)
     return bool(re.fullmatch(

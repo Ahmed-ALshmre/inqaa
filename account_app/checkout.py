@@ -178,6 +178,22 @@ def delivery_fee_inquiry(text):
                           r'(?<!\w)اذا\s*(?:بس\s*)?(?:قطع[هة]|وحد[هة]|1)(?!\w)', clean))
 
 
+def delivered_total_inquiry(text):
+    """Checking item + shipping arithmetic is a question, not a lower-price demand."""
+    clean = normalized(text)
+    if (not re.search(r'توصيل|شحن', clean)
+            or re.search(r'بشرط|(?<!\w)شرط(?!\w)|فقط|لازم|خصم|تخفيض|مجاني|بلاش|'
+                         r'خلي|تحسب|تنزل|تنقص|اقل|ارخص|ثبتي|ثبتلي|احجزي|احجزلي|'
+                         r'باجر|باچر|غدا|اليوم|يلحق|لا\s*تحجز|ما\s*ادفع|غير\s*هذا', clean)):
+        return False
+    # Require the shipping-inclusive result after shipping, plus a clarification
+    # cue. "إذا السعر 10 ثبتي" and arrival conditions keep their existing guards.
+    return bool(re.search(r'يعني|المجموع|كلتو|قلت[وي]|تكول|تقول|'
+                          r'اذا\s+(?:اطلب|اخذ|اشتري)\s+(?:قطع[ةه]|وحد[ةه]|قطعتين|\d+\s*قطع)', clean)
+                and re.search(r'(?:توصيل|شحن).{0,35}(?:ح\s*)?(?:يصير|تصير|يطلع|تطلع|يكون)\s*'
+                              r'(?:ب\s*)?\d+(?:[,.٬]\d+)*', clean))
+
+
 def unresolved_purchase_terms(text):
     """Do not treat price questions or conditional terms as purchase consent.
 
@@ -191,7 +207,7 @@ def unresolved_purchase_terms(text):
     if (re.search(r'ارجع|يرجع|ترجع|رجع|فحص|افحص', clean)
             and not re.search(r'خصم|تخفيض|تحسب|تخلي|بشرط.{0,20}(?:سعر|يوصل|يلحق)', clean)):
         return ''
-    if delivery_fee_inquiry(text):
+    if delivery_fee_inquiry(text) or delivered_total_inquiry(text):
         return 'unanswered_price_or_shipping'
     if re.search(
             r'(?:شكد|كم|بشكد|بيش|شنو).{0,22}(?:سعر|المجموع|توصيل|تحسب|يطلع)|'
