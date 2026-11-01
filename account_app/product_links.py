@@ -109,7 +109,7 @@ def _shared_sizes(left, right):
 
 
 def eligible_related_products(product, products, *, size='', age_years=None,
-                              audience='', limit=2):
+                              audience='', limit=2, weight=None):
     """Resolve source links to different, compatible, currently offered models.
 
     Explicit customer size/age takes precedence over a broad overlap of catalog
@@ -164,6 +164,10 @@ def eligible_related_products(product, products, *, size='', age_years=None,
         if age is not None:
             if not any(low <= age <= high for low, high in _size_data(candidate)['years']):
                 continue
+        elif weight is not None:
+            bounds = _size_data(candidate)['weights']
+            if not bounds or not any(low <= float(weight) <= high for low, high in bounds):
+                continue
         elif not size and not _shared_sizes(product, candidate):
             continue
         if size:
@@ -189,7 +193,7 @@ def eligible_age_alternatives(product, products, age_years):
 
 
 def catalog_alternatives(product, products, *, size='', age_years=None, color='',
-                         request='', excluded=(), limit=4):
+                         request='', excluded=(), limit=4, weight=None):
     """Search the store catalogue with the customer's retained constraints."""
     clean = customer_copy.normalized(request)
     blocked = {str(pid) for pid in excluded} | {str(product.get('product_id'))}
@@ -202,7 +206,7 @@ def catalog_alternatives(product, products, *, size='', age_years=None, color=''
     for category in dict.fromkeys(allowed):
         source = dict(product, category=category, related_product_ids=[str(p['product_id']) for p in candidates])
         for candidate in candidates:
-            if not eligible_related_products(source, [candidate], size=size, age_years=age_years, audience=_audience(product), limit=1):
+            if not eligible_related_products(source, [candidate], size=size, age_years=age_years, audience=_audience(product), limit=1, weight=weight):
                 continue
             if color and any(v['supported'] is not True for v in product_variants.assess(candidate, 'لون ' + color)):
                 continue

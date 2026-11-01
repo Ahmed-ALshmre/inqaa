@@ -206,7 +206,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         created, reply = self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
         self.assertTrue(created)
         self.assertEqual(reply, self.m.DEFAULT_ORDER_CONFIRMATION_TEXT)
-        self.assertLess(len(reply), 80)
+        self.assertIn('يرجى فحص الطلب', reply)
         self.assertEqual(self.m.approved_reply_parts(result, reply), [reply])
 
     def test_new_contact_triggers_checkout_despite_false_model_flag(self):
@@ -310,16 +310,17 @@ class CheckoutRegressionTests(unittest.TestCase):
         _, reply = self.m.create_order_if_valid(self.db, self.sender, result, None)
         self.assertIn("هذه القطع المقترحة", reply)
 
-    def test_manual_checkout_rejects_incomplete_shelan_order(self):
+    def test_manual_checkout_preserves_employee_incomplete_variants(self):
         client = self.m.app.test_client()
         with client.session_transaction() as session:
             session["dashboard_authenticated"] = True
         data = self.data(); data["items"][0].update(size="", color="")
         with patch.object(self.m, "send_text_to_facebook") as send:
             response = client.post(f"/api/conversations/{self.sender}/create_order", json=data)
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("لون", response.get_json()["error"])
-        send.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        item = json.loads(self.db.execute('SELECT order_items FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0])[0]
+        self.assertEqual((item['size'], item['color']), ('', ''))
+        send.assert_called_once()
 
     def test_actual_post_order_reply_cannot_claim_removed_shirt(self):
         self.db.execute("INSERT INTO orders(sender_id,store_id,status,created_at,order_items) VALUES(?,?,'new',?,?)",

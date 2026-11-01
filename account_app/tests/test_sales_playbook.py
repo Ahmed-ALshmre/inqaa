@@ -218,13 +218,13 @@ class ReviewedReplyPipelineTests(unittest.TestCase):
         self.assertNotIn('الكمية محدودة', result['reply'])
         self.assertNotIn('نكمل حجزه', result['reply'])
 
-    def test_narrow_interest_uses_actual_fabric_and_offer_then_asks_customer_size(self):
+    def test_narrow_interest_uses_actual_fabric_without_extra_sales_copy(self):
         product = dict(PRODUCT, fabric='القماش تركي', offer='عرض خاص الكمية محدودة')
         result, model = self.ask('سلام عليكم شنهو نوع القماش', product=product)
         model.assert_not_called()
-        for value in ['وعليكم السلام', 'أهلا وسهلا', 'القماش تركي', 'عرض هالفترة', 'شكد قياس تلبسين']:
+        for value in ['وعليكم السلام', 'أهلا وسهلا', 'القماش تركي', 'شكد قياس تلبسين']:
             self.assertIn(value, result['reply'])
-        for value in ['ممتازة', 'درجة أولى', '38', '52', 'آخر قطعة']:
+        for value in ['ممتازة', 'درجة أولى', '38', '52', 'آخر قطعة', 'عرض هالفترة']:
             self.assertNotIn(value, result['reply'])
         self.assertEqual(result['reply'].count('؟'), 1)
 

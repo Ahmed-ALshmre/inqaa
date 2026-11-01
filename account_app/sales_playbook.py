@@ -220,6 +220,9 @@ def quote_quantity(question,context=None):
 
 def selection_evidence(context):
     for item in (context or {}).get('evidence',[]):
+        focus = (context or {}).get('selection_product_id')
+        if focus and item.get('product_id') and item['product_id'] != focus:
+            continue
         for line in str(item.get('text') or '').splitlines():
             if line.strip():yield dict(item,text=line.strip())
 
@@ -244,7 +247,13 @@ def customer_selection(context, customer=None):
     selected['colors'] = stored_colors
     for item in selection_evidence(context):
         text = product_variants.size_choice_text(item.get('text'))
+        text = re.sub(r'^لا\s+(?=خلي\b|اعتمدي\b|بدلي\b)', '', text)
         question = sales_strategy.normalized(item.get('in_reply_to'))
+        if (is_confirmation(text) or text in {'نكمل', 'كملي'}
+                or re.search(r'نفس\s+(?:اللون|الون|لون|الصوره|الصورة)', text)):
+            offered = product_variants.requested(question)['colors']
+            if len(offered) == 1:
+                selected.update(color=offered[0], colors=offered, color_options=[])
         age_correction = product_variants.child_age_correction(text)
         declared_ages = product_variants.child_ages(text)
         if age_correction and age_correction[1] in selected['ages']:
@@ -295,7 +304,7 @@ def customer_selection(context, customer=None):
                 if not requested_sizes[0].isdigit() or len(numbers) == 1:
                     selected['size'] = requested_sizes[0]
             continue
-        size_pattern = r'(?:قياسي|مقاسي|البس|قياس|مقاس|سايز)\s*(\d{1,2}|[2-6]?xl|xxl|xxxl|xs|[sml])(?!\w)'
+        size_pattern = r'(?:قياسي|مقاسي|البس|قياس|مقاس|سايز|(?:خلي|اعتمدي|بدلي)\s*(?:قياس)?)\s*(\d{1,2}|[2-6]?xl|xxl|xxxl|xs|[sml])(?!\w)'
         sizes = [hit[1].upper() for hit in re.finditer(size_pattern, text)
                  if not re.search(r'(?:مو|لا|ما اريد)\s*$', text[max(0, hit.start()-15):hit.start()])]
         size_range = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/]\s*(\d{2})(?!\d)', text)
@@ -325,7 +334,8 @@ def customer_selection(context, customer=None):
         elif re.search(r'(?:مو|لا|ما اريد)\s*(?:قياس|مقاس|سايز)', text):
             selected['size'] = None
         age = conversation_quality.child_age(text)
-        if age is not None and (not sizes or re.search(r'عمر', text)):
+        if age is not None and (not sizes or re.search(r'عمر', text)
+                                or declared_ages and selected['age'] is None):
             selected['age'] = age
             selected['ages'] = declared_ages or [age]
         colors = product_variants.requested(text)['colors'] or list(product_variants.color_quantities(text))

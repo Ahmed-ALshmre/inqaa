@@ -176,7 +176,7 @@ def contact_fields(text, previous=None):
 def is_confirmation(text):
     # Only affirmative words and courtesy fillers; corrections, questions and
     # negations must still invalidate a pending cart, including mixed bursts.
-    affirmative = r"(?:اي+|يي+|نعم|تمام|موافق|موافقة|اوكي|اوك|ثبتي|ثبت|ثبتيه|ثبتوا|اعتمدي|اعتمديه|اعتمدها)"
+    affirmative = r"(?:اي+|يي+|نعم|تمام|موافق|موافقة|اوكي|اوك|نكمل|كملي|ثبتي|ثبت|ثبتيه|ثبتوا|اعتمدي|اعتمديه|اعتمدها)"
     filler = r"(?:عيني|حياتي|حبيبتي|حبي|عمري|يمعوده|يمعودة|الطلب|الحجز|هسه|رجاء|شكرا|والله|اكيد|بسرعه|بسرعة|زاد|فدوه|فدوة|بلا زحمه|بلا زحمة|ياريت|يا ريت|عادي|ماشي)"
     return bool(re.fullmatch(affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*", normalized(text).strip()))
 

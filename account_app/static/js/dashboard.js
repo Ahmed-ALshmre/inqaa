@@ -2060,20 +2060,27 @@ async function toggleConversationAI() {
 let manualOrderRowId = 0;
 let manualOrderSender = null;
 let manualOrderSubmitting = false;
+let manualOrderCreatedId = null;
 function addManualOrderItem() {
   const container = document.getElementById('manualOrderItems');
-  if (container.children.length >= 20) { showToast('الحد الأقصى 20 سطراً للقطع', 'warning'); return; }
   const id = ++manualOrderRowId;
   const row = document.createElement('div');
   row.className = 'manual-order-item border rounded p-3 mb-2';
   row.innerHTML = `<div class="row g-2">
     <div class="col-12"><label for="manual-product-${id}" class="form-label small">المنتج</label>
       <select id="manual-product-${id}" class="form-select" data-field="product_id"><option value="">اختر المنتج</option>${allProducts.map(p => `<option value="${esc(p.product_id)}">${esc(p.product_name)}</option>`).join('')}</select></div>
-    <div class="col-4"><label for="manual-quantity-${id}" class="form-label small">العدد</label><input id="manual-quantity-${id}" class="form-control" data-field="quantity" type="number" min="1" max="20" step="1" value="1"></div>
+    <div class="col-12"><label for="manual-name-${id}" class="form-label small">اسم القطعة — يمكن كتابته بحرية</label><input id="manual-name-${id}" class="form-control" data-field="product_name"></div>
+    <div class="col-4"><label for="manual-quantity-${id}" class="form-label small">العدد</label><input id="manual-quantity-${id}" class="form-control" data-field="quantity" type="number" min="1" step="1" value="1"></div>
     <div class="col-4"><label for="manual-size-${id}" class="form-label small">القياس</label><input id="manual-size-${id}" class="form-control" data-field="size"></div>
     <div class="col-4"><label for="manual-color-${id}" class="form-label small">اللون</label><input id="manual-color-${id}" class="form-control" data-field="color"></div>
+    <div class="col-6"><label for="manual-weight-${id}" class="form-label small">الوزن — اختياري</label><input id="manual-weight-${id}" class="form-control" data-field="weight"></div>
+    <div class="col-6"><label for="manual-price-${id}" class="form-label small">سعر القطعة بالدينار — اختياري</label><input id="manual-price-${id}" class="form-control" data-field="unit_price" type="number" min="0" step="1" placeholder="سعر الكتالوج أو سعر يدوي"></div>
     <div class="col-12 text-end"><button class="btn btn-outline-danger btn-sm" type="button" data-remove>حذف القطعة</button></div>
   </div>`;
+  row.querySelector('[data-field="product_id"]').addEventListener('change', event => {
+    const product = allProducts.find(p => p.product_id === event.target.value);
+    row.querySelector('[data-field="product_name"]').value = product?.product_name || '';
+  });
   row.querySelector('[data-remove]').addEventListener('click', () => {
     if (container.children.length > 1) row.remove();
     else showToast('أضف قطعة واحدة على الأقل', 'warning');
@@ -2084,6 +2091,8 @@ function addManualOrderItem() {
 function openOrderModal() {
   if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
   manualOrderSender = currentSenderId;
+  manualOrderCreatedId = null;
+  document.getElementById('submitManualOrderBtn').textContent = 'تثبيت الطلب';
   for (const [id, key] of [['orderPhone','phone'],['orderProvince','province'],['orderAddress','address']]) {
     document.getElementById(id).value = currentCustomer?.[key] || '';
   }
@@ -2102,8 +2111,8 @@ async function submitOrder() {
     item.quantity = Number(item.quantity);
     return item;
   });
-  if (!items.length || items.some(i => !i.product_id || !Number.isInteger(i.quantity) || i.quantity < 1 || i.quantity > 20)) {
-    showToast('اختر منتجاً وعدداً صحيحاً من 1 إلى 20 لكل قطعة', 'warning'); return;
+  if (!items.length || items.some(i => (!i.product_id && !i.product_name) || !Number.isInteger(i.quantity) || i.quantity < 1)) {
+    showToast('اكتب اسم القطعة أو اخترها وحدد العدد', 'warning'); return;
   }
   const data = {
     customer_name: currentCustomer?.name || '',
@@ -2118,12 +2127,21 @@ async function submitOrder() {
   const button = document.getElementById('submitManualOrderBtn');
   button.disabled = true;
   try {
-    const res = await apiFetch(`/api/conversations/${manualOrderSender}/create_order`, {
+    const endpoint = manualOrderCreatedId ? `/api/orders/${manualOrderCreatedId}/resend_confirmation?store_id=${encodeURIComponent(currentCustomer?.store_id || 'default')}`
+      : `/api/conversations/${manualOrderSender}/create_order`;
+    const res = await apiFetch(endpoint, {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data),
     });
     const r = await res.json();
     if (r.ok) {
+      if (r.confirmation_sent === false) {
+        manualOrderCreatedId = r.order_id || r.existing_order_id;
+        button.textContent = 'إعادة إرسال تأكيد الطلب';
+        showToast('الطلب محفوظ، لكن تأكيده لم يُرسل للزبون. أعد إرسال التأكيد من الزر، دون تكرار الحجز.', 'warning');
+        return;
+      }
       if (r.duplicate) showToast(r.message || 'هذا الطلب مثبت مسبقاً', 'warning');
+      else if (r.price_pending) showToast('تم حفظ الحجز؛ أكمل سعر القطعة قبل إرساله إلى شركة التوصيل.', 'warning');
       else if (r.telegram_sent === false) showToast(r.telegram_error || 'تم تثبيت الطلب لكن لم يصل إلى تلغرام', 'warning');
       else showToast('تم تثبيت الطلب وإرساله إلى تلغرام وجدولته للإرسال إلى API', 'success');
       bootstrap.Modal.getInstance(document.getElementById('orderModal')).hide();

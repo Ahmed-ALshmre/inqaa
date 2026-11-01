@@ -16,7 +16,7 @@ PRODUCT_KNOWLEDGE_FIELDS = (
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
     'fabric_feel', 'cut', 'season', 'care_instructions',
 )
-EVIDENCE_VERSION = 6
+EVIDENCE_VERSION = 7
 
 
 def browse_request(text):
@@ -93,6 +93,12 @@ def question_from_turn(turn):
 
 def context_evidence(text, turn):
     clean = normalized(product_variants.normalize_size_words(text))
+    if re.search(r'نفس\s+(?:اللون|الون|لون|الصوره|الصورة)|^(?:نكمل|كملي)$', clean):
+        return True
+    if re.search(r'(?:خلي|اعتمدي|بدلي)\s*(?:قياس\s*)?\d{2}(?!\d)', clean):
+        return True
+    if is_confirmation(text) and len(product_variants.requested(question_from_turn(turn))['colors']) == 1:
+        return True
     if product_variants.size_choice_text(clean) != clean:
         return True
     declarations = r'قياس|مقاس|سايز|فري سايز|قياس موحد|وزن|عمر|سنوات|سنه|سنة|لون|اسود|ابيض|احمر|ازرق|اخضر|اصفر|خردلي|سماوي|سماي|سمائي|رصاصي|رمادي|جوزي|نيلي|كحلي|وردي|بيج|بيجي|زيتي|تركواز|بنفسجي|كريمي|ماروني|خمري|عنابي|برتقالي|ذهبي|فضي|ميزاني|غالي|احجز|حجزت|ما اريد|مو هذا|مو هاي|اقصد|غيره|غيرها|الاول|الثاني|الثالث|قطعتين|قطعه|قطعة'
@@ -136,6 +142,7 @@ def advance(state, messages):
     corrections = list(state.get('corrections') or [])
     interrupted = state.get('offer_interrupted', False)
     open_details = list(state.get('open_details') or [])
+    focus = state.get('selection_product_id')
     for row in messages:
         row = dict(row)
         if (row.get('direction') == 'incoming' and row.get('id') is not None
@@ -143,6 +150,22 @@ def advance(state, messages):
             continue  # The triggering event may already have been loaded from DB.
         text = str(row.get('text') or '').strip()
         clean = normalized(text)
+        try:
+            metadata = json.loads(row.get('raw_payload') or '{}')
+        except (ValueError, TypeError):
+            metadata = {}
+        photos = metadata.get('_catalog_selections', []) if isinstance(metadata, dict) else []
+        if row.get('direction') == 'incoming' and photos:
+            ids = {photo.get('product_id') for photo in photos if isinstance(photo, dict)}
+            focus = next(iter(ids)) if len(ids) == 1 else None
+            for photo in photos:
+                if not isinstance(photo, dict) or not photo.get('product_id'):
+                    continue
+                color = product_variants.single_color(photo.get('observed_color'))
+                if color:
+                    evidence.append({'text': 'اللون ' + color, 'message_id': row.get('id'),
+                                     'product_id': photo['product_id'], 'photo_choice': True,
+                                     'created_at': row.get('created_at'), 'in_reply_to': ''})
         open_details = sales_decision.advance_details(open_details, row.get('direction'), text)
         if row.get('direction') == 'incoming' and text:
             latest = {'text': text[:500], 'message_id': row.get('id')}
@@ -162,6 +185,7 @@ def advance(state, messages):
         elif text and context_evidence(text, turn):
             # Preserve declarations and their context, not guessed normalized options.
             evidence.append({'text': text[:300], 'message_id': row.get('id'),
+                             'product_id': focus,
                              'created_at': row.get('created_at'),
                              'in_reply_to': question_from_turn(turn)[:250],
                              'staff_context': '\n'.join(item['text'] for item in turn[-3:])[:900]})
@@ -186,7 +210,7 @@ def advance(state, messages):
         # incoming reply, the next staff text must still replace the old turn.
         if row.get('direction') == 'incoming' or text:
             direction = row.get('direction')
-    state.update(evidence=evidence, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, open_details=open_details, version=5, evidence_version=EVIDENCE_VERSION)
+    state.update(evidence=evidence, selection_product_id=focus, last_staff_turn=turn, direction=direction, offer_interrupted=interrupted, latest_customer_turn=latest, corrections=corrections, open_details=open_details, version=5, evidence_version=EVIDENCE_VERSION)
     return state
 
 
@@ -197,7 +221,8 @@ def load(db, store, sender):
         cursor, state = 0, {}
     columns = {column[1] for column in db.execute('PRAGMA table_info(messages)')}
     visible = ' AND ' + VISIBLE_SQL if 'raw_payload' in columns else ''
-    rows = db.execute('SELECT id,direction,text,created_at,message_type,image_url FROM messages WHERE store_id=? AND sender_id=? AND id>?'
+    payload_column = ',raw_payload' if 'raw_payload' in columns else ''
+    rows = db.execute('SELECT id,direction,text,created_at,message_type,image_url' + payload_column + ' FROM messages WHERE store_id=? AND sender_id=? AND id>?'
                       + visible + ' ORDER BY id', (store, sender, cursor)).fetchall()
     if rows:
         state = advance(state, rows)

@@ -178,7 +178,7 @@ def _single_sales_kind(result, reply):
     phase = str(result.get('_response_kind') or result.get('intent') or '').lower()
     if result.get('_compact_offer_price'):
         return 'offer_price'
-    if result.get('_human_sales_voice') and len(compact(reply)) <= TARGET_LENGTH:
+    if result.get('_human_sales_voice') and len(compact(reply)) <= 140:
         return 'related_answer'
     if receipt(reply) or phase in {'confirmation', 'order_confirmation'}:
         return 'confirmation'
@@ -295,7 +295,8 @@ def plan_sales_bubbles(result, reply, image_urls=None):
     if photo_flow:
         before=reply[:reply.rfind(after_question)].strip()
         parts=([before] if before else [])+[after_question]
-    elif kind or (result.get('_single_message') and len(compact(reply)) <= 200):
+    elif kind or (result.get('_single_message') and len(compact(reply)) <= 200
+                  and not (result.get('_human_sales_voice') and len(compact(reply)) > 140)):
         parts = [reply] if reply else []
     else:
         # Album descriptions are atomic. A model's arbitrary parts never alter

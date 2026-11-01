@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice
+    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media
@@ -419,7 +419,7 @@ DEFAULT_INSPECTION_POLICY_TEXT = (
     "إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. "
     "أهم شي فحص الطلب قبل دفع المبلغ."
 )
-DEFAULT_ORDER_CONFIRMATION_TEXT = 'تم تثبيت الطلب، صار بعيوني.'
+DEFAULT_ORDER_CONFIRMATION_TEXT = DEFAULT_INSPECTION_POLICY_TEXT
 DEFAULT_MAIN_SYSTEM_PROMPT = (
     """أنتِ موظفة مبيعات بشرية محترفة جداً (تعتبرين أفضل موظفة مبيعات في العالم)، تعملين في {store_name}. تتحدثين باللهجة العراقية الطبيعية بكل بشاشة، طاقة إيجابية، وود.
 وصف المتجر: {store_description}.
@@ -2655,6 +2655,26 @@ def customer_image_positions(db, sender_id, images=None):
         store_id TEXT NOT NULL, sender_id TEXT NOT NULL, images TEXT NOT NULL,
         PRIMARY KEY(store_id, sender_id))""")
     if images is not None:
+        # Keep verified photo choices on their original incoming message. A
+        # later phone/address bubble must not erase its color or its product.
+        by_url = {url: item for item in images
+                  if isinstance(item, dict) and item.get('product_found') and item.get('product_id')
+                  for url in (item.get('image_url') if isinstance(item.get('image_url'), list) else [item.get('image_url')])
+                  if isinstance(url, str) and url}
+        changed = False
+        for message in db.execute("SELECT * FROM messages WHERE store_id=? AND sender_id=? AND direction='incoming' ORDER BY id DESC LIMIT 100",
+                                  (current_store_id(), sender_id)).fetchall():
+            urls = [entry['url'] for entry in message_media(dict(message)) if entry['type'] == 'image']
+            selections = [dict(product_id=by_url[url]['product_id'],
+                               observed_color=by_url[url].get('observed_color') or '') for url in urls if url in by_url]
+            if selections:
+                payload = followup_metadata(message['raw_payload'])
+                payload['_catalog_selections'] = selections
+                db.execute('UPDATE messages SET raw_payload=? WHERE id=?',
+                           (json.dumps(payload, ensure_ascii=False), message['id']))
+                changed = True
+        if changed:
+            db.execute('DELETE FROM sales_conversation_context WHERE store_id=? AND sender_id=?', (current_store_id(), sender_id))
         db.execute("INSERT OR REPLACE INTO customer_image_positions VALUES(?,?,?)",
                    (current_store_id(), sender_id, json.dumps(images, ensure_ascii=False)))
         db.commit()
@@ -3868,7 +3888,7 @@ def get_problem_reports(db, status=None, limit=200):
 
 
 def _norm_order_value(value):
-    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+    return re.sub(r"\s+", " ", sales_strategy.normalized(str(value or ""))).strip()
 
 
 def find_duplicate_order(db, sender_id, phone="", product_id="", address="", minutes=1440, items=None):
@@ -3886,7 +3906,9 @@ def find_duplicate_order(db, sender_id, phone="", product_id="", address="", min
     def cart_key(lines):
         totals = {}
         for line in lines:
-            key = tuple(_norm_order_value(line.get(k)) for k in ("product_id", "color", "size"))
+            key = tuple(_norm_order_value(value) for value in (
+                line.get('product_id') or line.get('product_name'), line.get('color'), line.get('size'),
+                line.get('weight') or (line.get('size') if line.get('size_type') == 'weight' else '')))
             totals[key] = totals.get(key, 0) + int(line.get("quantity") or 1)
         return totals
     wanted_phone = _norm_order_value(phone)
@@ -3904,6 +3926,8 @@ def find_duplicate_order(db, sender_id, phone="", product_id="", address="", min
         row_phone = _norm_order_value(row["phone"])
         row_product = _norm_order_value(row["product_id"])
         row_address = _norm_order_value(row["address"])
+        if items is not None and row_phone == wanted_phone and row_address == wanted_address:
+            return dict(row)  # Manual drafts may intentionally omit contacts or a catalog ID.
         phone_match = wanted_phone and row_phone == wanted_phone
         product_match = wanted_product and row_product == wanted_product
         address_match = wanted_address and row_address == wanted_address
@@ -7236,6 +7260,12 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     parts = sales_layout['reply_parts']
     image_urls = sales_layout['image_urls']
     generation = _reply_generation.get() or {}
+    confirmation_ids = []
+    if order_created and ai_result.get('_created_order_id'):
+        for part in parts:
+            confirmation_ids.append(save_message(db, sender_id, 'outgoing', 'text', part, None, None, None,
+                {'auto_after_product_link': True, '_delivery_status': 'generated',
+                 '_order_confirmation_id': ai_result['_created_order_id']}))
     sent = send_webhook_result_to_facebook({"sender_id": sender_id, "reply": reply,
         "reply_parts": parts, "_single_message": bool(ai_result.get("_single_message")),
         "_ordered_album": bool(ai_result.get('_ordered_album')),
@@ -7243,12 +7273,18 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
                                   "post_image_parts": sales_layout.get('post_image_parts') or []},
         "page_id": ev["page_id"], "platform": ev["platform"], "send_image": bool(image_urls),
         "image_urls": image_urls, "product_image_urls": image_urls,
-        "_reply_to_message_id": generation.get('incoming_id'), "_outgoing_message_ids": []})
+        "_reply_to_message_id": generation.get('incoming_id'), "_outgoing_message_ids": confirmation_ids})
     if not sent:
+        if confirmation_ids:
+            delivery_state.update(db, [{'id': message_id} for message_id in confirmation_ids], 'unconfirmed')
         return {'sent': False, 'reply': reply, 'reason': 'manychat_send_failed'}
+    if confirmation_ids:
+        delivery_state.update(db, [{'id': message_id} for message_id in confirmation_ids], 'accepted')
     after_images=sales_layout.get('post_image_parts') or []
     before_images=parts[:-len(after_images)] if after_images else parts
     for part in before_images:
+        if confirmation_ids:
+            continue
         save_message(
             db, sender_id, "outgoing", "text",
             part, None, None, None,
@@ -9409,7 +9445,8 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     # Resume a weight-only selection with that resolved product before generic
     # missing-fact logic asks for a garment size that this catalogue does not use.
     if result is None and has_app_context() and ev.get('sender_id') and chosen:
-        result=resume_weight_checkout(get_db(),ev,chosen,customer,customer_products,context,history)
+        result=(resume_weight_checkout(get_db(),ev,chosen,customer,customer_products,context,history)
+                or resume_known_checkout(get_db(),ev,chosen,customer,customer_products,context))
     if result is None:
         result = owner_sales.reply(ev, chosen, customer, context, history,
                                   photo_count=len(product_image_urls(chosen)) if chosen else 0)
@@ -10411,7 +10448,14 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     duplicate = find_duplicate_order(db, sender_id, phone, product_id, address, items=items)
     if duplicate:
         print(f"[Order] Duplicate skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
-        # The confirmation was already sent when this order was first created.
+        receipt = db.execute("SELECT raw_payload FROM messages WHERE sender_id=? AND direction='outgoing' "
+            "AND json_extract(CASE WHEN json_valid(raw_payload) THEN raw_payload ELSE '{}' END,'$._order_confirmation_id')=? ORDER BY id DESC LIMIT 1",
+            (sender_id, duplicate['id'])).fetchone()
+        if receipt and followup_metadata(receipt['raw_payload']).get('_delivery_status') in {'unconfirmed', 'rejected', 'failed', 'skipped'}:
+            ai_result['_created_order_id'] = duplicate['id']
+            ai_result['_single_message'] = True
+            return True, get_order_confirmation_text(db)
+        # An accepted confirmation does not need another booking or send.
         ai_result['_single_message'] = True
         return True, None
 
@@ -10528,7 +10572,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
 
     print(f"[Order] Created for {sender_id}: {product_name} | telegram_sent={telegram_sent}", flush=True)
     ai_result["_single_message"] = True
-    return True, DEFAULT_ORDER_CONFIRMATION_TEXT
+    ai_result['_created_order_id'] = order_cursor.lastrowid
+    return True, get_order_confirmation_text(db)
 
 
 # ── Main webhook processor ────────────────────────────────────────────────────
@@ -10655,7 +10700,7 @@ def requested_catalog_alternatives(db, ev, products, customer, customer_products
     request = str(ev.get('text') or '')
     fabric = next((item['text'] for item in reversed(context.get('evidence') or [])
                    if re.search(r'اثخن|ثخين|شتوي|خريفي|صيفي|قماش', item['text'])), '')
-    if (selected['age'] is None if child else not selected['size']):
+    if (selected['age'] is None if child else not selected['size'] and not selected.get('weight')):
         if not child and any(_stock_state(m) == 'out' for m in source_models):
             preview_candidates = []
             seen_preview = set(excluded_ids)
@@ -10674,7 +10719,8 @@ def requested_catalog_alternatives(db, ev, products, customer, customer_products
     seen_cands = set(excluded_ids)
     for m in source_models:
         for cand in product_links.catalog_alternatives(
-                m, products, size='' if child else selected['size'], age_years=selected['age'] if child else None,
+                m, products, size='' if child or selected.get('weight') else selected['size'], age_years=selected['age'] if child else None,
+                weight=selected.get('weight') if not child else None,
                 color=selected['color'] or '', request=request + '\n' + fabric, excluded=seen_cands):
             if cand['product_id'] not in seen_cands:
                 seen_cands.add(cand['product_id'])
@@ -10924,12 +10970,13 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, b
         return finish('', catalog_review['meta'])
     if not reply:
         reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
-    return finish(reply, {"order_created": bool(created), "cart_confirmed": True})
+    return finish(reply, {"order_created": bool(created), "cart_confirmed": True,
+                          "_order_confirmation_id": result.get('_created_order_id')})
 
 
 def recent_checkout_contact_action(db, sender_id):
     """Recent delivery declarations are purchase evidence, unlike saved profiles."""
-    rows = db.execute("SELECT direction,message_type,text,created_at FROM messages WHERE sender_id=? AND "
+    rows = db.execute("SELECT direction,message_type,text,created_at,raw_payload FROM messages WHERE sender_id=? AND "
                       + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 60", (sender_id,)).fetchall()
     recent = []
     for row in rows:
@@ -10939,7 +10986,10 @@ def recent_checkout_contact_action(db, sender_id):
         if row['direction'] != 'incoming':
             continue
         if row['message_type'] not in {'text', 'emoji'}:
-            break  # A later picture starts a new product discussion.
+            if followup_metadata(row['raw_payload']).get('_catalog_selections'):
+                continue
+            if row['message_type'] != 'audio' or not row['text']:
+                break  # An unverified attachment starts a new discussion.
         if customer_declines_purchase(row['text']):
             break
         recent.append(row['text'])
@@ -10954,7 +11004,8 @@ def checkout_selection_answer(text):
     if re.search(r'[؟?]|شكد|شوكت|يمتى|متى|شلون|شنو|افحص|اكدر|متوفر|موجود|بشرط|اذا|(?:ما|لا|مو)\s*(?:اريد|اخذ|لون|قياس)', clean):
         return False
     requested = product_variants.requested(text)
-    return bool(requested['colors'] or requested['sizes'] or conversation_quality.child_age(text) is not None)
+    return bool(requested['colors'] or requested['sizes'] or conversation_quality.child_age(text) is not None
+                or re.search(r'نفس\s+(?:اللون|الون|لون|الصوره|الصورة)', clean))
 
 
 def unfulfilled_checkout_ack(db, ev, result):
@@ -11023,6 +11074,8 @@ def checkout_requested(db, ev, result):
         if row['message_type'] == 'text' and row['text']:
             turn.append({'text': row['text']})
     turn.reverse()
+    if not fields and sales_context.continuation('اي', {'last_staff_turn': turn}):
+        return False  # Yes to photos/alternatives is never permission to book.
     if result.get('_confirmed_color_quantities'):
         question=sales_context.question_from_turn(turn)
         counted_color=(product_variants.quantity_number(text) is not None
@@ -11030,14 +11083,14 @@ def checkout_requested(db, ev, result):
                        and re.search(r'عدد|كمية|قطع',question))
         if color_choices.one_each(text, {'last_staff_turn': turn}) or counted_color:
             return True
-    if not turn or sales_context.continuation('اي', {'last_staff_turn': turn}):
-        return False
     if ((result.get('order') or {}).get('items')
-            and (is_confirmation(text) or checkout_selection_answer(text))
+            and (fields or is_confirmation(text) or checkout_selection_answer(text))
             and recent_checkout_contact_action(db, ev['sender_id'])):
         # Contacts may precede the final age/color answer or a short acceptance
         # of availability. Do not ask for all details or consent a second time.
         return True
+    if not turn or sales_context.continuation('اي', {'last_staff_turn': turn}):
+        return False
     checkout_words = r'(?:أثبت|اثبت|نثبت|أحجز|احجز|الحجز)'
     asked_checkout = bool(re.search(checkout_words, '\n'.join(item['text'] for item in turn)))
     if fields:
@@ -11100,6 +11153,7 @@ def restore_checkout_draft(db, ev, result, matched_product, *, for_negotiation=F
                           (ev['sender_id'],)).fetchone()
     previous_contact = dict(customer) if customer else {}
     if (not contact_fields(text, previous_contact) and not is_confirmation(text)
+            and not checkout_selection_answer(text)
             and not (for_negotiation and owner_sales.negotiation_kind(text))):
         return
     rows = db.execute("SELECT id,raw_payload,created_at FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' AND " + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 24", (ev["sender_id"],)).fetchall()
@@ -11114,13 +11168,19 @@ def restore_checkout_draft(db, ev, result, matched_product, *, for_negotiation=F
             continue
         # Empty later AI payloads must not erase a cart. However intervening
         # corrections or attachments prohibit restoring the older selection.
-        intervening = db.execute("SELECT text,message_type FROM messages WHERE sender_id=? AND direction='incoming' AND id>? ORDER BY id", (ev['sender_id'],last['id'])).fetchall()
-        if any(r['message_type'] not in {'text','emoji'} or
+        intervening = db.execute("SELECT text,message_type,raw_payload FROM messages WHERE sender_id=? AND direction='incoming' AND id>? ORDER BY id", (ev['sender_id'],last['id'])).fetchall()
+        lines = candidate.get('items') or checkout_lines(candidate)
+        def repeat_photo(row):
+            photos = followup_metadata(row['raw_payload']).get('_catalog_selections') or []
+            return bool(photos and all(any(photo.get('product_id') == line.get('product_id')
+                and product_variants.single_color(photo.get('observed_color'))
+                == product_variants.single_color(line.get('color')) for line in lines) for photo in photos))
+        if any(not repeat_photo(r) and (r['message_type'] not in {'text','emoji'} or
                not (contact_fields(r['text'], previous_contact) or is_confirmation(r['text']) or
                     owner_sales.negotiation_kind(r['text']) or
                     re.fullmatch(r'(?:كم يوم|شكد وقت|شوكت).{0,35}(?:يوصل|التوصيل|الطلب)[؟?\s]*', r['text'] or '')) or
                re.search(r'قياس|مقاس|وزن|كيلو|لون|بدل|مو هذا|ما اريد|لا اريد|عوفي|ضيف', r['text'] or '')
-               for r in intervening):
+               ) for r in intervening):
             return
         draft = candidate
         break
@@ -11225,6 +11285,50 @@ def resume_weight_checkout(db, ev, product, customer, customer_products, context
     return local(fact+(' '+step if step else ''),_browse_only=True)
 
 
+def resume_selected_multi_checkout(db, ev, customer, products, context):
+    """Build each explicitly requested model from its own remembered choices."""
+    if len(products or []) != 2 or pending_product_choice(db, ev['sender_id']):
+        return None
+    evidence = list(context.get('evidence') or [])
+    purchase = next((item for item in reversed(evidence) if re.search(
+        r'اريدهم|اريدهن|ثبتيهم|ثبتيهن|احجزيهم|احجزيهن|ثنينهم|اثنينهم|اثنينهن|كلهن|كلهم',
+        sales_strategy.normalized(item.get('text')))), None)
+    if (not purchase or sales_strategy.purchase_block_reason(purchase['text'])
+            or re.search(r'[؟?]', purchase['text']) or context.get('open_details')):
+        return None
+    if re.search(r'قطعتين|\d+\s*قطع|من\s*كل|كل\s*(?:موديل|قطعة|قطعه)', purchase['text']):
+        return None  # Per-model quantities need their own allocation, not one each.
+    created = sales_engagement.timestamp(purchase.get('created_at'))
+    if not created or datetime.now(BAGHDAD_TZ) - created > timedelta(hours=24):
+        return None
+    if unresolved_condition(load_history(db, ev['sender_id'], limit=100), ev.get('text')):
+        return None
+    lines = []
+    for product in products:
+        scoped = [dict(item, product_id=None) for item in evidence
+                  if item.get('product_id') == product['product_id'] or item is purchase]
+        selected = sales_playbook.customer_selection({'evidence': scoped})
+        years = product_variants.size_data(product.get('sizes'))['years']
+        age = selected.get('age')
+        if years and selected.get('size') and product_variants.year_size(selected['size']) is not None:
+            age = product_variants.year_size(selected['size'])
+        size = (product_variants.age_text(age) if years and age is not None else
+                selected.get('size'))
+        colors = selected.get('colors') or product_variants.colors(product.get('colors'))
+        if not size or len(colors) != 1 or len(selected.get('ages') or []) > 1:
+            return None  # Never reduce two choices or guess an image's color.
+        lines.append(dict(product_id=product['product_id'], product_name=product['product_name'],
+                          color=colors[0], size=str(size), quantity=1))
+    if order_line_error(lines, products):
+        return None
+    candidate = {'order': {'items': lines}}
+    if not checkout_requested(db, ev, candidate):
+        return None
+    return dict(candidate, reply='صار بعيوني.', reply_parts=['صار بعيوني.'],
+                create_order=False, requires_human=False, _local_reply=True,
+                _suppress_product_images=True)
+
+
 def resume_known_checkout(db, ev, product, customer, customer_products, context):
     """Complete a known cart from contact replies before asking a model again."""
     images = ev.get('_image_matches') or []
@@ -11248,6 +11352,8 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
         return None  # Resolve a newly named product before restoring an older cart.
     candidate = {'order': {}}
     restore_checkout_draft(db, ev, candidate, product)
+    if not candidate['order'] and len(customer_products or []) > 1:
+        return resume_selected_multi_checkout(db, ev, customer, customer_products, context)
     if not candidate['order']:
         if not product or len(customer_products or []) != 1 or pending_product_choice(db, ev['sender_id']):
             return None
@@ -11338,8 +11444,9 @@ def collect_unanswered_event(db, ev, incoming_message_id):
                     image_url=ev.get('image_url') or '') if x['type'] == 'image']
     linked = load_customer_products(db, ev['sender_id']) if not fresh_images else []
     binding = linked[0] if len(linked) == 1 and not pending_product_choice(db, ev['sender_id']) else None
+    linked_ids = {product.get('product_id') for product in linked}
     resolved_urls = {item.get('image_url') for item in customer_image_positions(db, ev['sender_id'])
-                     if binding and item.get('product_found') and item.get('product_id') == binding.get('product_id')}
+                     if item.get('product_found') and item.get('product_id') in linked_ids}
     resolved_before = None
     if binding and (binding.get('source') in {'image_recognition', 'manual_admin', 'telegram_human'}
                     or binding.get('match_method') in {'image_recognition', 'manual', 'telegram_human'}):
@@ -11362,6 +11469,8 @@ def collect_unanswered_event(db, ev, incoming_message_id):
             for url in active_images:
                 image_questions.setdefault(url, []).append(text)
         for item in message_attachments:
+            if item['type'] == 'image' and item['url'] in resolved_urls:
+                continue  # Its verified options are retained in conversation memory.
             if item['type'] == 'image' and resolved_before is not None:
                 try:
                     created = datetime.fromisoformat(message.get('created_at') or '')
@@ -12589,6 +12698,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     for index, part in enumerate(before_images):
         save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None,
                      {"reply": part, "checkout_proposal": ai_result.get("_checkout_proposal"),
+                      "_order_confirmation_id": ai_result.get('_created_order_id'),
                       "checkout_draft": ai_result.get("order") if not order_created else None,
                       "related_product_suggestion": {
                           "source_product_id": matched_product.get('product_id'),
@@ -14641,6 +14751,7 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
     if _promises_product_photo(text) and not images:
         text = 'ما عندي صورة مطابقة محفوظة لهذا الطلب حالياً.'
     return text, {"manual_reply": True, "ai_generated": True, "order_created": bool(created),
+                  "_order_confirmation_id": result.get('_created_order_id'),
                   "image_urls": images,
                   "checkout_proposal": result.get("_checkout_proposal"),
                   "checkout_draft": result.get("order") if not created else None}, None
@@ -17879,6 +17990,55 @@ def api_set_customer_gender(sender_id):
     return jsonify({"ok": True, "gender": gender_value})
 
 
+def send_saved_order_confirmation(db, order_id, sender_id):
+    """Retry only the saved confirmation, never the booking or fulfilment."""
+    db.execute('BEGIN IMMEDIATE')
+    row = db.execute("SELECT id,text,raw_payload,created_at FROM messages WHERE sender_id=? AND store_id=? AND direction='outgoing' "
+        "AND json_extract(CASE WHEN json_valid(raw_payload) THEN raw_payload ELSE '{}' END,'$._order_confirmation_id')=? ORDER BY id DESC LIMIT 1",
+        (sender_id, current_store_id(), order_id)).fetchone()
+    if row:
+        meta = followup_metadata(row['raw_payload'])
+        created = sales_engagement.timestamp(row['created_at'])
+        attempted_at = meta.get('_confirmation_attempt_at')
+        if not isinstance(attempted_at, (int, float)):
+            attempted_at = created.timestamp() if created else 0
+        if (meta.get('_delivery_status') == 'accepted'
+                or meta.get('_delivery_status') == 'pending' and time.time() - attempted_at < 120):
+            db.commit()
+            return meta.get('_delivery_status') == 'accepted'
+        message_id, text = row['id'], row['text']
+        meta['_delivery_status'] = 'pending'
+        meta['_confirmation_attempt_at'] = time.time()
+        db.execute('UPDATE messages SET raw_payload=? WHERE id=?', (json.dumps(meta, ensure_ascii=False), message_id))
+        db.commit()
+    else:
+        text = get_order_confirmation_text(db)
+        message_id = save_message(db, sender_id, 'outgoing', 'text', text, None, None, None,
+            {'manual_order': True, '_order_confirmation_id': order_id, '_delivery_status': 'pending',
+             '_confirmation_attempt_at': time.time()})
+    customer = db.execute("SELECT page_id,platform FROM customers WHERE sender_id=? AND store_id=?",
+                          (sender_id, current_store_id())).fetchone()
+    try:
+        sent = bool(send_text_to_facebook(sender_id, text, customer['page_id'] if customer else '',
+                                         customer['platform'] if customer else 'facebook'))
+    except Exception:
+        sent = False
+    delivery_state.update(db, [{'id': message_id}], 'accepted' if sent else 'unconfirmed')
+    return sent
+
+
+@app.route('/api/orders/<int:order_id>/resend_confirmation', methods=['POST'])
+@_dash_require
+def api_resend_order_confirmation(order_id):
+    db = get_db()
+    order = db.execute("SELECT sender_id FROM orders WHERE id=? AND store_id=? AND status NOT IN ('cancelled','canceled')",
+                       (order_id, current_store_id())).fetchone()
+    if not order:
+        return jsonify(ok=False, error='الطلب غير موجود في هذا المتجر أو ملغي'), 404
+    return jsonify(ok=True, order_id=order_id,
+                   confirmation_sent=send_saved_order_confirmation(db, order_id, order['sender_id']))
+
+
 @app.route("/api/conversations/<sender_id>/create_order", methods=["POST"])
 @_dash_require
 def api_create_order(sender_id):
@@ -17915,29 +18075,15 @@ def api_create_order(sender_id):
         ]
     if not raw_items and product_names:
         raw_items = [{"product_name": name, "quantity": 1} for name in product_names]
-    # Manual checkout follows the same completeness rules as automatic checkout.
+    # Staff input is authoritative, including incomplete contacts and free text
+    # measurements. Never send it through the AI's catalogue/fit validators.
     contact = checkout_customer_data(db, sender_id, data)
-    contact.update({key: data[key] for key in ("phone", "address") if data.get(key)})
-    missing = [label for key, label in (("phone", "رقم الهاتف"), ("province", "المحافظة"), ("address", "العنوان")) if not contact.get(key)]
-    if missing:
-        return jsonify({"ok": False, "error": "أكمل " + " و".join(missing) + " قبل تثبيت الطلب"}), 400
-    if not phone_number(contact.get("phone")):
-        return jsonify({"ok": False, "error": "رقم الهاتف غير صحيح"}), 400
+    contact.update({key: data[key] for key in ("phone", "province", "address") if key in data})
     data.update({k: contact[k] for k in ("phone", "province", "address")})
     catalog = load_products_from_file()
     try:
-        raw_items = expand_bundles(raw_items, catalog)
+        pricing = manual_checkout.prepare(raw_items, catalog, delivery_fee_for_province(data.get("province"), db))
     except (ValueError, KeyError, TypeError) as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
-    error = order_line_error(raw_items, catalog)
-    if error:
-        return jsonify({"ok": False, "error": error}), 400
-    items = normalize_order_items({"items": raw_items}, products=catalog)
-    if len(items) != len(raw_items):
-        return jsonify({"ok": False, "error": "إحدى القطع غير متوفرة؛ راجع الطلب قبل التثبيت"}), 400
-    try:
-        pricing = price_order(items, catalog, delivery_fee_for_province(data["province"], db))
-    except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     items = pricing["items"]
     product_total, delivery_fee = pricing["product_total"], pricing["delivery_fee"]
@@ -17961,6 +18107,7 @@ def api_create_order(sender_id):
             "ok": True,
             "duplicate": True,
             "existing_order_id": duplicate.get("id"),
+            "confirmation_sent": send_saved_order_confirmation(db, duplicate['id'], sender_id),
             "telegram_sent": False,
             "message": "هذا الطلب مثبت مسبقاً ولم يتم تكراره",
         })
@@ -18007,25 +18154,24 @@ def api_create_order(sender_id):
     )
     db.execute("UPDATE orders SET is_paid=? WHERE id=?", (int(is_paid), order_cursor.lastrowid))
     menger.enqueue(db, order_cursor.lastrowid, order_info, catalog)
+    price_pending = any(item.get('manual_price_pending') for item in items)
+    if price_pending:
+        db.execute("UPDATE menger_deliveries SET status='review_required',last_error='manual_price_required' WHERE order_id=?",
+                   (order_cursor.lastrowid,))
     order_info["id"] = order_cursor.lastrowid
     db.commit()
-    save_booking_to_file(order_info)
-    telegram_sent = send_order_to_telegram(order_info)
-    confirm = DEFAULT_ORDER_CONFIRMATION_TEXT
-    save_message(db, sender_id, "outgoing", "text", confirm, None, None, None, {"manual_order": True})
-    customer = db.execute(
-        "SELECT page_id, COALESCE(platform, 'facebook') AS platform FROM customers WHERE sender_id=?",
-        (sender_id,),
-    ).fetchone()
-    send_text_to_facebook(
-        sender_id,
-        confirm,
-        customer["page_id"] if customer else "",
-        customer["platform"] if customer else "facebook",
-    )
+    try:
+        save_booking_to_file(order_info)
+        telegram_sent = send_order_to_telegram(order_info)
+    except Exception:
+        telegram_sent = False
+    confirmation_sent = send_saved_order_confirmation(db, order_cursor.lastrowid, sender_id)
     print(f"[Dashboard] Manual order created for {sender_id}: {product_name_text} | telegram_sent={telegram_sent}", flush=True)
     return jsonify({
         "ok": True,
+        "order_id": order_cursor.lastrowid,
+        "confirmation_sent": confirmation_sent,
+        "price_pending": price_pending,
         "telegram_sent": telegram_sent,
         "telegram_error": "" if telegram_sent is not False else "تعذر إرسال الطلب إلى تلغرام. تأكد من TELEGRAM_BOT_TOKEN و TELEGRAM_ORDERS_CHAT_ID أو ORDER_TELEGRAM_CHAT_ID.",
     })

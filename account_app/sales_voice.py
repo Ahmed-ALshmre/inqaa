@@ -94,7 +94,7 @@ def answer(question, product, context, customer, history, delivery):
             ages=[age]
     requested = product_variants.requested(question)
     sizes = requested.get('sizes') or []
-    if selected & {'sizes','availability'} and not ('colors' in selected and not ages and not sizes):
+    if 'sizes' in selected or ('availability' in selected and 'colors' not in selected):
         if ages:
             if any(product_variants.order_choice_error(product,'size', product_variants.age_text(age)) for age in ages):
                 return None
@@ -153,7 +153,7 @@ def answer(question, product, context, customer, history, delivery):
         parts.append('إي حبيبتي تكدرين تختارين الألوان اللي تعجبج.' if re.search(r'اختار|مختلف|الوان مختلف',text)
                      else 'إي، ال'+known_colors[0]+' موجود.' if len(known_colors)==1
                      else 'متوفر بال' + ' وال'.join(colors) + '.')
-        step = 'يا لون عجبج؟' if not known_colors else step
+        step = 'يا لون عجبج؟' if len(colors) > 1 and not known_colors else step
     if known_colors and re.search(r'(?:يا|شنو|اي|أي).*لون',step):
         step = 'تحبين أحجزلج؟'
     if selected=={'price'} and not parts:
@@ -161,7 +161,7 @@ def answer(question, product, context, customer, history, delivery):
     if not parts:
         return None
     cue = sales_strategy.persuasion_cue(product,history)
-    if not paused and cue and (cue.get('kind')=='limited_stock' or re.search(r'الكمية\s+محدودة',customer_copy.normalized(cue.get('text')))) and not any(re.search(r'كمية|قطع.{0,10}قليل',str(t.get('text') or '')) for t in history if t.get('direction')=='outgoing'):
+    if not paused and selected & {'price', 'availability'} and cue and (cue.get('kind')=='limited_stock' or re.search(r'الكمية\s+محدودة',customer_copy.normalized(cue.get('text')))) and not any(re.search(r'كمية|قطع.{0,10}قليل',str(t.get('text') or '')) for t in history if t.get('direction')=='outgoing'):
         parts.append('عليه عرض هالفترة، والكمية الباقية قليلة.' if product.get('offer') and not any('عرض' in p for p in parts) else 'والكمية الباقية قليلة.')
     if step:
         parts.append(step.replace('شكد العمر المطلوب؟','شكد العمر حتى أتأكدلج من المتوفر؟'))
