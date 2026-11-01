@@ -10,9 +10,37 @@ except ImportError:
     from pricing import terms, offer_tiers, quote
 
 
-def answer(question, product, context, customer, history, delivery):
-    if not product or explicit_purchase(question) or sales_strategy.explicit_pause(question):
+def conversation_wording(reply, history):
+    """A greeting belongs to the first seller turn, never each factual answer."""
+    if not any(item.get('direction') == 'outgoing' and item.get('text') for item in history):
+        return reply
+    return re.sub(r'(?m)^\s*(?:(?:أهلا|أهلاً|اهلا|اهلاً)\s+وسهلا[ً]?|أهلاً\s+وسهلاً|اهلا\s+وسهلاً|يا\s+هلا|مرحبا|مرحباً)'
+                  r'(?:\s+(?:بيج|بيك|حبيبتي|عمري|عيوني|عيني|روحي))*[،,.!🌷🌸\s]*', '', reply).strip()
+
+
+def buying_choice(question, product):
+    """A definite available variant can invite contacts, never create an order."""
+    text=customer_copy.normalized(question)
+    if (not re.search(r'(?<!\w)(?:اريد|اخذ)(?!\w)',text)
+            or re.search(r'[؟?]|شكد|بكم|بيش|بعدني|بس\s+اسال|ما\s+اريد|ماريد|صحح|بدل|(?<!\w)(?:لو|اذا)(?!\w)',text)
+            or product_albums.stock_state(product)!='available'):
         return None
+    requested=product_variants.requested(question)
+    ages=product_variants.child_ages(question)
+    sizes=requested['sizes'] or ([product_variants.age_text(ages[0])] if len(ages)==1 else [])
+    colors=requested['colors'] or product_variants.colors(product.get('colors'))
+    if len(sizes)!=1 or len(colors)!=1:
+        return None
+    if product_variants.order_choice_error(product,'size',sizes[0]) or product_variants.order_choice_error(product,'color',colors[0]):
+        return None
+    return dict(items=[dict(product_id=product['product_id'],product_name=product.get('product_name'),
+                            color=colors[0],size=sizes[0],quantity=sales_playbook.requested_quantity(question) or 1)])
+
+
+def answer(question, product, context, customer, history, delivery):
+    if not product or explicit_purchase(question):
+        return None
+    paused=sales_strategy.explicit_pause(question)
     text = customer_copy.normalized(question)
     selected = set(sales_answers.topics(question))
     supported = {'fabric','fabric_feel','season','stretch','cut','lining','closure','care',
@@ -57,7 +85,8 @@ def answer(question, product, context, customer, history, delivery):
         facts.append(sales_answers.care_fact(product))
     if facts:
         greeting = 'وعليكم السلام، ' if re.search(r'(?:السلام|سلام)\s+عليكم',text) else ''
-        parts.append(greeting + 'أهلا وسهلا عيوني، ' + '، '.join(dict.fromkeys(filter(None,facts))) + '.')
+        opening = '' if any(item.get('direction') == 'outgoing' for item in history) else greeting + 'أهلا وسهلا عيوني، '
+        parts.append(opening + '، '.join(dict.fromkeys(filter(None,facts))) + '.')
     ages = product_variants.child_ages(question)
     if not ages:
         age=product_variants.requested_age(product,question)
@@ -85,13 +114,15 @@ def answer(question, product, context, customer, history, delivery):
             label = 'القطعتين' if qty==2 else f'{qty} قطع'
             line += ' و' + label + ' بـ ' + customer_copy.chat_amount(total)
         parts.append(line + ' بس.')
-    if selected & {'price','delivery'}:
-        fee = delivery.get('baghdad_fee') if customer.get('province')=='بغداد' or 'بغداد' in text else delivery.get('other_fee')
-        quantity = sales_playbook.requested_quantity(question) or 1
+    if 'delivery' in selected:
+        province=delivery.get('requested_province') or customer.get('province')
+        fee = delivery.get('requested_fee') if delivery.get('requested_fee') is not None else (
+            delivery.get('baghdad_fee') if province=='بغداد' or 'بغداد' in text else delivery.get('other_fee'))
+        quantity = sales_playbook.quote_quantity(question,context)
         priced = (quote([dict(product_id=product['product_id'],quantity=quantity)], [product],fee or 0)
                   if price is not None else dict(delivery_fee=fee or 0,product_total=0))
-        if delivery.get('baghdad_fee')==delivery.get('other_fee') or customer.get('province') or 'بغداد' in text:
-            shipping = 'التوصيل ' + customer_copy.chat_amount(priced['delivery_fee']) + '.'
+        if delivery.get('baghdad_fee')==delivery.get('other_fee') or province or 'بغداد' in text or priced['delivery_fee']==0:
+            shipping = 'التوصيل'+(' إلى '+province if province else '')+' ' + customer_copy.chat_amount(priced['delivery_fee']) + '.'
         else:
             shipping = 'التوصيل لبغداد ' + customer_copy.chat_amount(delivery.get('baghdad_fee',0)) + ' وللمحافظات ' + customer_copy.chat_amount(delivery.get('other_fee',0)) + '.'
         if 'price' in selected:
@@ -107,8 +138,13 @@ def answer(question, product, context, customer, history, delivery):
     if 'inspection' in selected:
         parts.append('وأكيد إلج حق الفحص بوجود المندوب قبل الدفع، وإذا بيها إشكال ترجع مجاناً بدون دفع حتى أجور التوصيل.')
     colors = product_variants.colors(product.get('colors'))
-    step = sales_playbook.price_next_step(product, context, customer, history)
+    step = '' if paused else sales_playbook.price_next_step(product, context, customer, history)
     known_colors = product_variants.chosen_colors(question)
+    photo_request=bool(re.search(r'صور|شوفيلي\s+صور',text))
+    if (len(ages)>1 and len(requested.get('colors') or [])>1
+            and re.search(r'للاول|للثاني|للصغير|للكبير',text)
+            and not re.search(r'(?<!\w)(?:لو|او)(?!\w)',text)):
+        known_colors=requested['colors']
     if len(requested.get('colors') or [])==1 and not re.search(r'(?<!\w)(?:لو|او)(?!\w)',text):
         known_colors=requested['colors']
     if ages and re.search(r'عمر',step):
@@ -125,13 +161,16 @@ def answer(question, product, context, customer, history, delivery):
     if not parts:
         return None
     cue = sales_strategy.persuasion_cue(product,history)
-    if cue and (cue.get('kind')=='limited_stock' or re.search(r'الكمية\s+محدودة',customer_copy.normalized(cue.get('text')))) and not any(re.search(r'كمية|قطع.{0,10}قليل',str(t.get('text') or '')) for t in history if t.get('direction')=='outgoing'):
-        parts.append('عليه عرض هالفترة، والكمية الباقية قليلة.' if product.get('offer') else 'والكمية الباقية قليلة.')
+    if not paused and cue and (cue.get('kind')=='limited_stock' or re.search(r'الكمية\s+محدودة',customer_copy.normalized(cue.get('text')))) and not any(re.search(r'كمية|قطع.{0,10}قليل',str(t.get('text') or '')) for t in history if t.get('direction')=='outgoing'):
+        parts.append('عليه عرض هالفترة، والكمية الباقية قليلة.' if product.get('offer') and not any('عرض' in p for p in parts) else 'والكمية الباقية قليلة.')
     if step:
         parts.append(step.replace('شكد العمر المطلوب؟','شكد العمر حتى أتأكدلج من المتوفر؟'))
-    reply = '\n\n'.join(parts)
-    show_colors = bool(len(colors)>1 and not known_colors and ('colors' in selected or re.search(r'(?:يا|شنو|اي|أي).*لون',step)))
-    return dict(reply=reply,reply_parts=parts,create_order=False,order={},requires_human=False,
+    # Related answers and their next step are one short message. Longer
+    # answers still pass through the semantic splitter without losing facts.
+    reply = ' '.join(parts)
+    show_colors = bool(len(colors)>1 and (photo_request or not known_colors and ('colors' in selected or re.search(r'(?:يا|شنو|اي|أي).*لون',step))))
+    return dict(reply=reply,reply_parts=[reply],create_order=False,order={},requires_human=False,
                 _local_reply=True,_human_sales_voice=True,_show_color_options=show_colors,
+                _image_option_colors=known_colors if photo_request else [],
                 image_product_ids=[product['product_id']] if show_colors else [],
                 _suppress_product_images=not show_colors)

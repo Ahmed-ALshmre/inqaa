@@ -246,7 +246,8 @@ class NaturalWarmthTests(unittest.TestCase):
     def test_neutral_checkout_wording_does_not_duplicate_booking_noun(self):
         for text in ('دزيلي الرقم حتى أثبتلج الحجز','دزيلي الرقم حتى أثبتلج حجز'):
             reply=owner_sales.surface(text,'',warm=False)
-            self.assertEqual(reply.count('الحجز'),1,reply)
+            self.assertEqual(reply.count('الطلب'),1,reply)
+            self.assertNotIn('الحجز الطلب',reply)
 
     def test_warmth_policy_avoids_repeated_endearments_and_respects_formal_request(self):
         self.assertFalse(owner_sales.warmth_allowed('اي',[

@@ -178,6 +178,8 @@ def _single_sales_kind(result, reply):
     phase = str(result.get('_response_kind') or result.get('intent') or '').lower()
     if result.get('_compact_offer_price'):
         return 'offer_price'
+    if result.get('_human_sales_voice') and len(compact(reply)) <= TARGET_LENGTH:
+        return 'related_answer'
     if receipt(reply) or phase in {'confirmation', 'order_confirmation'}:
         return 'confirmation'
     if (result.get('_service_reply') or result.get('_post_order') or meta.get('post_order_followup')
@@ -273,18 +275,27 @@ def plan_sales_bubbles(result, reply, image_urls=None):
         image_urls = [image_urls]
     images = list(dict.fromkeys(value.strip() for value in image_urls or []
                                 if isinstance(value, str) and value.strip()))
-    kind = _single_sales_kind(result, reply)
+    after_question = result.get('_post_image_question')
+    photo_flow = bool(images and isinstance(after_question,str) and after_question
+                      and compact(reply).endswith(compact(after_question)))
+    kind = '' if photo_flow else _single_sales_kind(result, reply)
     # Reserve a text slot whenever a validated reply exists. An image-only
     # response can use all five slots without inventing a caption.
-    image_cap = MAX_SALES_MESSAGES - bool(reply)
+    # A four-photo catalog may use the two short owner-requested captions,
+    # before and after the photos. Do not discard a photo to fit the old cap.
+    message_limit=MAX_SALES_MESSAGES+1 if photo_flow and len(images)==4 else MAX_SALES_MESSAGES
+    image_cap = message_limit - (2 if photo_flow else bool(reply))
     selected, deferred = images[:image_cap], images[image_cap:]
-    limit = min(MAX_PARTS, max(1, MAX_SALES_MESSAGES - len(selected)))
+    limit = min(MAX_PARTS, max(1, message_limit - len(selected)))
     reasons = []
     proposed = result.get('reply_parts')
     valid = (isinstance(proposed, list) and proposed
              and all(isinstance(part, str) and part.strip() for part in proposed)
              and compact(' '.join(proposed)) == compact(reply))
-    if kind or (result.get('_single_message') and len(compact(reply)) <= 200):
+    if photo_flow:
+        before=reply[:reply.rfind(after_question)].strip()
+        parts=([before] if before else [])+[after_question]
+    elif kind or (result.get('_single_message') and len(compact(reply)) <= 200):
         parts = [reply] if reply else []
     else:
         # Album descriptions are atomic. A model's arbitrary parts never alter
@@ -329,5 +340,6 @@ def plan_sales_bubbles(result, reply, image_urls=None):
     if parts and compact(' '.join(parts)) != compact(reply):
         raise ValueError('Sales layout changed the approved reply')
     return {'reply': reply, 'reply_parts': parts, 'image_urls': selected,
+            'post_image_parts': [after_question] if photo_flow else [],
             'deferred_image_urls': deferred, 'total_messages': total,
             'exception': kind or None, 'needs_rewrite': bool(reasons), 'rewrite_reasons': reasons}

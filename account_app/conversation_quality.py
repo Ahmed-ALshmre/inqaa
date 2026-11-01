@@ -51,8 +51,10 @@ def defer_contact_until_consent(reply):
 def booking_status_question(text):
     """An ordinary saved-order status question, without a new action or complaint."""
     clean = normalized(text).strip(' ؟?!.،')
-    return bool(re.fullmatch(r'(?:يعني\s+|زين\s+|هسه\s+)?(?:صار\s+الحجز|تم\s+الحجز|تثبت\s+(?:الطلب|الحجز)|'
-                             r'ثبتتوا\s+(?:الطلب|الحجز|طلبي)|سجلتوا\s+طلبي|طلبي\s+(?:ثبت|تثبت|مسجل))', clean))
+    clean=re.sub(r'(?<!\w)(?:بعيونج|بعيونك|حبيبتي|عيني|عمري)(?!\w)','',clean)
+    clean=re.sub(r'\s+',' ',clean).strip()
+    return bool(re.fullmatch(r'(?:يعني\s+|زين\s+|هسه\s+|صار\s+)?(?:صار\s+الحجز|تم\s+الحجز|(?:ثبت|تثبت)\s+(?:الطلب|الحجز)|'
+                             r'ثبتتوا\s+(?:الطلب|الحجز|طلبي)|سجلتوا\s+طلبي|طلبي\s+(?:ثبت|تثبت|مسجل))(?:\s+لو\s+بعد)?', clean))
 
 
 def defer_repeated_choice_questions(reply, history):

@@ -100,9 +100,17 @@ def normalize_age_words(value):
              'ست': 6, 'سته': 6, 'سبع': 7, 'سبعه': 7, 'ثمان': 8, 'ثماني': 8,
              'ثمانيه': 8, 'تسع': 9, 'تسعه': 9, 'عشر': 10, 'عشره': 10}
     text = re.sub(r'((?:قياس|عمر(?:ه|ها)?)\s+)ال(سنتين|سنتان|سن[هة]|شهرين|شهر)(?!\w)',r'\1\2',text)
-    return re.sub(r'(?<!\w)(و?)(?:ال)?(' + '|'.join(sorted(words, key=len, reverse=True)) +
+    text = re.sub(r'(?<!\w)(و?)(?:ال)?(' + '|'.join(sorted(words, key=len, reverse=True)) +
                   r')(?=\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)(?!\w))',
                   lambda hit: hit[1] + str(words[hit[2]]), text)
+    # In a correction the rejected value often omits its repeated unit:
+    # "أربع سنوات مو ثلاث، والثانية ست سنوات". Resolve only that local
+    # rejection, never arbitrary unlabelled numbers elsewhere in the message.
+    old_number=r'(?:\d{1,2}|'+'|'.join(sorted(words,key=len,reverse=True))+')'
+    text=re.sub(r'(\d{1,2}\s+(سنوات|سنين|سن[هة]|اشهر|شهور|شهر)\s+(?:مو|بدل|وليس)\s+)('
+                +old_number+r')(?=\s*(?:[،,.!?؟]|$|و(?=\w)|الثاني|الثانية))',
+                lambda h:h[1]+str(words.get(h[3],h[3]))+' '+h[2],text)
+    return text
 
 
 def age_choice_text(value):

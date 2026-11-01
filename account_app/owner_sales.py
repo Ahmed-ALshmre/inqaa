@@ -17,7 +17,8 @@ GUIDE = '''[تحديث أسلوب المالك — 1 نوفمبر]
 تكلمي بعراقية طبيعية ومختصرة مثل: «أهلا وسهلا عيوني، القماش قديفة ثقيل»، ثم أقرب سؤال مطلوب فقط. لا تعيدي اسم المنتج ورقم القياس وتفاصيل السلة بكل رسالة. إذا القماش موثق ثخين وبيه ليكرا قولي ذلك مباشرة، ولا تستنتجيه من كلمة شتوي وحدها.
 أي سؤال عن معلومة غير معروفة يُحال بصمت للتدخل البشري ويُسجل بصفحة أسئلة المنتج. ممنوع قول البيانات مو واضحة أو مو موضح أو يحتاج تأكيد من المتجر أو ما أگدر أأكد أو أخلّي البنية تشيّكه. لا ترسلي جواباً جزئياً يذكر النقص. لا تختلقي جواباً لتفادي التحويل.
 السعر مرة بشكل مفهوم: «حالياً عليه عرض، القطعة بـ12 ألف والقطعتين بـ20 ألف، والتوصيل5 آلاف» إذا تلك هي الأسعار المؤكدة. لا تكرري سعر العرض بصيغتين. قلة الكمية وآخر القطع وانتهاء العرض فقط إذا مسجلة، بلا اختلاق استعجال.
-عند اختيار الألوان اعرضي صوراً صحيحة من ألوان المنتج المتاحة واسألي «يا لون عجبج؟» دون إعادة سؤال العمر أو القياس المعروف. لا تستبدلي لوناً قريباً بصمت؛ أكدي اسم اللون الموجود إذا اختلف.
+الترحيب «أهلا وسهلا» ببداية المحادثة فقط. اجمعي جواب القياس واللون والطلب التالي برسالة قصيرة واحدة دون تكرار «إي موجود» لكل معلومة. لا تعيدي سؤال قياس أو عمر أو وزن معلوم، ولا تعيدي سرد الطلب عند سؤال «صار الحجز؟»؛ بعد نجاح الحفظ يكفي «إي عمري ثبت الطلب».
+عند اختيار الألوان: «إي صار بعيوني هاي الصور»، ثم صور صحيحة من ألوان المنتج المتاحة، وبعد الصور «يا لون عجبج حبيبتي؟». لا تعدي بصور لم تُرسل ولا تسألي اللون قبل الصور. لا تستبدلي لوناً قريباً بصمت؛ أكدي اسم اللون الموجود إذا اختلف.
 عند موافقة الشراء: «صار بعيوني، بس دزيلي رقم الموبايل والعنوان حتى أثبتلج الحجز». بعد الرقم: «عيوني باقي بس العنوان علمود أثبت الحجز». البيانات الناقصة تُحدد من المحفوظ فعلاً، ولا تعاد المعلومات المعروفة. السلة تبقى دقيقة داخل النظام حتى عندما يختصر النص.
 [سياسة المالك المعتمدة — تتقدم على صياغات البيع القديمة المتعارضة]
 اشتغلي بروح موظفة عراقية شاطرة بالمبيعات: جاوبي مباشرة وباختصار وحنية، وكملي من آخر نقطة بالمحادثة.
@@ -151,7 +152,7 @@ def neutral_address(text):
                           ('تدللين', 'تدللون'), ('تفحصين', 'تفحصون'),
                           ('تتأكدين', 'تتأكدون'), ('تدفعين', 'تدفعون'), ('ترجعينها', 'ترجعونها'),
                           ('اختيار[كج]', 'الاختيار'), ('رسالت[كج]', 'الرسالة'),
-                          (r'(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+(?:ال)?حجز)?', 'أثبت الحجز'),
+                          (r'(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+(?:ال)?(?:حجز|طلب))?', 'أثبت الطلب'),
                           ('(?:دزي|دز|ارسلي|ارسل|أرسلي)(?:لي)?', 'ممكن إرسال')]:
         text = re.sub(r'(?<!\w)(و?)' + before + r'(?!\w)', lambda hit: hit[1] + after, text)
     return text
@@ -275,9 +276,9 @@ def result(text='', *, human='', silent=False):
 
 def next_step(product, context, customer, history=()):
     try:
-        from .sales_playbook import customer_selection, weight_cart_choices
+        from .sales_playbook import customer_selection, weight_cart_choices, weight_fit_already_answered
     except ImportError:
-        from sales_playbook import customer_selection, weight_cart_choices
+        from sales_playbook import customer_selection, weight_cart_choices, weight_fit_already_answered
     known = customer_selection(context, customer)
     if sales_answers.wholesale_unit(product):
         outgoing = [str(item.get('text') or '') for item in list(history or [])[-12:]
@@ -303,7 +304,7 @@ def next_step(product, context, customer, history=()):
             if plan['question'] == 'شنو القياس المطلوب؟' and 'شنو القياس المطلوب' in recent:
                 return 'شنو القياس اللي يناسبج؟'
             return plan['question']
-    elif not years and not known['size']:
+    elif not years and not known['size'] and not weight_fit_already_answered(known,history):
         if 'size' in sales_strategy.repeated_choice_dimensions(history):
             return ''
         if 'شكد قياس تلبسين' in recent:
@@ -357,6 +358,8 @@ def delivery_wording(reply, question):
 
 def conversational_wording(reply):
     """Remove policy-label filler; retain the actual fee, inspection or condition."""
+    reply=re.sub(r'(?<!\w)يدللو(?!\w)','تدللين',reply)
+    reply=re.sub(r'ويوم\s+المبارك\s+يوصلكم','وتتهنون بطلبكم إن شاء الله',reply)
     reply=re.sub(r'((?:التوصيل|الشحن)\s+)بالعالم\s+العادي(?!\w)',r'\1بالوضع العادي',reply)
     reply=re.sub(r'[،,]?\s*(?:و)?(?:هو|هي)\s+نفس(?:ه|ها)\s+بالضبط\s+بالواقع', '', reply)
     return re.sub(r'(?:حسب|وفق|ضمن|بموجب)\s+(?:سياس[ةه]|شروط)\s+(?:المتجر|المحل|الصفحة)(?:\s+المعتمدة)?[،,]?\s*',
@@ -393,7 +396,12 @@ def negotiation_reply(ev, product, customer, context, history, *, delivery_optio
         offered = bool(customer_copy.fact(product.get('offer')) or
                        re.search(r'(?<!\w)بدل(?!\w)', customer_copy.normalized(product.get('price'))))
         refusal = ('ما نكدر ننزل أكثر، عليه عرض حاليًا' if offered else 'هذا السعر النهائي، ما عدنا تخفيض حاليًا')
-        opening = f'{refusal}، {label} {customer_copy.chat_amount(price)} و{unit} تستاهل.'
+        quantity=2 if re.search(r'قطعتين|قطعتان|ثنين',customer_copy.normalized(ev.get('text'))) else None
+        if quantity and count==1:
+            amount=quote([dict(product_id=product['product_id'],quantity=quantity)],[product],0)['product_total']
+            opening=f'{refusal}، القطعتين بـ{customer_copy.chat_amount(amount)} والقطعة تستاهل.'
+        else:
+            opening = f'{refusal}، {label} {customer_copy.chat_amount(price)} و{unit} تستاهل.'
     elif kind == 'free_delivery' and delivery_options:
         try:
             fees = [(region, quote([dict(product_id=product['product_id'], quantity=count)], [product], fee)['delivery_fee'])

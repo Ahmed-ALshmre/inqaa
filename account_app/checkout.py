@@ -349,6 +349,12 @@ def child_cart_error(items, messages, catalog):
         if re.search(r'(?:بس|فقط)\s*(?:قطعه|قطعة|وحده|واحد[ةه]?|عمر)', clean):
             wanted = []
         ages = child_ages(clean)
+        correction = product_variants.child_age_correction(clean)
+        if correction and correction[1] in wanted:
+            # Replace the rejected child's age; the other children retain their
+            # allocation. Never compare the final cart with a superseded age.
+            wanted = [correction[0] if age == correction[1] else age for age in wanted]
+            continue
         if len(ages) > 1 and re.search(r'اريد|اخذ|احتاج|قطعتين|ثنين|توام', clean) and not re.search(r'[؟?]|\b(?:لو|او)\b', clean):
             wanted = ages
     if not wanted:
@@ -361,6 +367,38 @@ def child_cart_error(items, messages, catalog):
         if age not in supplied:
             return 'اختيارات الأعمار محفوظة؛ باقي نحدد قطعة مستقلة لكل عمر قبل تثبيت الطلب.'
         supplied.remove(age)
+    return ''
+
+
+def chosen_color_error(items, history, catalog):
+    """A model may not substitute a different color for a single-model cart."""
+    ids={str(i.get('product_id') or '') for i in items if isinstance(i,dict)}
+    if len(ids)!=1:return ''
+    try:
+        from . import sales_context,sales_playbook
+    except ImportError:
+        import sales_context,sales_playbook
+    # Shipping details can contain color words ("الحي الأخضر"). A contact-only
+    # message is not a garment selection and cannot replace the chosen color.
+    choices=[]
+    for item in history:
+        text=item.get('text') or ''
+        if (item.get('direction')=='incoming' and contact_fields(text)
+                and not re.search(r'اريد|اخذ|قياس|عمر|قطعة|قطعه|لون|ثبت|حجزي',normalized(text))
+                and not product_variants.color_replacement(text)):
+            continue
+        choices.append(item)
+    selected=sales_playbook.customer_selection(sales_context.advance({},choices))
+    wanted=selected['colors'] or ([selected['color']] if selected['color'] else [])
+    if not wanted:return ''
+    product=next((p for p in catalog if str(p.get('product_id')) in ids),{})
+    offered=product_variants.colors(product.get('colors'))
+    actual=product_variants.colors(' '.join(str(i.get('color') or '') for i in items))
+    same=lambda a,b:a==b or {a,b}=={'أزرق','أزرق ملكي'}
+    if any(not any(same(c,o) for o in offered) for c in wanted):
+        return 'اللون المطلوب مو متوفر، الموجود '+ ' و'.join(offered)+'. يا لون نعتمد؟'
+    if actual and any(not any(same(c,a) for a in actual) for c in wanted):
+        return 'باقي نحدد لون كل قطعة مثل اختيارج حتى أثبت الطلب.'
     return ''
 
 

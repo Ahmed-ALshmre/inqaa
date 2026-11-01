@@ -26,7 +26,7 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value=result):
             response = self.event('ثبتي\nزين افحصها كدام المندوب؟')
         self.assertIn('تفحصين القطعة', response['reply'])
-        self.assertIn('حتى أثبتلج الحجز', response['reply'])
+        self.assertIn('حتى أثبتلج الطلب', response['reply'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 0)
 
     def test_september29_short_photo_reply_uses_saved_staff_offer(self):
@@ -46,8 +46,10 @@ class ConversationContextTests(unittest.TestCase):
         self.db.commit()
         result = self.event('بلا زحمه شوكت يوصلني الطلب؟')
         self.assertTrue(result['meta']['existing_order_followup'])
-        self.assertIn('رقمج موجود', result['reply'])
-        self.assertNotIn('دزيلي رقم', result['reply'])
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['meta']['needs_human'])
+        self.assertFalse(m.is_customer_ai_enabled(self.db,self.sender))
+        self.assertEqual(self.db.execute('SELECT phone FROM customers WHERE sender_id=?',(self.sender,)).fetchone()[0],'07700000000')
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
 
     def test_september29_context_deleted_with_conversation(self):

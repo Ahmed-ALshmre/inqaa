@@ -361,7 +361,8 @@ class RecentSalesPostOrderTests(unittest.TestCase):
         for question in ('يعني صار الحجز؟', 'صار الحجز؟', 'ثبتتوا طلبي؟'):
             response, calls = self.handle({'reply': 'unused', 'requires_human': True}, text=question)
             self.assertEqual(calls, 0)
-            self.assertIn('مسجل', response['reply'])
+            self.assertIn('ثبت الطلب', response['reply'])
+            self.assertLess(len(response['reply']),80)
             self.assertFalse(response['meta']['needs_human'])
         self.assertFalse(conversation_quality.booking_status_question('صار الحجز لو بعد ما حجزتوا وشوكت يوصل؟'))
 
