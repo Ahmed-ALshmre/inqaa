@@ -202,10 +202,33 @@ def requested_quantity(text):
     return int(match[1]) if match and 2 <= int(match[1]) <= 20 else None
 
 
+def quote_quantity(question,context=None):
+    """Price the declared allocation, without interpreting it as consent."""
+    text=sales_strategy.normalized(question)
+    explicit=requested_quantity(text)
+    if explicit:return explicit
+    if re.search(r'(?<!\w)(?:القطعه|القطعة|قطعة\s+وحد[هة]|قطعه\s+وحد[هة])(?!\w)',text):return 1
+    for value in [question]+[i.get('text') or '' for i in reversed((context or {}).get('evidence') or [])]:
+        clean=sales_strategy.normalized(value)
+        count=requested_quantity(clean)
+        if count and re.search(r'اريد|اخذ|احجز|حجزي|ثبت',clean):return count
+        ages=product_variants.child_ages(value)
+        if len(ages)>1 and re.search(r'اريد|طفلين|للاول|للثاني|لكل',clean):return len(ages)
+        if re.search(r'(?:بس|فقط)?\s*قطعة\s+وحد[هة]',clean):return 1
+    return 1
+
+
 def selection_evidence(context):
     for item in (context or {}).get('evidence',[]):
         for line in str(item.get('text') or '').splitlines():
             if line.strip():yield dict(item,text=line.strip())
+
+
+def weight_fit_already_answered(selected,history):
+    return bool(selected.get('weight') and any(
+        item.get('direction')=='outgoing' and re.search(r'(?:يناسب|يرهم|يلائم).{0,25}قياس\s*\d|قياس\s*\d.{0,25}(?:يناسب|يرهم)',
+                                                       sales_strategy.normalized(item.get('text')))
+        for item in history))
 
 
 def customer_selection(context, customer=None):
@@ -458,7 +481,7 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
                 return 'يا قياس تحبين نعتمدلج؟'
             return 'شنو القياس اللي يناسبج؟'
         return q
-    if not age_based and not selected['size']:
+    if not age_based and not selected['size'] and not weight_fit_already_answered(selected,history):
         if 'size' in sales_strategy.repeated_choice_dimensions(history):
             return ''
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
@@ -485,6 +508,9 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
     if len(selected['colors']) > 1:
         if any(color not in colors for color in selected['colors']):
             return ''
+        if any(re.search(r'قطعة\s+من\s+كل\s+لون|قطعه\s+من\s+كل\s+لون',
+                         sales_strategy.normalized(item.get('text'))) for item in selection_evidence(context)):
+            return booking_invitation(context, history)
         return 'قطعة من كل لون؟'
     if len(selected['color_options']) > 1:
         if any(color not in colors for color in selected['color_options']):
@@ -649,4 +675,4 @@ def human_requested(text):
     return assistant_identity_question(text) or bool(re.search(
         r'(?:ما\s*اريد|ماريد|لا اريد).{0,10}(?:ذكاء|بوت|روبوت|الي)\s*(?:يرد|يحجي|يجاوب)|'
         r'(?:اريد|ممكن|خليني|خلوني|خلي).{0,22}(?:احجي|احچي|اتكلم|اتواصل|اتحدث|يوصلني).{0,15}(?:موظف|بشر|انسان|ادار)|'
-        r'(?:اريد|اربطني|وصلني|حولني|تحويل).{0,10}(?:موظف|انسان|بشر)', text))
+        r'(?:اريد|اربطني|وصلني|حولني|حوليني|حولوني|تحويل).{0,10}(?:موظف|انسان|بشر)', text))

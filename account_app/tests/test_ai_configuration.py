@@ -19,7 +19,7 @@ class AIConfigurationTests(unittest.TestCase):
         self.db = m.get_db()
         self.sender = 'khuyoot::configuration-test'
         self.customer = m.get_or_create_customer(self.db, self.sender, 'page', 'facebook')
-        self.product = dict(product_id='P003', product_name='تنورة', store_id='khuyoot', status='active', price='12000', sizes='38 إلى 52')
+        self.product = dict(product_id='P003', product_name='تنورة', store_id='khuyoot', status='active', stock='متوفر', price='12000', sizes='38 إلى 52')
         self.ev = dict(sender_id=self.sender, text='شنو قياسات التنورة المتوفرة؟\nشكد سعر التنورة', attachments=[])
         self.client = m.app.test_client()
         with self.client.session_transaction() as session:

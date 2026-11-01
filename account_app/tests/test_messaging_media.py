@@ -92,19 +92,12 @@ class MessagingMediaTests(unittest.TestCase):
                 {'choices':[{'message':{'content':'{"reply":"السعر 18000 دينار","create_order":false,"order":{}}'}}]},
             ]
             result = self.m.call_main_ai(ev,'image',{},[],[product],product,{'product_found':True},'',[])
-        self.assertEqual(post.call_count, 2)
-        # The parsed retry still ignored the customer's size question. Keep the
-        # verified price and acknowledge the missing size fact rather than
-        # accepting a partial answer or inventing a size range.
-        self.assertIn('18 ألف', result['reply'])
-        self.assertIn('سوت حوامل', result['reply'])
-        self.assertIn('قياسات', result['reply'])
-        self.assertIn('تأكيد', result['reply'])
-        self.assertTrue(result.get('_needs_fact_review'))
-        self.assertNotIn('38', result['reply'])
-        self.assertNotIn('52', result['reply'])
+        # Missing sizes now stop the entire turn before the provider is used.
+        post.assert_not_called()
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['_needs_fact_review'])
+        self.assertTrue(result['requires_human'])
         self.assertFalse(result['create_order'])
-        self.assertFalse(result.get('failed'))
 
     def test_both_catalog_sheets_are_sent_for_lamsa(self):
         products = [{'product_id':'P005','product_name':'Suit','image_url':'https://images.test/suit.jpg'}]

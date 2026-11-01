@@ -103,7 +103,8 @@ class DecisionPipelineTests(unittest.TestCase):
             result=self.m.call_main_ai(dict(sender_id='pending-length',text='ثبتيه'),'text',{},[],[PRODUCT],PRODUCT,None,'',[],customer_products=[PRODUCT])
         self.assertFalse(result['create_order'])
         self.assertTrue(result['_needs_fact_review'])
-        self.assertIn('طول القطعة',result['reply'])
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['requires_human'])
         self.assertEqual(result['order']['items'],order['items'])
         self.assertEqual(self.db.execute('select count(*) from orders').fetchone()[0],0)
 

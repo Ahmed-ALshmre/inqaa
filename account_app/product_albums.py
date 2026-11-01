@@ -28,6 +28,11 @@ def image_question(question,index):
     if not matches:
         return question
     common=re.sub(r'(?:الصورة|الموديل)\s*$','',normalized[:matches[0].start()])
+    # A trailing "شنو قماش كل واحد؟" applies to both referenced photos,
+    # while each photo retains its own size/color clauses and ordinal.
+    shared=re.findall(r'(?:شنو|شكد|كم|هل)\s+(?:قماش|خام[هةت]?|الوان|سعر|قياسات)'
+                      r'[^؟?\n،]{0,45}كل\s*(?:واحد|موديل|قطعة)',normalized)
+    common+=' '+' '.join(shared)
     pieces=[normalized[m.end():matches[i+1].start() if i+1<len(matches) else len(normalized)]
             for i,m in enumerate(matches) if refs[m[1]]==index]
     return common + ' ' + ' '.join(pieces)

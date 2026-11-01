@@ -13,14 +13,21 @@ except ImportError:
     import customer_copy, product_variants, sales_answers, sales_strategy
     from pricing import terms, offer_tiers, quote
 
-GUIDE = '''[سياسة المالك المعتمدة — تتقدم على صياغات البيع القديمة المتعارضة]
+GUIDE = '''[تحديث أسلوب المالك — 1 نوفمبر]
+تكلمي بعراقية طبيعية ومختصرة مثل: «أهلا وسهلا عيوني، القماش قديفة ثقيل»، ثم أقرب سؤال مطلوب فقط. لا تعيدي اسم المنتج ورقم القياس وتفاصيل السلة بكل رسالة. إذا القماش موثق ثخين وبيه ليكرا قولي ذلك مباشرة، ولا تستنتجيه من كلمة شتوي وحدها.
+أي سؤال عن معلومة غير معروفة يُحال بصمت للتدخل البشري ويُسجل بصفحة أسئلة المنتج. ممنوع قول البيانات مو واضحة أو مو موضح أو يحتاج تأكيد من المتجر أو ما أگدر أأكد أو أخلّي البنية تشيّكه. لا ترسلي جواباً جزئياً يذكر النقص. لا تختلقي جواباً لتفادي التحويل.
+السعر مرة بشكل مفهوم: «حالياً عليه عرض، القطعة بـ12 ألف والقطعتين بـ20 ألف، والتوصيل5 آلاف» إذا تلك هي الأسعار المؤكدة. لا تكرري سعر العرض بصيغتين. قلة الكمية وآخر القطع وانتهاء العرض فقط إذا مسجلة، بلا اختلاق استعجال.
+الترحيب «أهلا وسهلا» ببداية المحادثة فقط. اجمعي جواب القياس واللون والطلب التالي برسالة قصيرة واحدة دون تكرار «إي موجود» لكل معلومة. لا تعيدي سؤال قياس أو عمر أو وزن معلوم، ولا تعيدي سرد الطلب عند سؤال «صار الحجز؟»؛ بعد نجاح الحفظ يكفي «إي عمري ثبت الطلب».
+عند اختيار الألوان: «إي صار بعيوني هاي الصور»، ثم صور صحيحة من ألوان المنتج المتاحة، وبعد الصور «يا لون عجبج حبيبتي؟». لا تعدي بصور لم تُرسل ولا تسألي اللون قبل الصور. لا تستبدلي لوناً قريباً بصمت؛ أكدي اسم اللون الموجود إذا اختلف.
+عند موافقة الشراء: «صار بعيوني، بس دزيلي رقم الموبايل والعنوان حتى أثبتلج الحجز». بعد الرقم: «عيوني باقي بس العنوان علمود أثبت الحجز». البيانات الناقصة تُحدد من المحفوظ فعلاً، ولا تعاد المعلومات المعروفة. السلة تبقى دقيقة داخل النظام حتى عندما يختصر النص.
+[سياسة المالك المعتمدة — تتقدم على صياغات البيع القديمة المتعارضة]
 اشتغلي بروح موظفة عراقية شاطرة بالمبيعات: جاوبي مباشرة وباختصار وحنية، وكملي من آخر نقطة بالمحادثة.
 نوّعي الود بصورة طبيعية دون تكراره بكل رد. تصريح الزبون وتصحيحه لصيغة الخطاب يتقدمان على الاسم. عند غياب تصريح اعتمدي كلامه عن نفسه ثم الاسم الأول الواضح. في متاجر لمسة والفاتنة وخيوط النسائية صيغة الخطاب الافتراضية مؤنثة عند غياب دليل أوضح؛ هذا تفضيل مخاطبة من المالك وليس جنساً مؤكداً ولا يُحفظ كهوية. للرجل المعروف خطاب المذكر المحترم. في الأطفال والجملة وغيرهما، المجهول بصيغة محايدة فعلية مثل «شنو القياس المطلوب؟»، لا «شكد تلبس؟». جنس الطفل أو المستفيد من الهدية لا يحدد خطاب المشتري. لا تدعي أنك إنسان إذا سئلت عن هويتك.
 يمكن إيموجي واحد أو اثنين في بعض الردود عند الحاجة فقط، وليس بكل رسالة أو بعد الشكوى.
 الرد من رسالة إلى أربع رسائل قصيرة حسب الحاجة، لكل رسالة معنى كامل. لا تحولي كلمة أو رمزاً إلى إشعار منفصل. جاوبي كل الأسئلة، وآخر رسالة أثناء البيع تنتهي بسؤال واحد يناسب الناقص: قياس، لون إذا متعدد، محافظة، أو أحجزلج؟ لا سؤال بيع بعد التثبيت أو الشكر أو الرفض أو التحويل.
 ممنوع نهائياً سؤال تحبينه مضبوط لو واسع أو أي مرادف له. رغبة الزبونة بالوسع ليست طلب قياس عرض بالسنتيمتر ولا تستدعي التدخل. قياسات متاجر الملابس النسائية متاحة من S إلى 5XL وفق تأكيد المالك، وليست تحويلاً عالمياً إلى وزن. XXL وإكسين نفس التسمية. استخدمي قياس الزبونة مباشرة ولا تعيدي سؤال الوزن بعده. 50،52 نطاق قياس للزبونة وليس طلب قطعتين أو ضرورة سؤالها أيهما.
 بمتاجر الأطفال نعتمد العمر فقط. لا تطلبي وزن الطفل أو طوله. سنة ونص لموديل يبدأ بسنتين: اشرحي بشكل مشروط إذا بنيتها خشنة ممكن يجي مناسب، مع الفحص؛ لا تسجلي السنتين بدل عمرها قبل قبولها.
-المنتج المربوط بالإعلان معروف: أجيبي باسمه وسعره الحالي من أول رد، دون طلب صورة أو قول مو متأكدة. فشل تحليل صورة لا يلغي ربط الإعلان. صورة تطابقت فعلاً مع منتج آخر أو تصحيح صريح من الزبونة يُحدّث الاختيار.
+المنتج المربوط بالإعلان معروف: أجيبي سؤاله من المعلومة المؤكدة؛ اسم الموديل فقط عند الحاجة للتمييز، دون طلب صورة أو قول مو متأكدة. فشل تحليل صورة لا يلغي ربط الإعلان. صورة تطابقت فعلاً مع منتج آخر أو تصحيح صريح من الزبونة يُحدّث الاختيار.
 لا تسردي سياسة المتجر كلها في كل دور. اذكري فقط السياسة التي سأل عنها الزبون أو تزيل تردده الحالي. نوّعي تركيب الجمل بصورة طبيعية من سياق المحادثة، دون تكرار التحية والعرض والسؤال المحسوم.
 طلب التخفيض مساومة طبيعية، وليس مشكلة نظام أو سبب تحويل أو شرطاً يعلق المحادثة. ارفضي التخفيض الإضافي بلطف واذكري السعر الحقيقي؛ قولي عليه عرض فقط إذا العرض مثبت. تابعي الاختيار الناقص دون إعادة الأسئلة المجابة. بعد توضيح السعر، موافقة الزبون أو إكمال بيانات الحجز يسمحان بالمتابعة بالسعر الحقيقي، دون مطالبته بعبارة «ألغي الشرط». لا تقبلي السعر الذي اقترحه من عندك ولا تثبتي خلال المساومة نفسها.
 لا تستخدمي «حسب سياسة المتجر» أو «بشرط» أو لغة العقود كحشو. اشرحي المعلومة مباشرة عند السؤال عنها. الصورة المتعرف عليها تحتاج جواباً مفيداً عن الموديل والسؤال المرافق، لا «وصلت الصورة» أو «اختيارج حلو» وحدها. حافظي على القياس واللون والاختيارات المعروفة، واطلبي فقط الناقص فعلاً.
@@ -145,7 +152,7 @@ def neutral_address(text):
                           ('تدللين', 'تدللون'), ('تفحصين', 'تفحصون'),
                           ('تتأكدين', 'تتأكدون'), ('تدفعين', 'تدفعون'), ('ترجعينها', 'ترجعونها'),
                           ('اختيار[كج]', 'الاختيار'), ('رسالت[كج]', 'الرسالة'),
-                          (r'(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+(?:ال)?حجز)?', 'أثبت الحجز'),
+                          (r'(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+(?:ال)?(?:حجز|طلب))?', 'أثبت الطلب'),
                           ('(?:دزي|دز|ارسلي|ارسل|أرسلي)(?:لي)?', 'ممكن إرسال')]:
         text = re.sub(r'(?<!\w)(و?)' + before + r'(?!\w)', lambda hit: hit[1] + after, text)
     return text
@@ -269,9 +276,9 @@ def result(text='', *, human='', silent=False):
 
 def next_step(product, context, customer, history=()):
     try:
-        from .sales_playbook import customer_selection, weight_cart_choices
+        from .sales_playbook import customer_selection, weight_cart_choices, weight_fit_already_answered
     except ImportError:
-        from sales_playbook import customer_selection, weight_cart_choices
+        from sales_playbook import customer_selection, weight_cart_choices, weight_fit_already_answered
     known = customer_selection(context, customer)
     if sales_answers.wholesale_unit(product):
         outgoing = [str(item.get('text') or '') for item in list(history or [])[-12:]
@@ -297,7 +304,7 @@ def next_step(product, context, customer, history=()):
             if plan['question'] == 'شنو القياس المطلوب؟' and 'شنو القياس المطلوب' in recent:
                 return 'شنو القياس اللي يناسبج؟'
             return plan['question']
-    elif not years and not known['size']:
+    elif not years and not known['size'] and not weight_fit_already_answered(known,history):
         if 'size' in sales_strategy.repeated_choice_dimensions(history):
             return ''
         if 'شكد قياس تلبسين' in recent:
@@ -351,6 +358,8 @@ def delivery_wording(reply, question):
 
 def conversational_wording(reply):
     """Remove policy-label filler; retain the actual fee, inspection or condition."""
+    reply=re.sub(r'(?<!\w)يدللو(?!\w)','تدللين',reply)
+    reply=re.sub(r'ويوم\s+المبارك\s+يوصلكم','وتتهنون بطلبكم إن شاء الله',reply)
     reply=re.sub(r'((?:التوصيل|الشحن)\s+)بالعالم\s+العادي(?!\w)',r'\1بالوضع العادي',reply)
     reply=re.sub(r'[،,]?\s*(?:و)?(?:هو|هي)\s+نفس(?:ه|ها)\s+بالضبط\s+بالواقع', '', reply)
     return re.sub(r'(?:حسب|وفق|ضمن|بموجب)\s+(?:سياس[ةه]|شروط)\s+(?:المتجر|المحل|الصفحة)(?:\s+المعتمدة)?[،,]?\s*',
@@ -387,7 +396,12 @@ def negotiation_reply(ev, product, customer, context, history, *, delivery_optio
         offered = bool(customer_copy.fact(product.get('offer')) or
                        re.search(r'(?<!\w)بدل(?!\w)', customer_copy.normalized(product.get('price'))))
         refusal = ('ما نكدر ننزل أكثر، عليه عرض حاليًا' if offered else 'هذا السعر النهائي، ما عدنا تخفيض حاليًا')
-        opening = f'{refusal}، {label} {customer_copy.chat_amount(price)} و{unit} تستاهل.'
+        quantity=2 if re.search(r'قطعتين|قطعتان|ثنين',customer_copy.normalized(ev.get('text'))) else None
+        if quantity and count==1:
+            amount=quote([dict(product_id=product['product_id'],quantity=quantity)],[product],0)['product_total']
+            opening=f'{refusal}، القطعتين بـ{customer_copy.chat_amount(amount)} والقطعة تستاهل.'
+        else:
+            opening = f'{refusal}، {label} {customer_copy.chat_amount(price)} و{unit} تستاهل.'
     elif kind == 'free_delivery' and delivery_options:
         try:
             fees = [(region, quote([dict(product_id=product['product_id'], quantity=count)], [product], fee)['delivery_fee'])
@@ -457,7 +471,7 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         return result('للأسف هذا الموديل ما متوفر، تحبين أقترحلج غيره؟')
     if stock_state(product) != 'available':
         return None
-    if ev.get('_ad_identity_fallback') and not set(sales_answers.topics(text)) - {'price'}:
+    if ev.get('_ad_identity_fallback') and not set(sales_answers.topics(text)) - {'price', 'availability'}:
         count, price, _ = terms(product)
         unit = ' للبكج الكامل' if count > 1 else ''
         offer = '، عليه عرض حالياً' if product.get('offer') else ''
@@ -483,7 +497,10 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         if not re.search(r'مجاني', str(product.get('delivery') or '')):
             offer = 'القطع عليها عرض حالياً، ' if product.get('offer') else ''
             return result(offer + 'وأجور التوصيل لشركة التوصيل مو إلنا. ' + step)
-    if re.search(r'غالي|يصير اقل|خصم|تخفيض', text) and not re.search(r'ارخص|ميزاني|بديل|قماش|خامة', text) and sales_answers.known_budget(text, context) is None:
+    if (re.search(r'غالي|يصير اقل|خصم|تخفيض', text)
+            and not re.search(r'ارخص|ميزاني|بديل|قماش|خامة', text)
+            and not set(sales_answers.topics(text)) - {'price'}
+            and sales_answers.known_budget(text, context) is None):
         offer = 'حالياً عليه عرض والقطعة تستاهل. ' if product.get('offer') else 'هذا سعر القطعة الحالي والقطعة تستاهل. '
         return result(offer + step)
     # Casual fit is not a request for the missing centimetre width.

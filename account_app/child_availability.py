@@ -9,9 +9,21 @@ except ImportError:
 
 
 def reply(product, products, question, *, known_color='', history=()):
+    try:
+        from .checkout import explicit_purchase
+    except ImportError:
+        from checkout import explicit_purchase
+    if explicit_purchase(question):
+        return None
     ages = product_variants.child_ages(question)
     if not product or not ages:
         return None
+    try:
+        from .sales_answers import topics
+    except ImportError:
+        from sales_answers import topics
+    if set(topics(question)) - {'sizes', 'colors', 'price', 'availability'}:
+        return None  # An age answer must not swallow an arrival/payment/fabric question.
     clean = customer_copy.normalized(question)
     if re.search(r'قماش|خام|فيديو|بطان|سحاب|طول|عرض|توصيل|شحن|دفع|ثبت|احجز|اطلب|خصم|تخفيض|غالي|اذا|بشرط|شرط|مكان|عنوانكم|وينكم', clean):
         return None  # Mixed facts and buying instructions keep the complete answer/checkout flow.

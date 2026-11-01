@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}أسئلة تحتاج جواباً — صوف{% endblock %}
+{% block styles %}<link rel="stylesheet" href="/static/css/product_questions.css?v=1">{% endblock %}
+{% block content %}
+<div class="pq-heading"><div><span class="pq-eyebrow">معرفة المتجر</span><h1>أسئلة تحتاج جواباً</h1><p>أضف المعلومة الصحيحة مرة واحدة، ليعرفها البوت عند السؤال عن المنتج نفسه لاحقاً.</p></div><span id="pqCount" class="pq-count">…</span></div>
+<div class="pq-toolbar"><label for="pqStatus">عرض الأسئلة<select id="pqStatus" class="form-select"><option value="pending">بانتظار جواب</option><option value="answered">تمت الإجابة</option></select></label><button id="pqRefresh" class="btn btn-outline-secondary" type="button">تحديث</button></div>
+<p class="pq-note">عند نقص المعلومة يتوقف الرد الآلي للمحادثة بصمت وتظهر في التدخل البشري. حفظ الجواب هنا يحدّث معرفة المنتج؛ لا يرسل رسالة للزبون ولا يعيد تشغيل محادثته.</p>
+<p id="pqStatusMessage" role="status" aria-live="polite"></p>
+<div id="pqList" class="pq-list" aria-busy="true"></div>
+<button id="pqMore" class="btn btn-outline-secondary pq-more" type="button" hidden>تحميل أسئلة أخرى</button>
+{% endblock %}
+{% block scripts %}<script src="/static/js/product_questions.js?v=1"></script>{% endblock %}

@@ -111,7 +111,7 @@ class CarrierDeliveryPipelineTests(unittest.TestCase):
         self.save('incoming', 'اريد وردي عمر سنة')
         reply = self.visible(self.call('شكد التوصيل؟'))
         self.assertNotIn(CARRIER, reply)
-        self.assertTrue(reply.endswith('أثبت الحجز؟'), reply)
+        self.assertTrue(reply.endswith('أثبت الطلب؟'), reply)
         self.assertEqual(reply.count('؟'), 1)
 
     def test_regional_actual_fee_and_product_free_shipping_are_preserved(self):
@@ -167,9 +167,9 @@ class CarrierDeliveryPipelineTests(unittest.TestCase):
                          create_order=False, order={}, requires_human=False)
         with patch.object(self.m, '_call_main_ai_once', return_value=generated) as model:
             result = self.call(text, history)
-        self.assertTrue(model.called)
-        self.assertIn('عنوان المتجر', result['reply'])
-        self.assertIn('لعمر سنة', result['reply'])
+        model.assert_not_called()
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['requires_human'])
         self.assertNotIn('حسم هالشرط', result['reply'])
 
     def test_complete_contact_after_quote_books_without_fee_confirmation(self):

@@ -2,11 +2,11 @@
 import re
 try:
     from . import customer_copy, product_albums, product_variants, sales_playbook, sales_context
-    from .checkout import is_confirmation, contact_fields
+    from .checkout import is_confirmation, contact_fields, explicit_purchase
     from .pricing import terms
 except ImportError:
     import customer_copy, product_albums, product_variants, sales_playbook, sales_context
-    from checkout import is_confirmation, contact_fields
+    from checkout import is_confirmation, contact_fields, explicit_purchase
     from pricing import terms
 
 
@@ -21,6 +21,8 @@ def one_each(text, context):
 
 
 def reply(product, text, context, customer=None):
+    if explicit_purchase(text) and not one_each(text,context):
+        return None
     try:
         if terms(product)[0] != 1:
             return None

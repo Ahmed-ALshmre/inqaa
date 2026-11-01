@@ -51,6 +51,27 @@ class StaffAccessTests(unittest.TestCase):
         for store in self.client.get('/api/stores').get_json()['stores']:
             self.assertNotIn('webhook_key',store)
 
+    def test_reply_staff_can_answer_product_questions_with_csrf_and_audit(self):
+        db=m.get_db()
+        from account_app import product_questions
+        ids=product_questions.capture(db,'default','synthetic-question',dict(product_id='TEST',product_name='منتج اختبار'),
+                                     'القصة كلوش؟',['cut'],None,m.now_baghdad_iso())
+        self.employee()
+        self.assertEqual(self.client.get('/product-questions').status_code,200)
+        self.assertEqual(self.client.get('/api/product-questions').status_code,200)
+        path=f'/api/product-questions/{ids[0]}/answer'
+        self.assertEqual(self.client.post(path,json={'answer':'القصة كلوش'}).status_code,403)
+        self.assertEqual(self.client.post(path,json={'answer':'القصة كلوش'},headers=self.headers).status_code,200)
+        self.assertTrue(db.execute('SELECT id FROM staff_audit WHERE staff_id=? AND path=?',(self.id,path)).fetchone())
+        price=product_questions.capture(db,'default','synthetic-question',dict(product_id='TEST',product_name='منتج اختبار'),
+                                       'شكد سعره؟',['price'],None,m.now_baghdad_iso())[0]
+        price_path=f'/api/product-questions/{price}/answer'
+        self.assertEqual(self.client.post(price_path,json={'answer':'سعر القطعة ب12000'},headers=self.headers).status_code,403)
+        db.execute('UPDATE staff_accounts SET permissions=? WHERE id=?',('["reply","products"]',self.id));db.commit()
+        self.assertEqual(self.client.post(price_path,json={'answer':'سعر القطعة ب12000'},headers=self.headers).status_code,200)
+        db.execute('UPDATE staff_accounts SET permissions=? WHERE id=?',('[]',self.id));db.commit()
+        self.assertEqual(self.client.get('/api/product-questions').status_code,403)
+
     def test_staff_csrf_and_server_permission_enforcement(self):
         self.employee()
         self.assertEqual(self.client.post('/api/conversations/test/send',json={'text':'hello'}).status_code,403)

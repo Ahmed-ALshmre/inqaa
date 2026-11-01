@@ -41,8 +41,9 @@ def one_next_question(reply):
 def defer_contact_until_consent(reply):
     """Called only without purchase consent: remove requests, retain factual answers."""
     text = str(reply or '')
-    pattern = (r'(?<!\w)(?:دزيلي|دزي|[اأ]رسلي|انطيني|[اأ]حتاج(?:\s+منج)?|نحتاج|محتاج[هة](?:\s+منج)?|ممكن\s+[اإ]رسال)'
-               r'\s+(?:بس\s*)?(?:رقم|عنوان|المحافظ[هة]|محافظتج|موبايل|تلفون|هاتف)[^.!؟?\n]*[.!؟?]?')
+    pattern = (r'(?<!\w)(?:بس\s+)?(?:(?:يا\s*ريت|لو\s+سمحتي)\s+)?'
+               r'(?:ت?دزيلي|ت?دزي|تدزين|ت?[اأ]رسلي|ترسلين|ت?انطيني|تنطيني|[اأ]حتاج(?:\s+منج)?|نحتاج|محتاج[هة](?:\s+منج)?|ممكن(?:\s+[اإ]رسال)?)'
+               r'\s+(?:بس\s*)?(?:ال)?(?:رقم|عنوان|محافظ[هة]|محافظتج|موبايل|تلفون|هاتف)[^.!؟?\n]*[.!؟?]?')
     text = re.sub(pattern, '', text)
     return re.sub(r'\n\s*\n+', '\n\n', text).strip()
 
@@ -50,8 +51,10 @@ def defer_contact_until_consent(reply):
 def booking_status_question(text):
     """An ordinary saved-order status question, without a new action or complaint."""
     clean = normalized(text).strip(' ؟?!.،')
-    return bool(re.fullmatch(r'(?:يعني\s+|زين\s+|هسه\s+)?(?:صار\s+الحجز|تم\s+الحجز|تثبت\s+(?:الطلب|الحجز)|'
-                             r'ثبتتوا\s+(?:الطلب|الحجز|طلبي)|سجلتوا\s+طلبي|طلبي\s+(?:ثبت|تثبت|مسجل))', clean))
+    clean=re.sub(r'(?<!\w)(?:بعيونج|بعيونك|حبيبتي|عيني|عمري)(?!\w)','',clean)
+    clean=re.sub(r'\s+',' ',clean).strip()
+    return bool(re.fullmatch(r'(?:يعني\s+|زين\s+|هسه\s+|صار\s+)?(?:صار\s+الحجز|تم\s+الحجز|(?:ثبت|تثبت)\s+(?:الطلب|الحجز)|'
+                             r'ثبتتوا\s+(?:الطلب|الحجز|طلبي)|سجلتوا\s+طلبي|طلبي\s+(?:ثبت|تثبت|مسجل))(?:\s+لو\s+بعد)?', clean))
 
 
 def defer_repeated_choice_questions(reply, history):

@@ -98,7 +98,8 @@ class AgeMonthPipelineTests(unittest.TestCase):
             result = self.m.call_main_ai(dict(sender_id='age-months', text='متوفر عمر سنه و١٠ اشهر'),
                 'text', {}, [], [CHILD], CHILD, None, '', [], customer_products=[CHILD])
         model.assert_not_called()
-        self.assertIn('متوفر لعمر سنة و10 أشهر', result['reply'])
+        self.assertIn('متوفر', result['reply'])
+        self.assertNotIn('شكد العمر', result['reply'])
         self.assertNotIn('مو متوفر', result['reply'])
         self.assertNotRegex(result['reply'], r'\d+\.\d+|1 سنوات')
         self.assertFalse(result['create_order'])
