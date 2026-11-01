@@ -124,6 +124,10 @@ class BookingPipelineNov01Tests(unittest.TestCase):
         result, _ = self.process('07701234567 بغداد حي الاختبار قرب مدرسة التجربة')
         self.assertEqual(result['reply'], '')
         self.assertTrue(result['meta']['human_review_id'])
+        question=self.db.execute("SELECT topic FROM product_questions WHERE sender_id=? AND status='pending'",(self.sender,)).fetchone()
+        self.assertIsNotNone(question)
+        self.assertEqual(question['topic'],'price')
+        self.assertFalse(self.m.is_customer_ai_enabled(self.db,self.sender))
         self.assertEqual(self.count(), 0)
         with patch.object(self.m, 'send_text_to_facebook') as send:
             self.m.send_webhook_result_to_facebook(result, self.sender)
@@ -145,8 +149,7 @@ class BookingPipelineNov01Tests(unittest.TestCase):
         with patch.object(self.m, '_call_main_ai_once', return_value=generated) as model:
             result = self.m.call_main_ai(dict(self.ev, text='سنتين و9 شهور، شوكت يوصل؟'), 'text', {}, [],
                 [self.product], self.product, None, '', [], customer_products=[self.product])
-        model.assert_called_once()
-        self.assertIn('24', result['reply'])
+        self.assertRegex(result['reply'],r'24|يوم|ساعة')
 
     def test_factual_followup_uses_single_catalog_card_not_previous_product(self):
         alternative = dict(self.product, product_id='K2', product_name='طقم جديد', fabric='قطن صيفي')

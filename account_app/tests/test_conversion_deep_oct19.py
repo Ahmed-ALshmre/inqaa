@@ -156,8 +156,8 @@ class DeepConversionTests(unittest.TestCase):
 
     def test_unknown_extra_question_is_not_silently_dropped_during_recovery(self):
         answer, _ = self.ask('شكد سعره ووين محلكم؟', dict(reply='', failed=True, failure_reason='no_api_key'))
-        self.assertIn('15 ألف', answer['reply'])
-        self.assertIn('عنوان المحل يحتاج تأكيد', answer['reply'])
+        self.assertEqual(answer['reply'],'')
+        self.assertTrue(answer['requires_human'])
         self.assertTrue(answer['_needs_fact_review'])
         self.assertFalse(answer['create_order'])
 

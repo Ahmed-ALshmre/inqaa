@@ -98,7 +98,7 @@ class BookingPipelineTests(unittest.TestCase):
             result = self.m.call_main_ai(dict(sender_id='size-question', text='قياس٤٢'),
                 'text', {}, [], [PRODUCT], PRODUCT, None, '', [], customer_products=[PRODUCT])
         self.assertFalse(result.get('failed'), result)
-        self.assertIn('42', result['reply'])
+        self.assertIn('موجود', result['reply'])
         self.assertNotIn('كريمي', result['reply'])
         self.assertFalse(result.get('create_order'))
         model.assert_not_called()

@@ -254,7 +254,8 @@ class DeepSalesPipelineTests(unittest.TestCase):
                       'text', {}, [], [PRODUCT], PRODUCT, None, '', [], customer_products=[PRODUCT])
         self.assertFalse(result['create_order'])
         self.assertTrue(result['_needs_fact_review'])
-        self.assertIn('البطانة', result['reply'])
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['requires_human'])
         self.assertEqual(result['order']['items'][0]['size'], '44')
 
 

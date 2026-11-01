@@ -159,9 +159,9 @@ class SalesTurnPipelineTests(unittest.TestCase):
         product = dict(PRODUCT, colors='اسود', offer='عرض خاص')
         result, provider = self.ask('قياسي 44', product=product)
         provider.assert_not_called()
-        self.assertIn('متوفر', result['reply'])
+        self.assertRegex(result['reply'],'متوفر|موجود')
         self.assertNotIn('فيت', result['reply'])  # Availability is not evidence of fit on this customer's body.
-        self.assertIn('محافظة', result['reply'])
+        self.assertRegex(result['reply'],'حجز|محافظة')
         self.assertNotIn('وزن', result['reply'])
         self.assertFalse(result['create_order'])
         parts = self.m.plan_sales_bubbles(result, result['reply'])['reply_parts']

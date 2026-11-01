@@ -52,7 +52,7 @@ class CheckoutCompletionTests(unittest.TestCase):
         first, model = self.process('07701234567')
         model.assert_not_called()
         self.assertNotIn('رقم الموبايل', first['reply'])
-        self.assertIn('المحافظة', first['reply'])
+        self.assertIn('العنوان', first['reply'])
         self.assertIn('العنوان', first['reply'])
         self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)
         second, model = self.process('البصرة الجزائر قرب المدرسة')

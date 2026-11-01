@@ -1796,6 +1796,10 @@ async function loadStats() {
     const data = await res.json();
     if (statsRequest !== controller) return;
     document.getElementById('statPending').textContent  = `${data.pending_reviews  || 0} مراجعة`;
+    const questionsCount=document.getElementById('productQuestionsCount');
+    if(questionsCount)questionsCount.textContent=data.product_questions_pending?String(data.product_questions_pending):'';
+    const questionsLink=document.getElementById('productQuestionsLink');
+    if(questionsLink)questionsLink.href='/product-questions?store_id='+encodeURIComponent(storeId==='all'?'default':storeId);
     document.getElementById('statOrders').textContent   = `${data.orders_today    || 0} طلب`;
     document.getElementById('statMessages').textContent = `${data.messages_today  || 0} رسالة`;
     setText('statTotalMessages', fmtNumber(data.people_total || data.total_conversations || 0));

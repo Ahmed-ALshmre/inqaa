@@ -113,13 +113,14 @@ class NegotiationCheckoutTests(unittest.TestCase):
     link_cart = completion.CheckoutCompletionTests.link_cart
     assert_confirmation = completion.CheckoutCompletionTests.assert_confirmation
 
-    def process(self, text):
+    def process(self, text, allow_silence=False):
         result, model = completion.CheckoutCompletionTests.process(self, text)
         # A generated refusal is context only after messaging accepts it.
         with patch.object(self.m, 'send_text_to_facebook', return_value=True), \
              patch.object(self.m, 'is_ai_enabled', return_value=True), \
              patch.object(self.m, 'is_customer_ai_enabled', return_value=True):
-            self.assertTrue(self.m.send_webhook_result_to_facebook(result))
+            sent=self.m.send_webhook_result_to_facebook(result)
+            self.assertEqual(sent,not allow_silence)
         return result, model
 
     def test_reject_discount_then_complete_the_saved_cart_without_repeated_questions(self):
@@ -153,10 +154,10 @@ class NegotiationCheckoutTests(unittest.TestCase):
     def test_arrival_condition_explains_uncertainty_without_policy_filler(self):
         self.link_cart()
         for text in ('ثبتي اذا يوصل باجر فقط', '07701234567 بغداد حي الاختبار'):
-            result, model = self.process(text)
+            result, model = self.process(text,allow_silence=True)
             model.assert_not_called()
-            self.assertIn('ما أگدر أضمنه', result['reply'])
-            self.assertIn('موعد مو أكيد', result['reply'])
+            self.assertEqual(result['reply'],'')
+            self.assertTrue(result['meta']['human_review_id'])
             self.assertNotIn('حسم هالشرط', result['reply'])
             self.assertFalse(result.get('create_order'))
             self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 0)

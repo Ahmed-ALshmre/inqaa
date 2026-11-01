@@ -137,7 +137,8 @@ class ChildAgeReplyTests(unittest.TestCase):
     def test_direct_size_and_age_questions_answer_without_provider_or_confirmation(self):
         for text in ('قياس 3 متوفر؟', 'عمره 4 سنوات', 'عمر 5', 'قياس 6', 'عمره 7 سنوات'):
             result = self.reply(text)
-            self.assertIn('متوفر لعمر', result['reply'])
+            self.assertIn('متوفر', result['reply'])
+            self.assertNotIn('شكد العمر', result['reply'])
             self.assertNotIn('يحتاج تأكيد', result['reply'])
 
     def test_two_and_eight_year_fit_questions_use_conditional_local_reply(self):

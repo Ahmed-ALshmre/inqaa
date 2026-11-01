@@ -83,6 +83,7 @@
   </section>
 
   <div class="drawer-section-title">الصفحات</div>
+  {% if can('reply') or can('products') %}<a id="productQuestionsLink" class="drawer-link" href="/product-questions"><i class="bi bi-chat-square-text"></i><span>أسئلة تحتاج جواباً</span><small id="productQuestionsCount"></small></a>{% endif %}
   {% if staff_person and staff_person.owner %}<a class="drawer-link" href="/settings/staff"><i class="bi bi-people"></i><span>الموظفون والصلاحيات</span></a>{% endif %}
   <a class="drawer-link" href="/products">
     <i class="bi bi-box-seam"></i>

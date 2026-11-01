@@ -99,7 +99,8 @@ def normalize_age_words(value):
     words = {'ثلاث': 3, 'ثلاثه': 3, 'اربع': 4, 'اربعه': 4, 'خمس': 5, 'خمسه': 5,
              'ست': 6, 'سته': 6, 'سبع': 7, 'سبعه': 7, 'ثمان': 8, 'ثماني': 8,
              'ثمانيه': 8, 'تسع': 9, 'تسعه': 9, 'عشر': 10, 'عشره': 10}
-    return re.sub(r'(?<!\w)(و?)(' + '|'.join(sorted(words, key=len, reverse=True)) +
+    text = re.sub(r'((?:قياس|عمر(?:ه|ها)?)\s+)ال(سنتين|سنتان|سن[هة]|شهرين|شهر)(?!\w)',r'\1\2',text)
+    return re.sub(r'(?<!\w)(و?)(?:ال)?(' + '|'.join(sorted(words, key=len, reverse=True)) +
                   r')(?=\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)(?!\w))',
                   lambda hit: hit[1] + str(words[hit[2]]), text)
 
@@ -149,6 +150,15 @@ def single_color(value):
     """Accept one explicit color label, never free-form recognition prose."""
     match = COLOR_RE.fullmatch(normalized(value).strip())
     return ALIASES[match[1]] if match else ''
+
+
+def nearby_color(wanted, available):
+    """Suggest an explicitly named alternative; never normalize it into a choice."""
+    groups = (('خمري','ماروني','أحمر'),('سماوي','تركوازي','أزرق'),('زيتي','أخضر'),
+              ('كريمي','بيج','أبيض'),('رصاصي','فضي'))
+    if wanted in available:
+        return ''
+    return next((color for group in groups if wanted in group for color in group if color in available),'')
 
 
 def chosen_colors(value):

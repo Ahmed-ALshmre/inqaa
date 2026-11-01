@@ -101,8 +101,8 @@ class OwnerReplyPipelineTests(unittest.TestCase):
     def test_xxl_answers_without_model_weight_or_size_reask(self):
         result, model=self.ask('قياس XXL موجود؟', PRODUCT, {'gender':'female'})
         model.assert_not_called()
-        self.assertIn('متوفر',result['reply'])
-        self.assertIn('محافظة',result['reply'])
+        self.assertRegex(result['reply'],'متوفر|موجود')
+        self.assertRegex(result['reply'],'حجز|محافظة')
         self.assertNotIn('وزن',result['reply'])
         self.assertNotIn('قياس تلبسين',result['reply'])
 

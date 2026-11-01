@@ -9,6 +9,12 @@ except ImportError:
 
 
 def reply(product, products, question, *, known_color='', history=()):
+    try:
+        from .checkout import explicit_purchase
+    except ImportError:
+        from checkout import explicit_purchase
+    if explicit_purchase(question):
+        return None
     ages = product_variants.child_ages(question)
     if not product or not ages:
         return None

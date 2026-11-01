@@ -18,12 +18,14 @@ def topics(question):
     result = []
     patterns = {
         'price': r'سعر|بشكد|بكم|بيش|حساب|غالي|ميزاني|خصم|تخفيض|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)|(?:شكد|اشكد|كم)\s*(?:ثنين|قطعتين|\d+\s*قطع)',
+        'advice': r'شنو\s+تنصح|شنو\s+راي|شنو\s+تقترح|اختار\s+شنو',
         'colors': r'الوان|(?<!\w)(?:و?ال)?لون(?:ه|ها)?(?!\w)|الاسود|الابيض|الوردي|الجوزي',
         'sizes': r'قياس|مقاس|سايز',
         'availability': r'متوفر|موجود|(?:شنو|ايش)\s+(?:ال)?باقي',
         'fabric': r'قماش|خام[ةهت]',
+        'cut': r'(?<!\w)(?:و?ال|و)?(?:كلوش|(?:كص|قص)(?:[هةت]|(?=\s|$)))',
         'fabric_feel': r'(?:قماش|خام[ةهت]|سمك|ملمس).{0,45}(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم)|'
-                       r'(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم).{0,20}(?:القماش|خامته|باللبس)',
+                       r'(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم).{0,20}(?:القماش|خامته|باللبس)|(?<!\w)(?:ثقيل|ثخين|سميك|خفيف)(?!\w)',
         'season': r'شتوي|صيفي|بهاري|خريفي|الموسم|يدفي',
         'care': r'غسل|غسيل|يكش|ينكمش|يذب\s*لون|يثبت\s*لون|كوي|يتعكش|يتجعد|يتكرمش',
         'delivery': r'توصيل|شحن|(?:كيف|شلون).{0,18}توصل(?:ون|وا)',
@@ -103,17 +105,19 @@ def product_fragments(question, product):
             gaps.append('عدد قطع وحدة البيع بالجملة يحتاج تأكيد من المتجر.')
     if 'photo_source' in selected:
         source = customer_copy.fact(product.get('real_photo_notes'), 'real_photo_notes').strip()
-        facts.append(source if source and len(source) <= 220 and not customer_copy.has_instructions(source)
-                     else 'طريقة إعداد الصورة مو موضحة عندي، فما أگدر أأكد إذا تصوير أو مولدة.')
+        if source and len(source) <= 220 and not customer_copy.has_instructions(source):
+            facts.append(source)
+        else:
+            gaps.append('مصدر الصورة يحتاج تأكيد من المتجر.')
     if 'season' in selected:
         recorded_season = season_fact(product)
         if recorded_season:
             facts.append(recorded_season)
         else:
-            fabric = customer_copy.fact(product.get('fabric'), 'fabric').strip()
-            facts.append((f'قماشه {fabric}، ' if fabric else '') + 'بس إذا شتوي لو صيفي هالتفصيل مو موضح عندي لهالموديل.')
+            gaps.append('الموسم يحتاج تأكيد من المتجر.')
     if 'care' in selected:
-        facts.append(care_fact(product) or 'تفاصيل العناية بالقماش مو موضحة عندي لهالموديل، فما أگدر أضمن نتيجة الغسل أو الكوي.')
+        value = care_fact(product)
+        (facts if value else gaps).append(value or 'العناية بالقماش تحتاج تأكيد من المتجر.')
     if 'availability' in selected:
         try:
             from .product_albums import stock_state
@@ -125,16 +129,17 @@ def product_fragments(question, product):
         else:
             gaps.append('توفر هالموديل يحتاج تأكيد من المتجر.')
     if 'fabric_feel' in selected:
-        facts.append(fabric_feel_fact(product) or 'سمك القماش وملمسه مو موضحين بتفاصيل هالموديل، فما أگدر أأكد إذا خفيف وبارد باللبس.')
+        value = fabric_feel_fact(product)
+        (facts if value else gaps).append(value or 'سمك القماش وملمسه يحتاج تأكيد من المتجر.')
     fields = [('colors', 'ألوان الموديل'), ('sizes', 'قياسات الموديل'),
               ('fabric', 'القماش'), ('lining', 'البطانة'),
-              ('stretch', 'المطاط'), ('closure', 'الإغلاق')]
+              ('stretch', 'المطاط'), ('closure', 'الإغلاق'), ('cut', 'قصة القطعة')]
     for key, label in fields:
         if key not in selected:
             continue
-        value = customer_copy.fact(product.get(key), key).strip()
+        value = field_fact(product, key)
         # A field is evidence only if it can be rendered without staff directions.
-        if value and not customer_copy.has_instructions(value) and len(value) <= 220:
+        if value and not customer_copy.has_instructions(value) and len(value) <= 1200:
             facts.append(f'{label}: {value}.')
         else:
             gaps.append(f'{label} يحتاج تأكيد من المتجر.')
@@ -149,7 +154,8 @@ def product_fragments(question, product):
     if 'video' in selected and not product.get('video_url'):
         facts.append('هسه ما عندي فيديو لهالموديل، المتوفر صوره.')
     if 'location' in selected:
-        gaps.append('عنوان المحل يحتاج تأكيد من المتجر.')
+        location = field_fact(product,'shop_address')
+        (facts if location else gaps).append(location or 'عنوان المحل يحتاج تأكيد من المتجر.')
     # Unrecognized clauses remain visible to staff instead of disappearing
     # behind the parts we can answer. Customer choices/statements are not gaps.
     clauses = re.split(r'\n+|[؟?]|\s+و(?=شنو|شكد|كم|منين|وين|متى|شلون|هل)', str(question or ''))
@@ -176,6 +182,8 @@ def wholesale_lines(product):
 
 
 def fabric_feel_fact(product):
+    if field_fact(product, 'fabric_feel'):
+        return field_fact(product, 'fabric_feel')
     recorded = '\n'.join(customer_copy.fact((product or {}).get(key), key)
                          for key in ('fabric', 'description', 'fit_notes'))
     return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
@@ -184,6 +192,8 @@ def fabric_feel_fact(product):
 
 
 def care_fact(product):
+    if field_fact(product, 'care_instructions'):
+        return field_fact(product, 'care_instructions')
     recorded = '\n'.join(customer_copy.fact((product or {}).get(key), key)
                          for key in ('fabric', 'description', 'fit_notes', 'faq', 'care_instructions'))
     return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
@@ -192,11 +202,27 @@ def care_fact(product):
 
 
 def season_fact(product):
+    if field_fact(product, 'season'):
+        return field_fact(product, 'season')
     recorded = ' '.join(customer_copy.fact((product or {}).get(key), key)
                         for key in ('fabric', 'description', 'fit_notes', 'faq'))
     return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
                      if len(part) <= 220 and re.search(r'(?<!\w)(?:شتوي[هة]?|صيفي[هة]?|بهاري[هة]?|خريفي[هة]?)(?!\w)', part)
                      and not customer_copy.has_instructions(part))
+
+
+def field_fact(product, key):
+    value = customer_copy.fact((product or {}).get(key), key).strip()
+    if value and not customer_copy.has_instructions(value):
+        return value
+    patterns = {'stretch': r'ليكرا|مطاط|يتمدد', 'cut': r'كلوش|قص[هةت]|كص[هةت]',
+                'lining': r'بطان', 'closure': r'سحاب|ازرار|دكم|دگم|لاستيك|استيك'}
+    if key not in patterns:
+        return ''
+    recorded = '\n'.join(customer_copy.fact((product or {}).get(k), k) for k in ('fabric','description','fit_notes','faq'))
+    return '، '.join(line.strip() for line in re.split(r'[.\n،]+', recorded)
+                     if len(line) <= 220 and re.search(patterns[key], normalized(line))
+                     and not customer_copy.has_instructions(line))
 
 
 def wholesale_unit(product):

@@ -22,8 +22,8 @@ class RecentSalesSelectionTests(unittest.TestCase):
 
     def test_washing_claims_require_documented_facts(self):
         facts, gaps = sales_answers.product_fragments('يكش بالغسل لو يذب لون؟', dict(fabric='لينن'))
-        self.assertFalse(gaps)
-        self.assertTrue(any('مو موضحة' in fact for fact in facts))
+        self.assertTrue(gaps)
+        self.assertFalse(facts)
         self.assertIn('لا يكش بالغسل', sales_answers.care_fact(dict(description='قماش لا يكش بالغسل.')))
 
     def test_male_photo_wording_and_known_province_survive_local_reply(self):
@@ -142,8 +142,8 @@ class RecentSalesSelectionTests(unittest.TestCase):
     def test_photo_provenance_unknown_is_answered_without_identity_handoff(self):
         question = 'هاي الصورة بالذكاء الاصطناعي لو تصوير؟'
         facts, gaps = sales_answers.product_fragments(question, {'real_photo_notes': ''})
-        self.assertTrue(any('مو موضحة' in fact for fact in facts))
-        self.assertFalse(gaps)
+        self.assertFalse(facts)
+        self.assertTrue(gaps)
         self.assertTrue(sales_answers.missing_answers('الصورة لنفس الموديل، شنو قياسج؟', question, {'real_photo_notes': ''}))
         facts, _ = sales_answers.product_fragments(question, {'real_photo_notes': 'صور تصوير المتجر للقطعة.'})
         self.assertIn('صور تصوير المتجر للقطعة.', facts)
@@ -152,8 +152,8 @@ class RecentSalesSelectionTests(unittest.TestCase):
         product = dict(product_id='K', fabric='تركي درجة أولى')
         self.assertFalse(sales_answers.season_fact(product))
         facts, gaps = sales_answers.product_fragments('قماشه شتوي لو صيفي؟', product)
-        self.assertFalse(gaps)
-        self.assertTrue(any('مو موضح' in fact for fact in facts))
+        self.assertTrue(gaps)
+        self.assertFalse(any('مو موضح' in fact for fact in facts))
         self.assertIn('بهاري لا صيفي ولا شتوي', sales_answers.season_fact(dict(product, description='القماش بهاري لا صيفي ولا شتوي.')))
 
     def test_wholesale_unit_and_count_are_catalog_facts_not_retail_prices(self):
@@ -259,8 +259,10 @@ class RecentSalesCheckoutTests(unittest.TestCase):
         self.m.set_store_setting(self.db, 'delivery_other_fee', '5000')
         data = {'items': [dict(product_id='W1', color='اسود', size='44', quantity=1)]}
         first = self.m.checkout_contact_prompt(self.db, self.sender, data, self.product, 'رقم الموبايل والمحافظة والعنوان')
-        self.assertIn('قياس 44', first)
-        self.assertIn('23 ألف', first)
+        self.assertIn('صار بعيوني', first)
+        self.assertNotIn('قياس 44', first)
+        self.assertNotIn(self.product['product_name'], first)
+        self.assertEqual(data['items'][0]['size'],'44')
         self.assertNotIn('تم تثبيت', first)
         self.save('outgoing', first)
         second = self.m.checkout_contact_prompt(self.db, self.sender, data, self.product, 'المحافظة والعنوان')
@@ -283,15 +285,16 @@ class RecentSalesCheckoutTests(unittest.TestCase):
             result = self.m.call_main_ai(dict(self.ev, text='قماشه شتوي لو صيفي؟'), 'text', {}, history,
                 [self.product], None, None, '', [], customer_products=[self.product])
         model.assert_not_called()
-        self.assertIn('مو موضح', result['reply'])
-        self.assertIn('تركي', result['reply'])
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['requires_human'])
 
     def test_unknown_photo_source_never_becomes_our_photography(self):
         with patch.object(self.m, '_call_main_ai_once', return_value={'reply': 'الصورة من تصويرنا'}) as model:
             result = self.m.call_main_ai(dict(self.ev, text='هاي الصورة بالذكاء لو تصوير؟'), 'text', {}, [],
                 [self.product], None, None, '', [], customer_products=[self.product])
         model.assert_not_called()
-        self.assertIn('مو موضحة', result['reply'])
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['requires_human'])
         self.assertNotIn('من تصويرنا', result['reply'])
 
     def test_advice_request_is_not_purchase_consent(self):
@@ -332,7 +335,8 @@ class RecentSalesCheckoutTests(unittest.TestCase):
             result = self.m.call_main_ai(dict(self.ev, text='قماشه ثقيل لو خفيف وبارد؟'), 'text', {}, [],
                 [product], product, None, '', [], customer_products=[product])
         model.assert_not_called()
-        self.assertIn('مو موضحين', result['reply'])
+        self.assertEqual(result['reply'],'')
+        self.assertTrue(result['requires_human'])
 
     def test_legacy_image_url_list_does_not_crash_after_model_selection(self):
         images = [dict(image_index=1, product_found=True, product_id='W1',

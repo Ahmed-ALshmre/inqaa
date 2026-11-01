@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales
+    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media
@@ -1308,6 +1308,8 @@ def init_db():
 
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_stats ON messages(store_id,direction,created_at,sender_id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_orders_stats ON orders(store_id,created_at,sender_id)")
+    product_questions.init(db)
+    product_questions.seed_owner_facts(db, load_products_from_file(all_stores=True), now_baghdad_iso())
     db.commit()
 
     now = now_baghdad_iso()
@@ -5143,7 +5145,7 @@ def detect_message_type(ev):
 def load_active_products(db):
     return [
         product_albums.sales_product(product)
-        for product in load_products_from_file()
+        for product in product_questions.apply(db or (get_db() if has_app_context() else None), current_store_id(), load_products_from_file())
         if product.get("status") == "active"
     ]
 
@@ -8460,6 +8462,11 @@ def requested_reply_images(result, products, matched, text, reply):
                     continue
             except ValueError:
                 continue
+        if result.get('_show_color_options'):
+            choices = product_variants.colors(product.get('colors'))
+            images = list(dict.fromkeys(url for choice in choices for url in select_product_image_urls(product,choice)[:1]))[:4]
+            urls.extend(images)
+            continue
         color = '' if result.get('_catalog_model_album') and result.get('_local_reply') else str(result.get('image_color') or '')
         images = select_product_image_urls(product, color)
         if result.get('_photo_preview_per_product') and result.get('_local_reply'):
@@ -8841,6 +8848,7 @@ def _call_main_ai_with_context(
     ages = conversation_quality.child_ages(question)
     years = product_variants.size_data(customer_copy.fact((matched_product or {}).get('sizes'), 'sizes'))['years']
     if (years and len(ages) > 1 and not ev.get('_post_order') and not ev.get('_image_matches')
+            and not sales_strategy._explicit_purchase(question)
             and not set(sales_answers.topics(question)) - {'sizes', 'colors', 'availability'}
             and not re.search(r'ثبت|احجز|اطلب|قماش|بطان|طول|عرض|توصيل|سعر', question)):
         parts = []
@@ -8851,6 +8859,7 @@ def _call_main_ai_with_context(
                     create_order=False, order={}, _local_reply=True)
     if (current_store_id() == baraah.STORE_ID and age is not None and years
             and not ev.get('_post_order') and not ev.get('_image_matches')
+            and not sales_strategy._explicit_purchase(question)
             and not set(sales_answers.topics(question)) - {'sizes', 'colors', 'availability'}
             and not re.search(r'سعر|توصيل|قماش|فيديو|ثبت|احجز|اطلب|بطان|مكان|عنوانكم|وينكم', sales_strategy.normalized(question))):
         answer = baraah.age_answer(matched_product, age, question)
@@ -9080,7 +9089,8 @@ def _call_main_ai_with_context(
         recovered = recover_factual_sales_reply(
             dict(ev, text=question + '\n' + '\n'.join(unresolved_questions)), matched_product, order=order)
         if recovered:
-            return dict(recovered, _needs_fact_review=True, create_order=False)
+            return dict(recovered, _needs_fact_review=True, create_order=False,
+                        _unanswered_question='\n'.join(unresolved_questions))
     contact = {key: order.get(key) or (customer or {}).get(key) or ''
                for key in ('phone', 'province', 'address')}
     if (explicit_checkout and not sales_strategy.purchase_block_reason(question) and not result.get('_needs_fact_review')
@@ -9273,11 +9283,30 @@ def silent_customer_handoff(db, ev):
                       'customer_requested_human': True, 'skipped': True, 'reason': 'customer_requested_human'})
 
 
+def unanswered_product_handoff(ev, product, topics=None):
+    result = dict(reply='',reply_parts=[],create_order=False,order={},requires_human=True,
+                  handoff_reason='سؤال عن المنتج يحتاج جواباً معتمداً من الموظف',
+                  _direct_fact_handoff=True,_needs_fact_review=True)
+    if not has_app_context() or not ev.get('sender_id'):
+        return result
+    db = get_db()
+    review_id = create_human_review(db, ev, result['handoff_reason'], notify_telegram=False)
+    ids = product_questions.capture(db, current_store_id(), ev['sender_id'], product,
+        ev.get('text') or '', topics or product_questions.missing(ev.get('text') or '',product), review_id, now_baghdad_iso())
+    set_customer_ai_enabled(db, ev['sender_id'], False)
+    cancel_followups_for_sender(db, ev['sender_id'], 'unanswered_product_question')
+    return dict(result, _product_question_review_id=review_id, _product_question_ids=ids)
+
+
 def call_main_ai(ev, message_type, customer, history, products, matched_product,
                  image_result, instructions_text, rules_list, fix_instruction=None,
                  customer_products=None, conversation_history=None, catalog_search_context=None):
     if sales_playbook.human_requested(ev.get('text')):
         return customer_identity_handoff(ev)
+    if has_app_context():
+        products = product_questions.apply(get_db(), current_store_id(), products)
+        if matched_product:
+            matched_product = next((p for p in products if p['product_id']==matched_product.get('product_id')), matched_product)
     products = [product_albums.sales_product(p) for p in products]
     matched_product = product_albums.sales_product(matched_product) if matched_product else None
     customer_products = [product_albums.sales_product(p) for p in customer_products or []]
@@ -9292,6 +9321,15 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     chosen = matched_product or (named[0] if len(named) == 1 else
                                 customer_products[0] if len(customer_products or []) == 1 else None)
     ev['_reply_product'] = chosen
+    if chosen and not ev.get('_post_order') and len(ev.get('_image_matches') or [])<=1:
+        if re.search(r'ماكو.{0,12}غير.{0,8}(?:هاي|هال).*صور|صوري(?:ه|ها)|تدزين نفس',sales_strategy.normalized(ev.get('text'))):
+            return unanswered_product_handoff(ev,chosen,['service'])
+        missing_facts = product_questions.missing(ev.get('text') or '', chosen)
+        if missing_facts:
+            return unanswered_product_handoff(ev, chosen, missing_facts)
+        exact = product_questions.exact_answer(chosen, ev.get('text') or '')
+        if exact:
+            return owner_result_surface(dict(reply=exact,create_order=False,order={}), ev, customer, history)
     if chosen and not ev.get('_post_order') and product_albums.color_conflict(chosen):
         return owner_sales.result(human='catalog_color_conflict', silent=True)
     continuation = sales_context.continuation(ev.get('text'), context)
@@ -9326,6 +9364,13 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
 def owner_result_surface(result, ev, customer=None, history=()):
     result = dict(result or {})
     original = str(result.get('reply') or '')
+    unknown_copy = re.search(r'مو موضح|ما موضح|مو مذكور|غير موثق|يحتاج.{0,12}ت[أا]كيد|تحتاج.{0,12}ت[أا]كيد|ما أگدر أأكد|ما اكدر ااكد', original)
+    if (ev.get('_reply_product') and not result.get('_product_question_review_id')
+            and (unknown_copy or (result.get('_needs_fact_review') and
+                 (result.get('_direct_fact_handoff') or result.get('_unanswered_question') or product_questions.missing(ev.get('text') or '',ev['_reply_product']))))):
+        review_ev = dict(ev,text=result.get('_unanswered_question') or ev.get('text') or '')
+        handoff = unanswered_product_handoff(review_ev, ev['_reply_product'])
+        return dict(handoff,order=result.get('order') or {})
     if not original:
         return result
     if not re.search(r'\w', original):
@@ -9345,6 +9390,28 @@ def owner_result_surface(result, ev, customer=None, history=()):
             return owner_sales.result(human='forbidden_customer_placeholder', silent=True)
         result = dict(recovered, _placeholder_recovered=True)
         original = str(result.get('reply') or '')
+    product = ev.get('_reply_product')
+    selected = set(sales_answers.topics(ev.get('text') or ''))
+    wanted_colors = product_variants.requested(ev.get('text') or '')['colors']
+    if (product and not ev.get('_post_order') and not sales_strategy._explicit_purchase(ev.get('text'))
+            and selected and not selected-{'colors','availability'} and len(wanted_colors)==1):
+        alternative = product_variants.nearby_color(wanted_colors[0],product_variants.colors(product.get('colors')))
+        if alternative and _stock_state(product)=='available':
+            original = f'ال{wanted_colors[0]} مو موجود، المتوفر ال{alternative} وقريب إله. تقصدين هاللون؟'
+            result.update(reply=original,reply_parts=[original],create_order=False,order={},
+                          image_product_ids=[product['product_id']],image_color=alternative,_suppress_product_images=False)
+    catalog_dump = re.search(r'عرض\s+\d+\s*قطع\s*[:：]|سعر\s+\d+\s*قطع\s*[:：]',original)
+    simple_facts = bool(selected and not selected-{'fabric','fabric_feel','season','stretch','cut','colors','sizes','availability'})
+    if (product and has_app_context() and not ev.get('_post_order') and not ev.get('_image_matches')
+            and not result.get('requires_human') and not result.get('_fit_recommendation_size')
+            and not result.get('_catalog_model_album') and not result.get('_plural_color_reply')
+            and (catalog_dump or result.get('_factual_recovery') or simple_facts)):
+        natural = sales_voice.answer(ev.get('text') or '',product,ev.get('_sales_context') or {},customer or {},history,get_delivery_settings(get_db()))
+        if natural:
+            result.update(reply=natural['reply'],reply_parts=natural['reply_parts'],_human_sales_voice=True)
+            if natural.get('_show_color_options') and not result.get('_catalog_model_album') and not result.get('image_product_ids'):
+                result.update(_show_color_options=True,image_product_ids=natural['image_product_ids'],_suppress_product_images=False)
+            original = result['reply']
     conversational = owner_sales.conversational_wording(original)
     if conversational != original:
         original = conversational
@@ -10109,6 +10176,18 @@ def checkout_catalog_error(db, sender_id, ai_result, error):
         'checkout_catalog_conflict: ' + str(error), notify_telegram=False)
     ai_result['_checkout_human_review_id'] = review_id
     ai_result['_checkout_catalog_review_id'] = review_id
+    ids = {str(item.get('product_id') or '') for item in (ai_result.get('order') or {}).get('items') or [] if isinstance(item,dict)}
+    if not ids:
+        binding = get_active_product_binding(db,sender_id)
+        if binding:
+            ids.add(str(binding.get('product_id') or ''))
+    topic = 'price' if re.search(r'سعر|أسعار|بكج',str(error)) else 'details'
+    for product in load_products_from_file():
+        if product.get('product_id') in ids:
+            product_questions.capture(db,current_store_id(),sender_id,product,
+                'مراجعة تسعير الحجز: '+str(error),[topic],review_id,now_baghdad_iso())
+    set_customer_ai_enabled(db,sender_id,False)
+    cancel_followups_for_sender(db,sender_id,'checkout_catalog_review')
     return ''
 
 
@@ -10122,45 +10201,11 @@ def checkout_catalog_review_response(ev, result):
 
 
 def checkout_contact_prompt(db, sender_id, order_data, matched_product, missing):
-    """Confirm a validated choice and cost once, then collect only missing contacts."""
-    request = f'دزيلي {missing} حتى أثبتلج الحجز 🌷'
-    catalog = load_active_products(db)
-    try:
-        raw_items = expand_bundles(checkout_lines(order_data, matched_product), catalog)
-        if order_line_error(raw_items, catalog):
-            return request
-        items = normalize_order_items({'items': raw_items}, matched_product, catalog)
-        by_id = {p['product_id']: p for p in catalog}
-        if not items or any(not item.get('size') or (by_id[item['product_id']].get('colors') and not item.get('color')) for item in items):
-            return request
-        delivery = get_delivery_settings(db)
-        if not order_data.get('province') and delivery['baghdad_fee'] != delivery['other_fee']:
-            return request
-        priced = price_order(items, catalog, delivery_fee_for_province(order_data.get('province'), db))
-        total = customer_copy.chat_amount(priced['product_total'] + priced['delivery_fee'])
-        choices = []
-        for item in items:
-            count = int(item.get('quantity') or 1)
-            quantity = 'قطعة' if count == 1 else 'قطعتين' if count == 2 else f'{count} قطع'
-            product = by_id[item['product_id']]
-            size = str(item.get('size') or '')
-            unit = 'وزن' if item.get('size_type') == 'weight' else 'قياس'
-            if product_variants.size_data(product.get('sizes'))['years']:
-                unit = 'عمر'
-                age = product_variants.child_age('عمر ' + size)
-                size = product_variants.age_text(age) if age is not None else size
-            details = ' '.join(str(value) for value in (item.get('color'), unit, size) if value)
-            choices.append(f"{quantity} {product['product_name']} ({details})")
-        summary = '، و'.join(choices)
-        previous = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='outgoing' AND "
-            + delivery_state.VISIBLE_SQL + " AND julianday(created_at)>=julianday(?)-1 ORDER BY id DESC LIMIT 12",
-            (sender_id, now_baghdad_iso())).fetchall()
-        visible_text = ' '.join(str(row['text'] or '') for row in reversed(previous))
-        if summary in visible_text and total in visible_text:
-            return request
-        return f'تمام، {summary}. المجموع ويا التوصيل {total}.\n{request}'
-    except (ValueError, TypeError, KeyError):
-        return request
+    """Keep the validated cart internal and ask only for missing contacts."""
+    remaining = re.sub(r'المحافظة\s+والعنوان(?:\s+الكامل)?','العنوان الكامل',missing)
+    if not re.search(r'رقم|موبايل|تلفون', remaining):
+        return f'عيوني باقي بس {remaining} علمود أثبتلج الحجز.'
+    return f'صار بعيوني، بس دزيلي {remaining} حتى أثبتلج الحجز.'
 
 
 def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_confirmed=False):
@@ -12100,6 +12145,11 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         conversation_history=conversation_history,
         catalog_search_context=_search_ctx,
     )
+    if ai_result.get('_product_question_review_id'):
+        return dict(sender_id=ev['sender_id'], page_id=ev.get('page_id'),platform=ev.get('platform'),
+                    reply='',reply_parts=[],send_image=False,
+                    meta=dict(needs_human=True,human_review_id=ai_result['_product_question_review_id'],
+                              product_question_ids=ai_result.get('_product_question_ids'),reason='product_question'))
     if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev['sender_id']):
         return {'sender_id': ev['sender_id'], 'page_id': ev['page_id'],
                 'platform': ev['platform'], 'reply': '', 'send_image': False,
@@ -12370,7 +12420,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     if order_created or ai_result.get("_checkout_proposal") or ai_result.get("_suppress_product_images"):
         send_img = False
     requested_image_color = str(ai_result.get("image_color") or "").strip()
-    if not requested_image_color and not (ai_result.get('_catalog_model_album') and ai_result.get('_local_reply')):
+    if not requested_image_color and not ai_result.get('_show_color_options') and not (ai_result.get('_catalog_model_album') and ai_result.get('_local_reply')):
         color_context = " ".join(filter(None, (ev.get("text"), reply)))
         normalized_context = _normalize_color_match_text(color_context)
         for variant in product_image_variants(matched_product):
@@ -15854,6 +15904,7 @@ def api_dashboard_stats():
         "goal_people": goal_people,
         "goal_gap": max(0, goal_people - cohort_buyers),
         "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'" + review_where, review_params).fetchone()[0],
+        "product_questions_pending": db.execute("SELECT COUNT(*) FROM product_questions WHERE status='pending'" + review_where, review_params).fetchone()[0],
         "orders_today":        conversion_growth.cohort_metrics(db, today, (datetime.now(BAGHDAD_TZ).date() + timedelta(days=1)).isoformat(), store_id or None, booking_source=booking_source)['orders'],
         "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?" + review_where, [today] + review_params).fetchone()[0],
         "messages_total":      total_people,
@@ -17924,6 +17975,50 @@ def api_mark_reviewed(sender_id):
             print(f"[Dashboard] Could not re-enable AI after mark_reviewed: {exc}", flush=True)
     current_ai_enabled = is_customer_ai_enabled(db, sender_id)
     return jsonify({"ok": True, "ai_resumed": current_ai_enabled, "ai_enabled": current_ai_enabled, **closed})
+
+
+@app.get('/product-questions')
+@_dash_require
+def product_questions_page():
+    return render_template('product_questions.html')
+
+
+@app.get('/api/product-questions')
+@_dash_require
+def api_product_questions():
+    db = get_db()
+    status = request.args.get('status','pending')
+    if status not in {'pending','answered'}:
+        return jsonify(error='حالة غير صالحة'),400
+    before = request.args.get('before',type=int)
+    sql = '''SELECT id,product_id,product_name,topic,question,answer,status,occurrences,created_at,updated_at
+             FROM product_questions WHERE store_id=? AND status=?'''
+    args = [current_store_id(),status]
+    if before:
+        sql += ' AND id<?'; args.append(before)
+    rows = [dict(row) for row in db.execute(sql+' ORDER BY id DESC LIMIT 51',args)]
+    return jsonify(questions=rows[:50],has_more=len(rows)>50,
+                   pending=db.execute("SELECT COUNT(*) FROM product_questions WHERE store_id=? AND status='pending'",(current_store_id(),)).fetchone()[0],
+                   topics=product_questions.LABELS)
+
+
+@app.post('/api/product-questions/<int:identity>/answer')
+@_dash_require
+def api_product_question_answer(identity):
+    if not secrets.compare_digest(request.headers.get('X-CSRF-Token',''),session.get('csrf_token') or secrets.token_hex(32)):
+        return jsonify(error='حدّث الصفحة ثم حاول مجدداً'),403
+    person = current_dashboard_person()
+    question = get_db().execute('SELECT topic FROM product_questions WHERE id=? AND store_id=?',(identity,current_store_id())).fetchone()
+    if question and question['topic']=='price' and person and not person.get('owner') and 'products' not in person.get('permissions',[]):
+        return jsonify(error='تصحيح السعر يحتاج صلاحية إدارة المنتجات'),403
+    try:
+        row = product_questions.save_answer(get_db(),current_store_id(),identity,
+            (request.get_json(silent=True) or {}).get('answer'), (person or {}).get('name','الموظف'),now_baghdad_iso())
+    except ValueError as error:
+        return jsonify(error=str(error)),400
+    if not row:
+        return jsonify(error='السؤال غير موجود في هذا المتجر'),404
+    return jsonify(ok=True,id=row['id'],answer=row['answer'],status=row['status'])
 
 
 chatwoot.install(sys.modules[__name__])

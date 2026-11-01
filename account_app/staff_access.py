@@ -69,6 +69,8 @@ def required_permission(path, method):
     if path in {'/rewards', '/api/rewards'} and read: return 'read'
     if path == '/api/rewards/withdraw' and method == 'POST': return 'read'
     if path == '/api/dashboard_stats': return 'read'
+    if path == '/product-questions' or path.startswith('/api/product-questions'):
+        return 'reply|products'
     if (method == 'POST' and path.startswith('/api/stores/') and path.endswith('/ai')
             and len(path.strip('/').split('/')) == 4):
         return 'reply|settings'

@@ -14,6 +14,7 @@ except ImportError:
 PRODUCT_KNOWLEDGE_FIELDS = (
     'lining', 'transparency', 'stretch', 'closure', 'measurements', 'fit_notes',
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
+    'fabric_feel', 'cut', 'season', 'care_instructions',
 )
 EVIDENCE_VERSION = 6
 
