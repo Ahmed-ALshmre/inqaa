@@ -8472,6 +8472,8 @@ def prepare_color_photo_reply(result,reply,ev,product,images,order_created=False
             and len(set(result.get('image_product_ids') or [])) <= 1
             and (result.get('_show_color_options') or _requests_product_photo(ev.get('text') or ''))
             and not topics-{'colors','availability'}
+            and not product_variants.child_ages(ev.get('text') or '')
+            and not product_variants.requested(ev.get('text') or '')['sizes']
             and not result.get('create_order')):
         gender=customer_address_gender(ev,customer or {},())
         if len(product_variants.colors(product.get('colors')))<=1:
@@ -9466,7 +9468,10 @@ def owner_result_surface(result, ev, customer=None, history=()):
     compound_facts = bool(len(selected)>1 and 'price' in selected and not selected-{
         'fabric','fabric_feel','season','stretch','cut','colors','sizes','availability',
         'price','delivery','payment','inspection','delivery_time'})
-    if (product and has_app_context() and not ev.get('_post_order') and not ev.get('_image_matches')
+    image_matches=ev.get('_image_matches') or []
+    single_verified_image=bool(product and len(image_matches)==1 and image_matches[0].get('product_found')
+                               and image_matches[0].get('product_id')==product.get('product_id'))
+    if (product and has_app_context() and not ev.get('_post_order') and (not image_matches or single_verified_image)
             and not result.get('requires_human') and not result.get('_fit_recommendation_size')
             and not result.get('_catalog_model_album') and not result.get('_plural_color_reply')
             and not result.get('_transparent_price')

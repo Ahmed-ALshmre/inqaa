@@ -145,6 +145,21 @@ class ReviewPipelineTests(unittest.TestCase):
         self.assertFalse(result.get('requires_human'),result)
         self.assertIn('ثخين',result['reply']);self.assertIn('ليكرا',result['reply'])
 
+    def test_photo_caption_does_not_replace_answer_to_supplied_child_age(self):
+        self.product['colors']='أخضر برتقالي'
+        original='إي متوفر لعمر خمس سنوات، هاي ألوانه.'
+        result,reply=self.m.prepare_color_photo_reply(dict(reply=original,_show_color_options=True),original,
+            dict(self.ev,text='هذا التراك بالصورة عندكم منه لعمر خمس سنوات؟'),self.product,['https://images.test/a.jpg'])
+        self.assertEqual(reply,original)
+
+    def test_single_verified_image_price_recovery_keeps_human_wording(self):
+        self.product.update(price='12000',offer='قطعتين ب20 الف')
+        event=dict(self.ev,text='هاي الصورة بكم؟',_reply_product=self.product,
+                   _image_matches=[dict(image_index=1,product_found=True,product_id='K1')])
+        result=self.m.owner_result_surface(dict(reply='سعره12 ألف عرض 2 قطع:20 ألف',create_order=False),event,{},[])
+        self.assertNotIn('عرض 2 قطع:',result['reply'])
+        self.assertIn('12 ألف',result['reply']);self.assertIn('20 ألف',result['reply'])
+
     def test_hypothetical_pair_question_does_not_ask_for_contacts(self):
         result=dict(reply='القطعتين ب20 ألف، دزيلي رقم الموبايل والعنوان حتى أثبت الحجز.',order={})
         event=dict(self.ev,text='والقطعة بكم؟ إذا آخذ اثنين يصير عرض؟',_reply_product=self.product)
