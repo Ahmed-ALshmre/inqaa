@@ -230,7 +230,7 @@ class AuditPipelineTests(unittest.TestCase):
         with patch.object(self.m, 'load_products_from_file', return_value=[product]):
             created, reply = self.m.create_order_if_valid(self.db, 'audit-price', result, product, cart_confirmed=True)
         self.assertFalse(created)
-        self.assertIn('المختص', reply)
+        self.assertEqual(reply, '')
         self.assertNotIn('سعر المنتج', reply)
         self.assertTrue(result['_checkout_human_review_id'])
         self.assertTrue(self.m.has_pending_human_review(self.db, 'audit-price'))

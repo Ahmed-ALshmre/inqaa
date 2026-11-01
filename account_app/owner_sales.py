@@ -457,7 +457,7 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         return result('للأسف هذا الموديل ما متوفر، تحبين أقترحلج غيره؟')
     if stock_state(product) != 'available':
         return None
-    if ev.get('_ad_identity_fallback') and not set(sales_answers.topics(text)) - {'price'}:
+    if ev.get('_ad_identity_fallback') and not set(sales_answers.topics(text)) - {'price', 'availability'}:
         count, price, _ = terms(product)
         unit = ' للبكج الكامل' if count > 1 else ''
         offer = '، عليه عرض حالياً' if product.get('offer') else ''
@@ -483,7 +483,10 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
         if not re.search(r'مجاني', str(product.get('delivery') or '')):
             offer = 'القطع عليها عرض حالياً، ' if product.get('offer') else ''
             return result(offer + 'وأجور التوصيل لشركة التوصيل مو إلنا. ' + step)
-    if re.search(r'غالي|يصير اقل|خصم|تخفيض', text) and not re.search(r'ارخص|ميزاني|بديل|قماش|خامة', text) and sales_answers.known_budget(text, context) is None:
+    if (re.search(r'غالي|يصير اقل|خصم|تخفيض', text)
+            and not re.search(r'ارخص|ميزاني|بديل|قماش|خامة', text)
+            and not set(sales_answers.topics(text)) - {'price'}
+            and sales_answers.known_budget(text, context) is None):
         offer = 'حالياً عليه عرض والقطعة تستاهل. ' if product.get('offer') else 'هذا سعر القطعة الحالي والقطعة تستاهل. '
         return result(offer + step)
     # Casual fit is not a request for the missing centimetre width.

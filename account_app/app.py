@@ -2866,6 +2866,7 @@ def _requires_linked_product_for_details(text):
         "سعر", "السعر", "سعره", "سعرها", "بكم", "شكد", "كم",
         "متوفر", "متوفرة", "موجود", "موجوده", "موجودة",
         "قياس", "مقاس", "مقاسات", "سايز", "لون", "الوان", "ألوان",
+        "عمر", "العمر", "يلبس", "تلبس", "بيها", "بيه",
         "احجز", "حجز", "اريد", "أريد", "اطلب", "طلب", "اخذ", "آخذ",
         "هذا", "هذه", "هاي", "هذي", "الموديل", "موديل", "المنتج",
     }
@@ -3158,6 +3159,9 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
     opening = sales_strategy.normalized(customer_text).strip(' ؟?!.،🌸')
     if re.fullmatch(r'(?:هلو|مرحبا|السلام عليكم|سلام عليكم|الو)', opening):
         return 'حبيبتي ممكن صورة للموديل لي رايدته ؟', customer_gender or 'unknown'
+
+    if _requires_linked_product_for_details(customer_text) and not sales_context.discovery_request(customer_text):
+        return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), customer_gender or 'unknown'
 
     if not OPENROUTER_KEY:
         return sales_context.opening_reply(customer_text, get_first_message_fallback(db)), customer_gender or 'unknown'
@@ -7185,6 +7189,9 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     if checkout_requested(db, ev, ai_result):
         ai_result['_booking_actor'] = 'staff' if staff_action else 'ai'
         order_created, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
+        catalog_review = checkout_catalog_review_response(ev, ai_result)
+        if catalog_review:
+            return dict(catalog_review, sent=False, reason='checkout_catalog_review')
         if order_reply:
             reply = order_reply if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
         elif order_created:
@@ -8834,6 +8841,7 @@ def _call_main_ai_with_context(
     ages = conversation_quality.child_ages(question)
     years = product_variants.size_data(customer_copy.fact((matched_product or {}).get('sizes'), 'sizes'))['years']
     if (years and len(ages) > 1 and not ev.get('_post_order') and not ev.get('_image_matches')
+            and not set(sales_answers.topics(question)) - {'sizes', 'colors', 'availability'}
             and not re.search(r'ثبت|احجز|اطلب|قماش|بطان|طول|عرض|توصيل|سعر', question)):
         parts = []
         for requested_age in ages:
@@ -8843,6 +8851,7 @@ def _call_main_ai_with_context(
                     create_order=False, order={}, _local_reply=True)
     if (current_store_id() == baraah.STORE_ID and age is not None and years
             and not ev.get('_post_order') and not ev.get('_image_matches')
+            and not set(sales_answers.topics(question)) - {'sizes', 'colors', 'availability'}
             and not re.search(r'سعر|توصيل|قماش|فيديو|ثبت|احجز|اطلب|بطان|مكان|عنوانكم|وينكم', sales_strategy.normalized(question))):
         answer = baraah.age_answer(matched_product, age, question)
         parts = [answer['reply']]
@@ -8915,7 +8924,7 @@ def _call_main_ai_with_context(
         return interest_reply
     if (matched_product and not ev.get('_post_order') and product_variants.is_lookup(question)
             and not ev.get('_image_matches')
-            and not set(sales_answers.topics(question)) - {'colors', 'sizes', 'price'}):
+            and not set(sales_answers.topics(question)) - {'colors', 'sizes', 'price', 'availability'}):
         lookup_positions = (positions if len(positions)>1 and re.search(r'الأول|الاول|الأولى|الاولى|الثاني|الثانية|الثالث|الثالثة',question)
                             and not ev.get('_manual_product_id') else
                             [{'product_found':True,'product_id':matched_product['product_id']}])
@@ -9227,6 +9236,13 @@ def _call_main_ai_with_context(
             and 'checkout_help' not in sales_answers.topics(question)
             and not checkout_requested(get_db(), ev, result)):
         single_step = conversation_quality.defer_contact_until_consent(single_step)
+        remainder = re.sub(r'[^\w\s]', ' ', sales_strategy.normalized(single_step)).strip()
+        if (matched_product
+                and single_step != result.get('reply')
+                and not re.search(r'\d|سعر|قماش|توصيل', remainder)
+                and re.fullmatch(r'(?:(?:تدللين|تدلل|عيني|حبيبتي|حياتي|عمري|روحي|تمام|بس)\s*)*'
+                                 r'(?:حتى\s+(?:نثبت|يثبت|اثبت|نكمل|نسوي)\w*(?:\s+\w+){0,4}\s*)?', remainder)):
+            single_step = 'تحبين نكمل الحجز هسه؟'
     if single_step != result.get('reply'):
         result = dict(result, reply=single_step, reply_parts=[single_step])
     if (len(ev.get('_image_matches') or []) > 1 and not ev.get('_post_order')
@@ -10085,15 +10101,24 @@ def order_store_error(db, sender_id):
 
 def checkout_catalog_error(db, sender_id, ai_result, error):
     """Keep catalogue maintenance errors internal and create a real handoff."""
-    if not re.search(r'سعر المنتج|أسعار العرض|عدد قطع البكج غير واضح|تعارض ألوان', str(error)):
+    if not re.search(r'سعر (?:المنتج|القطعة)|أسعار (?:العرض|القطعة)|عدد قطع البكج غير واضح|تعارض ألوان', str(error)):
         return str(error)
     row = db.execute('SELECT page_id,platform FROM customers WHERE sender_id=?', (sender_id,)).fetchone()
     review_id = create_human_review(db, {'sender_id': sender_id, 'text': '',
         'page_id': row['page_id'] if row else '', 'platform': row['platform'] if row else ''},
         'checkout_catalog_conflict: ' + str(error), notify_telegram=False)
     ai_result['_checkout_human_review_id'] = review_id
-    return owner_sales.surface('هسه أحوّل رسالتج للقسم المختص حبيبتي',
-                               _customer_gender_from_db(db, sender_id))
+    ai_result['_checkout_catalog_review_id'] = review_id
+    return ''
+
+
+def checkout_catalog_review_response(ev, result):
+    review_id = result.get('_checkout_catalog_review_id')
+    if not review_id:
+        return None
+    return dict(sender_id=ev.get('sender_id'), page_id=ev.get('page_id'), platform=ev.get('platform'),
+                reply='', reply_parts=[], send_image=False, image_urls=[],
+                meta=dict(needs_human=True, human_review_id=review_id, reason='checkout_catalog_review'))
 
 
 def checkout_contact_prompt(db, sender_id, order_data, matched_product, missing):
@@ -10376,6 +10401,26 @@ def saved_album_reply(db, ev, images, products, meta):
     save_conversation_message(db, ev['sender_id'], 'assistant', result['reply'])
     return dict(result, sender_id=ev['sender_id'], page_id=ev.get('page_id'),
                 platform=ev.get('platform'), send_image=False, meta=meta)
+
+
+def single_catalog_discussion_product(db, ev, products):
+    """A factual follow-up to one just-shown card concerns that card, not an old cart."""
+    text = sales_strategy.normalized(ev.get('text'))
+    if (ev.get('image_url') or ev.get('attachments') or ev.get('ref') or ev.get('ad_id')
+            or not re.search(r'قماش|خام|شتوي|صيفي|ثخين|ثقيل|خفيف|قياس|عمر|الوان|لون|سعر', text)
+            or re.search(r'القديم|السابق|الاول|الأول|الثاني|غيره|غيرها', text)
+            or first_message_named_products(text, products)):
+        return None
+    row = db.execute("SELECT raw_payload,created_at FROM messages WHERE sender_id=? AND store_id=? AND direction='outgoing' AND "
+                     + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 1", (ev['sender_id'], current_store_id())).fetchone()
+    if not row:
+        return None
+    meta = delivery_state.metadata(row['raw_payload']).get('catalog_page') or {}
+    ids = meta.get('product_ids') or []
+    created = sales_engagement.timestamp(row['created_at'])
+    if len(ids) != 1 or not created or datetime.now(BAGHDAD_TZ) - created > timedelta(minutes=30):
+        return None
+    return next((p for p in products if p.get('product_id') == ids[0]), None)
 
 
 def saved_catalog_page(db, ev, products, request_id, *, start):
@@ -10714,6 +10759,9 @@ def accept_checkout_proposal(db, ev, history, products, *, persist_reply=True, b
         return finish("تغيرت بعض تفاصيل المنتجات أو الأسعار؛ نحتاج نراجع ملخص الطلب قبل تثبيته.", {"checkout_changed": True})
     result = {"order": proposal, "_booking_actor": booking_actor}
     created, reply = create_order_if_valid(db, ev["sender_id"], result, None, cart_confirmed=True)
+    catalog_review = checkout_catalog_review_response(ev, result)
+    if catalog_review:
+        return finish('', catalog_review['meta'])
     if not reply:
         reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
     return finish(reply, {"order_created": bool(created), "cart_confirmed": True})
@@ -11473,6 +11521,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         if re.fullmatch(r'(?:(?:اريد|دزيلي|دزي|ارسلي|اشوف|ممكن)\s*)?(?:الكتالوج|كتالوج|الكاتالوج|كاتالوج|كل الموديلات|كل الانواع)[ ؟?!.،]*', sales_strategy.normalized(ev.get('text'))):
             return saved_catalog_page(db, ev, products, incoming_message_id, start=True)
         catalogue_choice = catalog_browsing.selection(db, current_store_id(), ev['sender_id'], ev.get('text'), products)
+        if not catalogue_choice:
+            discussion = single_catalog_discussion_product(db, ev, products)
+            if discussion:
+                ev['_catalog_discussion_id'] = discussion['product_id']
         if catalogue_choice:
             complete_customer_product_link(db, ev['sender_id'], catalogue_choice, 'catalog_browse',
                 confidence=100, source='customer_correction', preserve_existing=False)
@@ -11593,6 +11645,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                         else f'عدنا أكثر من موديل باسم {names}؛ شنو اللون أو وصف الموديل اللي ظهر بالإعلان؟')
             return saved_checkout_reply(db, ev, question, {'first_message_name_ambiguous': True})
 
+    if ev.get('_catalog_discussion_id'):
+        ev['_first_message_product_id'] = ev['_catalog_discussion_id']
     target = None
     if message_type != "image":
         selection = ev.get("_selection_resolved")
@@ -11654,7 +11708,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     _catalog_search_matches = []
     _catalog_search_request_info = {}
     photo_fit_followup = False
-    if message_type != "image" and ev.get("text"):
+    if (message_type != "image" and ev.get("text")
+            and not (not customer_products and sales_context.specific_model_reference(ev['text'])
+                     and not sales_context.discovery_request(ev['text']))):
         search_result = search_available_products_for_request(ev.get("text"), products, limit=5)
         request_info = search_result.get("request") or {}
         matches = search_result.get("matches") or []
@@ -12295,6 +12351,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         order_created, order_reply = create_order_if_valid(
             db, ev["sender_id"], ai_result, matched_product
         )
+        catalog_review = checkout_catalog_review_response(ev, ai_result)
+        if catalog_review:
+            return catalog_review
         if order_reply:
             reply = order_reply if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
             log(13, "ORDER", "Order created and outgoing reply updated", {"reply": reply})
@@ -14400,6 +14459,8 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
     created = False
     if checkout_requested(db, ev, result):
         created, reply = create_order_if_valid(db, sender_id, result, product)
+        if result.get('_checkout_catalog_review_id'):
+            return '', {}, 'سعر الكتالوج يحتاج تصحيحاً ومراجعة قبل إرسال رد الحجز؛ لم يُنشأ طلب.'
         notice = reply or ("طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً." if created else "نحتاج مراجعة تفاصيل الطلب قبل تثبيته.")
         text = notice if created else sales_recovery.checkout_reply(text, notice, ev.get('text'))
     else:

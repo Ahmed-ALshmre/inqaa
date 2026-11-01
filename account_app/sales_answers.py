@@ -20,12 +20,13 @@ def topics(question):
         'price': r'سعر|بشكد|بكم|بيش|حساب|غالي|ميزاني|خصم|تخفيض|عرض\s*(?:ال)?(?:قطعتين|قطعتان|\d+\s*قطع)|(?:شكد|اشكد|كم)\s*(?:ثنين|قطعتين|\d+\s*قطع)',
         'colors': r'الوان|(?<!\w)(?:و?ال)?لون(?:ه|ها)?(?!\w)|الاسود|الابيض|الوردي|الجوزي',
         'sizes': r'قياس|مقاس|سايز',
+        'availability': r'متوفر|موجود|(?:شنو|ايش)\s+(?:ال)?باقي',
         'fabric': r'قماش|خام[ةهت]',
         'fabric_feel': r'(?:قماش|خام[ةهت]|سمك|ملمس).{0,45}(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم)|'
                        r'(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم).{0,20}(?:القماش|خامته|باللبس)',
         'season': r'شتوي|صيفي|بهاري|خريفي|الموسم|يدفي',
         'care': r'غسل|غسيل|يكش|ينكمش|يذب\s*لون|يثبت\s*لون|كوي|يتعكش|يتجعد|يتكرمش',
-        'delivery': r'توصيل|شحن',
+        'delivery': r'توصيل|شحن|(?:كيف|شلون).{0,18}توصل(?:ون|وا)',
         'payment': r'دفع|ادفع',
         'delivery_time': r'(?:شوكت|يمتى|متى|كم يوم|شكد وقت).{0,30}(?:يوصل|توصيل|الطلب)',
         'inspection': r'فحص|افحص|ارجع|يرجع',
@@ -39,7 +40,8 @@ def topics(question):
         'stretch': r'مطاط|ليكرا|يتمدد',
         'closure': r'ينفتح|سحاب|(?<!\w)(?:و?ال)?سح?اب(?!\w)|اغلاق|ازرار|زرار|كبس|لاستيك|استيك|(?<!\w)(?:و?ال)?(?:دگم|دكم)(?!\w)',
         'location': r'وين\s+(?:المحل|محلكم|موقعكم)|عنوان\s+المحل|موقع\s+المحل',
-        'checkout_help': r'شلون\s+(?:اطلب|احجز)|كيف\s+(?:اطلب|احجز)|طريقة\s+(?:الطلب|الحجز)',
+        'checkout_help': r'شلون\s+(?:اطلب|احجز)|كيف\s+(?:اطلب|احجز)|طريقة\s+(?:الطلب|الحجز)|'
+                         r'(?:تحتاج(?:ون|ين)?|ناقص|ادز|ارسل).{0,20}(?:عنوان|رقم|موبايل)',
         'specifications': r'مواصفات|تفاصيل\s+(?:الموديل|الفستان|القطعة)',
         'composition': r'هو\s+قطعتين|قطعتين\s+يعني|(?:هو|هي|الموديل|الفستان)\s+قطعة\s+وحد[ةه]|(?:فستان|تنور[ةه])\s+لو\s+(?:فستان|تنور[ةه]|قطعتين)',
     }
@@ -112,6 +114,16 @@ def product_fragments(question, product):
             facts.append((f'قماشه {fabric}، ' if fabric else '') + 'بس إذا شتوي لو صيفي هالتفصيل مو موضح عندي لهالموديل.')
     if 'care' in selected:
         facts.append(care_fact(product) or 'تفاصيل العناية بالقماش مو موضحة عندي لهالموديل، فما أگدر أضمن نتيجة الغسل أو الكوي.')
+    if 'availability' in selected:
+        try:
+            from .product_albums import stock_state
+        except ImportError:
+            from product_albums import stock_state
+        state = stock_state(product)
+        if state in {'available', 'out'}:
+            facts.append('هالموديل متوفر حالياً.' if state == 'available' else 'هالموديل غير متوفر حالياً.')
+        else:
+            gaps.append('توفر هالموديل يحتاج تأكيد من المتجر.')
     if 'fabric_feel' in selected:
         facts.append(fabric_feel_fact(product) or 'سمك القماش وملمسه مو موضحين بتفاصيل هالموديل، فما أگدر أأكد إذا خفيف وبارد باللبس.')
     fields = [('colors', 'ألوان الموديل'), ('sizes', 'قياسات الموديل'),
@@ -142,10 +154,17 @@ def product_fragments(question, product):
     # behind the parts we can answer. Customer choices/statements are not gaps.
     clauses = re.split(r'\n+|[؟?]|\s+و(?=شنو|شكد|كم|منين|وين|متى|شلون|هل)', str(question or ''))
     for clause in clauses:
-        if re.search(r'شنو|شكد|منين|وين|متى|شلون|كيف|هل\s', normalized(clause)) and not topics(clause):
+        if (re.search(r'شنو|شكد|منين|وين|متى|شلون|كيف|هل\s', normalized(clause))
+                and not clarification_question(clause) and not topics(clause)):
             gaps.append('بقية التفاصيل المطلوبة تحتاج تأكيد من المتجر.')
             break
     return list(dict.fromkeys(facts)), list(dict.fromkeys(gaps))
+
+
+def clarification_question(text):
+    clean = normalized(text).strip(' ؟?!.،')
+    return bool(re.fullmatch(r'(?:يعني\s+)?(?:شنو\s+(?:قصد[كج]|قصدكم|تقصد(?:ين|ون)?)|'
+                             r'يعني\s*شنو|ما\s*فهمت|مفهمت)(?:\s+عيني)?', clean))
 
 
 def wholesale_lines(product):

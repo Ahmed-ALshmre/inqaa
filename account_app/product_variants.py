@@ -44,6 +44,8 @@ def normalize_size_words(value):
         (r'(?<!\w)(?:[5٥]|خمس[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '5XL'),
         (r'(?<!\w)(?:[6٦]|ست[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '6XL'),
         (r'(?<!\w)(?:[1١]\s*اكس(?:\s+لارج)?|اكس\s*لارج|اكسترا لارج)(?!\w)', 'XL')):
+        pattern = pattern.replace(r'(?<!\w)', r'(?<!\w)(?:و)?(?:(?:بال|ال)\s*)?', 1)
+        pattern = pattern.replace('اكس', '[اأإ]كس')
         text = re.sub(pattern, label, text, flags=re.I)
     return text
 
@@ -73,6 +75,27 @@ def size_choice_text(value):
 def normalize_age_words(value):
     """Written numbers need an age unit; prices and unrelated counts stay intact."""
     text = normalized(value)
+    # Iraqi declarations also put the unit first: "سنه 3، سنه 5".
+    # Do not let the standalone word "سنة" become a separate one-year child.
+    def unit_first(hit):
+        if not hit[1] and re.search(r'\d[ \t]*\Z', text[:hit.start()]):
+            return hit[0]  # In "3 سنوات 5 سنوات", the unit belongs to the 3.
+        return hit[1] + hit[3] + ' ' + hit[2]
+    text = re.sub(r'(?<!\w)(و?)(سن[هة]|سنوات|سنين|اشهر|شهور|شهر)\s*(\d{1,2}(?:\.\d+)?)(?![\d.])',
+                  unit_first, text)
+    text = re.sub(r'([لب]?عمر(?:ه|ها)?\s*\d{1,2}(?:\.\d+)?)(?![\d.])\s*و\s*(نص|نصف|ربع)(?!\w)',
+                  r'\1 سنوات و\2', text)
+    # "عندي طفلين، الأول 3 ونص والثاني 5" and "واحد 5 ونص
+    # والثاني 6 سنوات" refer to ages, not an unlabeled clothing size or price.
+    age_context = bool(re.search(r'طفلين|طفلتين|اولادي|بناتي|عمر|سنوات|سنين|سن[هة]', text))
+    if age_context and not re.search(r'الف|دينار|سعر|مجموع|اشهر|شهور|شهر', text):
+        def ordinal_age(hit):
+            tail = text[hit.end():]
+            if re.match(r'\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر|الف|دينار)', tail):
+                return hit[0]
+            return hit[1] + ' عمر ' + hit[2] + ' سنوات' + ((' و' + hit[3]) if hit[3] else '')
+        text = re.sub(r'(?<!\w)(و?(?:الاول[ىي]?|الثاني[هة]?|واحد[هة]?|وحد[هة]))\s+(\d{1,2}(?:\.\d+)?)(?![\d.])'
+                      r'(?:\s*و\s*(نص|نصف))?', ordinal_age, text)
     words = {'ثلاث': 3, 'ثلاثه': 3, 'اربع': 4, 'اربعه': 4, 'خمس': 5, 'خمسه': 5,
              'ست': 6, 'سته': 6, 'سبع': 7, 'سبعه': 7, 'ثمان': 8, 'ثماني': 8,
              'ثمانيه': 8, 'تسع': 9, 'تسعه': 9, 'عشر': 10, 'عشره': 10}

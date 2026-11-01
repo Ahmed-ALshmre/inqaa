@@ -46,6 +46,13 @@ def _retail_price(raw):
     singles = [match for match in _SINGLE_PRICE.finditer(raw)
                if not any(offer.start() <= match.start() < offer.end() for offer in offers)]
     if offers and not singles:
+        # A plain monetary amount at the start is the single-item price when
+        # every later amount belongs to an explicitly labelled quantity offer.
+        # "12000 أو قطعتين ب20000" is not an offer-only price to divide by two.
+        prefix = re.sub(r'(?:او|و|[,،])\s*$', '', raw[:offers[0].start()].strip()).strip()
+        remainder = _OFFER_QUANTITY.sub('', raw[offers[0].start():])
+        if re.fullmatch(_PRICE_AMOUNT, prefix) and not re.search(r'\d', remainder):
+            return money(prefix)
         raise ValueError("سعر القطعة غير واضح؛ حدّث السعر قبل تثبيت الطلب")
     if not singles or not offers:
         return None

@@ -233,7 +233,7 @@ def evaluate_turn(m, scenario, turn, texts, orders, sent):
                   one_next_question=len(re.findall(r'[؟?]', reply)) <= 1,
                   clean_punctuation=not re.search(r'[.!؟?؛]\s*[،؛]|،\s*،', reply),
                   no_internal_instructions=not m.customer_copy.has_instructions(reply),
-                  no_known_product_reask=not m.reply_reasks_known_product(reply),
+                  no_known_product_reask=bool(scenario.get('unlinked')) or not m.reply_reasks_known_product(reply),
                   no_fake_confirmation=not (positive_confirmation and not orders))
     if not scenario.get('album') and not turn.get('multiple_images_in_context'):
         checks['no_single_product_ordinal'] = not re.match(r'\s*(?:الاول|الأول|الثاني)[،\s]', reply)

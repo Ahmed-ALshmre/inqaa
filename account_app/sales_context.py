@@ -20,12 +20,18 @@ EVIDENCE_VERSION = 6
 
 def browse_request(text):
     text = normalized(text)
-    return bool(re.search(r'شنو عدكم|شنو عندكم|شنو عندج|اش عدكم|موديلات|خيارات|بدائل|اي موديل|أي موديل|بسعر|سعره? عشرين|بحدود|ميزاني', text))
+    return bool(re.search(r'شنو عدكم|شنو عندكم|شنو عندج|اش عدكم|موديلات|خيارات|بدائل|اي موديل|أي موديل|بسعر|سعره? عشرين|بحدود|ميزاني|(?:اشوف|شوف|دزيلي|دزي|اريد)\s+(?:الجديد|جديدكم)', text))
+
+
+def specific_model_reference(text):
+    return bool(re.search(r'(?<!\w)(?:بيها|بيه|نفس\s+الموديل|هذا\s+الموديل)(?!\w)', normalized(text)))
 
 
 def discovery_request(text):
     """A described shopping need deserves catalogue help, including on turn one."""
     clean = normalized(text)
+    if specific_model_reference(clean) and not browse_request(clean):
+        return False
     return browse_request(clean) or bool(re.search(
         r'عمر|اشهر|شهور|سنوات|سنتين|ملابس\s*(?:اطفال|بناتي|ولادي)|'
         r'(?:عدكم|عندكم|عندج).{0,20}(?:بناتي|ولادي|فستان|عبا|سوت)|'
