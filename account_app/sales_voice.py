@@ -18,6 +18,16 @@ def conversation_wording(reply, history):
                   r'(?:\s+(?:بيج|بيك|حبيبتي|عمري|عيوني|عيني|روحي))*[،,.!🌷🌸\s]*', '', reply).strip()
 
 
+def phone_first_step(reply, question):
+    """On a phone-only turn, settle the garment choice before a second address question."""
+    if not re.fullmatch(r'[+\d() \-]{10,20}',str(question or '').strip()):
+        return reply
+    first = re.fullmatch(r'(.{0,250}?(?:قياس|عمر|لون)[^؟?]{0,80}[؟?])\s*'
+                         r'و?(?:بأي|بأيّ|بأي[ةه]|من (?:يا|أي)|شنو|وين|يا|دزيلي|دزي|ارسلي|أرسلي)\s+'
+                         r'(?:ال)?(?:محافظ[ةه]|عنوان)[^؟?.!]{0,80}[؟?.!]?$', str(reply or '').strip(), re.S)
+    return first[1] if first else reply
+
+
 def buying_choice(question, product):
     """A definite available variant can invite contacts, never create an order."""
     text=customer_copy.normalized(question)
@@ -37,17 +47,65 @@ def buying_choice(question, product):
                             color=colors[0],size=sizes[0],quantity=sales_playbook.requested_quantity(question) or 1)])
 
 
-def answer(question, product, context, customer, history, delivery):
-    if not product or explicit_purchase(question):
+def child_detail_reply(question, product, inspection_policy):
+    """Two owner-approved answers for child fabrics and measuring trousers at delivery."""
+    text = customer_copy.normalized(question)
+    if not product_variants.size_data(product.get('sizes'))['years']:
         return None
-    paused=sales_strategy.explicit_pause(question)
+    topics = set(sales_answers.topics(question))
+    if (topics == {'length'} and re.search(r'طول (?:البنطرون|البنطلون)',text)
+            and not sales_strategy.measurement_fact(product,'length')
+            and re.search(r'حق الفحص|الفحص عند الاستلام',inspection_policy or '')
+            and not re.search(r'ممنوع|لا يسمح|ما يصير',inspection_policy or '')):
+        return 'حبيبتي ما عندي طوله، تكدرين تتأكدين من الطول بوجود المندوب قبل الدفع.'
+    if (topics <= {'fabric','stretch'} and 'stretch' in topics and re.search(r'قطن.{0,6}(?:100|مية بالمية)',text)
+            and not re.search(r'امن|آمن|يناسب الحساسية|تنصح|يضر|اكزيما', text)):
+        stretch = sales_answers.field_fact(product,'stretch')
+        fabric = sales_answers.field_fact(product,'fabric')
+        if stretch and not re.search(r'100|مية بالمية|خالص',fabric or ''):
+            return stretch.rstrip(' .') + '، بس قطن مية بالمية ما أگدر أضمنلج.'
+    return None
+
+
+def mixed_child_offer(question, product):
+    """Answer the offer for two selected colors and ages without restarting selection."""
+    text = customer_copy.normalized(question)
+    if not product or not re.search(r'(?:يصير|اكدر|اگدر) (?:اخلطهن|اجمعهن) بالعرض[؟?!. ]*$', text):
+        return None
+    colors = product_variants.requested(question)['colors']
+    ages = product_variants.child_ages(question)
+    if len(colors) != 2 or not ages or product_albums.stock_state(product) != 'available':
+        return None
+    if any(product_variants.order_choice_error(product,'color',c) for c in colors):
+        return None
+    if any(product_variants.order_choice_error(product,'size',product_variants.age_text(age)) for age in ages):
+        return None
+    terms_text = ' '.join(str(product.get(key) or '') for key in ('price','offer','notes','bundle_contents'))
+    if re.search(r'نفس اللون|لون واحد|بشرط|حصرا|فقط للون', customer_copy.normalized(terms_text)):
+        return None
+    try:
+        total = dict(offer_tiers(product)).get(2)
+    except (ValueError, TypeError):
+        return None
+    if total:
+        reply = 'إي حبيبتي، يصير تاخذين اللونين بالعرض، القطعتين بـ' + customer_copy.chat_amount(total) + '.'
+        return dict(reply=reply,reply_parts=[reply],create_order=False,order={},_local_reply=True,
+                    _mixed_child_offer=True,_single_message=True,_suppress_product_images=True)
+    return None
+
+
+def answer(question, product, context, customer, history, delivery):
+    comparison = bool(re.search(r'(?:بس|فقط)\s+(?:اقارن|أقارن|استفسر|أستفسر|اسأل|أسأل)', question or ''))
+    if not product or (explicit_purchase(question) and not comparison):
+        return None
+    paused=comparison or sales_strategy.explicit_pause(question)
     text = customer_copy.normalized(question)
     selected = set(sales_answers.topics(question))
     supported = {'fabric','fabric_feel','season','stretch','cut','lining','closure','care',
                  'colors','sizes','availability','price','delivery','payment','inspection','delivery_time'}
     if not selected or selected - supported or product_albums.stock_state(product) != 'available':
         return None
-    if re.search(r'ارخص|بديل|غير موديل|باجر|باچر|اذا|بشرط|صور[ةه]?.{0,15}(?:ثاني|اكثر)', text):
+    if (not comparison and 'اذا' in text) or re.search(r'ارخص|بديل|غير موديل|باجر|باچر|بشرط|صور[ةه]?.{0,15}(?:ثاني|اكثر)', text):
         return None
     if re.search(r'ميزاني|غالي|خصم|تخفيض|غير\s+(?:اللون\s*|لون\s*)?(?:ال)?اسود|عدا|باستثناء',text):
         return None

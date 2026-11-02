@@ -9,6 +9,10 @@ except ImportError:
 
 def policy_question(text):
     clean = normalized(text).strip(' ؟?!.،\n')
+    if re.fullmatch(r'(?:هل (?:يمكنني|يمكن)|اكدر|اگدر|يصير)(?: ان)? (?:ادفع|الدفع) (?:عند الاستلام|للمندوب من استلم)', clean):
+        return 'payment'
+    if re.fullmatch(r'كم تبلغ تكلفة التوصيل (?:الى |ل)?محافظتي', clean):
+        return 'delivery'
     if delivery_fee_inquiry(text) and not re.search(
             r'قماش|خام|عمر|قياس|مكان|عنوانكم|وين|سعر(?:ه|ها)|سعر\s+(?!التوصيل|الشحن)|دفع|فحص', clean):
         return 'delivery'

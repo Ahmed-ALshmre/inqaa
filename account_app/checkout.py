@@ -96,10 +96,21 @@ def has_shipping_landmark(address):
                     and re.search(r'دار\s*\d+', clean)))
 
 
+CHECKOUT_ETA_SUFFIX = re.compile(r'(?:^|[\s،,.])و?(?:شوكت|يمتى|متى)\s+يوصل(?:ني|نا| الطلب)?[؟?!.\s]*$')
+CHECKOUT_DONE_SUFFIX = re.compile(r'(?:[،,]|\.\s*|\s+)(?:ها صار|بعد تحتاجين شي)[؟?!.\s]*$')
+
+
+def checkout_declaration(text):
+    return CHECKOUT_DONE_SUFFIX.sub('', CHECKOUT_ETA_SUFFIX.sub('', text)).rstrip(' .،,')
+
+
 def contact_fields(text, previous=None):
     """Extract declarations, never an address from a shipping question."""
     previous = previous or {}
     original = str(text or "").translate(DIGITS)
+    # A hypothetical destination is not the buyer's delivery address.
+    if not re.search(r'(?<!\w)(?:اذا|لو|الى|الي|توصيل|شحن)(?!\w)', normalized(original)):
+        original = checkout_declaration(original)
     clean = normalized(original)
     if "http://" in clean or "https://" in clean:
         return {}
@@ -222,6 +233,8 @@ def unresolved_purchase_terms(text):
     if (re.search(r'ارجع|يرجع|ترجع|رجع|فحص|افحص', clean)
             and not re.search(r'خصم|تخفيض|تحسب|تخلي|بشرط.{0,20}(?:سعر|يوصل|يلحق)', clean)):
         return ''
+    if re.search(r'(?:شكد|بشكد|كم).{0,30}واص[للاتين]+', clean) and not re.search(r'خصم|تخفيض|بشرط|مجاني|بلاش', clean):
+        return 'unanswered_price_or_shipping'
     if delivery_fee_inquiry(text) or delivered_total_inquiry(text):
         return 'unanswered_price_or_shipping'
     if re.search(
@@ -402,7 +415,7 @@ def chosen_color_error(items, history, catalog):
     return ''
 
 
-def order_line_error(raw_items, catalog):
+def order_line_error(raw_items, catalog, *, review_color=False):
     """Reject an invalid line instead of silently dropping it from a purchase."""
     by_id = {str(p.get("product_id")): p for p in catalog}
     if not isinstance(raw_items, list) or not raw_items or len(raw_items) > 20:
@@ -437,6 +450,8 @@ def order_line_error(raw_items, catalog):
             return f'الوزن المذكور مو ضمن مجال {label}؛ نحتاج نراجع الاختيار قبل التثبيت.'
         for key, field, name in (("color", "colors", "لون"), ("size", "sizes", "قياس")):
             value = str(item.get(key) or "").strip()
+            if key == "color" and not value and review_color:
+                continue
             if product.get(field) and (not value or ambiguous_measurement(value)):
                 return f"باقي نحدد {name} {label} بشكل واضح حتى أثبت الطلب."
             problem=product_variants.order_choice_error(product,key,value)

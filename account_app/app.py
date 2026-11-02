@@ -34,7 +34,7 @@ try:
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from .pricing import quote as price_order, expand_bundles
-    from .checkout import contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from .checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media
     import baraah
@@ -49,7 +49,7 @@ except ImportError:
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from pricing import quote as price_order, expand_bundles
-    from checkout import contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
@@ -3233,7 +3233,7 @@ def generate_first_message_reply(db, ev, products, instructions_text, rules_list
         "القواعد المحظورة:\n"
         f"{rules_text}\n\n"
         f"{sales_engagement.guide(current_store_id())}\n\n"
-        f"{first_output}"
+        f"{owner_sales.WORKBOOK_VOICE}\n{first_output}"
     )
 
     user_content = (
@@ -3729,6 +3729,8 @@ def send_order_to_telegram(order):
     """Send one parser-friendly booking block to the order-import channel."""
     chat_id = TELEGRAM_ORDERS_CHAT_ID or TELEGRAM_CHAT_ID
     order = dict(order)
+    if order.get('status') == COLOR_REVIEW_STATUS:
+        return False  # This channel is an order importer, not the staff review queue.
     if has_app_context():
         db = get_db()
         store_id = order.get("store_id") or current_store_id()
@@ -7104,6 +7106,8 @@ def send_webhook_result_to_facebook(result, fallback_sender_id: str = "") -> boo
         if db is not None:
             delivery_state.update(db, prepared, 'skipped')
             delivery_state.complete(db, prepared, accepted_all)
+            if (result.get('meta') or {}).get('pause_after_phone_request'):
+                set_customer_ai_enabled(db, sender_id, False)
 
 
 
@@ -7238,7 +7242,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
         if catalog_review:
             return dict(catalog_review, sent=False, reason='checkout_catalog_review')
         if order_reply:
-            reply = order_reply if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
+            reply = booked_reply(db, ev.get('text'), order_reply) if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
     else:
@@ -9423,9 +9427,17 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     if chosen and not ev.get('_post_order') and len(ev.get('_image_matches') or [])<=1 and not album_question:
         if re.search(r'ماكو.{0,12}غير.{0,8}(?:هاي|هال).*صور|صوري(?:ه|ها)|تدزين نفس',sales_strategy.normalized(ev.get('text'))):
             return unanswered_product_handoff(ev,chosen,['service'])
+        if current_store_id() == baraah.STORE_ID and has_app_context():
+            policy = customer_copy.fact(chosen.get('inspection_policy')) or get_delivery_settings(get_db()).get('inspection_message')
+            detail = sales_voice.child_detail_reply(ev.get('text') or '', chosen, policy)
+            if detail:
+                return owner_result_surface(dict(reply=detail,create_order=False,order={},_workbook_detail=True),ev,customer,history)
         missing_facts = product_questions.missing(ev.get('text') or '', chosen)
         if missing_facts:
             return unanswered_product_handoff(ev, chosen, missing_facts)
+        offer = sales_voice.mixed_child_offer(ev.get('text') or '', chosen)
+        if offer:
+            return owner_result_surface(offer, ev, customer, history)
         exact = product_questions.exact_answer(chosen, ev.get('text') or '')
         if exact:
             return owner_result_surface(dict(reply=exact,create_order=False,order={}), ev, customer, history)
@@ -9511,7 +9523,7 @@ def owner_result_surface(result, ev, customer=None, history=()):
     if (product and has_app_context() and not ev.get('_post_order') and (not image_matches or single_verified_image)
             and not result.get('requires_human') and not result.get('_fit_recommendation_size')
             and not result.get('_catalog_model_album') and not result.get('_plural_color_reply')
-            and not result.get('_transparent_price')
+            and not result.get('_transparent_price') and not result.get('_mixed_child_offer') and not result.get('_workbook_detail')
             and (catalog_dump or result.get('_factual_recovery') or simple_facts or compound_facts)):
         context = ev.get('_sales_context') or sales_context.advance({}, history)
         context = sales_context.advance(context,[{'direction':'incoming','text':ev.get('text') or ''}])
@@ -9555,6 +9567,10 @@ def owner_result_surface(result, ev, customer=None, history=()):
         if deferred != original:
             original=deferred
             result.update(reply=original,reply_parts=[])
+    focused = sales_voice.phone_first_step(original, ev.get('text'))
+    if focused != original:
+        original = focused
+        result.update(reply=focused,reply_parts=[focused])
     gender = customer_address_gender(ev, customer, history)
     endearments=owner_sales.warmth_allowed(ev.get('text'),history)
     warm = customer_address_gender(ev, customer, history, use_store_default=False) == 'female' and endearments
@@ -10336,12 +10352,43 @@ def checkout_catalog_review_response(ev, result):
 
 def checkout_contact_prompt(db, sender_id, order_data, matched_product, missing):
     """Keep the validated cart internal and ask only for missing contacts."""
+    last = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='incoming' ORDER BY id DESC LIMIT 1",(sender_id,)).fetchone()
+    if last and product_variants.color_replacement(last['text']):
+        prior = db.execute("SELECT text FROM messages WHERE sender_id=? AND direction='outgoing' AND message_type='text' AND "
+                           + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 1",(sender_id,)).fetchone()
+        if prior and 'رقم' in missing and 'عنوان' in missing and 'رقم' in (prior['text'] or '') and 'عنوان' in prior['text']:
+            return 'صار بعيوني، اعتمدت اللون الجديد.'
     remaining = re.sub(r'المحافظة\s+والعنوان(?:\s+الكامل)?','العنوان الكامل',missing)
     if not re.search(r'رقم|موبايل|تلفون', remaining):
         return f'عيوني باقي بس {remaining} علمود أثبتلج الحجز.'
     if not re.search(r'عنوان|محافظ', remaining):
         return f'حبيبتي باقي بس {remaining} حتى أثبتلج الطلب.'
     return f'صار بعيوني، دزيلي {remaining} حتى أثبتلج الطلب.'
+
+
+def reviewable_checkout_color(db, sender_id, items, matched_product):
+    """A confirmed single model can await color review when the buyer completes checkout."""
+    if len(items) != 1 or not matched_product or not isinstance(items[0], dict):
+        return False
+    item = items[0]
+    if item.get('color') or not matched_product.get('colors') or item.get('product_id') != matched_product.get('product_id'):
+        return False
+    context = sales_context.load(db, current_store_id(), sender_id)
+    selected = sales_playbook.customer_selection(context)
+    if selected['color_options'] or selected['colors']:
+        return False  # Explicit alternatives need a choice; a known color must be retained.
+    photos = customer_image_positions(db, sender_id)
+    if photos:
+        return (len(photos) == 1 and photos[0].get('product_found') and bool(photos[0].get('image_url'))
+                and photos[0].get('product_id') == item['product_id'] and not photos[0].get('observed_color'))
+    linked = load_customer_products(db, sender_id, limit=2)
+    if len(linked) != 1 or linked[0]['product_id'] != item['product_id'] or pending_product_choice(db,sender_id):
+        return False
+    latest = latest_incoming_message(db, sender_id) or {}
+    return bool(contact_fields(latest.get('text')) and recent_checkout_contact_action(db, sender_id))
+
+
+COLOR_REVIEW_STATUS = 'يتطلب مراجعة اللون'
 
 
 def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_confirmed=False):
@@ -10394,7 +10441,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         raw_items = expand_bundles(raw_items, catalog_products)
     except (ValueError, KeyError, TypeError) as exc:
         return None, checkout_catalog_error(db, sender_id, ai_result, exc)
-    error = order_line_error(raw_items, catalog_products)
+    review_color = reviewable_checkout_color(db, sender_id, raw_items, matched_product)
+    error = order_line_error(raw_items, catalog_products, review_color=review_color)
     if error:
         known_ids = {p['product_id'] for p in catalog_products}
         unresolved = [item for item in raw_items if isinstance(item, dict) and item.get('product_id') not in known_ids]
@@ -10428,7 +10476,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     missing_options = []
     for item in items:
         product = catalog.get(item.get("product_id")) or {}
-        if product.get("colors") and not item.get("color"):
+        if product.get("colors") and not item.get("color") and not review_color:
             missing_options.append(f"لون {item.get('product_name')}")
         if product.get("sizes") and not item.get("size"):
             missing_options.append(f"قياس {item.get('product_name')}")
@@ -10476,6 +10524,9 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
             return None, checkout_receipt(order_data, items, catalog_products, delivery_fee,
                 "هذه القطع المقترحة للحجز، ولم يثبت الطلب بعد:") + "\nهل أثبت الطلب بهذه القطع والقياسات والأسعار؟"
 
+    booking_status = COLOR_REVIEW_STATUS if review_color else "new"
+    if review_color:
+        order_data['notes'] = (str(order_data.get('notes') or '').strip() + '\n' + COLOR_REVIEW_STATUS).strip()
     booking_data = {
         "created_at": now,
         "sender_id": sender_id,
@@ -10492,7 +10543,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         "product_total": product_total,
         "delivery_fee": delivery_fee,
         "total_amount": total_amount,
-        "status": "new",
+        "status": booking_status,
         "store_id": current_store_id(),
         "_booking_actor": ai_result.get('_booking_actor') or 'ai',
     }
@@ -10522,7 +10573,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
             items[0].get("color", "") if len(items) == 1 else "متعدد",
             items[0].get("size", "") if len(items) == 1 else "متعدد",
             order_data.get("notes", ""),
-            "new",
+            booking_status,
             json.dumps(items, ensure_ascii=False),
             now,
             current_store_id(),
@@ -10532,7 +10583,12 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     db.execute("UPDATE orders SET product_total=?,delivery_fee=?,total_amount=? WHERE id=?",
                (product_total, delivery_fee, total_amount, order_cursor.lastrowid))
 
-    menger.enqueue(db, order_cursor.lastrowid, booking_data, catalog_products)
+    if review_color:
+        db.execute("""INSERT INTO human_reviews(sender_id,message_text,image_url,reason,status,created_at,store_id)
+                   VALUES(?,?,?,?,'pending',?,?)""", (sender_id, product_name, next((p.get('image_url') for p in customer_image_positions(db, sender_id)), ''),
+                   f'تدقيق لون القطعة للطلب {order_cursor.lastrowid}', now, current_store_id()))
+    else:
+        menger.enqueue(db, order_cursor.lastrowid, booking_data, catalog_products)
     booking_data["id"] = order_cursor.lastrowid
     # Observational attribution only: a sent follow-up preceded this booking.
     db.execute('''UPDATE followups SET order_after_id=? WHERE id=(
@@ -11099,12 +11155,13 @@ def checkout_requested(db, ev, result):
             '\n'.join(item['text'] for item in turn)))
         return asked_checkout or requested_contact
     last_question = sales_context.question_from_turn(turn) or turn[-1]['text']
-    return asked_checkout and is_confirmation(text) and bool(re.search(checkout_words, last_question))
+    send_selected = re.fullmatch(r'(?:اي|تمام) دزيهن[ .!،]*', clean)
+    return asked_checkout and bool(is_confirmation(text) or send_selected) and bool(re.search(checkout_words, last_question))
 
 
 def claims_order_created(reply):
     text = sales_strategy.normalized(reply)
-    for match in re.finditer(r'تم\s+(?:تثبيت|حجز|تسجيل)|ثبتنا|ثبتنالج|ثبتت\s+(?:الطلب|الحجز)|'
+    for match in re.finditer(r'تم\s+(?:تثبيت|حجز|تسجيل)|ثبتنا|ثبتنالج|(?:و?ثبتت|و?حجزت|و?سجلت)\s+(?:الطلب|الحجز|طلب[جك]|حجز[جك])|'
                             r'(?<!\w)محجوز[هة]?\s*ا?ل[كجچ](?:م|ن)?(?!\w)', text):
         if not re.search(r'(?:ما|لم|مو)\s*(?:يتم\s*)?$', text[max(0, match.start()-18):match.start()]):
             return True
@@ -11329,6 +11386,16 @@ def resume_selected_multi_checkout(db, ev, customer, products, context):
                 _suppress_product_images=True)
 
 
+def booked_reply(db, text, confirmation):
+    if confirmation and re.search(r'بعد تحتاجين شي[؟?!.\s]*$', sales_strategy.normalized(text)):
+        return 'لا يروحي سلامتج.\n' + confirmation
+    if confirmation and CHECKOUT_ETA_SUFFIX.search(sales_strategy.normalized(text)):
+        timeframe = get_delivery_settings(db).get('delivery_time')
+        if timeframe:
+            return confirmation.rstrip() + '\n' + str(timeframe).strip()
+    return confirmation
+
+
 def resume_known_checkout(db, ev, product, customer, customer_products, context):
     """Complete a known cart from contact replies before asking a model again."""
     images = ev.get('_image_matches') or []
@@ -11342,10 +11409,14 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
     text = str(ev.get('text') or '')
     fields = contact_fields(text, customer)
     explicit_purchase = checkout_requested(db, ev, {'order': {}})
+    last_turn = (context or {}).get('last_staff_turn') or []
+    send_selected = (re.fullmatch(r'(?:اي|تمام) دزيهن[ .!،]*', sales_strategy.normalized(text))
+                     and re.search(r'ثبت|حجز', sales_context.question_from_turn(last_turn) or ''))
     selection_answer = checkout_selection_answer(text) and recent_checkout_contact_action(db, ev['sender_id'])
-    if not fields and not is_confirmation(text) and not explicit_purchase and not selection_answer:
+    if not fields and not is_confirmation(text) and not explicit_purchase and not selection_answer and not send_selected:
         return None
-    if re.search(r'[؟?]|شكد|شوكت|يمتى|متى|شلون|شنو|افحص|اكدر', sales_strategy.normalized(text)):
+    remaining = checkout_declaration(sales_strategy.normalized(text)).strip()
+    if not remaining or re.search(r'[؟?]|شكد|شوكت|يمتى|متى|شلون|شنو|افحص|اكدر', remaining):
         return None  # Answer a new independent question through the normal path.
     named = first_message_named_products(text, load_active_products(db))
     if named and any(item.get('product_id') != (product or {}).get('product_id') for item in named):
@@ -11405,7 +11476,7 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
                     color=color, size=str(size), size_type=size_type, quantity=1)
         if weight:
             item['weight'] = weight
-        if order_line_error([item], [product]):
+        if order_line_error([item], [product], review_color=reviewable_checkout_color(db, ev["sender_id"], [item], product)):
             return None
         candidate['order'] = {'items': [item]}
     if not checkout_requested(db, ev, candidate):
@@ -11422,7 +11493,8 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
         required = sales_decision.required_details(rows)
         if sales_decision.unresolved_purchase_questions({'open_details': required}, product):
             return None
-        if order_line_error(candidate['order'].get('items') or [], load_active_products(db)):
+        if order_line_error(candidate['order'].get('items') or [], load_active_products(db),
+                            review_color=reviewable_checkout_color(db, ev['sender_id'], candidate['order'].get('items') or [], product)):
             return None
         # A contact reply advances an already requested checkout even while
         # another contact field is missing. The order validator asks only for
@@ -11755,14 +11827,21 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         return silent_customer_handoff(db, ev)
 
     owner_reason = owner_sales.human_reason(ev.get('text'))
+    changed_phone = re.search(r'(?:الرقم|رقمي|رقم الموبايل)\s+(?:تغي[ّ]?ر|تبدل|اتغير)', sales_strategy.normalized(ev.get('text')))
+    if changed_phone and re.search(r'عنوان|طلبي القديم', sales_strategy.normalized(ev.get('text'))):
+        owner_reason = 'مراجعة تغيير رقم التوصيل لطلب سابق'
     if sales_decision.price_mismatch(ev.get('text')):
         owner_reason = 'advertisement_price_mismatch'
     if owner_reason:
         review_id = has_pending_human_review(db, ev['sender_id']) or create_human_review(db, ev, owner_reason)
         cancel_followups_for_sender(db, ev['sender_id'], owner_reason)
-        set_customer_ai_enabled(db,ev['sender_id'],False)
-        return saved_checkout_reply(db, ev, '',
-            {'needs_human': True, 'human_review_id': review_id, 'owner_handoff': owner_reason})
+        reply = ('إي حبيبتي دزيلي رقمج الجديد.' if owner_reason == 'مراجعة تغيير رقم التوصيل لطلب سابق'
+                 and not phone_number(ev.get('text') or '') else '')
+        if not reply:
+            set_customer_ai_enabled(db,ev['sender_id'],False)
+        return saved_checkout_reply(db, ev, reply,
+            {'needs_human': True, 'human_review_id': review_id, 'owner_handoff': owner_reason,
+             'pause_after_phone_request': bool(reply)})
 
     # ── STEP 07: Load products ────────────────────────────────────────────────
     log(7, "PRODUCTS", "Loading active products from products.json...")
@@ -12630,7 +12709,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         if catalog_review:
             return catalog_review
         if order_reply:
-            reply = order_reply if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
+            reply = booked_reply(db, ev.get('text'), order_reply) if order_created else sales_recovery.checkout_reply(reply, order_reply, ev.get('text'))
             log(13, "ORDER", "Order created and outgoing reply updated", {"reply": reply})
         elif order_created:
             reply = "طلبج مسجل مسبقاً، ولم ننشئ طلباً مكرراً."
@@ -13825,16 +13904,39 @@ def api_update_order(order_id):
         except (ValueError, TypeError, KeyError):
             return jsonify({"ok": False, "error": "أدخل سعر القطع الصحيح وأجرة التوصيل (صفر للتوصيل المجاني)"}), 400
         updates.update(product_total=amounts[0], delivery_fee=amounts[1], total_amount=sum(amounts))
+    releasing_color = (current.get('status') == COLOR_REVIEW_STATUS and bool(items)
+                       and all(item.get('color') for item in items)
+                       and updates.get('status') not in {'cancelled','canceled','ملغي'})
+    if releasing_color:
+        updates['status'] = 'new'
+        updates['notes'] = '\n'.join(line for line in str(updates.get('notes', current.get('notes')) or '').splitlines()
+                                     if line != COLOR_REVIEW_STATUS)
+    elif current.get('status') == COLOR_REVIEW_STATUS and updates.get('status') not in {None, COLOR_REVIEW_STATUS, 'cancelled','canceled','ملغي'}:
+        return jsonify(ok=False, error="راجع لون الصورة قبل تجهيز الطلب"), 400
     if not updates:
         return jsonify({"ok": False, "error": "no fields to update"}), 400
 
     set_clause = ", ".join(f"{field}=?" for field in updates)
     values = list(updates.values()) + [order_id]
-    db.execute(f"UPDATE orders SET {set_clause} WHERE id=?", values)
+    status_guard = " AND status=?" if releasing_color else ""
+    if releasing_color:
+        values.append(COLOR_REVIEW_STATUS)
+    updated = db.execute(f"UPDATE orders SET {set_clause} WHERE id=?{status_guard}", values)
+    if not updated.rowcount:
+        db.rollback()
+        return jsonify(ok=False, error="تغيّر الطلب؛ حدّث الصفحة"), 409
     order = _order_payload_by_id(db, order_id)
     order_actions.resolve_applied(db, order, now_baghdad_iso())
     # A pending export must never send an older item or a cancelled order.
     delivery = db.execute("SELECT status,attempts,remote_order_id FROM menger_deliveries WHERE order_id=?", (order_id,)).fetchone()
+    if releasing_color and not delivery:
+        token = _current_store_id.set(order.get("store_id") or "default")
+        try:
+            menger.enqueue(db, order_id, order, load_products_from_file())
+            db.execute("UPDATE human_reviews SET status='reviewed',replied_at=? WHERE store_id=? AND sender_id=? AND reason=? AND status='pending'",
+                       (now_baghdad_iso(), order['store_id'], order['sender_id'], f'تدقيق لون القطعة للطلب {order_id}'))
+        finally:
+            _current_store_id.reset(token)
     if delivery and delivery["status"] == "pending" and not delivery["attempts"] and not delivery["remote_order_id"]:
         if order.get("status") in {"cancelled", "canceled", "ملغي"}:
             db.execute("UPDATE menger_deliveries SET status='cancelled' WHERE order_id=?", (order_id,))
@@ -13846,6 +13948,8 @@ def api_update_order(order_id):
             finally:
                 _current_store_id.reset(token)
     db.commit()
+    if releasing_color:
+        send_order_to_telegram(order)
     return jsonify({"ok": True, "order": order, "external_followup_required": bool(delivery and (delivery["attempts"] or delivery["remote_order_id"]))})
 
 
