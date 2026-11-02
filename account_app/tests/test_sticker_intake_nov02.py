@@ -143,6 +143,31 @@ class ChatwootStickerTests(unittest.TestCase):
             row = db.execute('SELECT * FROM messages WHERE id=?', (mid,)).fetchone()
             self.assertEqual(media.message_media(row)[0]['type'], 'sticker')
 
+    def test_staff_media_retry_reclassifies_archived_sticker_without_redownload(self):
+        m = test_chatwoot.m
+        sender = f'{m.DEFAULT_STORE_ID}::cw-1-3'
+        source = 'https://app.chatwoot.com/media/thumb.png'
+        filename = 'b' * 32 + '.png'
+        Path(self.temp.name, filename).write_bytes(b'local archived sticker fixture')
+        with self.client.session_transaction() as session:
+            session['dashboard_authenticated'] = True
+        with m.app.app_context(), patch.object(m, 'INCOMING_MEDIA_DIR', self.temp.name):
+            db = m.get_db()
+            mid = m.save_message(db, sender, 'incoming', 'image', '', source, None, None,
+                {'attachments': [{'type': 'image', 'payload': {'url': source}}]})
+            db.execute('UPDATE messages SET media_json=? WHERE id=?',
+                (json.dumps([dict(type='image', url=source, local_file=filename)]), mid))
+            db.commit()
+            with patch.object(m, 'known_sticker', return_value=True), patch.object(m.inbound_media, 'fetch') as fetch:
+                response = self.client.post(f'/api/conversations/{sender}/messages/{mid}/media')
+            fetch.assert_not_called()
+            self.assertEqual(response.status_code, 200, response.json)
+            self.assertEqual(response.json['media'][0]['type'], 'sticker')
+            row = db.execute('SELECT * FROM messages WHERE id=?', (mid,)).fetchone()
+            self.assertEqual(row['message_type'], 'sticker')
+            self.assertIsNone(row['image_url'])
+            self.assertEqual(media.message_media(row)[0]['type'], 'sticker')
+
     def test_chatwoot_marker_is_preserved_for_sticker_only_or_text_and_sticker(self):
         for text in ('', 'عمر أربع سنوات'):
             self.payload['content'] = text

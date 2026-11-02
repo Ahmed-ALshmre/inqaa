@@ -14796,7 +14796,7 @@ def api_resolve_message_media(sender_id, message_id):
         return jsonify({'error': 'message not found'}), 404
     existing = _incoming_media_entries(row)
     for index, item in enumerate(existing):
-        if item['type'] == 'file':
+        if item['type'] in {'file', 'image', 'sticker'}:
             _archive_incoming_message_media(db, message_id, index, row['store_id'])
     row = db.execute('SELECT * FROM messages WHERE id=? AND sender_id=?', (message_id, sender_id)).fetchone()
     existing = _incoming_media_entries(row)
