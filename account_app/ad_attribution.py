@@ -25,7 +25,8 @@ def normalize(node):
         'headline': ('headline', 'ad_title', 'title', 'referral_headline', 'meta_ad_title'),
         'body': ('body', 'description', 'referral_body'),
         'image_url': ('thumbnail_url', 'thumbnailUrl', 'image_url', 'imageUrl', 'photo_url', 'meta_ad_photo_url'),
-        'source_url': ('source_url', 'sourceUrl', 'referral_source_url', 'ad_url'),
+        'video_url': ('video_url', 'videoUrl', 'meta_ad_video_url'),
+        'source_url': ('source_url', 'sourceUrl', 'referral_source_url', 'ad_url', 'meta_ad_source_url', 'meta_ad_url'),
         'campaign_id': ('campaign_id',), 'campaign_name': ('campaign_name', 'utm_campaign'),
         'post_id': ('post_id', 'meta_ad_post_id'), 'ctwa_clid': ('ctwa_clid', 'referral_ctwa_clid'),
         'captured_at': ('captured_at', 'meta_ad_captured_at'),
@@ -44,6 +45,10 @@ def normalize(node):
         value = safe_url(node.get('referral_media_url'))
         if value:
             result['image_url'] = value
+    if not result.get('video_url') and str(node.get('referral_media_content_type', '')).startswith('video/'):
+        value = safe_url(node.get('referral_media_url'))
+        if value:
+            result['video_url'] = value
     if not result.get('ad_id') and result.get('source_type', '').lower() == 'ad' and result.get('source_id'):
         result['ad_id'] = result['source_id']
     return result

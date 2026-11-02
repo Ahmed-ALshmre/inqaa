@@ -272,7 +272,7 @@ class ConversationContextTests(unittest.TestCase):
                 decision = {'action': 'change', 'reject_ids': ['F1'], 'select_ids': [], 'focus_id': 'F2'}
                 with patch.object(m, 'classify_contextual_selection', return_value=decision) as classify:
                     result = self.event(phrase, model_reply='تمام، نخلي فستان انيقة. شنو القياس المطلوب؟')
-                self.assertIn('انيقة', result['reply'])
+                self.assertIn('هالموديل', result['reply'])
                 self.assertNotIn('حدديه', result['reply'])
                 self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['F2'])
                 self.assertIsNone(m.pending_product_choice(self.db, self.sender))
@@ -298,8 +298,7 @@ class ConversationContextTests(unittest.TestCase):
             with patch.object(m, 'classify_contextual_selection', return_value=decision):
                 result = m.resolve_product_choice(self.db, dict(self.ev, text='ماعجبني'), CATALOG)
             if attempt == 0:
-                self.assertIn('دانتيل', result['reply'])
-                self.assertIn('انيقة', result['reply'])
+                self.assertIn('أي قطعة', result['reply'])
             else:
                 self.assertIn('اسم الموديل', result['reply'])
                 self.assertFalse(result['meta'].get('needs_human'))
@@ -336,7 +335,8 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m,"generate_first_message_reply",return_value=("أرسلي صورة", "")) as first:
             result = self.event("ما هي مواصفات الفستان؟", model_reply="الفستان دانتيل بسعر 16000")
         first.assert_not_called()
-        self.assertIn("دانتيل", result["reply"])
+        self.assertIn("لينن", result["reply"])
+        self.assertNotIn("دانتيل", result["reply"])
 
     def test_opening_ad_questions_bind_exact_skirt_name_before_default(self):
         skirt = dict(CATALOG[0], product_id='SK1', product_name='تنورة', category='تنورة', price='19000')
@@ -670,7 +670,7 @@ class ConversationContextTests(unittest.TestCase):
         self.assertIn("باربي",fabric)
         result=self.event("ثبتي الطلب")
         self.assertIn("أثبتلج",result["reply"])
-        self.assertIn("دانتيل",result["reply"])
+        self.assertIn("الاختيار السابق",result["reply"])
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?",(self.sender,)).fetchone()[0],0)
         self.event("بس هذا")
         self.assertIsNone(m.pending_product_choice(self.db,self.sender))
@@ -713,9 +713,9 @@ class ConversationContextTests(unittest.TestCase):
         with patch.object(m, '_call_main_ai_once', return_value={'reply': 'الصورة الأولى متوفرة والثانية متوفرة', 'create_order': False, 'order': {}}) as model:
             sent = m.auto_reply_after_product_link(self.db, self.sender, product, event=ev)
         model.assert_not_called()
-        self.assertIn('الأول، فستان دانتيل متوفر', sent['reply'])
-        self.assertIn('الثاني، فستان انيقة متوفر', sent['reply'])
-        self.assertLess(sent['reply'].index('دانتيل'), sent['reply'].index('انيقة'))
+        self.assertIn('الأول، هالموديل متوفر', sent['reply'])
+        self.assertIn('الثاني، هالموديل متوفر', sent['reply'])
+        self.assertLess(sent['reply'].index('16 ألف'), sent['reply'].index('15 ألف'))
 
     def test_repeated_product_keeps_both_image_positions(self):
         self.settings['enabled'] = False

@@ -277,7 +277,7 @@ class Last4DaysPipelineTests(unittest.TestCase):
         self.m.bind_customer_to_product(self.db, self.sender, self.product, source="image_recognition")
         alt_product = dict(
             product_id="ALT_1",
-            product_name="سوت ملكي متوفر",
+            product_name="سوت ملكي متوفر", reply_category="السوت",
             category="سوت نسائي",
             colors="اسود ماروني",
             sizes="38 40 42 44",
@@ -294,7 +294,8 @@ class Last4DaysPipelineTests(unittest.TestCase):
         result, model = self.process("أي نعم")
         model.assert_not_called()
         self.assertNotIn("للأسف هذا الموديل ما متوفر", result["reply"])
-        self.assertIn("سوت ملكي متوفر", result["reply"])
+        self.assertIn("السوت", result["reply"])
+        self.assertNotIn("سوت ملكي متوفر", result["reply"])
 
     def test_multi_product_out_of_stock_consent_sends_catalog_alternatives(self):
         """Customer sent 2 out-of-stock photos and replied 'أي نعم' to 'تحبين أقترحلج غيرهن؟'."""
@@ -320,7 +321,7 @@ class Last4DaysPipelineTests(unittest.TestCase):
         )
         alt_product = dict(
             product_id="ALT_MULTI_1",
-            product_name="سوت ملكي بديل",
+            product_name="سوت ملكي بديل", reply_category="السوت",
             category="سوت نسائي",
             colors="اسود ماروني",
             sizes="38 40 42 44",
@@ -342,7 +343,8 @@ class Last4DaysPipelineTests(unittest.TestCase):
         self.save("outgoing", "للأسف هالموديلات ما متوفرة، تحبين أقترحلج غيرهن؟")
         result, model = self.process("أي نعم")
         model.assert_not_called()
-        self.assertIn("سوت ملكي بديل", result["reply"])
+        self.assertIn("السوت", result["reply"])
+        self.assertNotIn("سوت ملكي بديل", result["reply"])
 
     def test_unknown_model_opening_message_is_friendly_photo_prompt(self):
         """User requirement: اول رساله تكون اذا لم يعرف الموديل تكون ودوده : حبيبتي ممكن صورة للموديل لي رايدته ؟"""

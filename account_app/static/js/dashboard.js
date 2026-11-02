@@ -677,10 +677,13 @@ function renderConversationAdContext(ad) {
   panel.hidden = !ad || !Object.values(ad).some(Boolean);
   const image = document.getElementById('conversationAdImage');
   const link = document.getElementById('conversationAdLink');
+  const video = document.getElementById('conversationAdVideo');
   image.hidden = true;
   image.removeAttribute('src');
   link.hidden = true;
   link.removeAttribute('href');
+  video.hidden = true;
+  video.removeAttribute('href');
   document.getElementById('conversationAdTitle').textContent = '';
   document.getElementById('conversationAdDetails').textContent = '';
   if (panel.hidden) return;
@@ -707,6 +710,8 @@ function renderConversationAdContext(ad) {
   }
   const sourceUrl = absoluteWebUrl(ad.source_url);
   if (sourceUrl) { link.href = sourceUrl; link.hidden = false; }
+  const videoUrl = absoluteWebUrl(ad.video_url);
+  if (videoUrl) { video.href = videoUrl; video.hidden = false; }
 }
 
 function safeMediaUrl(value) {
@@ -742,10 +747,11 @@ function messageMarkup(m) {
     const url = safeMediaUrl(item.url);
     if (!url) continue;
     const escaped = esc(url);
-    const kind = ['image','audio','video'].includes(item.type) ? item.type : 'file';
+    const kind = ['image','sticker','audio','video'].includes(item.type) ? item.type : 'file';
     const failure = `<div class="media-error">تعذر استعادة المرفق. إذا انتهت صلاحية رابطه الأصلي، اطلب من الزبون إعادة إرساله.<button type="button" onclick="retryMedia(this)">إعادة المحاولة</button></div>`;
-    if (kind === 'image') {
-      content += `<div class="message-media image-media is-loading"><span class="media-loading" role="status"><span class="spinner-border spinner-border-sm"></span> تحميل الصورة…</span><img src="${escaped}" data-src="${escaped}" class="msg-image" alt="صورة في المحادثة" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="mediaLoaded(this)" onerror="mediaFailed(this)" onclick="openLightbox(this.dataset.src)">${failure}</div>`;
+    if (kind === 'image' || kind === 'sticker') {
+      const description = kind === 'sticker' ? 'ملصق في المحادثة' : 'صورة في المحادثة';
+      content += `<div class="message-media image-media is-loading"><span class="media-loading" role="status"><span class="spinner-border spinner-border-sm"></span> تحميل الصورة…</span><img src="${escaped}" data-src="${escaped}" class="msg-image" alt="${description}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="mediaLoaded(this)" onerror="mediaFailed(this)" onclick="openLightbox(this.dataset.src)">${failure}</div>`;
     } else if (kind === 'audio' || kind === 'video') {
       const label = kind === 'audio' ? 'تسجيل صوتي' : 'مقطع فيديو';
       content += `<div class="message-media ${kind}-media"><div class="media-label">${label}</div><${kind} controls preload="metadata" src="${escaped}" aria-label="${label}" onloadedmetadata="mediaLoaded(this)" onerror="mediaFailed(this)" onwaiting="this.closest('.message-media').classList.add('is-loading')" oncanplay="mediaLoaded(this)"></${kind}><span class="media-loading" role="status">جاري التحميل…</span>${failure}</div>`;

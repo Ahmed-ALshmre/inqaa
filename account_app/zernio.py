@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import re
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,8 +13,11 @@ from urllib.parse import quote, urlparse
 import requests
 from flask import jsonify, request
 try:
+    from . import ad_attribution, media
     from .delivery_state import ANSWERED_SQL
 except ImportError:
+    import ad_attribution
+    import media
     from delivery_state import ANSWERED_SQL
 
 STORE_ID = 'al-fatena'
@@ -73,6 +77,54 @@ def init_db(db):
     ''')
 
 
+def seed_kids_bindings(db, entries):
+    """Link verified Meta participant IDs to existing kids conversation history."""
+    if not isinstance(entries, list) or not entries or len(entries) > 500:
+        raise ValueError('Provide 1 to 500 verified kids bindings')
+    accounts = account_bindings()
+    db.execute('SAVEPOINT kids_zernio_bindings')
+    try:
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError('Invalid binding')
+            sender = entry.get('sender_id')
+            account = entry.get('account_id')
+            participant = entry.get('participant_id')
+            conversation = entry.get('conversation_id')
+            if (not isinstance(sender, str) or not re.fullmatch(r'baraah-kids::cw-\d+-\d+', sender)
+                    or not isinstance(account, str) or account not in accounts
+                    or accounts[account]['store_id'] != 'baraah-kids'
+                    or not isinstance(participant, str) or not re.fullmatch(r'[0-9]{5,32}', participant)
+                    or not isinstance(conversation, str) or not conversation.strip() or len(conversation) > 500):
+                raise ValueError('Use an existing kids customer and its verified Meta identity')
+            platform = accounts[account]['platform']
+            customer = db.execute('SELECT store_id,platform FROM customers WHERE sender_id=?', (sender,)).fetchone()
+            if not customer or customer['store_id'] != 'baraah-kids' or customer['platform'] != platform:
+                raise ValueError('Customer store or platform does not match the kids account')
+            old = db.execute('SELECT * FROM zernio_conversations WHERE sender_id=? OR (account_id=? AND participant_id=?)',
+                             (sender, account, participant)).fetchall()
+            if any(row['sender_id'] != sender or row['account_id'] != account or row['participant_id'] != participant
+                   or row['store_id'] != 'baraah-kids' or row['platform'] != platform for row in old):
+                raise ValueError('Meta identity is already linked to a different conversation')
+            db.execute('''INSERT INTO zernio_conversations VALUES(?,?,?,?,?,?)
+                ON CONFLICT(sender_id) DO UPDATE SET conversation_id=excluded.conversation_id''',
+                       (sender, account, conversation.strip(), participant, platform, 'baraah-kids'))
+            if 'ad_context' in entry:
+                if not isinstance(entry['ad_context'], dict):
+                    raise ValueError('Ad context must contain verified referral fields')
+                context = ad_attribution.extract({'_ad_context': entry['ad_context']})
+                if not any(context.get(key) for key in ('ad_id', 'source_id', 'ref')):
+                    raise ValueError('Ad context requires an explicit source identity')
+                latest = db.execute('SELECT MAX(id) FROM messages').fetchone()[0] or 0
+                ad_attribution.save(db, sender, latest, {'_ad_context': context})
+        db.execute('RELEASE SAVEPOINT kids_zernio_bindings')
+    except (ValueError, sqlite3.IntegrityError):
+        db.execute('ROLLBACK TO SAVEPOINT kids_zernio_bindings')
+        db.execute('RELEASE SAVEPOINT kids_zernio_bindings')
+        raise ValueError('Binding batch rejected; verify exact customer identities') from None
+    return len(entries)
+
+
 def event_time(value):
     try:
         parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
@@ -116,8 +168,14 @@ def _binding(module, data, store_key=''):
     db = module.get_db()
     if not db.execute('SELECT 1 FROM stores WHERE store_id=?', (store,)).fetchone():
         raise ValueError('Store is not configured')
+    existing = db.execute('SELECT * FROM zernio_conversations WHERE account_id=? AND participant_id=?',
+                          (account_id, participant)).fetchone()
+    if existing:
+        sender_id = existing['sender_id']
     old = db.execute('SELECT * FROM zernio_conversations WHERE sender_id=?', (sender_id,)).fetchone()
-    if old and (old['account_id'] != account_id or old['participant_id'] != participant):
+    if old and (old['account_id'] != account_id or old['participant_id'] != participant
+                or old['store_id'] != store or old['platform'] != config['platform']
+                or sender_store(sender_id) != store):
         raise ValueError('Conversation identity conflict')
     db.execute('''INSERT INTO zernio_conversations VALUES(?,?,?,?,?,?)
         ON CONFLICT(sender_id) DO UPDATE SET conversation_id=excluded.conversation_id''',
@@ -400,7 +458,9 @@ def install(module):
             if isinstance(item, dict) and module.ad_attribution.safe_url(item.get('url')):
                 kind = item.get('type')
                 # Posts/reels may contain image URLs: the existing media resolver classifies files.
-                kind = kind if kind in ('image', 'video', 'audio', 'file') else 'file'
+                if media.sticker_attachment(item, message.get('metadata')):
+                    kind = 'sticker'
+                kind = kind if kind in ('image', 'video', 'audio', 'file', 'sticker') else 'file'
                 attachments.append({'type': kind, 'payload': {'url': item['url']}})
         if not text.strip() and not attachments:
             return jsonify(ok=True, ignored=True)
@@ -420,3 +480,19 @@ def install(module):
     @module._dash_require
     def zernio_diag():
         return jsonify(dict(configuration(), stores={store: configuration(store) for store in STORE_FLAGS}))
+
+    @module.app.post('/api/zernio/kids-bindings')
+    @module._dash_require
+    def zernio_kids_bindings():
+        # Unlisted mutation endpoints are owner-only through staff_access.
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(error='Expected verified kids bindings'), 400
+        db = module.get_db()
+        try:
+            count = seed_kids_bindings(db, data.get('bindings'))
+            db.commit()
+        except ValueError as exc:
+            db.rollback()
+            return jsonify(error=str(exc)), 400
+        return jsonify(ok=True, bound=count)

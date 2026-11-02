@@ -11,9 +11,9 @@ from account_app.tests import test_audit_orders as fixtures
 from account_app.tests.run_isolated import fixture_image
 
 CATALOG = [
-    dict(product_id='A', product_name='كيلوت', price='17000', stock='متوفر', status='active', colors='اسود', sizes='38 إلى 52'),
-    dict(product_id='B', product_name='تنورة', price='12000', stock='متوفر', status='active', colors='اسود', sizes='38 إلى 52'),
-    dict(product_id='C', product_name='قميص', price='13000', stock='نفذ', status='active', colors='سمائي', sizes='38 إلى 52'),
+    dict(product_id='A', product_name='كيلوت', reply_category='كيلوت', price='17000', stock='متوفر', status='active', colors='اسود', sizes='38 إلى 52'),
+    dict(product_id='B', product_name='تنورة', reply_category='تنورة', price='12000', stock='متوفر', status='active', colors='اسود', sizes='38 إلى 52'),
+    dict(product_id='C', product_name='قميص', reply_category='قميص', price='13000', stock='نفذ', status='active', colors='سمائي', sizes='38 إلى 52'),
 ]
 
 

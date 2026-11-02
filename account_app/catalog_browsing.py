@@ -129,10 +129,7 @@ def _eligible(products, image_urls, store_id):
 
 def _item(product, image_url, number):
     name = customer_copy.fact(product.get('product_name')) or f'موديل {number}'
-    # Product titles can contain paragraphs; one title must not swamp the page.
-    display_name = re.sub(r'\s+', ' ', name).strip()
-    if len(display_name) > 100:
-        display_name = display_name[:100].rstrip() + '…'
+    display_name = customer_copy.reply_category(product) or f'الموديل رقم {number}'
     try:
         safe_product = dict(product, price=customer_copy.fact(product.get('price')))
         count, price, _ = terms(safe_product)

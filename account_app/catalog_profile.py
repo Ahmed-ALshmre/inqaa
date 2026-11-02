@@ -11,7 +11,7 @@ SIZE_SYSTEMS = {'legacy': 'المقاسات المحفوظة', 'age': 'عمر ا
                 'weight': 'نطاق وزن تقريبي', 'none': 'لا يحتاج قياساً'}
 OCCASIONS = {'everyday': 'يومي', 'birthday': 'عيد ميلاد', 'eid': 'العيد',
              'occasion': 'مناسبات', 'school': 'مدرسة', 'winter': 'شتوي', 'summer': 'صيفي'}
-FIELDS = ('audience', 'product_type', 'size_system', 'age_min_months', 'age_max_months',
+FIELDS = ('reply_category', 'audience', 'product_type', 'size_system', 'age_min_months', 'age_max_months',
           'weight_min_kg', 'weight_max_kg', 'occasions', 'recommendation_groups',
           'recommendation_enabled', 'recommendation_priority', 'recommendation_notes')
 
@@ -21,6 +21,11 @@ def normalize(product, strict=False):
     def invalid(message):
         if strict:
             raise ValueError(message)
+    label = result.get('reply_category') or ''
+    if not isinstance(label, str) or len(label.strip()) > 60 or '\n' in label or '\r' in label:
+        invalid('اكتب فئة الرد بكلمات قليلة في سطر واحد (60 حرفاً كحد أقصى).')
+        label = ''
+    result['reply_category'] = label.strip()
     for field, allowed, default in (('audience', AUDIENCES, ''), ('product_type', TYPES, ''),
                                     ('size_system', SIZE_SYSTEMS, 'legacy')):
         value = result.get(field) or default

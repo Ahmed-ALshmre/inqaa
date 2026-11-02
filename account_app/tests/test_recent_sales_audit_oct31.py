@@ -314,12 +314,13 @@ class RecentSalesCheckoutTests(unittest.TestCase):
         self.assertFalse(self.m.is_conditional_return_question('استلمت وطلع مو نفس الصورة'))
 
     def test_offered_cheaper_product_does_not_replace_customer_binding(self):
-        alternative = dict(self.product, product_id='W2', product_name='سوت بديل', price='15000')
+        alternative = dict(self.product, product_id='W2', product_name='سوت بديل', reply_category='السوت', price='15000')
         catalog = [self.product, alternative]
         with patch.object(self.m, 'load_active_products', return_value=catalog), \
              patch.object(self.m, 'load_products_from_file', return_value=catalog):
             result, _ = self.process('غالي على ميزانيتي، اريد ارخص')
-            self.assertIn('سوت بديل', result['reply'])
+            self.assertIn('السوت', result['reply'])
+            self.assertNotIn('سوت بديل', result['reply'])
             self.assertEqual(self.m.get_active_product_binding(self.db, self.sender)['product_id'], 'W1')
         self.assertEqual(self.order_count(), 0)
 
