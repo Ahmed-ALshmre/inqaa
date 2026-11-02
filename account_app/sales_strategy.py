@@ -417,7 +417,7 @@ def stop_kind(question):
         return 'opt_out'
     if re.search(r'(?:ما\s*اريد|ماريد|مارد)\s*(?:احجز|اطلب|اشتري)\s*(?:هسه|هسة|الان)', text):
         return 'deferred'
-    if _declined(text):
+    if _declined(text) or re.fullmatch(r'(?:تسلمين|شكرا|ممنونة)?[،,.\s]*(?:هسه |هسة )?ما احتاج شي[.!،\s]*',text):
         return 'declined'
     if re.search(r'خل(?:ي|يني).{0,20}(?:افكر|استلم الراتب)|بعدين اطلب|بعدني محتار|ما قررت|مو هس[هة]', text):
         return 'deferred'
@@ -625,6 +625,8 @@ def measurement_fact(product, kind):
         value = customer_copy.fact((product or {}).get(key)).strip()
         for clause in re.split(r'[\n؛;]+|(?<=[.!؟?])\s+', value):
             clean = normalized(clause)
+            if kind == 'length' and re.fullmatch(r'\s*(?:طويل\s+)?(?:طوله|طولها|الطول)\s*[:：]?\s*\d{1,3}\s*',clean):
+                return clause.strip()
             if (len(clause) <= 220 and not customer_copy.has_instructions(clause)
                     and not re.search(r'يحتاج|تاكيد|ما عندي|غير معروف|[؟?]', clean)
                     and re.search(r'(?:' + labels[kind] + r').{0,35}?\d{1,3}(?:[.,]\d+)?\s*(?:سم|سانتي|سنتيمتر|cm)(?!\w)', clean)):

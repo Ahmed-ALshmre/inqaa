@@ -179,11 +179,15 @@ def chosen_colors(value):
 
 def color_replacement(value):
     """Read an explicit replacement or one specific replacement question, never infer one."""
-    text = re.split(r'[.\n]', normalized(value))[-1].strip(' .!؟?')
+    text = normalized(value).strip(' .!؟?')
+    text = re.sub(r'[.،,\n]\s*(?:(?:ثبتي|احجزي) (?:وحدة|وحده|قطعة)|الثانية (?:تبقى|تبقي) نفس ما اتفقنا)[.! ]*$', '', text)
+    text = re.split(r'[.\n]', text)[-1].strip(' .!؟?')
+    text = re.sub(r'^لا لحظة[،, ]+|^لا لحظه[،, ]+', '', text)
+    text = re.sub(r'\s+بالقطعة (?:الاولى|الاولي) بس$', '', text)
     hits = list(COLOR_RE.finditer(text))
     if len(hits) != 2 or not re.fullmatch(r'\s*بدل\s*', text[hits[0].end():hits[1].start()]):
         return None
-    if not re.fullmatch(r'(?:تحبين|تحب|تريدين|تريد|خلي|خليلي|بدلي|اريد)\s*', text[:hits[0].start()]):
+    if not re.fullmatch(r'(?:تحبين|تحب|تريدين|تريد|خلي|خليها|خليلي|بدلي|اريد)\s*', text[:hits[0].start()]):
         return None
     if text[hits[1].end():].strip():
         return None
