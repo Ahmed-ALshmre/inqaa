@@ -29,7 +29,7 @@ except ImportError:
     import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
-    from .media import extract_media, media_type, message_media
+    from .media import extract_media, media_type, message_media, known_sticker
     from .reply_layout import approved_parts, plan_sales_bubbles, polish_surface_punctuation
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
@@ -44,7 +44,7 @@ except ImportError:
     import chatwoot
     import zernio
     import ad_attribution
-    from media import extract_media, media_type, message_media
+    from media import extract_media, media_type, message_media, known_sticker
     from reply_layout import approved_parts, plan_sales_bubbles, polish_surface_punctuation
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
@@ -5099,6 +5099,8 @@ def extract_facebook_event(body):
     quick_reply = message.get("quick_reply", {})
 
     media = resolve_incoming_media(message)
+    has_sticker = any(m['type'] == 'sticker' for m in media)
+    media = [m for m in media if m['type'] != 'sticker']
     attachments = [{"type": m["type"], "payload": {"url": m["url"]}} for m in media]
     image_url = next((m["url"] for m in media if m["type"] == "image"), None)
     if image_url:
@@ -5123,6 +5125,7 @@ def extract_facebook_event(body):
         "platform"       : platform,
         "timestamp"      : timestamp,
         "text"           : text,
+        "_has_sticker"   : has_sticker,
         "attachments"    : attachments,
         "image_url"      : image_url,
         "quick_reply"    : quick_reply,
@@ -5157,6 +5160,8 @@ def _is_emoji_only(text):
 def detect_message_type(ev):
     if ev["postback"]:
         return "postback"
+    if ev.get('_has_sticker') and not ev.get('attachments') and not ev.get('text'):
+        return 'sticker'
     if ev["image_url"]:
         return "image"
     if ev["attachments"] and not ev["image_url"]:
@@ -6391,9 +6396,12 @@ def pending_product_choice(db, sender_id):
 
 
 def product_choice_question(previous, selected):
-    new_names = " و".join(p.get("product_name") or p["product_id"] for p in selected)
-    old_names = " و".join(p.get("product_name") or p["product_id"] for p in previous)
-    return f"أثبتلج {new_names} وحده، لو وياه {old_names}؟"
+    if len(previous) == len(selected) == 1:
+        new = customer_copy.reply_category(selected[0])
+        old = customer_copy.reply_category(previous[0])
+        if new and old and new != old:
+            return f'أثبتلج {new} وحده، لو أضيفه ويا {old}؟'
+    return 'أثبتلج الاختيار الجديد وحده، لو أضيفه ويا الاختيار السابق؟'
 
 
 def classify_contextual_selection(db, text, candidates, history, pending):
@@ -6526,8 +6534,7 @@ def resolve_contextual_product_selection(db, ev, products):
     if len(candidates) == 1 and not pending:
         return None
     # Fail closed: preserve all choices if interpretation is unavailable or ambiguous.
-    names = " لو ".join(p.get("product_name") or p["product_id"] for p in candidates)
-    return product_clarification_or_review(db, ev, f"حتى أفهم قصدج، تقصدين {names}؟")
+    return product_clarification_or_review(db, ev, 'أي قطعة تقصدين بالضبط؟ تكدرين تحددينها بالصورة.')
 
 
 def customer_declines_purchase(text):
@@ -6605,8 +6612,7 @@ def resolve_product_choice(db, ev, products):
         complete_customer_product_link(db, ev["sender_id"], product, "customer_correction",
                                       source="image_recognition", preserve_existing=index > 0)
     db.execute("DELETE FROM customer_product_choices WHERE sender_id=?", (ev["sender_id"],)); db.commit()
-    names = " و".join(p.get("product_name") or p["product_id"] for p in unique)
-    return saved_checkout_reply(db, ev, f"تمام، نعتمد {names} 🌸", {"product_choice_resolved": intent, "product_ids": [p["product_id"] for p in unique]})
+    return saved_checkout_reply(db, ev, "تمام، نعتمد اختيارج 🌸", {"product_choice_resolved": intent, "product_ids": [p["product_id"] for p in unique]})
 
 
 def review_unresolved_album_images(db, ev, image_result, products):
@@ -7252,6 +7258,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     if not image_urls and _promises_product_photo(reply):
         reply = "ما عندي صورة مطابقة محفوظة لهذا الطلب حالياً."
     ai_result = owner_result_surface(dict(ai_result, reply=reply), ev, customer, history)
+    ai_result = customer_copy.public_product_wording(ai_result, [*products, matched_product])
     reply = ai_result['reply']
     ai_result, reply = format_customer_reply(ai_result, reply,
         customer=customer if not order_created else None, history=history)
@@ -7856,6 +7863,7 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
     if not image_urls and _promises_product_photo(reply):
         reply = "ما عندي صورة مطابقة جاهزة للإرسال لهذا الموديل أو اللون حالياً. أحتاج أتأكد منها حتى ما أدزلج صورة مختلفة."
     result = owner_result_surface(dict(result, reply=reply), dict(ev, _post_order=True), customer, history)
+    result = customer_copy.public_product_wording(result, [*products, matched])
     reply = result.get('reply') or ''
     # A pending action is not a blanket stop on all future customer questions.
     reply_parts = approved_reply_parts(result, reply)
@@ -8137,13 +8145,6 @@ def guided_specification_reply(ev, product, customer, customer_products, positio
     if not name or not fabric or customer_copy.has_instructions(name + ' ' + fabric):
         return None
     accepted = accepted_sales_history(get_db(), ev['sender_id']) if has_app_context() and ev.get('sender_id') else []
-    if 'فستان' in sales_strategy.normalized(name):
-        named = re.match(r'^فستان\s+(.+)$', name)
-        suffix = named.group(1).strip() if named else ''
-        item = 'هالفستان' + ((' ' + suffix) if suffix.startswith('ال') else (' ال' + suffix if suffix else ''))
-    else:
-        item = name
-    intro = item
     description = customer_copy.fact(product.get('description'), 'description')
     match = re.search(r'(?:الموديل|الفستان|القطعة)\s+([^.;]{8,125})\.', description)
     detail = match.group(1).strip(' ،') if match else ''
@@ -8153,11 +8154,10 @@ def guided_specification_reply(ev, product, customer, customer_products, positio
         customer_copy.fact(product.get(key), key) for key in ('faq', 'bundle_contents', 'sale_unit')))
     if 'فستان' in sales_strategy.normalized(name) and re.search(r'قطعة\s+وحد[ةه]', composition):
         detail = 'قطعة وحدة، ' + detail if detail else 'قطعة وحدة'
+    parts = []
     if detail and not re.search(r'سعر|قياس|وزن|توصيل|عرض|مدة|فحص|حجز|اللون|قماش', detail):
-        first = intro + ' ' + detail + '.'
-    else:
-        first = intro + '.'
-    parts = [first, 'قماشه ' + fabric + '.']
+        parts.append((customer_copy.reply_category(product) or 'هالموديل') + ' ' + detail + '.')
+    parts.append('قماشه ' + fabric + '.')
     try:
         count, price, _ = conversation_quality.terms(product)
         if count == 1:
@@ -8166,7 +8166,7 @@ def guided_specification_reply(ev, product, customer, customer_products, positio
                 allow_offer=not sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer))
             cue = ('' if compact_offer or sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
                    else sales_playbook.next_sales_message(product, accepted))
-            parts[1] += ' ' + (compact_offer or ((cue + ' ' if cue and 'عرض' in cue else '') + 'سعره ' + amount + '.'))
+            parts[-1] += ' ' + (compact_offer or ((cue + ' ' if cue and 'عرض' in cue else '') + 'سعره ' + amount + '.'))
             if cue and 'عرض' not in cue:
                 parts.append(cue)
     except (ValueError, TypeError, KeyError):
@@ -8396,7 +8396,7 @@ def offered_product_photo_reply(ev, products, matched, continuation=None):
             parts.append('هاي صور ' + product['product_name'] + ' بال' + ' وال'.join(available) + '، شوفيهن براحتج 🌷')
         else:
             parts.append('ما عندي صورة منفصلة مؤكدة لل' + ' وال'.join(available)
-                         + '؛ هاي صور الموديل ' + product['product_name'] + ' حتى تشوفين شكله 🌷')
+                         + '؛ هاي صور الموديل حتى تشوفين شكله 🌷')
         return dict(reply=' '.join(parts), reply_parts=[' '.join(parts)],
                     image_product_ids=[product['product_id']], image_color=' و'.join(available) if exact else '',
                     _catalog_model_album=not exact, _local_reply=True, _catalog_fallback=True,
@@ -9571,6 +9571,15 @@ def owner_result_surface(result, ev, customer=None, history=()):
     if focused != original:
         original = focused
         result.update(reply=focused,reply_parts=[focused])
+    if (selected and not ev.get('_post_order') and not result.get('create_order')
+            and not result.get('requires_human') and not result.get('_checkout_interest')
+            and not checkout_selection_answer(ev.get('text') or '')
+            and not sales_strategy._explicit_purchase(ev.get('text') or '')):
+        deferred = conversation_quality.defer_repeated_choice_questions(original,
+            [*history, {'direction': 'outgoing', 'text': original}])
+        if deferred != original:
+            original = deferred
+            result.update(reply=deferred, reply_parts=[deferred])
     gender = customer_address_gender(ev, customer, history)
     endearments=owner_sales.warmth_allowed(ev.get('text'),history)
     warm = customer_address_gender(ev, customer, history, use_store_default=False) == 'female' and endearments
@@ -10654,6 +10663,7 @@ def saved_checkout_reply(db, ev, reply, meta, payload=None):
 def saved_album_reply(db, ev, images, products, meta):
     result = product_albums.response(images, products, ev.get('text') or '')
     result = owner_result_surface(result, ev)
+    result = customer_copy.public_product_wording(result, products)
     layout = plan_sales_bubbles(result, result['reply'], [])
     result['reply_parts'] = layout['reply_parts']
     result['_planned_sales_layout'] = {'reply': result['reply'].strip(), 'parts': layout['reply_parts'], 'images': []}
@@ -10926,9 +10936,9 @@ def historical_ad_candidate(db, ev, products):
 
 def saved_ad_candidate_reply(db, ev, product):
     """Show the likely ad model for a yes/no check, without claiming identity."""
-    name = customer_copy.fact(product.get('product_name')).strip()
+    name = customer_copy.reply_category(product) or 'هالموديل'
     images = product_image_urls(product)
-    if not name or not images:
+    if not images:
         return None
     price_phrase = ''
     try:
@@ -10984,8 +10994,7 @@ def ad_candidate_confirmation(db, ev, products):
             {'ad_candidate_rejected': True, 'needs_human': True})
     complete_customer_product_link(db, ev['sender_id'], candidate, 'ad_candidate_confirmed',
                                    confidence=100, source='customer_confirmation')
-    name = customer_copy.fact(candidate.get('product_name')).strip()
-    reply = f'إي عيني، هذا {name} 🌷 شنو قياسج حتى أتأكدلج من المناسب؟'
+    reply = 'إي عيني 🌷 شنو قياسج حتى أتأكدلج من المناسب؟'
     return saved_checkout_reply(db, ev, reply,
                                 {'ad_candidate_confirmed': True, 'product_id': candidate['product_id']})
 
@@ -11090,6 +11099,8 @@ def checkout_requested(db, ev, result):
         return False
     if unresolved_condition(load_history(db, ev['sender_id'], limit=100), ev.get('text')):
         return False
+    if result.get('_local_reply') and result.get('_confirmed_child_cart'):
+        return True
     # Sending contact details in response to a checkout question completes that
     # step; it does not require the model to ask the same question again.
     text = str(ev.get("text") or "")
@@ -11396,6 +11407,89 @@ def booked_reply(db, text, confirmation):
     return confirmation
 
 
+def selected_child_cart(db, ev, product):
+    """Keep two explicitly selected ages/colors through a final short acceptance."""
+    if (not product or not product_variants.size_data(product.get('sizes'))['years']
+            or _stock_state(product) != 'available' or pending_product_choice(db, ev['sender_id'])):
+        return None
+    text = str(ev.get('text') or '')
+    if (not (is_confirmation(text) or contact_fields(text) or checkout_selection_answer(text))
+            or sales_strategy.purchase_block_reason(text) or unresolved_purchase_terms(text)):
+        return None
+    history = load_history(db, ev['sender_id'], limit=100)
+    if unresolved_condition(history, text):
+        return None
+    turn = []
+    for row in reversed(history):
+        if row['direction'] == 'incoming':
+            if turn:
+                break
+            continue
+        if row.get('text'):
+            turn.append({'text': row['text']})
+    turn.reverse()
+    if sales_context.continuation(text, {'last_staff_turn': turn}):
+        return None
+    purchase = next((index for index in range(len(history) - 1, -1, -1)
+                     if history[index]['direction'] == 'incoming'
+                     and sales_playbook.requested_quantity(history[index].get('text')) == 2
+                     and re.search(r'اريد|اخذ|احجز|ثبت', sales_strategy.normalized(history[index].get('text')))
+                     and not sales_strategy.purchase_block_reason(history[index].get('text'))
+                     and not re.search(r'[؟?]|(?:اذا|لو)\s+(?:اخذ|احجز|اريد)', sales_strategy.normalized(history[index].get('text')))), None)
+    if purchase is None:
+        return None
+    created = sales_engagement.timestamp(history[purchase].get('created_at'))
+    if not created or datetime.now(BAGHDAD_TZ) - created > timedelta(hours=24):
+        return None
+    color_words = '|'.join(re.escape(word) for word in product_variants.ALIASES)
+
+    def pairs(value):
+        result = {}
+        parts = re.split(r'[،,.\n]+|\s+و\s*(?=(?:ال)?(?:' + color_words + r')|[لب]?عمر|\d)',
+                         product_variants.normalize_age_words(value))
+        for part in parts:
+            ages, colors = product_variants.child_ages(part), product_variants.chosen_colors(part)
+            if len(ages) == len(colors) == 1:
+                result[ages[0]] = colors[0]
+        return result
+
+    ages, colors, allocated = set(), set(), {}
+    for row in history[purchase:]:
+        if row['direction'] != 'incoming':
+            continue
+        value = str(row.get('text') or '')
+        clean = sales_strategy.normalized(value)
+        if customer_declines_purchase(value):
+            return None
+        if re.search(r'(?:بس|فقط)\s*(?:قطع[ةه]\s*)?(?:وحد[ةه]|واحد[ةه]?)(?!\w)', clean):
+            return None
+        if re.search(r'[؟?]|شنو|شكد|متوفر|موجود|اكو|\b(?:لو|او)\b', clean):
+            continue
+        choices = product_variants.chosen_colors(value)
+        declared = product_variants.child_ages(value)
+        if (choices or declared) and re.search(r'\b(?:مو|لا|بدل|غيري|بدلي|عوفي)\b', clean):
+            return None  # Let the normal correction path resolve superseded choices.
+        if contact_fields(value) and not declared:
+            continue  # A delivery address containing a color is not a new garment choice.
+        ages.update(declared)
+        colors.update(choices)
+        allocated.update(pairs(value))
+    if len(ages) != 2 or not colors:
+        return None
+    if is_confirmation(text):
+        summary = pairs(re.sub(r'[؟?]', '', '\n'.join(item['text'] for item in turn)))
+        if any(age in summary and summary[age] != color for age, color in allocated.items()):
+            return None
+        if set(summary) == ages and set(summary.values()) == colors:
+            allocated = summary
+    if set(allocated) != ages or set(allocated.values()) != colors:
+        return None  # Never assign an unallocated color or omit one child.
+    items = [dict(product_id=product['product_id'], product_name=product['product_name'],
+                  color=color, size=product_variants.age_text(age), size_type='size', quantity=1)
+             for age, color in allocated.items()]
+    return None if order_line_error(items, [product]) else {'items': items}
+
+
 def resume_known_checkout(db, ev, product, customer, customer_products, context):
     """Complete a known cart from contact replies before asking a model again."""
     images = ev.get('_image_matches') or []
@@ -11408,12 +11502,17 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
         return None
     text = str(ev.get('text') or '')
     fields = contact_fields(text, customer)
+    child_cart = None
+    if (len(customer_products or []) == 1 and product
+            and db.execute("SELECT COUNT(DISTINCT product_id) FROM customer_product_interests WHERE sender_id=? "
+                           "AND COALESCE(status,'active')!='suggested'", (ev['sender_id'],)).fetchone()[0] == 1):
+        child_cart = selected_child_cart(db, ev, product)
     explicit_purchase = checkout_requested(db, ev, {'order': {}})
     last_turn = (context or {}).get('last_staff_turn') or []
     send_selected = (re.fullmatch(r'(?:اي|تمام) دزيهن[ .!،]*', sales_strategy.normalized(text))
                      and re.search(r'ثبت|حجز', sales_context.question_from_turn(last_turn) or ''))
     selection_answer = checkout_selection_answer(text) and recent_checkout_contact_action(db, ev['sender_id'])
-    if not fields and not is_confirmation(text) and not explicit_purchase and not selection_answer and not send_selected:
+    if not fields and not is_confirmation(text) and not explicit_purchase and not selection_answer and not send_selected and not child_cart:
         return None
     remaining = checkout_declaration(sales_strategy.normalized(text)).strip()
     if not remaining or re.search(r'[؟?]|شكد|شوكت|يمتى|متى|شلون|شنو|افحص|اكدر', remaining):
@@ -11421,6 +11520,10 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
     named = first_message_named_products(text, load_active_products(db))
     if named and any(item.get('product_id') != (product or {}).get('product_id') for item in named):
         return None  # Resolve a newly named product before restoring an older cart.
+    if child_cart:
+        return dict(reply='صار بعيوني.', reply_parts=['صار بعيوني.'], order=child_cart,
+                    create_order=False, requires_human=False, intent='order', _local_reply=True,
+                    _confirmed_child_cart=True, _single_message=True, _suppress_product_images=True)
     candidate = {'order': {}}
     restore_checkout_draft(db, ev, candidate, product)
     if not candidate['order'] and len(customer_products or []) > 1:
@@ -11541,6 +11644,8 @@ def collect_unanswered_event(db, ev, incoming_message_id):
             for url in active_images:
                 image_questions.setdefault(url, []).append(text)
         for item in message_attachments:
+            if item['type'] == 'sticker':
+                continue
             if item['type'] == 'image' and item['url'] in resolved_urls:
                 continue  # Its verified options are retained in conversation memory.
             if item['type'] == 'image' and resolved_before is not None:
@@ -11657,6 +11762,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     customer = get_or_create_customer(db, ev["sender_id"], ev["page_id"], ev["platform"])
     log(5, "CUSTOMER INTELLIGENCE", "Updated gender and purchase intent", customer_intelligence)
     log(5, "SAVE MSG", "Incoming message saved")
+    if message_type == 'sticker':
+        return {"sender_id": ev['sender_id'], "page_id": ev['page_id'],
+                "platform": ev['platform'], "reply": "", "send_image": False,
+                "meta": {"skipped": True, "reason": "non_product_sticker"}}
     if message_type == "image":
         image_flow(
             "03_saved_incoming_image",
@@ -11989,9 +12098,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 complete_customer_product_link(db, ev["sender_id"], product, "text", preserve_existing=True)
             customer_products = load_customer_products(db, ev["sender_id"])
         elif len(named_products) > 1:
-            names = ' لو '.join(dict.fromkeys(p.get('product_name') or p['product_id'] for p in named_products))
-            question = (f'تقصدين {names}؟' if len({str(p.get('product_name') or '').replace('ة', 'ه') for p in named_products}) > 1
-                        else f'عدنا أكثر من موديل باسم {names}؛ شنو اللون أو وصف الموديل اللي ظهر بالإعلان؟')
+            labels = [customer_copy.reply_category(p) for p in named_products]
+            question = ('تقصدين ' + ' لو '.join(labels) + '؟' if all(labels) and len(set(labels)) == len(labels)
+                        else 'أي قطعة تقصدين؟ دزيلي صورتها حتى أحددها إلج.')
             return saved_checkout_reply(db, ev, question, {'first_message_name_ambiguous': True})
 
     if ev.get('_catalog_discussion_id'):
@@ -12136,6 +12245,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         )
         if sales_playbook.assistant_identity_statement(first_reply_text):
             return silent_customer_handoff(db, ev)
+        first_reply_text = customer_copy.public_product_wording({'reply': first_reply_text}, products)['reply']
         first_reply_text = owner_sales.surface(first_reply_text, _customer_gender_from_db(db, ev['sender_id']), ev.get('text'), store_id=current_store_id())
         if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
             return {"sender_id": ev["sender_id"], "page_id": ev["page_id"],
@@ -12753,6 +12863,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                 "meta": {"skipped": True, "reason": "ai_disabled_before_reply_save"}}
     log(14, "SAVE REPLY", "Saving outgoing reply to database...")
     ai_result = owner_result_surface(dict(ai_result, reply=reply), ev, customer, history)
+    related_suggestion_ids = named_related_suggestions(ai_result['reply'], matched_product, products)
+    ai_result = customer_copy.public_product_wording(ai_result, [*products, matched_product])
     reply = ai_result['reply']
     ai_result, reply = format_customer_reply(ai_result, reply,
         customer=customer if not order_created else None, history=history)
@@ -12771,7 +12883,6 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     outgoing_image_urls = sales_layout['image_urls']
     if sales_layout['needs_rewrite']:
         log(14, "SALES LAYOUT", "Reply needs further layout review", sales_layout['rewrite_reasons'])
-    related_suggestion_ids = named_related_suggestions(reply, matched_product, products)
     after_images=sales_layout.get('post_image_parts') or []
     before_images=reply_parts[:-len(after_images)] if after_images else reply_parts
     for index, part in enumerate(before_images):
@@ -14525,7 +14636,7 @@ def _incoming_media_entries(row):
     if not isinstance(entries, list) or not entries:
         entries = message_media(row)
     return [dict(item) for item in entries if isinstance(item, dict)
-            and isinstance(item.get('url'), str) and item.get('type') in ('image', 'audio', 'video', 'file')]
+            and isinstance(item.get('url'), str) and item.get('type') in ('image', 'audio', 'video', 'file', 'sticker')]
 
 
 def _archive_incoming_message_media(db, message_id, index=None, store_id=None):
@@ -14538,23 +14649,33 @@ def _archive_incoming_message_media(db, message_id, index=None, store_id=None):
             return 0
         entries = _incoming_media_entries(row)
         archived = 0
+        changed = False
         for position, item in enumerate(entries):
             if index is not None and position != index:
                 continue
             filename = str(item.get('local_file') or '')
             if (_incoming_media_filename.fullmatch(filename)
                     and os.path.isfile(os.path.join(INCOMING_MEDIA_DIR, filename))):
+                path = os.path.join(INCOMING_MEDIA_DIR, filename)
+                if item['type'] == 'image' and os.path.getsize(path) <= 65536:
+                    with open(path, 'rb') as saved:
+                        if known_sticker(saved.read()):
+                            item['type'] = 'sticker'
+                            changed = True
                 continue
             if not inbound_media.trusted_source(item['url'], os.environ.get('CHATWOOT_BASE_URL', '')):
                 continue
             try:
-                downloaded = inbound_media.fetch(item['url'], item['type'], os.environ.get('CHATWOOT_BASE_URL', ''))
+                hint = 'image' if item['type'] == 'sticker' else item['type']
+                downloaded = inbound_media.fetch(item['url'], hint, os.environ.get('CHATWOOT_BASE_URL', ''))
             except Exception as exc:
                 app.logger.warning('Incoming media retrieval failed: %s', type(exc).__name__)
                 continue
             if not downloaded:
                 continue
             content, kind, suffix, mime = downloaded
+            if item['type'] == 'sticker' or (kind == 'image' and known_sticker(content)):
+                kind = 'sticker'
             os.makedirs(INCOMING_MEDIA_DIR, exist_ok=True)
             filename = secrets.token_hex(16) + suffix
             path = os.path.join(INCOMING_MEDIA_DIR, filename)
@@ -14562,9 +14683,12 @@ def _archive_incoming_message_media(db, message_id, index=None, store_id=None):
                 output.write(content)
             item.update(type=kind, local_file=filename, mime=mime)
             archived += 1
-        if archived:
+        if archived or changed:
             db.execute('UPDATE messages SET media_json=? WHERE id=? AND store_id=?',
                        (json.dumps(entries, ensure_ascii=False), message_id, store_id))
+            if entries and all(item['type'] == 'sticker' for item in entries) and not row['text']:
+                db.execute("UPDATE messages SET message_type='sticker',image_url=NULL WHERE id=? AND store_id=?",
+                           (message_id, store_id))
             db.commit()
         return archived
 
@@ -15294,6 +15418,7 @@ def api_ask_ai(sender_id):
                         "failure_reason": reason}), 502
     if ai_result.get("requires_human") or is_ai_handoff_reply(ai_result.get("reply")):
         return jsonify({"reply": "", "intent": "human_review"})
+    ai_result = customer_copy.public_product_wording(ai_result, [*products, matched_product])
     if allow_empty:
         ai_reply_draft_table(db)
         db.execute("INSERT OR REPLACE INTO ai_reply_drafts VALUES (?,?,?,?,?)",

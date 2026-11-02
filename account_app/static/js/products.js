@@ -12,6 +12,7 @@ const fields = {
   product_id: 'productId',
   audience: 'productAudience', product_type: 'productType', size_system: 'productSizeSystem', recommendation_notes: 'productRecommendationNotes',
   product_name: 'productName',
+  reply_category: 'productReplyCategory',
   order_name: 'productOrderName',
   price: 'productPrice',
   status: 'productStatus',

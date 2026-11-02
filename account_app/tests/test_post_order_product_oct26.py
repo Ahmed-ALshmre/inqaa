@@ -9,7 +9,7 @@ from account_app.tests import test_audit_orders as fixtures
 SET = dict(product_id='P010', product_name='طقم بناتي', category='طقم', price='13000',
            stock='متوفر', status='active', colors='اسود', sizes='2 إلى 7 سنوات',
            image_url='https://images.test/set.jpg')
-DRESS = dict(product_id='P017', product_name='فستان الاميرات', category='فستان', price='12000',
+DRESS = dict(product_id='P017', product_name='فستان الاميرات', reply_category='الفستان', category='فستان', price='12000',
              stock='متوفر', status='active', colors='اخضر وردي', sizes='2 إلى 7 سنوات',
              image_url='https://images.test/dress.jpg')
 
@@ -74,7 +74,8 @@ class PostOrderProductTests(unittest.TestCase):
         with patch.object(self.m, 'match_customer_image_with_catalog', return_value=dict(product_found=True, product_id='P017')) as vision:
             result, model = self.handle('إذا موجود من هل النفنوف اخضر اسود خلي اشوفه', 'https://images.test/customer-dress.jpg')
         vision.assert_called_once()
-        self.assertIn('فستان الاميرات', result['reply'])
+        self.assertIn('الفستان', result['reply'])
+        self.assertNotIn('الاميرات', result['reply'])
         self.assertNotIn('طقم', result['reply'])
         self.assertEqual(model.call_args.args[5]['product_id'], 'P017')
         self.assertEqual(model.call_args.args[0]['_post_order']['product_id'], 'P010')
@@ -92,7 +93,8 @@ class PostOrderProductTests(unittest.TestCase):
             result = self.m.process_webhook(self.db, {}, use_debounce=False)
         vision.assert_called_once()
         self.assertEqual(model.call_args.args[5]['product_id'], 'P017')
-        self.assertIn('فستان الاميرات', result['reply'])
+        self.assertIn('الفستان', result['reply'])
+        self.assertNotIn('الاميرات', result['reply'])
         self.assert_order_unchanged()
 
     def test_followup_keeps_new_photo_and_shipment_question_uses_saved_order(self):

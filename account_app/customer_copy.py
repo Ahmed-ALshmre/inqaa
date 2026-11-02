@@ -67,6 +67,81 @@ def chat_wording(text):
     return chat_money(text).replace('الهاتف', 'الموبايل')
 
 
+def reply_category(product):
+    return fact((product or {}).get('reply_category')).strip()
+
+
+def public_product_wording(result, products):
+    """Render catalog titles only in outgoing prose, after image/order resolution."""
+    titles = {}
+    protected = set()
+    seen_products = set()
+    for product in products:
+        if not product:
+            continue
+        pid = product.get('product_id')
+        if pid and pid in seen_products:
+            continue
+        seen_products.add(pid)
+        label = reply_category(product)
+        fabric = fact(product.get('fabric'), 'fabric')
+        # A short catalog title can also be an actual fact (e.g. "دانتيل").
+        # Keep facts and owner-entered labels intact when a different model's
+        # internal title happens to share their wording.
+        for value in (label, fabric,
+                      fact(product.get('colors'), 'colors'), fact(product.get('sizes'), 'sizes')):
+            protected.update(normalized(part).strip() for part in re.split(r'[،,\n]+', value)
+                             if part.strip())
+        protected.update(normalized(word) for word in fabric.split())
+        name = normalized(fact(product.get('product_name'))).strip()
+        if len(name) >= 2 and any(c.isalpha() for c in name):
+            if name in titles and titles[name] != label:
+                label = ''
+            titles[name] = label
+    if not titles:
+        return result
+    patterns = []
+    names = sorted(titles, key=len, reverse=True)
+    for name in names:
+        words = [re.escape(word.removeprefix('ال')) if word.startswith('ال') and len(word) > 3
+                 else re.escape(word) for word in name.split()]
+        patterns.append(r'(?:هال|ال)?' + r'\s+(?:ال)?'.join(words))
+    pattern = re.compile(r'(?<!\w)([وفب]?)(?:' + '|'.join(
+        f'(?P<n{i}>{part})' for i, part in enumerate(patterns)) + r')(?!\w)')
+    labels = [titles[name] for name in names]
+    protected_pattern = re.compile(r'(?<!\w)[وفب]?(?:' + '|'.join(
+        r'(?:ال)?' + re.escape(value.removeprefix('ال'))
+        for value in sorted(protected, key=len, reverse=True)) + r')(?!\w)') if protected else None
+
+    def render(text):
+        clean, pos = _normalized_positions(text)
+        protected_spans = [m.span() for m in protected_pattern.finditer(clean)] if protected_pattern else []
+        pieces, end = [], 0
+        for m in pattern.finditer(clean):
+            if any(start <= m.start() and m.end() <= stop for start, stop in protected_spans):
+                continue
+            start, stop = pos[m.start()], pos[m.end()-1] + 1
+            tail = text[stop:]
+            prefix = m.group(1)
+            before = clean[:m.start()].rstrip()
+            label = labels[int(m.lastgroup[1:])] or ('الموديل' if before.endswith('هذا') else 'هالموديل')
+            # A price or fabric answer already identifies its subject.
+            redundant = re.match(r'^[ \t،,:]*(?=(?:قماش(?:ه|ها)|سعر(?:ه|ها)|ألوانه|قياساته)\b)', tail)
+            if not prefix and redundant and not before.endswith(('هذا', 'هاي', 'هذه', 'عن')):
+                label = ''
+                stop += redundant.end()
+            pieces.extend((text[end:start], prefix + label))
+            end = stop
+        return ''.join(pieces) + text[end:]
+
+    updated = dict(result, reply=render(result.get('reply') or ''))
+    if isinstance(result.get('reply_parts'), list):
+        updated['reply_parts'] = [render(part) for part in result['reply_parts'] if isinstance(part, str)]
+    if result.get('_post_image_question'):
+        updated['_post_image_question'] = render(result['_post_image_question'])
+    return updated
+
+
 def _fabric_word(word):
     candidates=(word,word[1:] if word.startswith('و') else word)
     return any(value in FABRIC_WORDS or (value.endswith('ه') and value[:-1]+'ة' in FABRIC_WORDS)

@@ -12,6 +12,11 @@ from urllib.parse import urlparse
 import requests
 from flask import jsonify, request
 
+try:
+    from . import media
+except ImportError:
+    import media
+
 
 def enabled():
     return os.environ.get('MESSAGING_PROVIDER', 'chatwoot').lower() == 'chatwoot'
@@ -150,6 +155,13 @@ def install(module):
         for attachment in data.get('attachments') or []:
             if isinstance(attachment, dict) and attachment.get('data_url'):
                 kind = attachment.get('file_type', 'file')
+                sticker = media.sticker_attachment(attachment, data.get('content_attributes'))
+                if not sticker and kind == 'image' and media.sticker_candidate(attachment):
+                    downloaded = module.inbound_media.fetch(attachment['data_url'], 'image',
+                                                           configuration()['chatwoot_api_url'])
+                    sticker = bool(downloaded and media.known_sticker(downloaded[0]))
+                if sticker:
+                    kind = 'sticker'
                 attachments.append({'type': kind, 'payload': {'url': attachment['data_url']}})
         ad_context = module.ad_attribution.extract(data)
         body = {'_ad_context': ad_context, 'object': platform if platform != 'facebook' else 'page', 'entry': [{

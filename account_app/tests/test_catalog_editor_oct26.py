@@ -3,7 +3,7 @@ import copy
 import io
 import json
 import unittest
-from account_app import catalog_profile as profile, product_links, product_variants
+from account_app import catalog_profile as profile, customer_copy, product_links, product_variants
 from account_app.tests import test_product_editor_links_oct24 as fixture
 
 
@@ -15,6 +15,39 @@ def dress(pid, **fields):
 
 
 class CatalogProfileTests(unittest.TestCase):
+    def test_fabric_reply_omits_internal_title_and_preserves_order(self):
+        product = dict(product_id='P1', product_name='تراك ولادي تطعيم', reply_category='التراك الولادي')
+        first = 'يا هلا 🌸 تراك ولادي تطعيم قماشه تركي شتوي وبيه ليكرا.'
+        second = 'القطعة بـ 12 ألف.'
+        result = dict(reply=first+'\n'+second, reply_parts=[first,second], order=dict(items=[product]))
+        out = customer_copy.public_product_wording(result, [product])
+        self.assertEqual(out['reply_parts'], ['يا هلا 🌸 قماشه تركي شتوي وبيه ليكرا.',second])
+        self.assertEqual(out['reply'], '\n'.join(out['reply_parts']))
+        self.assertEqual(out['order']['items'][0]['product_name'], 'تراك ولادي تطعيم')
+
+    def test_manual_label_or_generic_reference_for_old_product(self):
+        product = dict(product_name='قميص وردة', product_id='P1', reply_category='القميص')
+        result = dict(reply='هذا القميص الوردة متوفر؟')
+        self.assertEqual(customer_copy.public_product_wording(result,[product])['reply'],'هذا القميص متوفر؟')
+        del product['reply_category']
+        self.assertEqual(customer_copy.public_product_wording(result,[product])['reply'],'هذا الموديل متوفر؟')
+
+    def test_catalog_title_collision_does_not_erase_fabric_color_or_size_facts(self):
+        products = [
+            dict(product_id='A', product_name='دانتيل', fabric='دانتيل تركي', colors='ماروني', sizes='XL'),
+            dict(product_id='B', product_name='ماروني'),
+            dict(product_id='C', product_name='XL'),
+        ]
+        reply = 'قماشه دانتيل، الماروني متوفر وقياس XL موجود.'
+        result = customer_copy.public_product_wording(dict(reply=reply), products)
+        self.assertEqual(result['reply'], reply)
+
+    def test_manual_category_survives_another_models_internal_title(self):
+        products = [dict(product_id='A', product_name='تراك تطعيم', reply_category='التراك الولادي'),
+                    dict(product_id='B', product_name='تراك ولادي')]
+        result = customer_copy.public_product_wording(dict(reply='التراك الولادي متوفر.'), products)
+        self.assertEqual(result['reply'], 'التراك الولادي متوفر.')
+
     def test_age_range_keeps_exact_months_and_uses_existing_variant_checks(self):
         p = profile.normalize(dress('A', age_min_months=6, age_max_months=18), strict=True)
         self.assertEqual(p['sizes'], '6 إلى 18 أشهر')
@@ -122,7 +155,7 @@ class CatalogEditorApiTests(unittest.TestCase):
     saved = fixture.ProductEditorLinkTests.saved
 
     def test_new_fields_round_trip_with_canonical_age_and_old_facts(self):
-        data = dress('A', lining='مبطن بالكامل', order_name='طلب خاص')
+        data = dress('A', lining='مبطن بالكامل', order_name='طلب خاص', reply_category='الفستان')
         self.assertEqual(self.create('A', **{k:v for k,v in data.items() if k != 'product_id'}).status_code,201)
         saved = self.saved()['A']
         for key in profile.FIELDS:
@@ -133,6 +166,9 @@ class CatalogEditorApiTests(unittest.TestCase):
         self.assertEqual(listing['lining'],'مبطن بالكامل')
         self.client.put('/api/products/manage/A',headers=self.headers,json=dict(occasions=['eid']))
         self.assertEqual(self.saved()['A']['order_name'],'طلب خاص')
+        self.assertEqual(self.saved()['A']['reply_category'],'الفستان')
+        self.assertEqual(self.client.put('/api/products/manage/A',headers=self.headers,json={'reply_category':''}).status_code,200)
+        self.assertEqual(self.saved()['A']['reply_category'],'')
 
     def test_invalid_create_or_update_does_not_write_or_lose_legacy_data(self):
         self.create('A', sizes='38، 42', notes='معلومة قديمة')
@@ -195,7 +231,7 @@ class CatalogEditorApiTests(unittest.TestCase):
         parser=Parser();parser.feed(page.text)
         self.assertEqual(len(parser.ids),len(set(parser.ids)))
         self.assertTrue({'panel-basics','panel-fit','panel-knowledge','panel-media','panel-links',
-                         'productAudience','productGroups','previewRecommendationsBtn'}.issubset(parser.ids))
+                         'productReplyCategory','productAudience','productGroups','previewRecommendationsBtn'}.issubset(parser.ids))
         self.assertNotIn('databaseImportInput',parser.ids)
 
 

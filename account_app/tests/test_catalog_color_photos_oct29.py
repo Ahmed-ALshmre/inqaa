@@ -105,7 +105,7 @@ class CatalogColorPhotoTests(unittest.TestCase):
         self.offer_two_models()
         result,model=self.process('ممكن اشوف صور الوردي او الاحمر\nدزيلي صورهن عيني')
         self.assertEqual(model.call_count,0,result);self.assertEqual(result.get('image_urls'),self.urls,result)
-        self.assertIn('فستان الاميرات',result['reply']);self.assertNotIn('طقم بناتي',result['reply'])
+        self.assertNotIn('فستان الاميرات',result['reply']);self.assertIn('الوردي',result['reply']);self.assertNotIn('طقم بناتي',result['reply'])
 
     def test_explicit_all_photos_followup_keeps_both_offered_models(self):
         self.offer_two_models()

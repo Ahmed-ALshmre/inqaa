@@ -99,6 +99,7 @@ def normalize_age_words(value):
     words = {'ثلاث': 3, 'ثلاثه': 3, 'اربع': 4, 'اربعه': 4, 'خمس': 5, 'خمسه': 5,
              'ست': 6, 'سته': 6, 'سبع': 7, 'سبعه': 7, 'ثمان': 8, 'ثماني': 8,
              'ثمانيه': 8, 'تسع': 9, 'تسعه': 9, 'عشر': 10, 'عشره': 10}
+    words.update({word[:-1] + 'ة': number for word, number in list(words.items()) if word.endswith('ه')})
     text = re.sub(r'((?:قياس|عمر(?:ه|ها)?)\s+)ال(سنتين|سنتان|سن[هة]|شهرين|شهر)(?!\w)',r'\1\2',text)
     text = re.sub(r'(?<!\w)(و?)(?:ال)?(' + '|'.join(sorted(words, key=len, reverse=True)) +
                   r')(?=\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)(?!\w))',
