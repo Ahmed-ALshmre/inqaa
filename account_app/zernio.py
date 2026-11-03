@@ -308,10 +308,7 @@ def product_event(module, db, event, products):
             or module.pending_product_choice(db, sender_id)):
         source['resolution'] = 'customer_choice'
         return result
-    candidates = [product for product in products
-                  if product.get('store_id', store) == store and any(
-                      context.get(key) and str(product.get(key) or '').strip() == str(context[key]).strip()
-                      for key in ('ad_id', 'ref'))]
+    candidates = module.ad_attribution.product_candidates(products, context, store)
     if len(candidates) != 1:
         if not candidates and _unmapped_referral_belongs_to_image_turn(module, db, sender_id, text, captured):
             source['resolution'] = 'historical'

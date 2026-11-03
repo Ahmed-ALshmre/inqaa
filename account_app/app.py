@@ -1498,7 +1498,7 @@ def reset_request_store_context(error=None):
 
 
 PRODUCT_FIELDS = (
-    "store_id", "product_id", "ref", "ad_id", "product_name", "keywords", "category",
+    "store_id", "product_id", "ref", "ad_id", "ad_ids", "product_name", "keywords", "category",
     "description", "visual_description", "price", "offer", "colors", "sizes",
     "stock", "stock_quantity", "fabric", "style", "delivery", "image_url",
     "lining", "transparency", "stretch", "closure", "measurements", "fit_notes",
@@ -1514,6 +1514,7 @@ def _normalize_product(raw_product):
     product["product_id"] = str(product.get("product_id") or "").strip()
     product["store_id"] = _safe_store_id(product.get("store_id") or DEFAULT_STORE_ID)
     product["status"] = str(product.get("status") or "active").strip() or "active"
+    product['ad_ids'] = ad_attribution.normalize_product_ids(product.get('ad_ids'))
     product["image_colors"] = _normalize_product_image_colors(
         product.get("image_colors"), product.get("image_url")
     )
@@ -6767,21 +6768,11 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
     match_method = None
     image_result = None
 
-    if ref and not image_url:
-        matched = next((p for p in products if p.get("ref") == ref), None)
-        if matched:
-            match_method = "ref"
-
-    if not matched and ad_id and not image_url:
-        ad_id_str = str(ad_id).strip()
-        matched = next(
-            (p for p in products
-             if str(p.get("ad_id") or "").strip() == ad_id_str),
-            None,
-        )
-        if matched:
-            match_method = "ad_id"
-            print(f"[Product] Matched via ad_id={ad_id} → {matched.get('product_name')}", flush=True)
+    if not image_url:
+        advertised = ad_attribution.product_candidates(products, ev, current_store_id())
+        if len(advertised) == 1:
+            matched = advertised[0]
+            match_method = 'ad_id' if ad_id else 'ref'
 
     if text and not image_url:
         text_product = _text_match_product(text, products)
@@ -10835,6 +10826,37 @@ def pending_image_policy_reply(db, ev, meta):
     return result
 
 
+def recover_mapped_ad_review(db, ev, products):
+    """A newly saved mapping resolves only its old ad review, never staff work."""
+    if ev.get('image_url') or ev.get('attachments') or ev.get('_ad_product_unresolved'):
+        return False
+    candidates = ad_attribution.product_candidates(products, ev, current_store_id())
+    if len(candidates) != 1:
+        return False
+    target = candidates[0]
+    explicit = customer_product_target(ev.get('text'), products)
+    if explicit and explicit.get('product_id') != target['product_id']:
+        return False
+    creative = (ad_attribution.load(db, ev['sender_id']) or {}).get('image_url') or ''
+    reviews = db.execute('''SELECT id FROM human_reviews WHERE sender_id=? AND status='pending'
+        AND (lower(reason) LIKE '%ad product unresolved%' OR
+             (reason LIKE 'Image analysis service failure:%' AND image_url=? AND image_url<>''))''',
+        (ev['sender_id'], creative)).fetchall()
+    if not reviews:
+        return False
+    complete_customer_product_link(db, ev['sender_id'], target, 'ad_id', source='ad_ref',
+                                   resume_ai=False, close_reviews=False)
+    for review in reviews:
+        db.execute("UPDATE human_reviews SET status='linked',replied_at=? WHERE id=?",
+                   (now_baghdad_iso(), review['id']))
+    db.commit()
+    pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (ev['sender_id'],)).fetchone()
+    if (pause and pause['reason'] in {'image_unresolved', 'pending_image_review'}
+            and not has_pending_human_review(db, ev['sender_id']) and is_ai_enabled(db)):
+        set_customer_ai_enabled(db, ev['sender_id'], True)
+    return True
+
+
 def pending_image_service_followup(db, ev, products):
     """Keep an image outage in human review without replaying the old photo."""
     if ev.get('image_url') or any(item['type'] == 'image' for item in
@@ -11775,6 +11797,16 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             ref=ev.get("ref"),
         )
 
+    # A catalog fix can recover an automatic ad pause on a NEW incoming turn.
+    # Manual pauses and unrelated reviews continue to own the conversation.
+    if is_ai_enabled(db) and not is_customer_ai_enabled(db, ev['sender_id']):
+        pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (ev['sender_id'],)).fetchone()
+        if pause and pause['reason'] in {'image_unresolved', 'pending_image_review'}:
+            repair_products = load_active_products(db)
+            repair_event = zernio.product_event(sys.modules[__name__], db, ev, repair_products)
+            if recover_mapped_ad_review(db, repair_event, repair_products):
+                ev = repair_event
+
     # إيقاف AI العام/للمحادثة يجب أن يمنع أي رد تلقائي، بما فيه ترحيب الصور.
     if not is_ai_enabled(db) or not is_customer_ai_enabled(db, ev["sender_id"]):
         reason = "ai_globally_disabled" if not is_ai_enabled(db) else "ai_disabled_for_conversation"
@@ -12007,10 +12039,11 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             {'cancellation_requested': True, 'needs_human': True, 'human_review_id': review_id})
     if sales_recovery.disputed_product_photo(ev.get('text')):
         return resolve_product_choice(db, ev, products)
+    ev = zernio.product_event(sys.modules[__name__], db, ev, products)
+    recover_mapped_ad_review(db, ev, products)
     pending_service_reply = pending_image_service_followup(db, ev, products)
     if pending_service_reply:
         return pending_service_reply
-    ev = zernio.product_event(sys.modules[__name__], db, ev, products)
     if ev.get('_ad_product_unresolved'):
         likely = historical_ad_candidate(db, ev, products)
         if not likely:
@@ -12042,13 +12075,14 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                       else 'Ad product unresolved: no reliable catalog match for referral')
             review_id = create_human_review(db, dict(ev, image_url=creative), reason,
                                             build_product_vision_candidates(products, limit=20))
-            reply = ('يا هلا عيني 🌷 الإعلان اللي جيتي منه وصلني. خليت الموديل للمراجعة '
-                     'حتى نطيج سعره الصحيح، وما يحتاج تدزين صورته.')
-            return saved_checkout_reply(db, ev, reply,
-                                        {'ad_product_unresolved': True,
-                                         'human_review_id': review_id,
-                                         'reason': ev['_ad_source']['resolution'],
-                                         'needs_human': True})
+            # Resolve in the staff inbox silently; never expose attribution or
+            # provider failures to a shopper or ask them to identify a known ad.
+            return {'sender_id': ev['sender_id'], 'page_id': ev.get('page_id'),
+                    'platform': ev.get('platform'), 'reply': '', 'send_image': False,
+                    'meta': {'ad_product_unresolved': True,
+                             'human_review_id': review_id,
+                             'reason': ev['_ad_source']['resolution'],
+                             'needs_human': True}}
     if not latest_order and message_type != "image":
         choice_reply = resolve_product_choice(db, ev, products)
         if choice_reply:
@@ -12084,9 +12118,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         )
         # A current ad is fresh evidence; otherwise retain a reliable selection.
         if contextual_opening:
-            advertised = [p for p in products if any(
-                ev.get(key) and str(p.get(key) or '').strip() == str(ev[key]).strip()
-                for key in ('ref', 'ad_id'))]
+            advertised = ad_attribution.product_candidates(products, ev, current_store_id())
             if len(advertised) == 1 and (not named_products or advertised[0] in named_products):
                 named_products = advertised
             elif not advertised and known_focus:
@@ -12112,7 +12144,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
                   if selection else customer_product_target(ev.get("text"), products))
         if ev.get('_first_message_product_id'):
             target = next(p for p in products if p['product_id'] == ev['_first_message_product_id'])
-        ad_matches = [p for p in products if any(ev.get(key) and str(p.get(key) or "").strip() == str(ev[key]).strip() for key in ("ref", "ad_id"))]
+        ad_matches = ad_attribution.product_candidates(products, ev, current_store_id())
         if not target and not selection and len(ad_matches) == 1:
             target = ad_matches[0]
         if target and (not active_binding or target.get("product_id") != active_binding.get("product_id")):
@@ -12279,15 +12311,13 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         image_flow("04_before_image_matching", sender_id=ev["sender_id"], image_url=ev.get("image_url"))
         matched_product, match_method, image_result = match_product(db, ev, products)
         if not matched_product and len(extract_media({'attachments': ev.get('attachments', [])}, image_url=ev.get('image_url') or '')) <= 1:
-            advertised = [p for p in products if any(ev.get(key) and
-                str(p.get(key) or '').strip() == str(ev[key]).strip() for key in ('ad_id', 'ref'))]
+            advertised = ad_attribution.product_candidates(products, ev, current_store_id())
             binding = get_active_product_binding(db, ev['sender_id']) or {}
             if not advertised and binding.get('source') in {'ad_id', 'ref', 'ad_ref', 'zernio_ad', 'ad_referral'}:
                 advertised = [p for p in products if p['product_id'] == binding.get('product_id')]
             if not advertised and (not binding or binding.get('source') == 'ad_ref'):
                 attribution = ad_attribution.load(db, ev['sender_id']) or {}
-                advertised = [p for p in products if any(attribution.get(key) and
-                    str(p.get(key) or '').strip() == str(attribution[key]).strip() for key in ('ad_id', 'ref'))]
+                advertised = ad_attribution.product_candidates(products, attribution, current_store_id())
             if len(advertised) == 1:
                 matched_product, match_method = advertised[0], 'ad_id'
                 image_result = {'available': _stock_state(matched_product) == 'available',
@@ -14153,6 +14183,11 @@ def api_import_products():
                        for value in item["sales_cues"])):
             return jsonify({"error": f"عبارات المنتج رقم {idx} غير صحيحة"}), 400
         try:
+            item = dict(item, ad_ids=ad_attribution.normalize_product_ids(item.get('ad_ids'), strict=True))
+            primary = ad_attribution.normalize_product_ids(item.get('ad_id'), strict=True)
+            if len(primary) > 1:
+                raise ValueError('معرف الإعلان الرئيسي يجب أن يكون معرفاً واحداً.')
+            item['ad_id'] = primary[0] if primary else ''
             product = _normalize_product(catalog_profile.normalize(item, strict=True))
         except ValueError as exc:
             return jsonify({"error": f"بيانات المنتج رقم {idx}: {exc}"}), 400
@@ -14166,6 +14201,7 @@ def api_import_products():
     imported = {item["product_id"]: item for item in normalized}
     for product in normalized:
         try:
+            ad_attribution.validate_product_ids(product, normalized)
             product["related_product_ids"] = product_links.validate_related_ids(
                 product["related_product_ids"], product["product_id"], sid, normalized)
         except ValueError as exc:
@@ -15682,6 +15718,11 @@ def _product_from_request(data, existing=None):
     product["store_id"] = _safe_store_id(product.get("store_id") or current_store_id())
     product["product_name"] = str(product.get("product_name") or "").strip()
     product["status"] = str(product.get("status") or "active").strip() or "active"
+    product['ad_ids'] = ad_attribution.normalize_product_ids(product.get('ad_ids'), strict=True)
+    primary = ad_attribution.normalize_product_ids(product.get('ad_id'), strict=True)
+    if len(primary) > 1:
+        raise ValueError('اكتبي معرفاً واحداً في المعرف الرئيسي، وبقية المعرفات في حقل الإعلانات الإضافية.')
+    product['ad_id'] = primary[0] if primary else ''
     product["image_url"] = _normalize_product_image_value(product.get("image_url"))
     product["image_colors"] = _normalize_product_image_colors(
         product.get("image_colors"), product["image_url"]
@@ -15730,6 +15771,7 @@ def api_create_product():
         if any(p.get("product_id") == product["product_id"] and p.get("store_id") == product["store_id"] for p in products):
             return jsonify({"error": "product_id already exists"}), 409
         try:
+            ad_attribution.validate_product_ids(product, products)
             product["related_product_ids"] = product_links.validate_related_ids(
                 product["related_product_ids"], product["product_id"], product["store_id"], products)
         except ValueError as exc:
@@ -15799,6 +15841,7 @@ def api_update_product(product_id):
                 if not updated.get("product_name"):
                     return jsonify({"error": "product_name required"}), 400
                 try:
+                    ad_attribution.validate_product_ids(updated, products)
                     updated["related_product_ids"] = product_links.validate_related_ids(
                         updated["related_product_ids"], product_id, updated["store_id"], products)
                 except ValueError as exc:

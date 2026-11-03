@@ -160,7 +160,7 @@ const document={getElementById(id){if(!nodes.has(id))nodes.set(id,new Element())
 const sandbox={document,window:{location:{search:'?store_id=default'}},URLSearchParams,Set,console,confirm:()=>true};vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),sandbox);
 vm.runInContext(`allProducts=[
-{product_id:'A',store_id:'default',product_name:'الأصل',related_product_ids:['B'],sales_cues:['high_demand'],stock_quantity:0,status:'active'},
+{product_id:'A',store_id:'default',product_name:'الأصل',related_product_ids:['B'],sales_cues:['high_demand'],ad_ids:['120251751355980095','120251751385940095'],stock_quantity:0,status:'active'},
 {product_id:'B',store_id:'default',product_name:'موديل <img onerror=x>',category:'فساتين',sizes:'44',status:'active'},
 {product_id:'C',store_id:'default',product_name:'الثالث',sizes:'46',status:'inactive'},
 {product_id:'X',store_id:'other',product_name:'متجر آخر',status:'active'}];editProduct('A');`,sandbox);
@@ -171,8 +171,13 @@ document.getElementById('relatedProductsSearch').value='46';vm.runInContext('ren
 const row=document.getElementById('relatedProductsOptions').children[0];row.children[0].checked=true;row.children[0].listeners.change();
 let data=JSON.parse(vm.runInContext('JSON.stringify(collectPayload())',sandbox));
 assert.deepStrictEqual(data.related_product_ids,['B','C']);assert.deepStrictEqual(data.sales_cues,['high_demand']);
+assert.deepStrictEqual(data.ad_ids,['120251751355980095','120251751385940095']);
+document.getElementById('productAdIds').value='120251751355980095،120251751355980095\n120251751385940095';
+data=JSON.parse(vm.runInContext('JSON.stringify(collectPayload())',sandbox));
+assert.deepStrictEqual(data.ad_ids,['120251751355980095','120251751385940095']);
 vm.runInContext('newProduct()',sandbox);data=JSON.parse(vm.runInContext('JSON.stringify(collectPayload())',sandbox));
 assert.deepStrictEqual(data.related_product_ids,[]);assert.deepStrictEqual(data.sales_cues,[]);
+assert.deepStrictEqual(data.ad_ids,[]);
 '''
         result = subprocess.run([shutil.which('node'), '-e', script, str(root / 'static/js/products.js')],
                                 capture_output=True, text=True, encoding='utf-8', timeout=15)
