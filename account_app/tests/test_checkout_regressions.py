@@ -206,7 +206,7 @@ class CheckoutRegressionTests(unittest.TestCase):
         created, reply = self.m.create_order_if_valid(self.db, self.sender, result, CATALOG[0])
         self.assertTrue(created)
         self.assertEqual(reply, self.m.DEFAULT_ORDER_CONFIRMATION_TEXT)
-        self.assertIn('يرجى فحص الطلب', reply)
+        self.assertIn(self.m.DEFAULT_ORDER_CONFIRMATION_TEXT, reply)
         self.assertEqual(self.m.approved_reply_parts(result, reply), [reply])
 
     def test_new_contact_triggers_checkout_despite_false_model_flag(self):

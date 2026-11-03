@@ -16,7 +16,7 @@ PRODUCT_KNOWLEDGE_FIELDS = (
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
     'fabric_feel', 'cut', 'season', 'care_instructions',
 )
-EVIDENCE_VERSION = 7
+EVIDENCE_VERSION = 8
 
 
 def browse_request(text):
@@ -93,6 +93,8 @@ def question_from_turn(turn):
 
 def context_evidence(text, turn):
     clean = normalized(product_variants.normalize_size_words(text))
+    if re.search(r'(?:الاثنين|الثنين)\s+سوا', clean):
+        return True
     if re.search(r'نفس\s+(?:اللون|الون|لون|الصوره|الصورة)|^(?:نكمل|كملي)$', clean):
         return True
     if re.search(r'(?:خلي|اعتمدي|بدلي)\s*(?:قياس\s*)?\d{2}(?!\d)', clean):

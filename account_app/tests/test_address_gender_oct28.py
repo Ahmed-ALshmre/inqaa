@@ -22,6 +22,9 @@ class AddressEvidenceTests(unittest.TestCase):
         for text, gender in [('خاطبني بصيغة المؤنث', 'female'), ('خاطبيني كمذكر', 'male'), ('أنا أنثى', 'female')]:
             self.assertEqual(owner_sales.explicit_gender(text), gender)
         self.assertEqual(owner_sales.address_gender('Hiba', 'male', store_id='default'), 'male')
+        correction = 'اني زلمة مو مرة، اشتري للولد'
+        self.assertEqual(owner_sales.explicit_gender(correction), 'male')
+        self.assertEqual(owner_sales.address_gender('حساب خاص', history=[{'direction':'incoming','text':correction}], text='الاخضر موجود؟', store_id='baraah-kids'), 'male')
 
     def test_latin_names_prefixes_and_fathers_name(self):
         for name in ('its. heba', 'Hiba Ali', 'Heba Ahmed', 'Hajar Ali', 'مريم محمد'):

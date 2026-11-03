@@ -45,7 +45,8 @@ class ReviewedLessonTests(unittest.TestCase):
     def test_quantity_price_uses_real_offer_and_delivery(self):
         product = dict(PRODUCT, price='12000', offer='عرض سعر القطعتين ب 20 الف')
         text = '\n'.join(playbook.price_preview(product, [('', 5000)], 2))
-        self.assertIn('سعر 2 قطع: 20,000', text)
+        self.assertEqual(text.count('20,000'), 1)
+        self.assertIn('عرض 2 قطع: 20,000', text)
         self.assertIn('الإجمالي لـ2 قطع: 25,000', text)
 
     def test_free_delivery_package_preserves_unit_and_total(self):

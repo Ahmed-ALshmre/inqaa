@@ -108,7 +108,7 @@ class Last50PipelineTests(unittest.TestCase):
         result, model = self.process('بغداد حي الاختبار')
         model.assert_not_called()
         self.assertIn('تم تثبيت الطلب', result['reply'])
-        self.assertIn('يرجى فحص الطلب', result['reply'])
+        self.assertIn(self.m.DEFAULT_ORDER_CONFIRMATION_TEXT, result['reply'])
         items = json.loads(self.order()['order_items'])
         self.assertEqual((items[0]['color'], items[0]['size']), ('جوزي', '46'))
 
@@ -176,14 +176,14 @@ class Last50PipelineTests(unittest.TestCase):
         self.link()
         self.save('incoming', 'ثبتي الأسود قياس 44')
         result, _ = self.process('07701234567 بغداد حي الاختبار')
-        self.assertIn('يرجى فحص الطلب', result['reply'])
+        self.assertIn(self.m.DEFAULT_ORDER_CONFIRMATION_TEXT, result['reply'])
         row = self.db.execute("SELECT id,raw_payload FROM messages WHERE sender_id=? AND direction='outgoing' ORDER BY id DESC LIMIT 1", (self.sender,)).fetchone()
         meta = json.loads(row['raw_payload']); meta['_delivery_status'] = 'unconfirmed'
         self.db.execute('UPDATE messages SET raw_payload=? WHERE id=?', (json.dumps(meta), row['id'])); self.db.commit()
         cart = {'order': self.data()}
         with patch.object(self.m, 'send_order_to_telegram') as telegram:
             created, reply = self.m.create_order_if_valid(self.db, self.sender, cart, self.product)
-        self.assertTrue(created); self.assertIn('يرجى فحص الطلب', reply)
+        self.assertTrue(created); self.assertIn(self.m.DEFAULT_ORDER_CONFIRMATION_TEXT, reply)
         self.assertEqual(cart['_created_order_id'], self.order()['id'])
         telegram.assert_not_called()
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders WHERE sender_id=?', (self.sender,)).fetchone()[0], 1)
@@ -252,7 +252,7 @@ class Last50PipelineTests(unittest.TestCase):
         self.save('incoming', 'نفس لون الصور قياس 6 سنوات أريدهم اثنينهم')
         self.save('outgoing', 'دزيلي الرقم والعنوان حتى أثبت الحجز')
         result, model = self.process('07701234567 بغداد حي الاختبار')
-        model.assert_not_called(); self.assertIn('يرجى فحص الطلب', result['reply'])
+        model.assert_not_called(); self.assertIn(self.m.DEFAULT_ORDER_CONFIRMATION_TEXT, result['reply'])
         items = json.loads(self.order()['order_items'])
         self.assertEqual({(i['product_id'], i['color'], i['size']) for i in items},
                          {('F1', 'أسود', '6 سنوات'), ('F2', 'وردي', '6 سنوات')})

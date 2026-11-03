@@ -9,6 +9,11 @@ except ImportError:
 
 def policy_question(text):
     clean = normalized(text).strip(' ؟?!.،\n')
+    # Opening/checking the parcel before payment is a store policy, not a
+    # missing garment detail or a request to identify an advertising photo.
+    if (re.search(r'فحص|افحص|اتفحص', clean) and re.search(r'قبل.{0,15}(?:دفع|ادفع)|المندوب', clean)
+            and not re.search(r'ثبت|احجز|اطلب|اشتري|سعر|قماش|بطان|قياس|عمر|لون|طول|استلمت|دفعت|خياط[ةه].{0,12}(?:مفتوح|مقطوع)', clean)):
+        return 'inspection'
     if re.fullmatch(r'(?:هل (?:يمكنني|يمكن)|اكدر|اگدر|يصير)(?: ان)? (?:ادفع|الدفع) (?:عند الاستلام|للمندوب من استلم)', clean):
         return 'payment'
     if re.fullmatch(r'كم تبلغ تكلفة التوصيل (?:الى |ل)?محافظتي', clean):

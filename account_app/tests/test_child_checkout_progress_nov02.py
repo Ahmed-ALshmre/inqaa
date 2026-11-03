@@ -73,6 +73,23 @@ class ChildCheckoutProgressTests(unittest.TestCase):
         self.assertIn('العنوان', result['reply'])
         self.assertEqual(self.count(), 0)
 
+    def test_one_of_each_with_color_and_age_books_without_redundant_confirmation(self):
+        result, model = self.process('اريد واحد اخضر عمر 3 سنوات وواحد برتقالي عمر 4 سنوات')
+        model.assert_not_called()
+        self.assertIn('رقم', result['reply'])
+        self.assertIn('العنوان', result['reply'])
+        self.assertNotIn('يا عمر', result['reply'])
+        self.accept_generated_reply()
+        self.process('07701234567')
+        self.accept_generated_reply()
+        result, model = self.process('بغداد حي الاختبار قرب المدرسة')
+        model.assert_not_called()
+        self.assertIn('تم تثبيت', result['reply'])
+        row = self.db.execute('SELECT order_items,total_amount FROM orders WHERE sender_id=?', (self.sender,)).fetchone()
+        self.assertEqual({(i['color'], product_variants.child_age(i['size'])) for i in json.loads(row['order_items'])},
+                         {('أخضر',3), ('برتقالي',4)})
+        self.assertEqual(row['total_amount'], 25000)
+
     def test_unallocated_second_colour_is_not_invented_from_yes(self):
         self.choice_history(summary=False)
         ev = dict(self.ev, text='نعم')
