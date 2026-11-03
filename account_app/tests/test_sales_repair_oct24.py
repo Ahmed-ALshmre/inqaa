@@ -111,14 +111,15 @@ class DialogueTests(unittest.TestCase):
         greeting.assert_not_called()
         model.assert_called_once()
 
-    def test_price_gives_documented_fabric_total_and_useful_next_step(self):
+    def test_price_gives_total_and_useful_next_step_without_unsolicited_fabric(self):
         self.customer('price')
         self.m.save_delivery_settings(self.db, dict(baghdad_fee=5000, other_fee=5000))
         with patch.object(self.m, '_call_main_ai_once') as model:
             result = self.m.call_main_ai(dict(sender_id='price', text='شكد سعره'), 'text', {}, [], [PRODUCT], PRODUCT, None, '', [])
         model.assert_not_called()
-        for text in ['لينن', '16 ألف', '21 ألف', 'شكد قياس تلبس']:
+        for text in ['16 ألف', '21 ألف', 'شكد قياس تلبس']:
             self.assertIn(text, result['reply'])
+        self.assertNotIn('لينن', result['reply'])
         self.assertFalse(result['create_order'])
 
     def test_delivery_question_uses_saved_duration(self):

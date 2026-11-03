@@ -419,7 +419,7 @@ DEFAULT_INSPECTION_POLICY_TEXT = (
     "إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. "
     "أهم شي فحص الطلب قبل دفع المبلغ."
 )
-DEFAULT_ORDER_CONFIRMATION_TEXT = DEFAULT_INSPECTION_POLICY_TEXT
+DEFAULT_ORDER_CONFIRMATION_TEXT = 'تم تثبيت الطلب عيوني 🌷'
 DEFAULT_MAIN_SYSTEM_PROMPT = (
     """أنتِ موظفة مبيعات بشرية محترفة جداً (تعتبرين أفضل موظفة مبيعات في العالم)، تعملين في {store_name}. تتحدثين باللهجة العراقية الطبيعية بكل بشاشة، طاقة إيجابية، وود.
 وصف المتجر: {store_description}.
@@ -1311,6 +1311,7 @@ def init_db():
     db.execute("CREATE INDEX IF NOT EXISTS idx_orders_stats ON orders(store_id,created_at,sender_id)")
     product_questions.init(db)
     product_questions.seed_owner_facts(db, load_products_from_file(all_stores=True), now_baghdad_iso())
+    restore_held_color_reviews(db)
     db.commit()
 
     now = now_baghdad_iso()
@@ -1742,7 +1743,15 @@ def get_delivery_policy_text(db=None):
 
 
 def get_order_confirmation_text(db=None):
-    return get_store_settings(db).get("inspection_message") or DEFAULT_ORDER_CONFIRMATION_TEXT
+    saved = get_store_settings(db).get("inspection_message") or DEFAULT_ORDER_CONFIRMATION_TEXT
+    # Upgrade only the old built-in receipt, preserving owner-written receipts.
+    compact = re.sub(r'\s+', ' ', str(saved)).strip()
+    legacy = (DEFAULT_INSPECTION_POLICY_TEXT,
+              'تم تثبيت الطلب\nيرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. '
+              'إذا لم يطابق الطلب يرجع مع المندوب بدون دفع.\nاهم شي تفحصين الطلب قبل دفع المبلغ.')
+    if compact in {re.sub(r'\s+', ' ', text).strip() for text in legacy}:
+        return DEFAULT_ORDER_CONFIRMATION_TEXT
+    return saved
 
 
 def valid_ai_model_id(value):
@@ -2580,7 +2589,8 @@ def complete_customer_product_link(db, sender_id, product, match_method, confide
         cur = db.execute(
             "UPDATE human_reviews SET status='linked', replied_at=? "
             "WHERE sender_id=? AND status='pending' AND reason NOT LIKE 'partial_image_match:%' "
-            "AND reason<>'customer_requested_human'",
+            "AND reason<>'customer_requested_human' "
+            "AND reason NOT IN (SELECT 'تدقيق لون القطعة للطلب ' || id FROM orders WHERE status='يتطلب مراجعة اللون')",
             (now, sender_id),
         )
         closed = cur.rowcount if cur.rowcount is not None else 0
@@ -6405,6 +6415,29 @@ def product_choice_question(previous, selected):
     return 'أثبتلج الاختيار الجديد وحده، لو أضيفه ويا الاختيار السابق؟'
 
 
+def discard_unavailable_previous_choice(db, sender_id, products):
+    """An unavailable old model is not a cart option alongside the new photo."""
+    pending = pending_product_choice(db, sender_id)
+    if not pending:
+        return False
+    catalog = {p['product_id']: p for p in products}
+    previous = [pid for pid in json.loads(pending['previous_ids']) if pid in catalog
+                and catalog[pid].get('status', 'active') == 'active' and _stock_state(catalog[pid]) != 'out']
+    selected = [catalog[pid] for pid in json.loads(pending['image_ids']) if pid in catalog
+                and catalog[pid].get('status', 'active') == 'active' and _stock_state(catalog[pid]) != 'out']
+    if previous or not selected:
+        if previous != json.loads(pending['previous_ids']):
+            db.execute('UPDATE customer_product_choices SET previous_ids=? WHERE sender_id=?',
+                       (json.dumps(previous), sender_id)); db.commit()
+        return False
+    for index, product in enumerate(selected):
+        complete_customer_product_link(db, sender_id, product, 'image_recognition',
+            source='image_recognition', preserve_existing=index > 0)
+    db.execute('DELETE FROM customer_product_choices WHERE sender_id=?', (sender_id,))
+    db.commit()
+    return True
+
+
 def classify_contextual_selection(db, text, candidates, history, pending):
     """Interpret preference scope with conversation context, not name matching."""
     if not OPENROUTER_KEY:
@@ -6589,6 +6622,7 @@ def resolve_product_choice(db, ev, products):
         return saved_checkout_reply(db, ev,
             'حقج علينا، ما راح أعتمد الصورة اللي ما تطابق طلبج. الموديل يحتاج تأكيد من الموظف، وبقية اختياراتج محفوظة.',
             {'photo_identity_disputed': True, 'human_review_id': review_id})
+    discard_unavailable_previous_choice(db, ev['sender_id'], products)
     semantic_reply = resolve_contextual_product_selection(db, ev, products)
     if semantic_reply or ev.get("_selection_resolved"):
         return semantic_reply
@@ -6723,10 +6757,11 @@ def match_product(db, ev, products, resume_ai_on_link=True):
     # identity/replace-or-add question. Explicit additions still keep both.
     advertised_selection = bool(ev.get('_ad_source')) or (
         previous and all(p.get('source') == 'ad_ref' for p in previous))
-    if previous and new_ids and not intent and not advertised_selection:
+    previous_options = [p for p in previous if _stock_state(p) != 'out' and p.get('status', 'active') == 'active']
+    if previous_options and new_ids and not intent and not advertised_selection:
         product_choice_table(db)
         db.execute("INSERT OR REPLACE INTO customer_product_choices VALUES(?,?,?,?)", (
-            ev["sender_id"], json.dumps([p["product_id"] for p in previous]), json.dumps(combined['product_ids']), now_baghdad_iso()))
+            ev["sender_id"], json.dumps([p["product_id"] for p in previous_options]), json.dumps(combined['product_ids']), now_baghdad_iso()))
         db.commit()
         for index, product in enumerate(recognized):
             complete_customer_product_link(db, ev["sender_id"], product, "image_recognition",
@@ -7743,6 +7778,10 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
                  f"وصل طلب تغيير القياس إلى {action['value']}؛ القياس المسجل حالياً {order_actions.single_size(order) or 'ضمن تفاصيل القطع'}، ولم يتغير بعد.")
         return saved_checkout_reply(db, ev, reply, {"post_order_followup": True, "order_action_request": request_id,
                                                   "human_review_id": review_id, "needs_human": True})
+    total_reply = sales_playbook.saved_order_total(ev.get('text'), order)
+    if total_reply and not ev.get('image_url') and not ev.get('attachments'):
+        return saved_checkout_reply(db, dict(ev, _post_order=True), total_reply,
+                                    {'post_order_followup': True, 'order_id': order['id']})
     event, focus, discussion_products, image_result = post_order_product_focus(db, ev, products, customer_products)
     event["_post_order"] = dict(order)
     review_id = has_pending_human_review(db, ev["sender_id"])
@@ -7988,6 +8027,7 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     parts = sales_playbook.price_preview(product, options, sales_playbook.requested_quantity(ev.get('text')))
     if not parts:
         return None
+    has_priced_offer = any(part.startswith('عرض ') for part in parts)
     delivered_question = sales_playbook.delivery_price_question(ev.get('text'))
     accepted = accepted_sales_history(db, ev['sender_id']) if ev.get('sender_id') else []
     compact_offer = sales_playbook.last_pieces_price_line(product, accepted,
@@ -8022,14 +8062,14 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
     if natural_total:
         parts = [natural_total]
     parts = [customer_copy.chat_money(catalog_truth.conversational(part)) for part in parts]
-    fabric = customer_copy.fact(product.get('fabric'), 'fabric').strip(' .،')
-    fabric = re.sub(r'^(?:القماش|قماش(?:ه|ها)?)\s*[:：]?\s*', '', fabric)
-    fabric_seen = any(fabric and fabric in (item.get('text') or '') for item in accepted)
-    if not delivered_question and fabric and not fabric_seen and len(fabric) <= 60 and not customer_copy.has_instructions(fabric):
-        parts[0] += ' وقماشه ' + fabric + '.'
+    parts = [re.sub(r'عرض\s+(\d+)\s+قطع\s*[:：]\s*',
+                    lambda hit: 'والقطعتين بـ ' if hit[1] == '2' else f'و{hit[1]} قطع بـ ', part)
+             for part in parts]
     parts = [natural_total] if natural_total else ['\n'.join(part.rstrip(' .') + '.' for part in parts)]
     cue = ('' if total_inquiry or sales_playbook.selection_conflicts(product, ev.get('_sales_context'), customer)
            else sales_playbook.next_sales_message(product, accepted))
+    if cue and 'عرض' in cue and (has_priced_offer or any('عرض' in part for part in parts)):
+        cue = ''  # The price answer already includes the verified offer once.
     if cue:
         parts.insert(0, cue) if 'عرض' in cue else parts.append(cue)
     step = sales_playbook.price_next_step(product, ev.get('_sales_context'), customer, accepted,
@@ -10391,6 +10431,19 @@ def reviewable_checkout_color(db, sender_id, items, matched_product):
 COLOR_REVIEW_STATUS = 'يتطلب مراجعة اللون'
 
 
+def restore_held_color_reviews(db):
+    """Keep held orders visible without changing choices, AI switches or exports."""
+    now = now_baghdad_iso()
+    return db.execute('''INSERT INTO human_reviews
+        (sender_id,store_id,message_text,reason,status,created_at)
+        SELECT o.sender_id,o.store_id,'الطلب محفوظ وبانتظار تحديد لون القطعة',
+               'تدقيق لون القطعة للطلب ' || o.id,'pending',?
+        FROM orders o WHERE o.status=? AND NOT EXISTS (
+            SELECT 1 FROM human_reviews h WHERE h.sender_id=o.sender_id
+            AND h.store_id=o.store_id AND h.reason='تدقيق لون القطعة للطلب ' || o.id
+            AND h.status='pending')''', (now, COLOR_REVIEW_STATUS)).rowcount
+
+
 def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_confirmed=False):
     if generation_superseded(db, sender_id):
         return None, ''
@@ -10723,7 +10776,7 @@ def requested_catalog_alternatives(db, ev, products, customer, customer_products
             or (re.search(r'صور', text) and not re.search(r'موديل|بديل|موديلات', text))):
         return None
     continuation = sales_context.continuation(ev.get('text'), context)
-    explicit = re.search(r'غيره|غيرها|غيرهن|غير\s*موديل|موديل\s*(?:ثاني|غيره|مشابه)|موديلات\s*(?:ثاني|ثانيه|غير)|بدائل|بديل|اقترح',
+    explicit = re.search(r'غيره|غيرها|غيرهن|غير\s*موديل|موديل\s*(?:ثاني|غيره|مشابه|اخر)|موديلات[\s،,.]*(?:ثاني|ثانيه|غير|اخر[ىي])|بدائل|بديل|اقترح',
                          sales_strategy.normalized(ev.get('text')))
     last_q_norm = sales_strategy.normalized((continuation or {}).get('question') or (context or {}).get('last_staff_question') or '')
     consent = bool(
@@ -11381,11 +11434,17 @@ def resume_selected_multi_checkout(db, ev, customer, products, context):
         return None
     evidence = list(context.get('evidence') or [])
     purchase = next((item for item in reversed(evidence) if re.search(
-        r'اريدهم|اريدهن|ثبتيهم|ثبتيهن|احجزيهم|احجزيهن|ثنينهم|اثنينهم|اثنينهن|كلهن|كلهم',
+        r'اريدهم|اريدهن|ثبتيهم|ثبتيهن|احجزيهم|احجزيهن|ثنينهم|اثنينهم|اثنينهن|كلهن|كلهم|الاثنين\s+سوا|الثنين\s+سوا',
         sales_strategy.normalized(item.get('text')))), None)
     if (not purchase or sales_strategy.purchase_block_reason(purchase['text'])
             or re.search(r'[؟?]', purchase['text']) or context.get('open_details')):
         return None
+    for item in evidence[evidence.index(purchase):]:
+        clean = sales_strategy.normalized(item.get('text'))
+        if (re.search(r'(?:لا|مو|ما\s*اريد|ماريد)\s+(?:الاثنين|الثنين|هذني|هذوله|كلهم|كلهن)', clean)
+                or re.search(r'(?:بس|فقط)\s+(?:الاول|الثاني|واحد|وحده|قطعه)', clean)
+                or sales_strategy.purchase_block_reason(clean)):
+            return None  # A later correction takes precedence over an older "both".
     if re.search(r'قطعتين|\d+\s*قطع|من\s*كل|كل\s*(?:موديل|قطعة|قطعه)', purchase['text']):
         return None  # Per-model quantities need their own allocation, not one each.
     created = sales_engagement.timestamp(purchase.get('created_at'))
@@ -11396,7 +11455,7 @@ def resume_selected_multi_checkout(db, ev, customer, products, context):
     lines = []
     for product in products:
         scoped = [dict(item, product_id=None) for item in evidence
-                  if item.get('product_id') == product['product_id'] or item is purchase]
+                  if item.get('product_id') in (None, product['product_id']) or item is purchase]
         selected = sales_playbook.customer_selection({'evidence': scoped})
         years = product_variants.size_data(product.get('sizes'))['years']
         age = selected.get('age')
@@ -11452,9 +11511,28 @@ def selected_child_cart(db, ev, product):
     turn.reverse()
     if sales_context.continuation(text, {'last_staff_turn': turn}):
         return None
+    color_words = '|'.join(re.escape(word) for word in product_variants.ALIASES)
+
+    def pairs(value):
+        result = {}
+        parts = re.split(r'[،,.\n]+|\s+و\s*(?=(?:(?:واحد[هة]?|وحد[هة]|قطع[هة])\s+)?(?:ال)?(?:'
+                         + color_words + r')|[لب]?عمر|\d)',
+                         product_variants.normalize_age_words(value))
+        for part in parts:
+            ages, colors = product_variants.child_ages(part), product_variants.chosen_colors(part)
+            if len(ages) == len(colors) == 1:
+                result[ages[0]] = colors[0]
+        return result
+
+    def requested_pair(value):
+        clean = sales_strategy.normalized(value)
+        units = re.findall(r'(?<!\w)و?(?:واحد[هة]?|وحد[هة]|قطع[هة])(?!\w)', clean)
+        return (sales_playbook.requested_quantity(value) == 2
+                or len(units) == 2 and len(pairs(value)) == 2)
+
     purchase = next((index for index in range(len(history) - 1, -1, -1)
                      if history[index]['direction'] == 'incoming'
-                     and sales_playbook.requested_quantity(history[index].get('text')) == 2
+                     and requested_pair(history[index].get('text') or '')
                      and re.search(r'اريد|اخذ|احجز|ثبت', sales_strategy.normalized(history[index].get('text')))
                      and not sales_strategy.purchase_block_reason(history[index].get('text'))
                      and not re.search(r'[؟?]|(?:اذا|لو)\s+(?:اخذ|احجز|اريد)', sales_strategy.normalized(history[index].get('text')))), None)
@@ -11463,18 +11541,6 @@ def selected_child_cart(db, ev, product):
     created = sales_engagement.timestamp(history[purchase].get('created_at'))
     if not created or datetime.now(BAGHDAD_TZ) - created > timedelta(hours=24):
         return None
-    color_words = '|'.join(re.escape(word) for word in product_variants.ALIASES)
-
-    def pairs(value):
-        result = {}
-        parts = re.split(r'[،,.\n]+|\s+و\s*(?=(?:ال)?(?:' + color_words + r')|[لب]?عمر|\d)',
-                         product_variants.normalize_age_words(value))
-        for part in parts:
-            ages, colors = product_variants.child_ages(part), product_variants.chosen_colors(part)
-            if len(ages) == len(colors) == 1:
-                result[ages[0]] = colors[0]
-        return result
-
     ages, colors, allocated = set(), set(), {}
     for row in history[purchase:]:
         if row['direction'] != 'incoming':
@@ -15985,7 +16051,8 @@ def api_link_product(sender_id):
         db.execute("BEGIN IMMEDIATE")
         resolved_urls = {x['image_url'] for x in resolved_links}
         closable = {row['id'] for row in db.execute(
-            "SELECT id,reason,image_url FROM human_reviews WHERE sender_id=? AND status='pending' AND id<=?",
+            "SELECT id,reason,image_url FROM human_reviews WHERE sender_id=? AND status='pending' AND id<=? "
+            "AND reason NOT IN (SELECT 'تدقيق لون القطعة للطلب ' || id FROM orders WHERE status='يتطلب مراجعة اللون')",
             (sender_id, review_cutoff)) if not str(row['reason'] or '').startswith('partial_image_match:') or row['image_url'] in resolved_urls}
         rewards.award_pending(db, sender_id, current_dashboard_person(), cutoff=review_cutoff, review_ids=closable)
         for review_id in closable:
@@ -18454,6 +18521,7 @@ def close_human_attention(db, sender_id=None):
     order_actions.init(db)
     order_actions.reconcile(db, sender_id)
     clause = ' AND sender_id NOT IN (SELECT sender_id FROM order_action_requests WHERE status="pending")'
+    clause += " AND sender_id NOT IN (SELECT sender_id FROM orders WHERE status='يتطلب مراجعة اللون')"
     if sender_id is not None:
         clause += ' AND sender_id=?'
     params = (sender_id,) if sender_id is not None else ()
@@ -18490,6 +18558,12 @@ def api_close_all_human_reviews():
 def api_mark_reviewed(sender_id):
     data = request.get_json(silent=True) or {}
     db  = get_db()
+    held = [row['id'] for row in db.execute('SELECT id FROM orders WHERE sender_id=? AND status=?',
+                                          (sender_id, COLOR_REVIEW_STATUS))]
+    if held:
+        restore_held_color_reviews(db)
+        db.commit()
+        return jsonify(ok=False, error='حدد لون القطعة من الطلب قبل إغلاق المراجعة', held_order_ids=held), 409
     if order_actions.pending(db, sender_id):
         pending = [dict(row) for row in db.execute("SELECT id,order_id,kind,value FROM order_action_requests WHERE sender_id=? AND status='pending' ORDER BY id", (sender_id,))]
         person = current_dashboard_person() or {}

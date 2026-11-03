@@ -123,12 +123,14 @@ def price_preview(product, delivery_options, quantity=None):
         label = f'البكج ({size} قطع)' if size > 1 else 'الموديل'
         scope = 'لبكج واحد' if size > 1 else 'لقطعة واحدة'
         lines = [f'سعر {label}: {price:,} د.ع.']
-        for offer_quantity, amount in offer_tiers(product):
+        tiers = offer_tiers(product)
+        for offer_quantity, amount in tiers:
             lines.append(f'عرض {offer_quantity} قطع: {amount:,} د.ع.')
         requested = quantity if isinstance(quantity, int) else None
         if requested is not None and requested > 0:
             requested_quote = quote([{'product_id': product['product_id'], 'quantity': requested}], [product], 0)
-            lines.append(f'سعر {requested} قطع: {requested_quote["product_total"]:,} د.ع.')
+            if (requested, requested_quote['product_total']) not in tiers and requested != size:
+                lines.append(f'سعر {requested} قطع: {requested_quote["product_total"]:,} د.ع.')
         totals = []
         for region, fee in delivery_options:
             priced = quote([{'product_id': product['product_id'], 'quantity': requested or size}], [product], fee)
@@ -152,6 +154,22 @@ def price_question(text):
         r'(?:شكد|اشكد|بشكد|بيش|كم)\s*(?:سعر|سعره|سعرها|السعر|اسعر|سعر هذا|سعر الموديل)|'
         r'(?:بيش|بكم|بشكد)\s*(?:هذا|هاذا|هاي|هالقطعة|هالسوت|هالفستان)|'
         r'(?:شكد|اشكد|بشكد|بيش|بكم|سعر|عرض)\s*(?:(?:ال)?قطعتين|ثنين|\d+\s*قطع)', text))
+
+
+def saved_order_total(text, order):
+    """Answer the booked cart's total from its receipt, never today's catalog."""
+    clean = sales_strategy.normalized(text)
+    if (not re.search(r'مجموع|اجمالي|الحساب|كله[نم].{0,20}(?:ويا|مع)\s*التوصيل', clean)
+            or re.search(r'قماش|قياس|لون|عمر|شوكت|شوقت|متى|فحص|بدل|الغ|غير|اضيف|زيد|جديد|اخذ|اذا|لو\s', clean)):
+        return ''
+    try:
+        total = float(order.get('total_amount'))
+        subtotal, fee = float(order.get('product_total')), float(order.get('delivery_fee'))
+    except (TypeError, ValueError):
+        return ''
+    if total <= 0 or subtotal < 0 or fee < 0 or abs(total - subtotal - fee) > 0.01:
+        return ''
+    return f'المجموع ويا التوصيل {customer_copy.chat_amount(total)} عيوني 🌷'
 
 
 def delivery_price_question(text):
