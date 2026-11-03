@@ -187,6 +187,7 @@ function editProduct(productId, force = false) {
   currentProductId = productId;
   relatedProductIds = new Set(product.related_product_ids || []);
   for (const [key, id] of Object.entries(fields)) setSelectValue(id, product[key]);
+  byId('productAdIds').value = (product.ad_ids || []).join('\n');
   byId('productImages').value = imageText(product.image_url);
   productImageColors = normalizeImageColors(product.image_colors, imageLines());
   byId('relatedProductsSearch').value = '';
@@ -435,6 +436,7 @@ function collectPayload() {
   for (const [key, id] of Object.entries(fields)) {
     payload[key] = document.getElementById(id).value.trim();
   }
+  payload.ad_ids = [...new Set(byId('productAdIds').value.split(/[\s,،;؛]+/).map(x => x.trim()).filter(Boolean))];
   payload.age_min_months = numericValue('productAgeMin', byId('productAgeMinUnit').value === 'years' ? 12 : 1);
   payload.age_max_months = numericValue('productAgeMax', byId('productAgeMaxUnit').value === 'years' ? 12 : 1);
   payload.weight_min_kg = numericValue('productWeightMin'); payload.weight_max_kg = numericValue('productWeightMax');

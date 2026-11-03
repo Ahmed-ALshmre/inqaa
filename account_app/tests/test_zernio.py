@@ -192,7 +192,7 @@ class ZernioTests(unittest.TestCase):
             with self.subTest(catalog=catalog):
                 result = self.process_latest(catalog)
                 self.assertTrue(result['meta']['ad_product_unresolved'])
-                self.assertIn('الإعلان', result['reply'])
+                self.assertEqual('', result['reply'])
                 self.assertNotRegex(result['reply'], r'دزيلي|أرسلي|ارسلي')
                 self.assertTrue(result['meta']['human_review_id'])
                 self.assertNotIn('غير متوفر', result['reply'])

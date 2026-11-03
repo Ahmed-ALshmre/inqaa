@@ -46,7 +46,7 @@
       <div class="catalog-section-heading"><h3>هوية المنتج وسعره</h3><p>المعلومات التي يرجع لها المساعد عند سؤال الزبون.</p></div>
       <div class="catalog-fields">{{ input('productName','اسم الموديل الداخلي','مثال: فستان الاميرات',wide=true) }}{{ input('productReplyCategory','فئة القطعة في رد الزبون','اكتبها يدوياً مثل التراك الولادي أو القميص. اختيارية.',wide=true) }}{{ input('productId','كود المنتج','P015') }}{{ input('productPrice','السعر بالدينار','13000، أو بكج 3 قطع بـ25000') }}
       {{ select('productStatus','الظهور بالكتالوج',{'active':'نشط — ظاهر','inactive':'مخفي'}) }}{{ select('productStock','التوفر',{'متوفر':'متوفر','نفذ':'غير متوفر'},'غير مؤكد') }}{{ input('productStockQuantity','الكمية الفعلية المتبقية','اتركها فارغة إذا غير معروفة','number') }}{{ input('productOffer','العرض الحالي','مثال: عرض على آخر القطع') }}{{ area('productDescription','وصف قصير للزبون','ما الذي يميز القطعة؟ وصف حقيقي بدون أسعار قديمة.') }}
-      </div><details class="catalog-advanced"><summary>ربط الإعلان واسم الطلب</summary><div class="catalog-fields">{{ input('productRef','مرجع الإعلان Ref') }}{{ input('productAdId','معرف الإعلان Ad ID') }}{{ input('productOrderName','اسم المنتج في الطلبات','الاسم المطابق في نظام الطلبات',wide=true) }}</div></details>
+      </div><details class="catalog-advanced"><summary>ربط الإعلانات واسم الطلب</summary><div class="catalog-fields">{{ input('productRef','مرجع الإعلان Ref') }}{{ input('productAdId','معرف الإعلان الرئيسي Ad ID') }}{{ area('productAdIds','معرفات إعلانات إضافية لنفس المنتج','كل معرف بسطر؛ يمكن ربط عدة إعلانات بالقطعة نفسها.') }}<p class="catalog-help wide">استخدمي معرف الإعلان، وليس معرف المنشور. أي إعلان مسجّل هنا يربط الزبون مباشرة بهذا المنتج.</p>{{ input('productOrderName','اسم المنتج في الطلبات','الاسم المطابق في نظام الطلبات',wide=true) }}</div></details>
     </section>
     <section id="panel-fit" role="tabpanel" aria-labelledby="tab-fit" class="catalog-tabpanel" hidden>
       <div class="catalog-section-heading"><h3>لمن تناسب القطعة؟</h3><p>اختيارات واضحة للجمهور والعمر والمقاس، مع إبقاء المقاسات القديمة كما هي إلى أن تعدّلها.</p></div>
@@ -81,6 +81,6 @@
 </main>
 <script id="catalogSchema" type="application/json">{{ catalog_schema|tojson }}</script>
 <div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script><script src="/static/js/products.js?v=18"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script><script src="/static/js/products.js?v=19"></script>
 {% include "_mobile_nav.html" %}
 </body></html>

@@ -1,7 +1,55 @@
 """Allowlisted ad referral metadata; never infer ads from customer attachments."""
 import json
+import re
 from datetime import datetime
 from urllib.parse import urlsplit
+
+
+def normalize_product_ids(value, *, strict=False):
+    """Ad identities stay strings: Meta IDs exceed JavaScript's safe integers."""
+    if value in (None, ''):
+        return []
+    values = re.split(r'[\s,،;؛]+', value) if isinstance(value, str) else value
+    if not isinstance(values, list) or any(not isinstance(x, str) for x in values):
+        if strict:
+            raise ValueError('معرفات الإعلانات يجب أن تكون نصوصاً، كل معرف بسطر.')
+        return []
+    result = []
+    for item in values:
+        item = item.strip()
+        if not item:
+            continue
+        if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,250}', item):
+            if strict:
+                raise ValueError('اكتبي معرف الإعلان فقط، بدون رابط أو وصف.')
+            continue
+        if item not in result:
+            result.append(item)
+    if strict and len(result) > 100:
+        raise ValueError('الحد الأقصى 100 معرف إعلاني لكل منتج.')
+    return result[:100]
+
+
+def product_ids(product):
+    return list(dict.fromkeys(normalize_product_ids(product.get('ad_id')) +
+                              normalize_product_ids(product.get('ad_ids'))))
+
+
+def product_candidates(products, context, store_id=None):
+    """Exact owner mappings only. Shared post IDs and ad names are not identity."""
+    context = context or {}
+    ad_id, ref = str(context.get('ad_id') or '').strip(), str(context.get('ref') or '').strip()
+    return [p for p in products if (store_id is None or p.get('store_id', store_id) == store_id)
+            and ((ad_id and ad_id in product_ids(p)) or
+                 (ref and str(p.get('ref') or '').strip() == ref))]
+
+
+def validate_product_ids(product, products):
+    ids = set(product_ids(product))
+    for peer in products:
+        if (peer.get('store_id') == product.get('store_id') and
+                peer.get('product_id') != product.get('product_id') and ids.intersection(product_ids(peer))):
+            raise ValueError('أحد معرفات الإعلان مربوط بمنتج آخر في هذا المتجر؛ عدّلي الربط السابق أولاً.')
 
 
 def safe_url(value):
