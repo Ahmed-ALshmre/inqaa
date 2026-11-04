@@ -108,6 +108,9 @@ def operational_request(text):
     text = normalized(text)
     if re.search(r"(?:اذا|يذا|لو|في حال).*(?:ارجع|يرجع|يرجه|ترجع)", text):
         return None
+    if re.fullmatch(r'(?:(?:عيني|حبيبتي|حياتي)\s+)?(?:الغي|الغيه|الغو|الغوا)'
+                    r'(?:\s+(?:ما\s*عجب(?:هم|ني)|شكرا|حبيبتي|عيني))*[ .!،]*', text):
+        return {'kind':'cancel','value':'cancelled'}
     if re.search(r"(?:الغ[يوا]*|الغاء|مااريد|ما اريد).{0,15}(?:طلب|حجز)|(?:طلب|حجز).{0,10}(?:الغ[يوا]*|مااريد|ما اريد)", text):
         return {"kind": "cancel", "value": "cancelled"}
     # Keep children's age units; two years is not garment size two.
@@ -125,6 +128,9 @@ def operational_request(text):
 
 def unsupported_claim(reply):
     text = normalized(reply)
+    if re.search(r'(?:سجلت|دونت|ثبتت|راح\s*(?:نسجل|نثبت|نبلغ)|رح\s*(?:نسجل|نثبت|نبلغ)).{0,60}'
+                 r'(?:ملاحظ|وقت.{0,20}توصيل|المغرب|العصر|شركة\s*التوصيل|المندوب)', text):
+        return True
     if re.search(r'(?:من|اول\s*ما|بس|لما)\s+(?:تتوفر|يتوفر|ينزل|تنزل|نوفر|تجي|يجي).{0,65}(?:ابلغ|نبلغ|ادزلج|ندزلج|نراسلك|نتواصل)', text):
         return True  # No automatic restock-notification subscription exists.
     return bool(re.search(r"(?:بلغت|بلغنا|استعجلت|استعجلنا|اتصلت|اتصلنا|دا اتابع|هسه اتابع).{0,45}(?:شرك|مندوب)|(?:سجلت|ثبتت).{0,35}(?:نبلغ|نوفر|قياسات اكبر)|(?:تم الغاء|الغيت|الغينا|عدلت|غيرت).{0,25}(?:طلب|حجز)", text))

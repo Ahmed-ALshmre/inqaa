@@ -43,7 +43,7 @@ def normalize_size_words(value):
         (r'(?<!\w)(?:[4٤]|اربع[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '4XL'),
         (r'(?<!\w)(?:[5٥]|خمس[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '5XL'),
         (r'(?<!\w)(?:[6٦]|ست[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '6XL'),
-        (r'(?<!\w)(?:[1١]\s*اكس(?:\s+لارج)?|اكس\s*لارج|اكسترا لارج)(?!\w)', 'XL')):
+        (r'(?<!\w)(?:[1١]\s*اكس(?:\s+لارج)?|اكس\s*لا(?:ر)?ج|لكس\s*لا(?:ر)?ج|اكسترا لارج)(?!\w)', 'XL')):
         pattern = pattern.replace(r'(?<!\w)', r'(?<!\w)(?:و)?(?:(?:بال|ال)\s*)?', 1)
         pattern = pattern.replace('اكس', '[اأإ]كس')
         text = re.sub(pattern, label, text, flags=re.I)
@@ -53,6 +53,9 @@ def normalize_size_words(value):
 def size_choice_text(value):
     """Keep the new label in an explicit correction, without guessing alternatives."""
     text = normalized(normalize_size_words(value))
+    accepted = re.fullmatch(r'(\d{2})\s+(?:هاي|هذه)\s*(?:هي|هيا)', text.strip())
+    if accepted:
+        return 'قياس ' + accepted[1]
     if re.search(r'[؟?]|(?<!\w)(?:اذا|لو|او)(?!\w)', text):
         return text
     atom = r'(?:[2-6]xl|xxl|xl|xs|[sml]|\d{2})(?!\w)'
@@ -117,6 +120,13 @@ def normalize_age_words(value):
 def age_choice_text(value):
     """Remove only a rejected age, retaining every other child's declaration."""
     text = normalize_age_words(value)
+    future = re.search(r'(?:بعدل[هة]|باقيل[هة]|بعد)\s*(شهرين|شهر|\d{1,2}\s*(?:اشهر|شهور|شهر))'
+                       r'\s*(?:يلا\s*)?يصير\s*((?:\d{1,2}\s*(?:سنوات|سن[هة]|سنين)|سن[هة]|سنتين)'
+                       r'(?:\s*و\s*(?:نص|نصف|ربع|\d{1,2}\s*(?:اشهر|شهر)|شهرين))?)', text)
+    if future:
+        duration, target = child_age(future[1]), child_age(future[2])
+        if duration is not None and target is not None and 0 < target - duration < 18:
+            text = text[:future.start()] + 'عمر ' + normalized(age_text(target - duration)) + text[future.end():]
     if re.search(r'[؟?]|(?<!\w)(?:اذا|لو|او)(?!\w)', text):
         return text
     atom = r'(?:\d{1,2}(?:\.\d+)?\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)|سنتين|سنتان|سن[هة])'
@@ -131,6 +141,18 @@ def child_age_correction(value):
     atom = r'(?:\d{1,2}(?:\.\d+)?\s*(?:سنوات|سنين|سن[هة]|اشهر|شهور|شهر)|سنتين|سنتان|سن[هة])'
     hit = re.search('(' + atom + r')\s+(?:بدل|مو|وليس)\s*(?:عمر(?:ه|ها)?\s*)?(' + atom + ')', text)
     return (child_age(hit[1]), child_age(hit[2])) if hit else None
+
+
+def chosen_child_size(value):
+    text = normalized(value)
+    if not re.search(r'سن[هة]|سنتين|سنوات|سنين|شهر|اشهر|اعوام', text):
+        return ''
+    if not re.search(r'قياس|(?:صور\w*\s+)?مال\s*(?:ال)?(?:سنتين|سن[هة]|\d)', text):
+        return ''
+    text = normalize_age_words(value)
+    text = re.sub(r'مال\s*(?:ال)?(?=سنتين|سن[هة]|\d)', 'قياس ', text)
+    ages = child_ages(text)
+    return age_text(ages[0]) if len(ages) == 1 else ''
 
 
 def is_free_size_product(product):
@@ -188,7 +210,7 @@ def color_replacement(value):
     hits = list(COLOR_RE.finditer(text))
     if len(hits) != 2 or not re.fullmatch(r'\s*بدل\s*', text[hits[0].end():hits[1].start()]):
         return None
-    if not re.fullmatch(r'(?:تحبين|تحب|تريدين|تريد|خلي|خليها|خليلي|بدلي|اريد)\s*', text[:hits[0].start()]):
+    if not re.fullmatch(r'(?:تحبين|تحبون|تحب|تريدين|تريدون|تريد|خلي|خليها|خليلي|بدلي|اريد)\s*', text[:hits[0].start()]):
         return None
     if text[hits[1].end():].strip():
         return None
@@ -396,6 +418,20 @@ def display(value,field):
 def weight_only_ranges(product):
     data=_product_sizes(product or {})
     return data['weights'] if not any(data[k] for k in ('ranges','numbers','years','labels')) else []
+
+
+def canonical_weight_size(product, size, weight):
+    """A catalog weight band is guidance; the declared kg value is the order unit."""
+    bounds = weight_only_ranges(product)
+    value = normalized(weight).strip()
+    if not bounds or not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?', value):
+        return size
+    if not any(lo <= float(value) <= hi for lo, hi in bounds):
+        return size
+    supplied = size_data(size)
+    if supplied['weights'] and supplied['weights'] == bounds:
+        return value
+    return size
 
 
 _WEIGHT_TENS={'خمسين':50,'ستين':60,'سبعين':70,'ثمانين':80,'تسعين':90}

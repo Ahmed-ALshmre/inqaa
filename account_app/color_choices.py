@@ -56,6 +56,9 @@ def reply(product, text, context, customer=None):
         return None  # Child references and corrections need the full conversation, not one shared age.
     if age is None:
         age, ages = selected['age'], selected['ages']
+        chosen_size_age = product_variants.child_age(selected.get('size') or '')
+        if chosen_size_age is not None:
+            age, ages = chosen_size_age, [chosen_size_age]
     bounds = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))['years']
     age_label = product_variants.age_text(age) if age is not None else ''
     if age is not None and not bounds:

@@ -21,9 +21,9 @@ class October19AuditTests(unittest.TestCase):
     def test_shipping_questions_from_backup_answered_locally_instead_of_asking_for_photo(self):
         self.customer('policy')
         self.m.save_delivery_settings(self.db, {'baghdad_fee':4000,'other_fee':7000,'delivery_time':'من يومين إلى ثلاثة أيام'})
-        for text, amount in [('توصيل شكد', '7,000'),('وتوصيل ميسان شكد؟','7,000'),
-                             ('شكد التوصيل لبغداد؟','4,000'),('كم تبلغ تكلفة التوصيل؟','7,000'),
-                             ('اكو توصيل','7,000'),('ما هي طريقة التوصيل؟','7,000')]:
+        for text, amount in [('توصيل شكد', '7 آلاف'),('وتوصيل ميسان شكد؟','7 آلاف'),
+                             ('شكد التوصيل لبغداد؟','4 آلاف'),('كم تبلغ تكلفة التوصيل؟','7 آلاف'),
+                             ('اكو توصيل','7 آلاف'),('ما هي طريقة التوصيل؟','7 آلاف')]:
             with self.subTest(text=text), patch.object(self.m.ai_transport,'post') as provider:
                 reply, _ = self.m.generate_first_message_reply(self.db,{'text':text,'sender_id':'policy'},[], '', [])
                 provider.assert_not_called()
@@ -42,10 +42,10 @@ class October19AuditTests(unittest.TestCase):
         token=self.m._current_store_id.set('khuyoot')
         try:
             self.m.save_delivery_settings(self.db,{'other_fee':8000,'baghdad_fee':6000})
-            self.assertIn('8,000',self.m.store_policy_question_reply('شكد التوصيل للبصرة؟')['reply'])
+            self.assertIn('8 آلاف',self.m.store_policy_question_reply('شكد التوصيل للبصرة؟')['reply'])
         finally:
             self.m._current_store_id.reset(token)
-        self.assertNotIn('8,000',self.m.store_policy_question_reply('شكد التوصيل؟')['reply'])
+        self.assertNotIn('8 آلاف',self.m.store_policy_question_reply('شكد التوصيل؟')['reply'])
         product=dict(CATALOG[0],delivery='توصيل مجاني')
         self.assertIn('مجاني',self.m.store_policy_question_reply('شكد التوصيل؟',product)['reply'])
 

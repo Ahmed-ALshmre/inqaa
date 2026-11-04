@@ -4,11 +4,11 @@ import re
 
 try:
     from . import sales_decision, product_variants
-    from .checkout import normalized, phone_number, invalid_shipping_address, is_confirmation
+    from .checkout import normalized, phone_number, invalid_shipping_address, is_confirmation, accepts_inspection_offer
     from .delivery_state import VISIBLE_SQL
 except ImportError:
     import sales_decision, product_variants
-    from checkout import normalized, phone_number, invalid_shipping_address, is_confirmation
+    from checkout import normalized, phone_number, invalid_shipping_address, is_confirmation, accepts_inspection_offer
     from delivery_state import VISIBLE_SQL
 
 PRODUCT_KNOWLEDGE_FIELDS = (
@@ -16,7 +16,7 @@ PRODUCT_KNOWLEDGE_FIELDS = (
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
     'fabric_feel', 'cut', 'season', 'care_instructions',
 )
-EVIDENCE_VERSION = 8
+EVIDENCE_VERSION = 9
 
 
 def browse_request(text):
@@ -93,7 +93,15 @@ def question_from_turn(turn):
 
 def context_evidence(text, turn):
     clean = normalized(product_variants.normalize_size_words(text))
+    if product_variants.chosen_child_size(text):
+        return True
+    if accepts_inspection_offer(text):
+        return True
     if re.search(r'(?:الاثنين|الثنين)\s+سوا', clean):
+        return True
+    if re.search(r'ولادي|بناتي|اولاد|بنات|ابني|بنتي|للولد|للبنت|نسائي|رجالي', clean):
+        return True
+    if re.search(r'\d\s*(?:sal|سال)\b|\b(?:bnt|bint|walad)\s*\d', clean, re.I):
         return True
     if re.search(r'نفس\s+(?:اللون|الون|لون|الصوره|الصورة)|^(?:نكمل|كملي)$', clean):
         return True

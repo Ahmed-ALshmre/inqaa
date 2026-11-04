@@ -153,3 +153,24 @@ def discovery_candidates(text, products):
             continue
         result.append(product)
     return sorted(result, key=lambda p: -normalize(p)['recommendation_priority'])
+
+
+def contextual_candidates(text, products, context):
+    """Carry the buyer's recipient and sizing filters into later catalogue pages."""
+    try:
+        from . import sales_playbook, product_variants
+    except ImportError:
+        import sales_playbook, product_variants
+    context = context or {}
+    evidence = list(context.get('evidence') or [])
+    audience = query_audience(text) or next((query_audience(item.get('text')) for item in reversed(evidence)
+                                           if query_audience(item.get('text'))), '')
+    selected = sales_playbook.customer_selection(context)
+    ages = product_variants.child_ages(text) or selected.get('ages') or (
+        [selected['age']] if selected.get('age') is not None else [])
+    size = selected.get('size')
+    query = AUDIENCES.get(audience, '')
+    query += ' ' + ' '.join('عمر ' + product_variants.age_text(age) for age in ages)
+    if size and not ages:
+        query += ' قياس ' + str(size)
+    return discovery_candidates(query, products)

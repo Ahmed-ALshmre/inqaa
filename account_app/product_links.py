@@ -63,6 +63,8 @@ def _audience(product):
         'men': r'رجالي|رجال|\bmens?\b',
     }
     found = [name for name, pattern in groups.items() if re.search(pattern, text, re.I)]
+    if not found and re.search(r'فستان|فساتين', text) and _size_data(product)['years']:
+        return 'girls'
     return found[0] if len(found) == 1 else ''
 
 
@@ -75,7 +77,7 @@ def _category(product):
     groups = (
         ('dresses', r'فستان|فساتين|dress'),
         ('abaya', r'عباي|عباء|عبايات|abaya'),
-        ('sets', r'سوت|طقم|اطقم|set'),
+        ('sets', r'سوت|طقم|اطقم|تراك|قاط|set'),
         ('skirts', r'تنور|تنانير|skirt'),
         ('trousers', r'بنطل|بنطر|شروال|trouser|pants'),
         ('tops', r'بلوز|قميص|قمصان|shirt|blouse'),

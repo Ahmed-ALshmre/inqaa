@@ -130,4 +130,14 @@ def conversational(text):
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
+    amount = r'\d+(?:[,٬]\d{3})*(?:\s*(?:د\.\s*ع\.?|دينار|ألف|الف|آلاف))?(?:\s+و\d+)?'
+    seen = set()
+    def price_line(hit):
+        key = (hit[2], re.sub(r'\s+', '', hit[3]))
+        if key in seen:
+            return ''
+        seen.add(key)
+        label = 'القطعتين' if hit[2] == '2' else hit[2] + ' قطع'
+        return ('و' if hit[1] == 'عرض' else 'سعر ') + label + ' بـ ' + hit[3]
+    text = re.sub(r'(عرض|سعر)\s+(\d+)\s*قطع\s*[:：]\s*(' + amount + ')', price_line, text)
     return text

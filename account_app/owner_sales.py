@@ -168,6 +168,7 @@ def neutral_address(text):
                           ('تدللين', 'تدللون'), ('تفحصين', 'تفحصون'),
                           ('تتأكدين', 'تتأكدون'), ('تدفعين', 'تدفعون'), ('ترجعينها', 'ترجعونها'),
                           ('اختيار[كج]', 'الاختيار'), ('رسالت[كج]', 'الرسالة'),
+                          ('عجب[كج]', 'عجبكم'), ('تحبين', 'تحبون'), ('يعجبج', 'يعجبكم'),
                           (r'(?:أحجز|احجز|أثبت|اثبت)ل[كج](?:\s+(?:ال)?(?:حجز|طلب))?', 'أثبت الطلب'),
                           ('(?:دزي|دز|ارسلي|ارسل|أرسلي)(?:لي)?', 'دزولنا')]:
         text = re.sub(r'(?<!\w)(و?)' + before + r'(?!\w)', lambda hit: hit[1] + after, text)
@@ -209,6 +210,7 @@ def surface(text, gender='', seed='', *, warm=True, store_id='', allow_endearmen
                               ('تدفعين', 'تدفع'), ('دزيلي', 'دزلي'), ('قياسج', 'قياسك'),
                               ('عنوانج', 'عنوانك'), ('رقمج', 'رقمك'), ('عليج', 'عليك'),
                               ('اختيارج', 'اختيارك'), ('يعجبج', 'يعجبك'), ('يناسبج', 'يناسبك'),
+                              ('عجبج', 'عجبك'),
                               ('دزي', 'دز'), ('ارسلي', 'ارسل'), ('أرسلي', 'أرسل'),
                               ('تفضلي', 'تفضل'), ('تفضلين', 'تفضل'), ('تختارين', 'تختار'),
                               ('أدزلج', 'أدزلك'), ('ادزلج', 'ادزلك'), ('أشوفلج', 'أشوفلك'),
@@ -264,6 +266,9 @@ def surface(text, gender='', seed='', *, warm=True, store_id='', allow_endearmen
 
 def human_reason(text, *, post_order=False, message_type='text'):
     clean = customer_copy.normalized(text)
+    if (not re.search(r'[؟?]|اخاف|خاف|خايف|اذا', clean)
+            and re.search(r'خياط[هةت].{0,20}(?:مخربط|ردي|مقطوع)|قماش.{0,20}مو\s*زين', clean)):
+        return 'received_quality_complaint'
     if re.search(r'(?:موديلين|قطعتين).{0,80}(?:بآخر|باخر|بنهاية) (?:الفيديو|المقطع)',clean):
         return 'تحديد الموديل المقصود من نهاية الفيديو'
     if message_type == 'audio':
@@ -276,9 +281,14 @@ def human_reason(text, *, post_order=False, message_type='text'):
         return 'guaranteed_arrival_required'
     conditional_inspection = bool(re.search(r'اذا|لو', clean) and re.search(r'نفس الصور|افحص|فحص', clean) and not re.search(r'استلمت|دفعت|راح المندوب', clean))
     if post_order and not conditional_inspection:
+        if re.search(r'(?:وهاي|وهذا|وهذي).{0,25}(?:حجز|ويا)|حجز.{0,20}(?:وياهم|وياهن|وياه|وياها)', clean):
+            return 'post_order_action'
+        if (re.search(r'وصلو|وصلوا|يوصل|توصيل|اريد|كون', clean)
+                and re.search(r'المغرب|العصر|المسا|الصبح|بالليل|بليل|وقت\s*محدد|ساع[هة]\s*\d', clean)):
+            return 'post_order_delivery_schedule'
         if re.search(r'(?:جاوبي|كلمي|اتصلي|ردي).{0,20}المندوب|المندوب.{0,20}(?:ينتظر|يتصل)|وصل\s*(?:لولا|لو لا)|(?:يوصل|واصل).{0,12}اليوم', clean):
             return 'post_order_delivery_status'
-        if re.search(r'بدل|بدّل|غيري|غيرلي|تغيير|الغ|الغاء|اضيف|ضيف|زيد|زودي|ارجع|استبد|اشتكي|شكوى|ما وصل|ماوصل|مو واصل|تاخر|صار.{0,12}(?:يومين|ايام)|وين طلبي|وين الطلب|استلمت|وصلني.{0,25}(?:صغير|ضيّق|ضيق|مو|غير)', clean):
+        if re.search(r'رفضت|رجعت[هة]|ما\s*اج[هة].{0,12}قياس|بدل|بدّل|غيري|غيرلي|تغيير|الغ|الغاء|اضيف|ضيف|زيد|زودي|ارجع|استبد|اشتكي|شكوى|ما وصل|ماوصل|مو واصل|تاخر|صار.{0,12}(?:يومين|ايام)|وين طلبي|وين الطلب|استلمت|وصلني.{0,25}(?:صغير|ضيّق|ضيق|مو|غير)', clean):
             return 'post_order_action'
     return ''
 
@@ -461,6 +471,8 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
     reason = human_reason(text, post_order=bool(ev.get('_post_order')))
     if reason:
         return result(human=reason, silent=True)
+    if re.search(r'(?:اذا|من|لما)\s+(?:يتوفر|تتوفر|توفر|وفرتوا)\s+(?:قياس|مقاس|حجم)', text):
+        return dict(result('صار عيوني، من يتوفر القياس تكدرين تطلبينه.'), _browse_only=True)
     if re.search(r'(?:كاتبين|مكتوب|بالاعلان|بالاعلان).{0,45}(?:ليش|سعر|الف|\d)|ليش.{0,35}(?:اعلان|كاتبين)', text) and re.search(r'ليش|غير|فرق', text):
         return dict(result(human='advertisement_price_mismatch', silent=True), _needs_fact_review=True)
     if not product or ev.get('_post_order') or len(ev.get('_image_matches') or []) > 1:
@@ -499,7 +511,7 @@ def reply(ev, product, customer, context, history, *, photo_count=0):
     if re.search(r'(?<!\w)(?:باچر|باجر|غدا|غداً)(?!\w)', text) and re.search(r'يوصل|توصيل|اريد|ضروري|مناسب', text):
         return result('إن شاء الله يوصلج باچر بس مو أكيد، إحنا نسلّمه لشركة التوصيل، يناسبج؟')
     years = product_variants.size_data(product.get('sizes'))['years']
-    if years and min(lo for lo, hi in years) == 2 and re.search(r'سن[ةه]\s*(?:و\s*)?(?:نص|نصف)|سنه ونص|18\s*شهر', text):
+    if years and min(lo for lo, hi in years) == 2 and product_variants.child_ages(text) == [1.5]:
         return result('إذا بنيتها خشنة، قياس السنتين ممكن يجي فيت ومناسب عليها، وتكدرين تفحصينه بوجود المندوب قبل الدفع، تحبين قياس السنتين؟')
     if re.search(r'اخذ.{0,15}(?:وحده|قطعه).{0,25}(?:ارجع|الثاني)|ارجع.{0,12}(?:الثاني|وحده)|استلام جزئي', text):
         count, _, _ = terms(product)

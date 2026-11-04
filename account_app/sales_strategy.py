@@ -575,6 +575,8 @@ def premature_close(reply, question):
 
 def purchase_block_reason(question):
     text = normalized(question)
+    if re.search(r'(?:اذا|من|لما)\s+(?:يتوفر|تتوفر|توفر|وفرتوا)\s+(?:قياس|مقاس|حجم)', text):
+        return 'awaiting_stock'
     kind = stop_kind(question)
     if kind in {'opt_out', 'declined'}:
         return 'declined'

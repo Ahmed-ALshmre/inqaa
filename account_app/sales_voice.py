@@ -94,6 +94,21 @@ def mixed_child_offer(question, product):
     return None
 
 
+def remembered_age_availability(question, product, context, customer=None):
+    if (not product or set(sales_answers.topics(question)) != {'availability'}
+            or product_variants.child_ages(question) or explicit_purchase(question)):
+        return None
+    bounds = product_variants.size_data(product.get('sizes'))['years']
+    selected = sales_playbook.customer_selection(context, customer)
+    age = product_variants.child_age(selected.get('size') or '')
+    age = age if age is not None else selected.get('age')
+    if not bounds or age is None or any(lo <= age <= hi for lo, hi in bounds):
+        return None
+    reply = 'لعمر ' + product_variants.age_text(age) + ' مو موجود بهالموديل، المتوفر ' + customer_copy.fact(product.get('sizes'), 'sizes') + '.'
+    return dict(reply=reply, reply_parts=[reply], create_order=False, order={},
+                requires_human=False, _local_reply=True, _browse_only=True, _contextual_stock_reply=True)
+
+
 def answer(question, product, context, customer, history, delivery):
     comparison = bool(re.search(r'(?:بس|فقط)\s+(?:اقارن|أقارن|استفسر|أستفسر|اسأل|أسأل)', question or ''))
     if not product or (explicit_purchase(question) and not comparison):
