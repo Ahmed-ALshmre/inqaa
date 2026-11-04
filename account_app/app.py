@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout
+    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media, known_sticker
@@ -1259,6 +1259,7 @@ def init_db():
     for column in ("product_total", "delivery_fee", "total_amount"):
         _add_column_if_missing("orders", column, "INTEGER")
     _add_column_if_missing("messages", "media_json", "TEXT")
+    _add_column_if_missing("customers", "inbox_reviewed_message_id", "INTEGER NOT NULL DEFAULT 0")
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id,id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_direction_id ON messages(sender_id,direction,id)")
     db.commit()
@@ -1309,6 +1310,7 @@ def init_db():
 
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_stats ON messages(store_id,direction,created_at,sender_id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_orders_stats ON orders(store_id,created_at,sender_id)")
+    inbox_queries.init_db(db)
     product_questions.init(db)
     product_questions.seed_owner_facts(db, load_products_from_file(all_stores=True), now_baghdad_iso())
     restore_held_color_reviews(db)
@@ -14712,6 +14714,7 @@ def api_conversations():
             c.gender,
             COALESCE(c.lead_score, 0) AS lead_score,
             COALESCE(c.lead_stage, 'new') AS lead_stage,
+            c.inbox_reviewed_message_id,
             m.text       AS last_message,
             m.direction  AS last_direction,
             COALESCE(m.created_at, c.last_seen_at, '') AS last_time,
@@ -14777,16 +14780,11 @@ def api_conversations():
     # Technical failures also need human attention while their reviews are pending.
     # Keep their diagnostic filter available alongside the complete human queue.
     # Repeated checkout prompts do not automatically change orders.
-    technical = "(COALESCE(hr.reason,'') LIKE '%exception:%' OR COALESCE(hr.reason,'') LIKE '%provider_http_%' OR COALESCE(hr.reason,'') LIKE '%Image analysis service failure:%' OR COALESCE(hr.reason,'') LIKE '%empty_reply%' OR COALESCE(hr.reason,'') LIKE '%could not produce a reply%')"
+    technical = inbox_queries.TECHNICAL_REVIEW
+    system_issues = inbox_queries.system_issue_sql('base.sender_id', 'base.last_time', 'base.inbox_reviewed_message_id')
     base_query = f"""SELECT base.*,
         (base.problem_count + (SELECT COUNT(*) FROM human_reviews hr WHERE hr.sender_id=base.sender_id AND hr.status='pending' AND NOT {technical})) human_service_count,
-        ((SELECT COUNT(*) FROM human_reviews hr WHERE hr.sender_id=base.sender_id AND hr.status='pending' AND {technical}) +
-         (SELECT COUNT(*) FROM ai_jobs j WHERE j.sender_id=base.sender_id AND j.status='failed') +
-         CASE WHEN (SELECT COUNT(*) FROM messages issue WHERE issue.sender_id=base.sender_id AND issue.direction='outgoing'
-             AND (issue.text LIKE 'هذه القطع المقترحة للحجز%' OR issue.text LIKE 'باقي نحدد لون%' OR issue.text LIKE 'أثبتلج%وحده، لو وياه%')
-             AND datetime(issue.created_at)>=datetime(base.last_time,'-1 day')
-             AND NOT EXISTS (SELECT 1 FROM orders done WHERE done.sender_id=base.sender_id AND datetime(done.created_at)>=datetime(issue.created_at)))>=3 THEN 1 ELSE 0 END
-        ) system_issue_count
+        {system_issues} system_issue_count
         FROM ({base_query}) base"""
     rows = db.execute(f"SELECT * FROM ({base_query}) WHERE {where} ORDER BY {sort} LIMIT ? OFFSET ?", params + [limit + 1, offset]).fetchall()
     return jsonify({"conversations": [dict(r) for r in rows[:limit]], "has_more": len(rows) > limit})
@@ -18586,8 +18584,8 @@ def close_human_attention(db, sender_id=None):
     """Close both persisted sources of the human-intervention inbox filter."""
     order_actions.init(db)
     order_actions.reconcile(db, sender_id)
-    clause = ' AND sender_id NOT IN (SELECT sender_id FROM order_action_requests WHERE status="pending")'
-    clause += " AND sender_id NOT IN (SELECT sender_id FROM orders WHERE status='يتطلب مراجعة اللون')"
+    clause = ' AND sender_id NOT IN (SELECT sender_id FROM order_action_requests WHERE status="pending" AND sender_id IS NOT NULL)'
+    clause += " AND sender_id NOT IN (SELECT sender_id FROM orders WHERE status='يتطلب مراجعة اللون' AND sender_id IS NOT NULL)"
     if sender_id is not None:
         clause += ' AND sender_id=?'
     params = (sender_id,) if sender_id is not None else ()
@@ -18608,6 +18606,8 @@ def close_human_attention(db, sender_id=None):
         problems = db.execute("UPDATE problem_reports SET status='closed',updated_at=? WHERE COALESCE(status,'open') IN ('open','needs_attention')" + clause,
                               (now,) + params).rowcount
         db.execute("UPDATE ai_jobs SET status='dismissed' WHERE status='failed'" + clause, params)
+        db.execute("""UPDATE customers SET inbox_reviewed_message_id=COALESCE(
+            (SELECT MAX(id) FROM messages WHERE messages.sender_id=customers.sender_id),0) WHERE 1=1""" + clause, params)
     return {'closed_conversations': count, 'closed_reviews': reviews, 'closed_problems': problems}
 
 
@@ -18648,13 +18648,18 @@ def api_mark_reviewed(sender_id):
         else:
             return jsonify(ok=False, error="يوجد إلغاء أو تعديل طلب معلّق؛ نفّذه من الطلب، أو أكد إنجازه خارج النظام", pending_actions=pending, can_confirm_completion=can_confirm), 409
     closed = close_human_attention(db, sender_id)
+    attention = inbox_queries.attention_state(db, sender_id)
+    if attention.get('human_attention_count'):
+        return jsonify(ok=False, error='وصلت مراجعة جديدة أو بقي إجراء معلّق؛ راجع تفاصيل المحادثة',
+                       sender_id=sender_id, attention=attention), 409
     if _setting_bool(data.get("resume_ai"), True):
         try:
             set_customer_ai_enabled(db, sender_id, True)
         except Exception as exc:
             print(f"[Dashboard] Could not re-enable AI after mark_reviewed: {exc}", flush=True)
     current_ai_enabled = is_customer_ai_enabled(db, sender_id)
-    return jsonify({"ok": True, "ai_resumed": current_ai_enabled, "ai_enabled": current_ai_enabled, **closed})
+    return jsonify({"ok": True, "sender_id": sender_id, "ai_resumed": current_ai_enabled,
+                    "ai_enabled": current_ai_enabled, "attention": attention, **closed})
 
 
 @app.get('/product-questions')

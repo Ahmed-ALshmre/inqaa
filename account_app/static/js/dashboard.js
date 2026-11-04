@@ -18,6 +18,8 @@ let hasMoreConv = true;
 let inboxLoadError = '';
 let inboxRetryOptions = null;
 let inboxLoadedQuery = '';
+let inboxMutationRevision = 0;
+const reviewCloseRequests = new Map();
 let pollConvTimer     = null;
 let statsPollTimer    = null;
 let statsRequest      = null;
@@ -189,6 +191,8 @@ async function loadConversations(showSpinner = true, isLoadMore = false, resetLi
   if (inboxRequest && !showSpinner && !resetList) return;
   inboxRequest?.abort();
   const controller = new AbortController();
+  const requestRevision = inboxMutationRevision;
+  let retryChangedQuery = false;
   inboxRequest = controller;
   isLoadingMoreConv = isLoadMore;
   inboxLoadError = '';
@@ -223,6 +227,10 @@ async function loadConversations(showSpinner = true, isLoadMore = false, resetLi
     if (!res.ok) throw new Error("فشل تحميل المحادثات");
     const data = await res.json();
     if (inboxRequest !== controller || controller.signal.aborted) return;
+    if (requestRevision !== inboxMutationRevision) {
+      retryChangedQuery = queryKey !== inboxLoadedQuery;
+      return; // A response started before a completed action must not restore old badges.
+    }
     inboxLoadedQuery = queryKey;
     
     if (isLoadMore) {
@@ -292,6 +300,11 @@ async function loadConversations(showSpinner = true, isLoadMore = false, resetLi
       });
     }
     renderConversations({resetScroll: resetList || queryChanged});
+    const selected = allConversations.find(c => c.sender_id === currentSenderId);
+    if (selected && currentCustomer) {
+      for (const key of ['pending_reviews_count', 'problem_count', 'human_attention_count', 'human_review_reason', 'problem_reason']) currentCustomer[key] = selected[key];
+      if (selected.human_attention_count > 0) showHumanIntervention(); else hideHumanIntervention();
+    }
     if (isLoadMore && hasMoreConv) requestAnimationFrame(() => {
       const list = document.getElementById('customerList');
       if (list.scrollHeight <= list.clientHeight + 120) onCustomerListScroll();
@@ -320,6 +333,7 @@ async function loadConversations(showSpinner = true, isLoadMore = false, resetLi
       listElement.classList.remove('is-filtering');
       listElement.inert = false;
       updateInboxPagination();
+      if (retryChangedQuery) queueMicrotask(() => loadConversations(false, false, true));
     }
   }
 }
@@ -549,6 +563,7 @@ function renderConversations({resetScroll = false} = {}) {
 async function selectConversation(senderId) {
   if (currentSenderId !== senderId) { clearImage(); discardRecordedVoice(); }
   currentSenderId = senderId;
+  renderReviewCloseButtons();
   closeAllPanels();
 
   if (window.innerWidth <= 768) {
@@ -619,7 +634,8 @@ async function selectConversation(senderId) {
   await Promise.all([messagesReady, productsReady]);
   if (currentSenderId !== senderId) return;
   await loadCustomerInstructions(senderId);
-  if ((conv.pending_reviews_count || 0) > 0) {
+  const activeConv = allConversations.find(c => c.sender_id === senderId) || currentCustomer || conv;
+  if ((activeConv.human_attention_count || activeConv.pending_reviews_count || 0) > 0) {
     showHumanIntervention();
   } else {
     hideHumanIntervention();
@@ -840,6 +856,7 @@ function _hiSetBusy(busy, btnId = null) {
     const b = document.getElementById(btnId);
     if (b) b.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;"></span> جاري…';
   }
+  renderReviewCloseButtons();
 }
 
 function _hiResetButtons() {
@@ -855,6 +872,7 @@ function _hiResetButtons() {
     const b = document.getElementById(id);
     if (b) { b.disabled = false; b.innerHTML = html; }
   });
+  renderReviewCloseButtons();
 }
 
 function _hiCurrentMode() {
@@ -993,15 +1011,16 @@ async function hiLinkProduct() {
 
 async function hiMarkUnavailable() {
   if (_hiBusy || !currentSenderId) return;
+  const senderId = currentSenderId;
   _hiSetBusy(true, 'hiBtnUnavailable');
   try {
-    await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
+    if (!await finishHumanReview(senderId, {confirmCompletion: false})) return;
+    if (senderId !== currentSenderId) return;
     await sendMessage('حبيبتي للأسف هذا الموديل غير متوفر حالياً 🌸 إذا تحبين أقترحلج موديل مشابه؟');
     showToast('تم إخبار الزبون بعدم التوفر', 'info');
     _hiCloseModal();
     hideHumanIntervention();
-    await loadConversations(false);
-    await loadMessages(currentSenderId);
+    await loadMessages(senderId);
   } catch (e) {
     showToast('خطأ: ' + e.message, 'danger');
   } finally {
@@ -1067,22 +1086,25 @@ async function hiAskAI() {
 
 async function hiSendDirect() {
   if (_hiBusy || !currentSenderId) return;
+  const senderId = currentSenderId;
+  let messageSent = false;
   const text = (document.getElementById('hiUnifiedText').value || '').trim();
   if (!text) { showToast('اكتب نصاً أولاً', 'warning'); return; }
   _hiSetBusy(true, 'hiBtnSendDirect');
   try {
     await _hiSyncGenderIfChosen();
+    if (senderId !== currentSenderId) return;
     await _hiSilentLinkIfChosen();
+    if (senderId !== currentSenderId) return;
     document.getElementById('messageInput').value = text;
     const sent = await sendMessage();
+    messageSent = sent;
     if (sent) {
-      await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
-      _hiCloseModal();
-      hideHumanIntervention();
-      await loadConversations(false);
+      await finishHumanReview(senderId, {confirmCompletion: false});
+      if (senderId === currentSenderId) _hiCloseModal();
     }
   } catch (e) {
-    showToast('خطأ: ' + e.message, 'danger');
+    showToast((messageSent ? 'تم إرسال الرد، لكن تعذر إغلاق المراجعة: ' : 'خطأ: ') + e.message, messageSent ? 'warning' : 'danger');
   } finally {
     _hiSetBusy(false);
     _hiResetButtons();
@@ -1091,18 +1113,12 @@ async function hiSendDirect() {
 
 async function hiCloseReview() {
   if (_hiBusy || !currentSenderId) return;
+  const senderId = currentSenderId;
   _hiSetBusy(true, 'hiBtnCloseReview');
   try {
-    const res = await closeReviewWithCompletion(currentSenderId);
-    if (!res) return;
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'تعذر إغلاق المراجعة');
-    currentConversationAIEnabled = Boolean(data.ai_enabled);
-    renderConversationAIToggle();
+    if (!await finishHumanReview(senderId)) return;
     showToast('تم إغلاق المراجعة', 'success');
-    _hiCloseModal();
-    hideHumanIntervention();
-    await loadConversations(false, false, true);
+    if (senderId === currentSenderId) _hiCloseModal();
   } catch (e) {
     showToast('خطأ: ' + e.message, 'danger');
   } finally {
@@ -1463,19 +1479,12 @@ function applyReplyShortcut(type) {
 
 async function sendAIReply() {
   if (!aiPendingReply) return;
+  const senderId = currentSenderId;
   const reply = aiPendingReply;
   const sent = await sendMessage(reply);
   if (!sent) return;
   try {
-    const res = await apiFetch(`/api/conversations/${currentSenderId}/mark_reviewed`, { method: 'POST' });
-    const data = await res.json();
-    if (data.ok) {
-      currentConversationAIEnabled = data.ai_enabled !== 0 && data.ai_enabled !== false;
-      if (currentCustomer) currentCustomer.ai_enabled = currentConversationAIEnabled ? 1 : 0;
-      renderConversationAIToggle();
-      hideHumanIntervention();
-      await loadConversations(false);
-    }
+    await finishHumanReview(senderId, {confirmCompletion: false});
   } catch (e) {
     showToast('تم إرسال الرد، لكن تعذر إغلاق المراجعة: ' + e.message, 'warning');
   }
@@ -2170,29 +2179,75 @@ async function sendCatalog() {
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
-async function closeReviewWithCompletion(senderId) {
-  const path = `/api/conversations/${senderId}/mark_reviewed`;
+async function closeReviewWithCompletion(senderId, {confirmCompletion = true} = {}) {
+  const path = `/api/conversations/${encodeURIComponent(senderId)}/mark_reviewed`;
   const response = await apiFetch(path, {method:'POST'});
   if (response.status !== 409) return response;
   const data = await response.clone().json();
-  if (!data.can_confirm_completion || !data.pending_actions?.length) return response;
+  if (!confirmCompletion || !data.can_confirm_completion || !data.pending_actions?.length) return response;
   const actions = data.pending_actions.map(action => `الطلب #${action.order_id}: ${action.kind === 'cancel' ? 'إلغاء الطلب' : 'تعديل القياس إلى ' + action.value}`).join('\n');
   if (!confirm(`هذه المهام ما زالت معلّقة بالسجل:\n${actions}\n\nهل نفّذتها بالفعل خارج النظام؟ التأكيد يسجل إنجازها ويغلق المراجعة، ولا يرسل تعديلًا أو إلغاءً إلى شركة الطلبات.`)) return null;
   return apiFetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({completed_action_ids:data.pending_actions.map(action => action.id)})});
 }
 
+function renderReviewCloseButtons() {
+  const busy = reviewCloseRequests.has(currentSenderId);
+  for (const id of ['markHumanReviewButton', 'hiBtnCloseReview', 'hiBtnCloseImageReview']) {
+    const button = document.getElementById(id);
+    if (button) { button.disabled = busy || _hiBusy; button.setAttribute('aria-busy', String(busy)); }
+  }
+}
+
+function applyInboxAttention(senderId, data) {
+  inboxMutationRevision++;
+  const row = allConversations.find(c => c.sender_id === senderId);
+  const patch = {...(data.attention || {})};
+  if ('ai_enabled' in data) patch.ai_enabled = data.ai_enabled ? 1 : 0;
+  if (row) Object.assign(row, patch);
+  pendingReviewsBySender[senderId] = patch.pending_reviews_count || 0;
+  openProblemsBySender[senderId] = patch.problem_count || 0;
+  if (currentSenderId === senderId) {
+    if (currentCustomer) Object.assign(currentCustomer, patch);
+    if ('ai_enabled' in patch) currentConversationAIEnabled = Boolean(patch.ai_enabled);
+    renderConversationAIToggle();
+    if (patch.human_attention_count > 0) showHumanIntervention(); else hideHumanIntervention();
+  }
+  if (row) {
+    const aiFilter = document.getElementById('filterAI')?.value;
+    const hidden = currentFilter === 'problems' && !row.human_attention_count
+      || currentFilter === 'system_issues' && !row.system_issue_count
+      || ['0', '1'].includes(aiFilter) && Number(aiFilter) !== Number(row.ai_enabled);
+    if (hidden) allConversations = allConversations.filter(c => c.sender_id !== senderId);
+  }
+  renderConversations(); // Preserve loaded pages, scroll anchor and the open message history.
+}
+
+async function finishHumanReview(senderId, options = {}) {
+  if (reviewCloseRequests.has(senderId)) return reviewCloseRequests.get(senderId);
+  const operation = (async () => {
+    const response = await closeReviewWithCompletion(senderId, options);
+    if (!response) return null;
+    const data = await response.json();
+    if (data.attention) applyInboxAttention(senderId, data);
+    if (!response.ok || !data.ok) {
+      const held = data.held_order_ids?.map(id => '#' + id).join('، ');
+      throw new Error((data.error || 'تعذر إغلاق المراجعة') + (held ? ' — الطلب ' + held : ''));
+    }
+    return data;
+  })();
+  reviewCloseRequests.set(senderId, operation);
+  renderReviewCloseButtons();
+  try { return await operation; }
+  finally { reviewCloseRequests.delete(senderId); renderReviewCloseButtons(); }
+}
+
 async function markHumanReview() {
   if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
+  const senderId = currentSenderId;
+  if (reviewCloseRequests.has(senderId)) return;
   try {
-    const res = await closeReviewWithCompletion(currentSenderId);
-    if (!res) return;
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'تعذر إغلاق المراجعة');
-    currentConversationAIEnabled = Boolean(data.ai_enabled);
-    renderConversationAIToggle();
-    hideHumanIntervention();
+    if (!await finishHumanReview(senderId)) return;
     showToast('تم إغلاق المراجعة', 'success');
-    await loadConversations(false, false, true);
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
 }
 
@@ -2205,8 +2260,14 @@ async function deleteConversation() {
     const res = await apiFetch(`/api/conversations/${encodeURIComponent(senderId)}`, { method: 'DELETE' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حذف المحادثة');
-    resetConversationView();
-    if (window.innerWidth <= 768 && history.state?.dashboardConversation) {
+    inboxMutationRevision++;
+    allConversations = allConversations.filter(c => c.sender_id !== senderId);
+    messageCache.delete(senderId);
+    delete pendingReviewsBySender[senderId];
+    delete openProblemsBySender[senderId];
+    const wasSelected = currentSenderId === senderId;
+    if (wasSelected) resetConversationView(); else renderConversations();
+    if (wasSelected && window.innerWidth <= 768 && history.state?.dashboardConversation) {
       const cleanUrl = new URL(location.href);
       cleanUrl.searchParams.delete('sender_id');
       const cleanState = {...(history.state || {})};
@@ -2214,7 +2275,6 @@ async function deleteConversation() {
       history.replaceState(cleanState, '', cleanUrl);
     }
     showToast('تم حذف المحادثة', 'success');
-    await loadConversations(false, false, true);
     await loadStats();
   } catch (e) {
     showToast(e.message || 'فشل حذف المحادثة', 'danger');
