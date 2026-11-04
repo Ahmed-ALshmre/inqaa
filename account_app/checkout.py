@@ -17,7 +17,7 @@ def normalized(value):
 
 def explicit_purchase(value):
     """Direct Iraqi purchase requests; capability questions and negation are not consent."""
-    text = normalized(value)
+    text = re.sub(r'(?<!\w)اثيبت(?!\w)', 'ثبتي', normalized(value))
     if re.search(r'(?<!\w)(?:ما\s*اريد|ماريد|لا\s*اريد|ما|مو|لا)\s*(?:ت?حجز\w*|ت?ثبت\w*|احجز\w*)(?!\w)', text):
         return False
     if re.search(r'(?<!\w)(?:شلون|كيف|اكدر|اگدر|يصير|ممكن)\s+(?:احجز|اطلب|اشتري)(?!\w)|'
@@ -192,6 +192,13 @@ def is_confirmation(text):
     return bool(re.fullmatch(affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*", normalized(text).strip()))
 
 
+def accepts_inspection_offer(text):
+    clean = normalized(text).strip()
+    return bool(re.match(r'^(?:اي|نعم|تمام)(?!\w)', clean)
+                and re.search(r'افحص|اقيس|اجرب|استلمه|استلمها|المندوب', clean)
+                and not re.search(r'[؟?]|بدل|غير|خصم|مجاني|باجر|(?<!\w)(?:لا|مو|لو|او)(?!\w)|ما\s*اريد', clean))
+
+
 def delivery_fee_inquiry(text):
     """A question about a single piece's shipping is not a condition of purchase."""
     clean = normalized(text)
@@ -211,6 +218,9 @@ def delivered_total_inquiry(text):
                          r'خلي|تحسب|تنزل|تنقص|اقل|ارخص|ثبتي|ثبتلي|احجزي|احجزلي|'
                          r'باجر|باچر|غدا|اليوم|يلحق|لا\s*تحجز|ما\s*ادفع|غير\s*هذا', clean)):
         return False
+    if (re.search(r'شكد|كم|بشكد|المجموع|الحساب', clean)
+            and re.search(r'قطعتين|ثنين|اثنين|[2-9]\s*(?:قطع|مع|ويا|ويه)|(?:مع|ويا|ويه)\s*(?:التوصيل|الشحن)', clean)):
+        return True
     # Require the shipping-inclusive result after shipping, plus a clarification
     # cue. "إذا السعر 10 ثبتي" and arrival conditions keep their existing guards.
     return bool(re.search(r'يعني|المجموع|كلتو|قلت[وي]|تكول|تقول|'
@@ -450,6 +460,8 @@ def order_line_error(raw_items, catalog, *, review_color=False):
             return f'الوزن المذكور مو ضمن مجال {label}؛ نحتاج نراجع الاختيار قبل التثبيت.'
         for key, field, name in (("color", "colors", "لون"), ("size", "sizes", "قياس")):
             value = str(item.get(key) or "").strip()
+            if key == 'size' and item.get('size_type') == 'weight':
+                value = product_variants.canonical_weight_size(product, value, weight)
             if key == "color" and not value and review_color:
                 continue
             if product.get(field) and (not value or ambiguous_measurement(value)):

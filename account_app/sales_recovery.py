@@ -109,15 +109,21 @@ def claims_sent_models(text):
     clean = normalized(text)
     if re.search(r'(?:ما|لم|مو)\s+(?:دزيت|ارسلت|رسلت|بعثت)', clean):
         return False
-    return bool(re.search(r'(?:دزيت\w*|ارسلت\w*|رسلت\w*|بعثت\w*)\s+(?:الموديلات|البدائل|الخيارات|الصور)|شوفي\s+الخاص\s+(?:دزيت|ارسلت)', clean))
+    return bool(re.search(r'(?:دزيت\w*|ارسلت\w*|رسلت\w*|بعثت\w*)\s+(?:الموديلات|البدائل|الخيارات|الصور)|شوفي\s+الخاص\s+(?:دزيت|ارسلت)|'
+                          r'(?:هسه\s+|راح\s+|رح\s+)?(?:ادز\w*|ارسل\w*)\s+(?:الموديلات|البدائل|الخيارات)', clean))
 
 
 def checkout_reply(answer, notice, question):
     """Keep approved answers to open questions when checkout needs more data."""
     text = normalized(question)
     if not (re.search(r'[؟?]', text) or re.search(
-            r'شكد|شلون|شوكت|يمته|متى|افحص|الفحص|نوع القماش|خامت|موضوع القياس', text)):
+            r'شكد|شلون|شوكت|يمته|متى|افحص|اقيس|اجرب|الفحص|نوع القماش|خامت|موضوع القياس', text)):
         return notice
+    try:
+        from .customer_copy import chat_money
+    except ImportError:
+        from customer_copy import chat_money
+    answer = chat_money(answer)
     kept = []
     for part in re.split(r'\n+|(?<=[.؟?؛])\s+', str(answer or '')):
         part = part.strip()

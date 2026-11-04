@@ -8,11 +8,11 @@ import re
 try:
     from . import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from .pricing import terms, quote, offer_tiers
-    from .checkout import is_confirmation, delivered_total_inquiry
+    from .checkout import is_confirmation, delivered_total_inquiry, accepts_inspection_offer, unresolved_purchase_terms
 except ImportError:
     import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from pricing import terms, quote, offer_tiers
-    from checkout import is_confirmation, delivered_total_inquiry
+    from checkout import is_confirmation, delivered_total_inquiry, accepts_inspection_offer, unresolved_purchase_terms
 
 REVIEWED_LESSONS = {
     'cost': (
@@ -241,8 +241,25 @@ def selection_evidence(context):
         focus = (context or {}).get('selection_product_id')
         if focus and item.get('product_id') and item['product_id'] != focus:
             continue
-        for line in str(item.get('text') or '').splitlines():
+        for line in product_variants.size_choice_text(item.get('text') or '').splitlines():
             if line.strip():yield dict(item,text=line.strip())
+
+
+def checkout_consent(context):
+    """Remember a purchase/checkout yes; a photo offer or refusal cannot grant it."""
+    accepted = False
+    for item in selection_evidence(context):
+        text = item.get('text') or ''
+        if item.get('photo_choice') or sales_strategy.purchase_block_reason(text):
+            accepted = False
+            continue
+        if sales_strategy._explicit_purchase(text) and not unresolved_purchase_terms(text):
+            accepted = True
+        elif is_confirmation(text) or accepts_inspection_offer(text):
+            question = item.get('in_reply_to') or ''
+            if re.search(r'ثبت|حجز', question) and not re.search(r'صور|بدائل|موديلات ثاني', question):
+                accepted = True
+    return accepted
 
 
 def weight_fit_already_answered(selected,history):
@@ -267,12 +284,21 @@ def customer_selection(context, customer=None):
         text = product_variants.size_choice_text(item.get('text'))
         text = re.sub(r'^لا\s+(?=خلي\b|اعتمدي\b|بدلي\b)', '', text)
         question = sales_strategy.normalized(item.get('in_reply_to'))
-        if (is_confirmation(text) or text in {'نكمل', 'كملي'}
+        if (is_confirmation(text) or accepts_inspection_offer(text) or text in {'نكمل', 'كملي'}
                 or re.search(r'نفس\s+(?:اللون|الون|لون|الصوره|الصورة)', text)):
-            offered = product_variants.requested(question)['colors']
+            offer_text = question
+            if accepts_inspection_offer(text):
+                offer_text += '\n' + str(item.get('staff_context') or '')
+            offered = product_variants.requested(offer_text)['colors']
             if len(offered) == 1:
                 selected.update(color=offered[0], colors=offered, color_options=[])
+            offered_sizes = product_variants.requested(question)['sizes']
+            if accepts_inspection_offer(text) and len(offered_sizes) == 1:
+                selected['size'] = offered_sizes[0]
         age_correction = product_variants.child_age_correction(text)
+        child_size = product_variants.chosen_child_size(text)
+        if child_size:
+            selected['size'] = child_size
         declared_ages = product_variants.child_ages(text)
         if age_correction and age_correction[1] in selected['ages']:
             declared_ages = list(dict.fromkeys(age_correction[0] if age == age_correction[1] else age

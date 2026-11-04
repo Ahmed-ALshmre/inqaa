@@ -367,7 +367,7 @@ def next_question(images, products, customer, context=None, store='default', que
     evidence = ' '.join(x.get('text', '') for x in (context or {}).get('evidence', []))
     if store == 'golden-threads':
         return 'شكد الكمية اللي تحتاجها؟'
-    if not re.search(r'قياس|مقاس|سايز|عمر|سنوات|وزن|كيلو|\b(?:xs|s|m|l|xl|xxl)\b', evidence, re.I):
+    if not re.search(r'قياس|مقاس|سايز|عمر|سنوات|وزن|كيلو|\d\s*(?:sal|سال)\b|\b(?:bnt|bint|walad)\s*\d|\b(?:xs|s|m|l|xl|xxl)\b', evidence, re.I):
         return 'شكد عمر الطفل حتى نتأكد من القياس؟' if store == 'baraah-kids' else 'شنو قياسج عادةً؟'
     # A known size is useful memory, but is not permission to book.
     return 'تحبين نكمل على الموديل المتوفر؟'

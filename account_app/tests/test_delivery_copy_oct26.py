@@ -170,7 +170,7 @@ class PolicyAssemblyTests(unittest.TestCase):
 
     def test_approved_delivery_copy_continues_with_missing_child_age(self):
         reply = self.delivery_reply()
-        self.assertIn('التوصيل 5,000 د.ع لكل المحافظات، وإلكم حق الفحص بوجود المندوب قبل الدفع', reply)
+        self.assertIn('التوصيل 5 آلاف لكل المحافظات، وإلكم حق الفحص بوجود المندوب قبل الدفع', reply)
         self.assertIn('شكد العمر المطلوب؟', reply)
         self.assertEqual(reply.count('؟'), 1)
         self.assertEqual(reply.count('الفحص'), 1)

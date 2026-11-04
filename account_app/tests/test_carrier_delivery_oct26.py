@@ -104,7 +104,7 @@ class CarrierDeliveryPipelineTests(unittest.TestCase):
         model.assert_not_called()
         reply = self.visible(result)
         self.assertNotIn(CARRIER, reply)
-        self.assertTrue(reply.endswith(('شنو اللون اللي يعجبج؟', 'شنو اللون اللي يعجبك؟')))
+        self.assertTrue(reply.endswith(('شنو اللون اللي يعجبج؟', 'شنو اللون اللي يعجبك؟', 'شنو اللون اللي يعجبكم؟')))
         self.assertNotIn('توافق', reply)
 
     def test_known_variants_advance_to_booking_question(self):

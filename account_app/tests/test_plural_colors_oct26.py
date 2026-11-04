@@ -42,7 +42,7 @@ class PluralColorFactsTests(unittest.TestCase):
         result = choices.reply(dict(PRODUCT, colors='جوزي وردي'), TEXT, incoming(TEXT))
         self.assertIn('الوردي متوفر لعمر سنة و6 أشهر', result['reply'])
         self.assertIn('البيج مو ضمن الألوان المتوفرة', result['reply'])
-        self.assertRegex(result['reply'], r'تحب(?:ين)? الجوزي بدل البيج؟')
+        self.assertRegex(result['reply'], r'تحب(?:ين|ون)? الجوزي بدل البيج؟')
         self.assertEqual(result['order'], {})
         self.assertNotEqual(variants.colors('ماروني'), variants.colors('احمر'))
 
@@ -232,7 +232,7 @@ class PluralColorPipelineTests(unittest.TestCase):
     def test_live_catalog_replacement_is_not_quantity_consent(self):
         self.catalog[0]['colors'] = 'جوزي وردي'
         result = self.process(TEXT)
-        self.assertRegex(result['reply'], r'تحب(?:ين)? الجوزي بدل البيج؟')
+        self.assertRegex(result['reply'], r'تحب(?:ين|ون)? الجوزي بدل البيج؟')
         result = self.process('اي')
         self.assertIn('الجوزي والوردي متوفرات', result['reply'])
         self.assertIn('قطعة من كل لون؟', result['reply'])

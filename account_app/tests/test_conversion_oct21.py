@@ -30,7 +30,7 @@ class ImagePolicyRecoveryTests(unittest.TestCase):
              patch.object(self.m, '_call_main_ai_once') as provider:
             result = self.m.process_webhook(self.db, {}, use_debounce=False)
         provider.assert_not_called()
-        self.assertIn('7,000', result['reply'])
+        self.assertIn('7 آلاف', result['reply'])
         self.assertIn('الأنبار', result['reply'])
         self.assertNotIn('جوزي متوفر', result['reply'])
         self.assertTrue(result['meta']['image_unresolved'])
@@ -44,8 +44,8 @@ class ImagePolicyRecoveryTests(unittest.TestCase):
                                     ev['image_url'], None, None, {})
         result = self.m.pending_image_policy_reply(self.db, ev, {'human_review_id': 1})
         self.assertIn('يومين إلى ثلاثة', result['reply'])
-        self.assertIn('4,000', result['reply'])
-        self.assertIn('7,000', result['reply'])
+        self.assertIn('4 آلاف', result['reply'])
+        self.assertIn('7 آلاف', result['reply'])
         latest = self.m.save_message(self.db, ev['sender_id'], 'incoming', 'text', 'نفس اللون', None, None, None, {})
         collected = self.m.collect_unanswered_event(self.db, dict(ev, image_url=None, text='نفس اللون'), latest)
         self.assertIn('القياس 38', collected['text'])
@@ -60,7 +60,7 @@ class ImagePolicyRecoveryTests(unittest.TestCase):
              patch.object(self.m, 'match_product', return_value=(None, '', {'service_error': True, 'error_code': 'timeout'})), \
              patch.object(self.m, 'send_telegram_message', return_value=False):
             result = self.m.process_webhook(self.db, {}, use_debounce=False)
-        self.assertIn('7,000', result['reply'])
+        self.assertIn('7 آلاف', result['reply'])
         self.assertTrue(result['meta']['service_error'])
         self.assertNotIn('الصورة وصلت', result['reply'])
         self.assertNotIn('عرض القطعة', result['reply'])
@@ -74,8 +74,8 @@ class ImagePolicyRecoveryTests(unittest.TestCase):
 
     def test_policy_destination_is_not_saved_as_customer_address(self):
         self.prepare('شكد التوصيل لبغداد؟')
-        for question, province, fee in [('شكد التوصيل لبغداد؟', 'بغداد', '4,000'),
-                                        ('شكد التوصيل للبصرة؟', 'البصرة', '7,000')]:
+        for question, province, fee in [('شكد التوصيل لبغداد؟', 'بغداد', '4 آلاف'),
+                                        ('شكد التوصيل للبصرة؟', 'البصرة', '7 آلاف')]:
             result = self.m.store_policy_question_reply(question)
             self.assertIn(province, result['reply'])
             self.assertIn(fee, result['reply'])

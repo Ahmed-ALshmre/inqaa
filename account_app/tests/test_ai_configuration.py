@@ -89,9 +89,10 @@ class AIConfigurationTests(unittest.TestCase):
              patch.object(m.ai_transport, 'post') as provider:
             result = m._call_main_ai_once(ev, 'text', self.customer, [], [], None, None, '', [])
         provider.assert_not_called()
-        self.assertIn('4,000', result['reply'])
-        self.assertIn('6,000', result['reply'])
-        self.assertIn('صورة المنتج أو اسمه', result['reply'])
+        self.assertIn('4 آلاف', result['reply'])
+        self.assertIn('6 آلاف', result['reply'])
+        self.assertIn('صورة القطعة', result['reply'])
+        self.assertIn('اسمها', result['reply'])
         self.assertFalse(result['create_order'])
 
     def test_system_prompt_guides_short_answers_and_optional_next_step(self):
