@@ -172,6 +172,12 @@ def saved_order_total(text, order):
     return f'المجموع ويا التوصيل {customer_copy.chat_amount(total)} عيوني 🌷'
 
 
+def cart_total_question(text):
+    clean=sales_strategy.normalized(text)
+    return bool(re.search(r'حسابي|حسابنا|الحساب|المجموع|اجمالي|سعرن[اعه]',clean)
+        and not re.search(r'قماش|لون|قياس|عمر|طول|بطان|متى|شوكت|استلمت|دفعت|الغ|لغي|بشرط|اذا|(?<!\w)لو(?!\w)|خصم|تخفيض|تنزل|خلي',clean))
+
+
 def delivery_price_question(text):
     if delivered_total_inquiry(text):
         return True
@@ -226,10 +232,16 @@ def quote_quantity(question,context=None):
     explicit=requested_quantity(text)
     if explicit:return explicit
     if re.search(r'(?<!\w)(?:القطعه|القطعة|قطعة\s+وحد[هة]|قطعه\s+وحد[هة])(?!\w)',text):return 1
-    for value in [question]+[i.get('text') or '' for i in reversed((context or {}).get('evidence') or [])]:
+    focus=(context or {}).get('selection_product_id')
+    evidence=[i for i in (context or {}).get('evidence') or []
+              if not focus or not i.get('product_id') or i['product_id']==focus]
+    for value in [question]+[i.get('text') or '' for i in reversed(evidence)]:
         clean=sales_strategy.normalized(value)
         count=requested_quantity(clean)
-        if count and re.search(r'اريد|اخذ|احجز|حجزي|ثبت',clean):return count
+        if count and re.search(r'اريد|ريد|اخذ|اخد|احجز|حجزي|ثبت',clean):return count
+        if (re.search(r'(?:اريد|ريد|اخذ|اخد|خليلي)\s*(?:بس\s+)?(?:واحد[هة]?|1)(?!\w)',clean)
+                and not re.search(r'ثاني|ثان[ية]|وواحد|و\s+واحد|\bو\b',clean)):
+            return 1
         ages=product_variants.child_ages(value)
         if len(ages)>1 and re.search(r'اريد|طفلين|للاول|للثاني|لكل',clean):return len(ages)
         if re.search(r'(?:بس|فقط)?\s*قطعة\s+وحد[هة]',clean):return 1

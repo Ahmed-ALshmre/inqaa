@@ -24,10 +24,12 @@ def policy_question(text):
     clean = re.sub(r'(شكد|اشكد|كم|بشكد)(?=التوصيل|توصيل|الشحن|شحن)', r'\1 ', clean)
     clean = re.sub(r'^(?:السلام عليكم|سلام عليكم|هلو|مرحبا)\s*', '', clean)
     clean = re.sub(r'^و(?=توصيل|التوصيل)', '', clean)
+    clean = re.sub(r'^خدم[هة]\s+', '', clean)
     names = {normalized(name) for aliases in PROVINCES.values() for name in aliases}
     names.update('لل' + name[2:] for name in list(names) if name.startswith('ال'))
     location = '|'.join(sorted({re.escape(name) for name in names}, key=len, reverse=True))
     clean = re.sub(r'(?:^|\s)(?:ل|الى |لـ)?(?:' + location + r')(?=\s|$)', ' ', clean)
+    clean = re.sub(r'(?<!\w)(?:الى\s+|ل)?(?:(?:كل|جميع|باقي)\s+)?(?:ال)?محافظات(?:ي)?(?!\w)', ' ', clean)
     clean = ' '.join(clean.split())
     if re.fullmatch(r'(?:متى|يمتى|شوكت)\s+(?:(?:يتم|يصير)\s+)?(?:التوصيل|توصيل|التسليم|تسليم|يوصل الطلب)', clean):
         return 'delivery_time'
