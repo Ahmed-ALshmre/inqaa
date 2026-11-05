@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries
+    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media, known_sticker
@@ -824,7 +824,7 @@ def storage_restore_pending():
 
 @app.before_request
 def log_incoming_http_request():
-    if not REQUEST_LOGGING_ENABLED or request.path.startswith("/chatwoot/webhook"):
+    if not REQUEST_LOGGING_ENABLED or request.path.startswith(("/chatwoot/webhook", "/api/live/", "/api/settings/live-access")):
         return
     record = _incoming_request_log_record()
     _append_incoming_request_log(record)
@@ -836,7 +836,7 @@ def log_incoming_http_request():
 
 @app.after_request
 def log_outgoing_http_response(response):
-    if not REQUEST_LOGGING_ENABLED:
+    if not REQUEST_LOGGING_ENABLED or request.path.startswith(("/api/live/", "/api/settings/live-access")):
         return response
     # Skip logging for static files and binary/streaming responses to avoid consuming their stream
     path = request.path
@@ -908,6 +908,7 @@ def init_db():
     inbound_voice.init_db(db)
     sales_learning.init_db(db)
     ai_jobs.init_db(db)
+    live_access.init_db(db)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS processed_messages (
             mid        TEXT PRIMARY KEY,
@@ -14279,6 +14280,10 @@ def _backup_sqlite_file_to_bytes(path):
         dst = sqlite3.connect(tmp_path)
         try:
             src.backup(dst)
+            if dst.execute("SELECT 1 FROM sqlite_master WHERE name='live_access_tokens'").fetchone():
+                dst.execute('DELETE FROM live_access_tokens')
+                dst.execute('DELETE FROM live_access_audit')
+                dst.commit()
             if dst.execute("SELECT 1 FROM sqlite_master WHERE name='menger_store_settings'").fetchone():
                 dst.execute("UPDATE menger_store_settings SET api_key=''")
                 if dst.execute("SELECT 1 FROM sqlite_master WHERE name='menger_connection'").fetchone():
@@ -18818,6 +18823,7 @@ def api_product_question_answer(identity):
 
 chatwoot.install(sys.modules[__name__])
 zernio.install(sys.modules[__name__])
+live_access.install(sys.modules[__name__])
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 

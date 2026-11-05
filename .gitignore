@@ -55,6 +55,8 @@ analysis_20261023/
 analysis_20261024/
 analysis_20261027/
 /outputs/
+.live-access/
+live-access.json
 /docs/updates/2026-10-21-*.md
 outputs/sales-strengthening-20261014/
 outputs/rewards-balance-fix-20261014/

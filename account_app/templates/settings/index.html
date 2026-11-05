@@ -13,6 +13,7 @@
 <h2 class="workspace-section-label">المتجر وفريق العمل</h2>
 <section class="admin-card-grid">
   {% if staff_person and staff_person.owner %}<a class="admin-link-card" href="/settings/staff"><i class="bi bi-people"></i><h2>الموظفون والصلاحيات</h2><p>حسابات مستقلة، صلاحيات الرد والإدارة، وتعطيل الوصول.</p></a>{% endif %}
+  {% if staff_person and staff_person.owner %}<a class="admin-link-card" href="/settings/live-access"><i class="bi bi-plug"></i><h2>الوصول المباشر للمراجعة</h2><p>اتصالات قراءة آمنة للمحادثات والكتالوج والطلبات، مع إمكانية إلغاء الوصول.</p></a>{% endif %}
   <a class="admin-link-card" href="/settings/stores">
     <i class="bi bi-shop"></i><h2>المتاجر والـ Webhook</h2><p>إضافة المتاجر والحصول على رابط Webhook مستقل لكل متجر.</p>
   </a>
