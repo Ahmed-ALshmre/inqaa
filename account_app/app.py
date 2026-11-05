@@ -419,7 +419,7 @@ DEFAULT_INSPECTION_POLICY_TEXT = (
     "إذا لم يطابق الطلب يرجع مع المندوب بدون دفع. "
     "أهم شي فحص الطلب قبل دفع المبلغ."
 )
-DEFAULT_ORDER_CONFIRMATION_TEXT = 'تم تثبيت الطلب عيوني 🌷'
+DEFAULT_ORDER_CONFIRMATION_TEXT = DEFAULT_INSPECTION_POLICY_TEXT
 DEFAULT_MAIN_SYSTEM_PROMPT = (
     """أنتِ موظفة مبيعات بشرية محترفة جداً (تعتبرين أفضل موظفة مبيعات في العالم)، تعملين في {store_name}. تتحدثين باللهجة العراقية الطبيعية بكل بشاشة، طاقة إيجابية، وود.
 وصف المتجر: {store_description}.
@@ -1747,9 +1747,9 @@ def get_delivery_policy_text(db=None):
 
 def get_order_confirmation_text(db=None):
     saved = get_store_settings(db).get("inspection_message") or DEFAULT_ORDER_CONFIRMATION_TEXT
-    # Upgrade only the old built-in receipt, preserving owner-written receipts.
+    # Use the owner's complete inspection receipt; preserve separately edited receipts.
     compact = re.sub(r'\s+', ' ', str(saved)).strip()
-    legacy = (DEFAULT_INSPECTION_POLICY_TEXT,
+    legacy = ('تم تثبيت الطلب عيوني 🌷', DEFAULT_INSPECTION_POLICY_TEXT,
               'تم تثبيت الطلب\nيرجى فحص الطلب بحضور المندوب والتأكد من الموديل والقياس. '
               'إذا لم يطابق الطلب يرجع مع المندوب بدون دفع.\nاهم شي تفحصين الطلب قبل دفع المبلغ.')
     if compact in {re.sub(r'\s+', ' ', text).strip() for text in legacy}:
@@ -5299,7 +5299,7 @@ def first_message_named_products(text, products):
     return list({p['product_id']: p for p, _, _ in matches}.values())
 
 
-def customer_product_target(text, products):
+def customer_product_target(text, products, context_product=None):
     """Resolve an unambiguous available model without guessing from shared words."""
     text = text or ""
     # Comparisons and negated names do not establish a new primary model.
@@ -5310,6 +5310,17 @@ def customer_product_target(text, products):
     # never silently become an available model sharing its category.
     named = first_message_named_products(text, products)
     target = (named[0] if len(named) == 1 else None) if named else _text_match_product(text, products)
+    # A generic garment word inside negotiation is a reference to the known
+    # photo, not an instruction to switch to a different SKU named "فستان".
+    generic = customer_copy.normalized((target or {}).get('product_name')).strip()
+    clean = customer_copy.normalized(text)
+    if (target and context_product and target['product_id']!=context_product.get('product_id')
+            and generic in {'فستان','قميص','تنوره','بنطلون','بنطرون','دشداشه','سوت','طقم','تراك'}
+            and re.search(r'يصير|تحسب|تنزل|تخفيض|خصم|اذا\s*(?:اخذ|اشتري)',clean)
+            and not re.search(r'بدل|غير\s+(?:الموديل|القطعه)|اقصد|قصدي|اريد\s+(?:هذا|هاذا|فستان\s+ثاني)',clean)):
+        bound=next((p for p in available if p['product_id']==context_product.get('product_id')),None)
+        if bound:
+            return bound
     return target if target and target in available else None
 
 
@@ -7260,7 +7271,8 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     if (ai_result.get('_child_availability') or ai_result.get('_plural_color_reply')) and ai_result.get('requires_human'):
         review_id = create_human_review(db, ev, ai_result.get('handoff_reason') or
             'تأكيد جدول الأعمار أو توفر الموديل بعد الربط', notify_telegram=True)
-        return {'sent': False, 'reply': '', 'reason': 'child_availability_review', 'human_review_id': review_id}
+        return {'sent': False, 'reply': '', 'reason': 'child_availability_review', 'human_review_id': review_id,
+                'needs_human': True}
     if not reply or is_ai_handoff_reply(reply):
         return {"sent": False, "reply": "", "reason": "empty_or_handoff_reply",
                 "needs_human": bool(ai_result.get('requires_human')),
@@ -8009,14 +8021,15 @@ def requests_alternative_photo(text):
 def transparent_price_reply(ev, product, customer, customer_products, positions):
     """Answer a narrow single-selection price inquiry with the full current cost."""
     text = ev.get('text') or ''
-    total_inquiry = sales_playbook.delivered_total_inquiry(text)
+    cart_total = sales_playbook.cart_total_question(text)
+    total_inquiry = sales_playbook.delivered_total_inquiry(text) or cart_total
     if (total_inquiry
             and set(sales_answers.topics(text)) - {'price', 'delivery'}):
         return None  # Compound questions still need all of their independent facts.
     if (not has_app_context() or not product or ev.get('_post_order')
             or ev.get('image_url') or ev.get('_image_matches')
             or not (sales_playbook.price_question(ev.get('text'))
-                    or sales_playbook.delivery_price_question(ev.get('text')))
+                    or sales_playbook.delivery_price_question(ev.get('text')) or cart_total)
             or _stock_state(product) != 'available'
             or len(customer_products or []) > 1 or len(positions or []) > 1):
         return None
@@ -8032,6 +8045,21 @@ def transparent_price_reply(ev, product, customer, customer_products, positions)
         options = [('', settings['other_fee'])]
     else:
         options = [(' لبغداد', settings['baghdad_fee']), (' لبقية المحافظات', settings['other_fee'])]
+    if cart_total:
+        quantity=sales_playbook.quote_quantity(text,ev.get('_sales_context'))
+        try:
+            lines=[]
+            for region,fee in options:
+                priced=price_order([{'product_id':product['product_id'],'quantity':quantity}],[product],fee)
+                label='القطعتين' if quantity==2 else f'{quantity} قطع' if quantity>1 else 'القطعة'
+                lines.append(f"{label} بـ{customer_copy.chat_amount(priced['product_total'])}، "
+                    f"والتوصيل{region} {customer_copy.chat_amount(priced['delivery_fee'])}؛ "
+                    f"المجموع {customer_copy.chat_amount(priced['product_total']+priced['delivery_fee'])} 🌷")
+            return {'reply':'\n'.join(lines),'reply_parts':lines,'create_order':False,'order':{},
+                    'requires_human':False,'_local_reply':True,'_transparent_price':True,
+                    '_suppress_product_images':True}
+        except (ValueError,TypeError,KeyError):
+            return None
     parts = sales_playbook.price_preview(product, options, sales_playbook.requested_quantity(ev.get('text')))
     if not parts:
         return None
@@ -9509,7 +9537,10 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
         if exact:
             return owner_result_surface(dict(reply=exact,create_order=False,order={}), ev, customer, history)
         factual_topics=set(sales_answers.topics(ev.get('text') or ''))
-        if factual_topics == {'fabric','season'}:
+        fabric_only=(factual_topics=={'fabric'} and re.fullmatch(
+            r'(?:بس\s+)?(?:كوليلي\s+)?(?:شنو|شنهو|ما\s*هو)\s+(?:نوع(?:ي[هة])?\s+)?(?:ال)?قماش(?:ه|ها)?[؟?!.،\s]*',
+            sales_strategy.normalized(ev.get('text'))))
+        if factual_topics == {'fabric','season'} or fabric_only:
             natural=sales_voice.answer(ev.get('text') or '',chosen,context,customer,history,{})
             if natural:
                 return owner_result_surface(natural,ev,customer,history)
@@ -12199,6 +12230,18 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         return resolve_product_choice(db, ev, products)
     ev = zernio.product_event(sys.modules[__name__], db, ev, products)
     recover_mapped_ad_review(db, ev, products)
+    if (message_type=='text' and not ev.get('image_url') and not ev.get('attachments')
+            and sales_recovery.policy_question(ev.get('text'))
+            and not is_existing_order_followup(ev.get('text'))):
+        advertised=ad_attribution.product_candidates(products,ev,current_store_id())
+        policy_product=(advertised[0] if len(advertised)==1 else
+                        select_customer_context_product(ev.get('text') or '',customer_products))
+        policy=store_policy_question_reply(ev['text'],policy_product,ev=ev,customer=customer,history=history)
+        if policy and not policy.get('_needs_fact_review'):
+            if len(advertised)==1:
+                complete_customer_product_link(db,ev['sender_id'],advertised[0],'ad_id',
+                    source='ad_ref',resume_ai=False,close_reviews=False)
+            return saved_checkout_reply(db,ev,policy['reply'],{'store_policy_reply':True})
     pending_service_reply = pending_image_service_followup(db, ev, products)
     if pending_service_reply:
         return pending_service_reply
@@ -12299,7 +12342,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     if message_type != "image":
         selection = ev.get("_selection_resolved")
         target = (next((p for p in products if p["product_id"] == selection.get("focus_id")), None)
-                  if selection else customer_product_target(ev.get("text"), products))
+                  if selection else customer_product_target(ev.get("text"), products, active_binding))
         if ev.get('_first_message_product_id'):
             target = next(p for p in products if p['product_id'] == ev['_first_message_product_id'])
         ad_matches = ad_attribution.product_candidates(products, ev, current_store_id())
@@ -13505,7 +13548,11 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
                 _current_store_id.reset(token)
             return {'ok': False, 'error': 'لم يكتمل إرسال الرد.'}
         meta = result.get('meta') or {}
-        if meta.get('service_error') or (meta.get('auto_reply') and not meta['auto_reply'].get('sent')):
+        auto=meta.get('auto_reply') or {}
+        intentional=(auto.get('needs_human') or auto.get('reason') in {
+            'ai_disabled','ai_disabled_for_conversation','customer_requested_human','conversation_changed',
+            'child_availability_review'})
+        if meta.get('service_error') or (auto and not auto.get('sent') and not intentional):
             return {'ok': False, 'error': 'تعذر توليد الرد أو إرساله؛ راجع مشاكل النظام.', 'meta': meta}
         return {'ok': True, 'meta': meta}
 
@@ -18383,7 +18430,8 @@ def resume_pending_ai_reply(db, sender_id, payload):
             event['_image_matches']=image_result['images']
         if not product:
             reason='تعذر تحليل الصورة مؤقتاً؛ حاول مجدداً.' if (image_result or {}).get('service_error') else 'حدد منتج الصورة من نافذة التدخل البشري ثم أعد الرد.'
-            return outcome(needs_human=True,error=reason,reason='image_unresolved')
+            return outcome(needs_human=True,error=reason,reason='image_unresolved',
+                           service_error=bool((image_result or {}).get('service_error')))
     if not product:
         return outcome(reason='missing_product',error='تم تشغيل AI؛ اختر المنتج إذا أردت إعادة الرد على الرسالة السابقة.')
     if latest_incoming_message(db,sender_id).get('id')!=latest['id']:

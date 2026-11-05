@@ -303,6 +303,9 @@ def unresolved_condition(history, text=''):
 
 def is_existing_order_followup(text):
     clean = normalized(text)
+    if (re.search(r'(?:كيف(?:ي[هة])?|شلون|طريق[هة])\s+(?:الطلب|الحجز|اطلب|احجز)',clean)
+            and not re.search(r'طلبت|طلبي(?:تي|ه)?(?!\w)|وصيت|حجزت|حاجز[هة]|موصي[هة]|ما\s*وصل|مو\s*وصل|تاخر|تأخر|صارلي',clean)):
+        return False  # "كيفية الطلب ... مكانكم وين" describes a new purchase.
     if re.search(r'(?:شوكت|يمتى|يمته|متى|وين).{0,35}(?:طلبي|طلبيه|طلبية|الطلب|حجزي)|(?:طلبي|الطلب|طلبية|طلبيه|حجزي).{0,35}(?:شوكت|يمتى|يمته|متى|يوصل)', clean) and not re.search(r'اذا|لو احجز|لو اطلب|اريد احجز|اريد اطلب', clean):
         return True
     if (not re.search(r'اذا|لو\s+(?:احجز|اطلب)|اريد\s+(?:احجز|اطلب)', clean)

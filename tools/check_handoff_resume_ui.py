@@ -39,7 +39,7 @@ def main():
                         row=db.execute('SELECT * FROM ai_jobs WHERE id=?',(identity,)).fetchone()
                         if row and row['status']=='queued':
                             job=dict(row);result=m.run_ai_job(job,json.loads(job['payload']))
-                            m.ai_jobs.finish(db,identity,'done' if result.get('ok',True) else 'failed',result)
+                            m.ai_jobs.finish_result(db,identity,result)
                     response=client.open(path,method=request.method,data=request.post_data,headers=dict(request.headers))
                     route.fulfill(status=response.status_code,body=response.data,content_type=response.content_type)
                 page.route('**/*',route_request)

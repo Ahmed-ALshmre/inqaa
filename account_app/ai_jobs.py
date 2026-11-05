@@ -83,6 +83,14 @@ def finish(db, job_id, status, result):
     db.commit()
 
 
+def finish_result(db,job_id,result):
+    # An intentional human review can carry an operator explanation in error.
+    # It completed its routing action; actual service/delivery failures stay failed.
+    failed=(result.get('ok') is False or bool(result.get('service_error'))
+            or bool(result.get('error') and not result.get('needs_human')))
+    finish(db,job_id,'failed' if failed else 'done',result)
+
+
 def deliver(db, identity, payload, send):
     key = hashlib.sha256((identity + json.dumps(payload, sort_keys=True, ensure_ascii=False)).encode()).hexdigest()
     with db:
@@ -141,7 +149,7 @@ def start(path, handler, workers=8):
                 job = claim(db, owner)
                 if job:
                     result = handler(job, json.loads(job['payload'])) or {}
-                    finish(db, job['id'], 'failed' if result.get('error') or result.get('ok') is False else 'done', result)
+                    finish_result(db, job['id'], result)
             except Busy:
                 db.rollback()
                 db.execute("UPDATE ai_jobs SET status='queued',available_at=?,owner=NULL WHERE id=?",

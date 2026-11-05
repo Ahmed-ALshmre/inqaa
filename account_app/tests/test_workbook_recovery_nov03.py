@@ -87,7 +87,7 @@ class RecoveryCheckout(TestCase):
         self.assertFalse(self.m.is_customer_ai_enabled(self.db, self.sender))
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE sender_id=? AND status='pending'", (self.sender,)).fetchone()[0], 1)
 
-    def test_stock_receipt_shortens_but_owner_receipt_is_preserved(self):
+    def test_full_inspection_receipt_and_owner_custom_receipt_are_preserved(self):
         with patch.object(self.m, 'get_store_settings', return_value={'inspection_message': self.m.DEFAULT_INSPECTION_POLICY_TEXT}):
             self.assertEqual(self.m.get_order_confirmation_text(self.db), self.m.DEFAULT_ORDER_CONFIRMATION_TEXT)
         custom = 'تم تثبيت الطلب. يرجى فحص الطلب بحضور المندوب. أهم شي تسلمون، توصيلنا مجاني.'

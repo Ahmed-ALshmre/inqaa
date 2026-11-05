@@ -211,6 +211,8 @@ class ConversationContextTests(unittest.TestCase):
                     selection.assert_not_called()
                     if model.called:
                         self.assertEqual(model.call_args.args[5]['product_id'],'SK')
+                    elif phrase == 'بس كوليلي شنو نوع القماش':
+                        self.assertIn(skirt['fabric'], response['reply'])
                     else:
                         self.assertIn('المندوب', response['reply'])
             self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],0)
