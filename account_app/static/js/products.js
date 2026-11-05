@@ -51,6 +51,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   byId('productImages').addEventListener('input', () => { renderImagePreview(); markProductDirty(); });
   byId('relatedProductsSearch').addEventListener('input', renderRelatedProducts);
   byId('productId').addEventListener('input', renderRelatedProducts);
+  byId('productType').addEventListener('change',()=>{
+    const profile=catalogSchema.product_type_profiles?.[byId('productType').value];
+    if(profile){byId('productSizeSystem').value=profile.size_system;updateSizeFields();updateProductSummary();}
+  });
   byId('productForm').addEventListener('input', () => { updateSizeFields(); updateProductSummary(); markProductDirty(); });
   byId('productForm').addEventListener('change', () => { updateSizeFields(); updateProductSummary(); markProductDirty(); });
   byId('productForm').addEventListener('keydown', event => {
@@ -112,6 +116,7 @@ async function loadProducts(force = false) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'فشل تحميل المنتجات');
     allProducts = data.products || [];
+    Object.assign(catalogSchema,data.catalog_schema||{});renderProductTypeOptions();
     renderGroupLists(); renderProducts();
     if (currentProductId && allProducts.some(p => p.product_id === currentProductId)) editProduct(currentProductId, true);
     else newProduct(false, true);
@@ -159,6 +164,7 @@ function newProduct(rerender = true, force = false) {
   if (!force && !allowProductNavigation()) return;
   currentProductId = null; productImageColors = {}; relatedProductIds = new Set();
   byId('productForm').reset(); byId('productImages').value = '';
+  renderProductTypeOptions('');
   byId('productStatus').value = 'active'; byId('productSizeSystem').value = 'legacy';
   byId('productRecommendationPriority').value = '3';
   byId('productAgeMinUnit').value = 'years'; byId('productAgeMaxUnit').value = 'years';
@@ -185,6 +191,7 @@ function editProduct(productId, force = false) {
   if (!force && !allowProductNavigation()) return;
   const product = allProducts.find(p => p.product_id === productId); if (!product) return;
   currentProductId = productId;
+  renderProductTypeOptions(product.product_type||'');
   relatedProductIds = new Set(product.related_product_ids || []);
   for (const [key, id] of Object.entries(fields)) setSelectValue(id, product[key]);
   byId('productAdIds').value = (product.ad_ids || []).join('\n');
@@ -226,8 +233,16 @@ function rememberProductSnapshot() { cleanProductSnapshot = JSON.stringify(colle
 function markProductDirty() { const dirty = hasProductChanges(); byId('saveState').textContent = dirty ? 'تعديلات غير محفوظة' : 'لا توجد تعديلات'; byId('saveState').classList.toggle('dirty', Boolean(dirty)); }
 function navigateProduct(offset) { const list = filteredProducts(); const index = list.findIndex(p => p.product_id === currentProductId); if (list[index+offset]) editProduct(list[index+offset].product_id); }
 function updateProductNavigation() { const list = filteredProducts(); const index = list.findIndex(p => p.product_id === currentProductId); byId('productPosition').textContent = index >= 0 ? `${index+1} / ${list.length}` : currentProductId ? 'خارج النتائج' : 'جديد'; byId('previousProduct').disabled = index <= 0; byId('nextProduct').disabled = index < 0 || index >= list.length-1; }
-function groupNames() { return [...new Set(allProducts.flatMap(p => p.recommendation_groups || []))].sort((a,b) => a.localeCompare(b,'ar')); }
-function renderGroupLists() { for (const id of ['productGroupFilter','existingGroupPicker']) { const selected = byId(id).value; byId(id).innerHTML = `<option value="">${id === 'productGroupFilter' ? 'كل المجموعات' : 'اختر مجموعة'}</option>`; for (const name of groupNames()) byId(id).add(new Option(name,name)); byId(id).value = selected; } }
+function renderProductTypeOptions(selected=byId('productType').value){
+  const select=byId('productType');select.replaceChildren(new Option('غير محدد',''));
+  for(const [id,name] of Object.entries(catalogSchema.product_types||{})){
+    const active=catalogSchema.product_type_profiles?.[id]?.active!==false;
+    if(active||id===selected)select.add(new Option(name+(active?'':' — مخفية'),id));
+  }
+  select.value=selected;
+}
+function groupNames(activeOnly=false) { const managed=catalogSchema.groups||[];return [...new Set([...managed.filter(r=>!activeOnly||r.active).map(r=>r.name),...allProducts.flatMap(p=>p.recommendation_groups||[]).filter(name=>!activeOnly||!managed.some(r=>r.name===name&&!r.active))])].sort((a,b)=>a.localeCompare(b,'ar')); }
+function renderGroupLists() { for (const id of ['productGroupFilter','existingGroupPicker']) { const selected = byId(id).value; byId(id).innerHTML = `<option value="">${id === 'productGroupFilter' ? 'كل المجموعات' : 'اختر مجموعة'}</option>`; for (const name of groupNames(id==='existingGroupPicker')) byId(id).add(new Option(name,name)); byId(id).value = selected; } }
 function addExistingGroup() { const selected = byId('existingGroupPicker').value; if (!selected) return; const groups = [...new Set([...splitGroups(byId('productGroups').value),selected])]; byId('productGroups').value = groups.join('، '); markProductDirty(); }
 function splitGroups(value) { return [...new Set(value.split(/[،,;؛\n]+/).map(v => v.trim()).filter(Boolean))]; }
 function numericValue(id, multiplier=1) { const value = byId(id).value.trim(); return value === '' ? null : Number(value)*multiplier; }
@@ -235,10 +250,12 @@ function updateSizeFields() {
   const mode = byId('productSizeSystem').value || 'legacy';
   byId('ageSizeFields').hidden = mode !== 'age'; byId('weightSizeFields').hidden = mode !== 'weight';
   byId('legacySizeField').hidden = ['age','weight','none'].includes(mode);
+  byId('productSizes').placeholder=mode==='shoe'?'مثال: 36، 37، 38، 39 أو 40 إلى 45':'38، 40، 44 أو S / M / L أو 3 إلى 7 سنوات';
   const payload = collectPayload(); let text = '';
   if (mode === 'age') text = `نطاق العمر: ${ageLabel(payload.age_min_months)} إلى ${ageLabel(payload.age_max_months)}`;
   if (mode === 'weight') text = `نطاق وزن تقريبي: ${payload.weight_min_kg ?? '—'} إلى ${payload.weight_max_kg ?? '—'} كيلو`;
   if (mode === 'none') text = 'هذا المنتج لا يحتاج قياساً.';
+  if (mode === 'shoe') text = 'اكتب قياسات الحذاء المتوفرة فعلياً. عمر الطفل أو الوزن لا يحددان قياس الحذاء.';
   byId('sizePreview').textContent = text; byId('sizePreview').hidden = !text;
 }
 function ageLabel(months) { if (months == null || !Number.isFinite(months)) return '—'; const years = Math.floor(months/12), rest = months%12; return [years ? `${years} سنة` : '', rest || !years ? `${rest} شهر` : ''].filter(Boolean).join(' و'); }

@@ -196,6 +196,8 @@ def page(db, store_id, sender_id, products, *, image_urls=None, start=False, req
                       else f'هاي الدفعة التالية، بيها {len(selected)} موديلات متوفرة:')
             ending = ('أي واحد لفت نظرج؟ وإذا تحبين تشوفين البقية اكتبي «البقية».' if more
                       else 'هذي آخر دفعة بهالمجموعة. أي موديل عجبج حتى نشوف قياسه ولونه؟')
+            if not more and all(eligible[item['product_id']][0].get('size_system')=='none' for item in selected):
+                ending='هذي آخر دفعة بهالمجموعة. أي موديل عجبج؟'
             reply = prefix + '\n' + '\n'.join(item['text'] for item in selected) + '\n\n' + ending
         elif start:
             reply = 'هسه ما عندي صور لموديلات متوفرة أعرضها إلك.'

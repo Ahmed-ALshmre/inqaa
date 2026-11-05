@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const can = p => person.permissions.includes(p);
     document.querySelectorAll('a[href]').forEach(link => {
       const path = new URL(link.href,location.href).pathname;
-      let permission = path.startsWith('/settings') ? 'settings' : path.startsWith('/orders') ? 'orders' : path.startsWith('/products') ? 'products' : path.includes('advisor') ? 'advisor' : '';
+      let permission = path.startsWith('/settings') ? 'settings' : path.startsWith('/orders') ? 'orders' : path.startsWith('/products') || path==='/product-categories' ? 'products' : path.includes('advisor') ? 'advisor' : '';
       if(path.includes('maintenance') || path.includes('/staff')) permission='owner';
       if(permission && !can(permission)) link.hidden=true;
     });

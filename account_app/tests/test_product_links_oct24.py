@@ -151,13 +151,13 @@ class ProductEditorBoundaryTests(unittest.TestCase):
 const fs=require('fs'), vm=require('vm'), assert=require('assert');
 class Element {
  constructor(){this.value='';this.children=[];this.listeners={};this.style={};this.checked=false;this.classList={toggle(){}};}
- append(...x){this.children.push(...x);} replaceChildren(...x){this.children=x;}
+ append(...x){this.children.push(...x);} replaceChildren(...x){this.children=x;} add(x){this.children.push(x);}
  addEventListener(k,v){this.listeners[k]=v;} setAttribute(k,v){this[k]=v;}
  reset(){for(const x of nodes.values()){x.value='';x.checked=false;}for(const x of cues)x.checked=false;}
 }
 const nodes=new Map(), cues=['limited_stock','high_demand','frequent_bookings','many_purchases'].map(value=>Object.assign(new Element(),{value}));
 const document={getElementById(id){if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id);},createElement(){return new Element();},addEventListener(){},querySelectorAll(s){if(!s.includes('productSalesCues'))return [];return s.endsWith(':checked')?cues.filter(x=>x.checked):cues;}};
-const sandbox={document,window:{location:{search:'?store_id=default'}},URLSearchParams,Set,console,confirm:()=>true};vm.createContext(sandbox);
+const sandbox={document,window:{location:{search:'?store_id=default'}},Option:class extends Element{constructor(text,value){super();this.textContent=text;this.value=value;}},URLSearchParams,Set,console,confirm:()=>true};vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),sandbox);
 vm.runInContext(`allProducts=[
 {product_id:'A',store_id:'default',product_name:'الأصل',related_product_ids:['B'],sales_cues:['high_demand'],ad_ids:['120251751355980095','120251751385940095'],stock_quantity:0,status:'active'},

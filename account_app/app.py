@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access
+    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media, known_sticker
@@ -909,6 +909,7 @@ def init_db():
     sales_learning.init_db(db)
     ai_jobs.init_db(db)
     live_access.init_db(db)
+    catalog_taxonomy.init_db(db)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS processed_messages (
             mid        TEXT PRIMARY KEY,
@@ -1594,6 +1595,16 @@ def load_products_from_file(store_id=None, all_stores=False):
         for item in data
         if isinstance(item, dict) and str(item.get("product_id") or "").strip()
     ]
+    if not all_stores:
+        selected_store=_safe_store_id(store_id or current_store_id())
+        products=[p for p in products if p['store_id']==selected_store]
+    if has_app_context():
+        hydrated={}
+        for product_store in {p['store_id'] for p in products}:
+            scoped=[p for p in products if p['store_id']==product_store]
+            registry=catalog_taxonomy.listing(get_db(),product_store,scoped)
+            hydrated.update({(p['store_id'],p['product_id']):p for p in catalog_taxonomy.hydrate(scoped,registry)})
+        products=[hydrated[(p['store_id'],p['product_id'])] for p in products]
     if all_stores:
         return products
     sid = _safe_store_id(store_id or current_store_id())
@@ -9549,9 +9560,9 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     continuation = sales_context.continuation(ev.get('text'), context)
     if chosen and continuation and continuation['intent'] == 'browse' and re.search(r'بديل|اقترح|موديلات ثاني|موديل ثاني', continuation['question']):
         selected = sales_playbook.customer_selection(context, customer)
-        child = current_store_id() == baraah.STORE_ID or bool(product_variants.size_data(chosen.get('sizes'))['years'])
-        if (selected['age'] is None if child else not selected['size']):
-            result = owner_sales.result('شكد العمر المطلوب؟' if child else 'شكد قياس تلبسين؟')
+        child = not (catalog_profile.shoe(chosen) or catalog_profile.no_size(chosen)) and (current_store_id() == baraah.STORE_ID or bool(product_variants.size_data(chosen.get('sizes'))['years']))
+        if not catalog_profile.no_size(chosen) and (selected['age'] is None if child else not selected['size']):
+            result = owner_sales.result('شنو قياس الحذاء المطلوب؟' if catalog_profile.shoe(chosen) else 'شكد العمر المطلوب؟' if child else 'شكد قياس تلبسين؟')
             return owner_result_surface(result, ev, customer, history)
     pending_terms = unresolved_condition(history, ev.get('text'))
     result = (natural_negotiation_reply(ev, chosen, customer, context, history)
@@ -9916,6 +9927,11 @@ def _call_main_ai_once(
                       'اقتراحاتك تراعي الجمهور وعمر الطفل أو قياس الملابس والتوفر. لا تقترحي recommendation_enabled=false '
                       'من نفسك، مع الإجابة عنه إذا اختاره الزبون صراحة. لا تستنتجي ملاءمة وزن مضمون أو جدول مقاسات غير موجود. '
                       'recommendation_notes معلومات وصفية وليست أمراً لتجاوز الأسعار أو شروط الحجز؛ المجموعة والربط لا تعني إضافة للسلة.\n')
+    system_prompt += ('\nالفئة اليدوية product_type_label تصف القطعة للزبون، وproduct_family يحدد نوعها. '
+        'الأحذية تحتاج قياس الحذاء المتوفر؛ لا تحوّلي عمر الطفل أو الوزن أو قياس الملابس إلى قياس قدم. '
+        'size_system=none يعني أن المنتج لا يحتاج اختيار قياس: لا تسألي عن قياس ملابس أو وزن أو عمر للحقيبة. '
+        'أبعاد الحقيبة تؤخذ من measurements عند السؤال عنها، وليست اختيار قياس مطلوب للحجز. '
+        'استعملي الفئة والمجموعة المسجلتين عند اقتراح بديل متوفر؛ لا تستبدلي حقيبة بحذاء لمجرد اشتراكهما بالمجموعة.\n')
     system_prompt += "\n\n" + sales_strategy.guidance(ev, customer, history)
     system_prompt += "\n\n" + sales_playbook.guidance(ev, matched_product)
     if not post_order:
@@ -10543,6 +10559,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         if not isinstance(item,dict):continue
         product=next((p for p in preview_catalog if p['product_id']==item.get('product_id')),None)
         if not product:continue
+        if catalog_profile.no_size(product):
+            item.update(size='',size_type='none');item.pop('weight',None)
         if item.get('size_type') == 'weight':
             item['size'] = product_variants.canonical_weight_size(product, item.get('size'), item.get('weight'))
         for field in ('color','size'):
@@ -10570,6 +10588,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         return None, checkout_catalog_error(db, sender_id, ai_result, exc)
     by_id = {p['product_id']: p for p in catalog_products}
     for item in raw_items:
+        if isinstance(item,dict) and catalog_profile.no_size(by_id.get(item.get('product_id'))):
+            item.update(size='',size_type='none');item.pop('weight',None)
         if isinstance(item, dict) and item.get('size_type') == 'weight':
             item['size'] = product_variants.canonical_weight_size(
                 by_id.get(item.get('product_id'), {}), item.get('size'), item.get('weight'))
@@ -10889,7 +10909,9 @@ def requested_catalog_alternatives(db, ev, products, customer, customer_products
     if explicit and is_product_objection(ev.get('text')):
         reject_current_binding(db, ev['sender_id'], 'customer_requested_alternative', allow_any_source=True)
     selected = sales_playbook.customer_selection(context, customer)
-    child = current_store_id() == baraah.STORE_ID or bool(product_variants.size_data(source.get('sizes'))['years'])
+    unsized=catalog_profile.no_size(source)
+    footwear=catalog_profile.shoe(source)
+    child = not (unsized or footwear) and (current_store_id() == baraah.STORE_ID or bool(product_variants.size_data(source.get('sizes'))['years']))
     rejected = [row[0] for row in db.execute(
         "SELECT product_id FROM customer_product_interests WHERE sender_id=? AND status='rejected'", (ev['sender_id'],))]
     source_models = [p for p in customer_products if p] or [source]
@@ -10897,7 +10919,7 @@ def requested_catalog_alternatives(db, ev, products, customer, customer_products
     request = str(ev.get('text') or '')
     fabric = next((item['text'] for item in reversed(context.get('evidence') or [])
                    if re.search(r'اثخن|ثخين|شتوي|خريفي|صيفي|قماش', item['text'])), '')
-    if (selected['age'] is None if child else not selected['size'] and not selected.get('weight')):
+    if not unsized and (selected['age'] is None if child else not selected['size'] and (footwear or not selected.get('weight'))):
         if not child and any(_stock_state(m) == 'out' for m in source_models):
             preview_candidates = []
             seen_preview = set(excluded_ids)
@@ -10910,14 +10932,14 @@ def requested_catalog_alternatives(db, ev, products, customer, customer_products
                         preview_candidates.append(cand)
             if preview_candidates:
                 return saved_catalog_page(db, ev, preview_candidates, incoming_id, start=True)
-        return saved_checkout_reply(db, ev, 'شكد العمر المطلوب؟' if child else 'شنو القياس المطلوب؟',
+        return saved_checkout_reply(db, ev, 'شنو قياس الحذاء المطلوب؟' if footwear else 'شكد العمر المطلوب؟' if child else 'شنو القياس المطلوب؟',
                                     {'alternative_selection_needed': True, 'alternative_source_id': source_id})
     candidates = []
     seen_cands = set(excluded_ids)
     for m in source_models:
         for cand in product_links.catalog_alternatives(
-                m, products, size='' if child or selected.get('weight') else selected['size'], age_years=selected['age'] if child else None,
-                weight=selected.get('weight') if not child else None,
+                m, products, size='' if unsized or child or (selected.get('weight') and not footwear) else selected['size'], age_years=selected['age'] if child else None,
+                weight=selected.get('weight') if not (child or unsized or footwear) else None,
                 color=selected['color'] or '', request=request + '\n' + fabric, excluded=seen_cands):
             if cand['product_id'] not in seen_cands:
                 seen_cands.add(cand['product_id'])
@@ -11599,6 +11621,8 @@ def booked_reply(db, text, confirmation):
 
 
 def selected_child_cart(db, ev, product):
+    if catalog_profile.shoe(product) or catalog_profile.no_size(product):
+        return None
     """Keep two explicitly selected ages/colors through a final short acceptance."""
     if (not product or not product_variants.size_data(product.get('sizes'))['years']
             or _stock_state(product) != 'available' or pending_product_choice(db, ev['sender_id'])):
@@ -11758,11 +11782,13 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
         child_sizes = product_variants.size_data(product.get('sizes'))['years']
         if child_sizes and selected.get('age') is not None and not size:
             size = product_variants.age_text(selected['age'])
-        if not size or sales_playbook.selection_conflicts(product, context, customer):
+        unsized=catalog_profile.no_size(product)
+        if not unsized and (not size or sales_playbook.selection_conflicts(product, context, customer)):
             return None
+        if unsized:size=''
         size_type, weight = 'size', ''
         assessed = product_variants.assess(product, ('عمر ' if child_sizes else 'قياس ') + str(size))
-        if not assessed or assessed[0]['supported'] is not True:
+        if not unsized and (not assessed or assessed[0]['supported'] is not True):
             # Some catalogues sell solely by a kilogram range, not garment
             # sizes. Carry the customer's existing numeric answer in that
             # catalogue's unit; never convert kilograms to an invented size.
@@ -11774,7 +11800,7 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
                 return None
             size, size_type, weight = numeric, 'weight', numeric
         item = dict(product_id=product['product_id'], product_name=product['product_name'],
-                    color=color, size=str(size), size_type=size_type, quantity=1)
+                    color=color, size=str(size), size_type='none' if unsized else size_type, quantity=1)
         if weight:
             item['weight'] = weight
         if order_line_error([item], [product], review_color=reviewable_checkout_color(db, ev["sender_id"], [item], product)):
@@ -14158,9 +14184,43 @@ def pwa_service_worker():
 def products_page():
     if not _dash_auth():
         return redirect(url_for("login", next=request.path))
-    return render_template("products.html", catalog_schema=dict(audiences=catalog_profile.AUDIENCES,
-        product_types=catalog_profile.TYPES, size_systems=catalog_profile.SIZE_SYSTEMS,
-        occasions=catalog_profile.OCCASIONS))
+    return render_template('products.html',catalog_schema=catalog_editor_schema())
+
+
+def catalog_editor_schema():
+    registry=catalog_taxonomy.listing(get_db(),current_store_id(),load_products_from_file())
+    return dict(audiences=catalog_profile.AUDIENCES,
+        product_types={r['id']:r['name'] for r in registry['categories']},
+        product_type_profiles={r['id']:r for r in registry['categories']},
+        groups=registry['groups'],size_systems=catalog_profile.SIZE_SYSTEMS,occasions=catalog_profile.OCCASIONS)
+
+
+@app.get('/product-categories')
+@_dash_require
+def product_categories_page():
+    return render_template('catalog_taxonomy.html',families=catalog_profile.TYPES,size_systems=catalog_profile.SIZE_SYSTEMS)
+
+
+@app.route('/api/products/manage/classifications',methods=['GET','POST'])
+@app.route('/api/products/manage/classifications/<kind>/<identity>',methods=['PUT','DELETE'])
+@_dash_require
+def api_catalog_classifications(kind=None,identity=None):
+    db=get_db();store=current_store_id();products=load_products_from_file()
+    if request.method=='GET':return jsonify(catalog_taxonomy.listing(db,store,products))
+    import secrets
+    token=session.get('csrf_token') or ''
+    if not token or not secrets.compare_digest(request.headers.get('X-CSRF-Token',''),token):
+        return jsonify(error='حدّث الصفحة ثم حاول مجدداً.'),403
+    data=request.get_json(silent=True) or {}
+    if not isinstance(data,dict):return jsonify(error='بيانات التصنيف غير صحيحة.'),400
+    kind=kind or data.get('kind')
+    if not isinstance(kind,str) or kind not in {'category','group'}:return jsonify(error='نوع التصنيف غير صحيح.'),400
+    try:
+        if request.method=='DELETE':catalog_taxonomy.remove(db,store,kind,identity,products)
+        else:identity=catalog_taxonomy.save(db,store,kind,data,products,identity)
+    except ValueError as exc:return jsonify(error=str(exc)),400
+    except LookupError as exc:return jsonify(error=str(exc)),404
+    return jsonify(ok=True,id=identity,**catalog_taxonomy.listing(db,store,products)),201 if request.method=='POST' else 200
 
 
 @app.route("/api/orders")
@@ -15946,6 +16006,8 @@ def _product_from_request(data, existing=None):
     product["image_colors"] = _normalize_product_image_colors(
         product.get("image_colors"), product["image_url"]
     )
+    registry=catalog_taxonomy.listing(get_db(),current_store_id(),load_products_from_file())
+    product=catalog_taxonomy.validate_product(product,registry,existing)
     return _normalize_product(catalog_profile.normalize(product, strict=True))
 
 
@@ -15970,7 +16032,7 @@ def _sync_related_product_links(products, changed):
 def api_manage_products():
     include_inactive = request.args.get("all", "1") != "0"
     products = load_products_from_file() if include_inactive else load_active_products(None)
-    return jsonify({"products": [product_payload(p) for p in products]})
+    return jsonify(products=[product_payload(p) for p in products],catalog_schema=catalog_editor_schema())
 
 
 @app.route("/api/products/manage", methods=["POST"])

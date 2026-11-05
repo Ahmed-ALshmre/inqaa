@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>المنتجات — صوف</title>
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <script>window.workspacePerson = {{ staff_person|tojson }};</script><script src="/static/js/workspace.js?v=2"></script>
   <link rel="icon" href="/static/icons/icon-192.png?v=7">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -25,7 +27,7 @@
 <header class="catalog-topbar"><a href="/dashboard" class="catalog-brand"><img src="/static/icons/soof-mascot-idle.png" alt="صوف"><span>صوف <small>إدارة المنتجات</small></span></a><nav aria-label="تنقل الصفحة"><a href="/dashboard">المحادثات</a><a href="/orders">الطلبات</a><a href="/settings">الإعدادات</a></nav><details class="catalog-tools"><summary><i class="bi bi-three-dots"></i><span>أدوات الكتالوج</span></summary><div><button type="button" onclick="exportProducts()">تصدير المنتجات</button><button type="button" onclick="document.getElementById('productsImportInput').click()">استيراد المنتجات</button><a href="/settings/maintenance">النسخ الاحتياطي</a></div></details><input type="file" id="productsImportInput" accept="application/json,.json" hidden onchange="importProductsFile(this)"></header>
 <main class="products-layout catalog-layout">
 <aside class="products-list-panel catalog-library" aria-label="مكتبة المنتجات">
-  <div class="catalog-library-heading"><div><span class="catalog-eyebrow">الكتالوج</span><h1>المنتجات <span id="productsCount">—</span></h1></div><button class="catalog-icon-button" type="button" onclick="loadProducts()" aria-label="تحديث المنتجات"><i class="bi bi-arrow-clockwise"></i></button></div>
+  <div class="catalog-library-heading"><div><span class="catalog-eyebrow">الكتالوج</span><h1>المنتجات <span id="productsCount">—</span></h1></div><button class="catalog-icon-button" type="button" onclick="loadProducts()" aria-label="تحديث المنتجات"><i class="bi bi-arrow-clockwise"></i></button></div><a class="btn btn-outline-secondary m-3" id="manageCategoriesLink" href="/product-categories?store_id={{ request.args.get('store_id','default')|urlencode }}">إدارة الفئات والمجموعات</a>
   <div class="catalog-filters"><label class="visually-hidden" for="productsStoreSelect">المتجر</label><select class="form-select" id="productsStoreSelect" aria-label="المتجر"></select><div class="catalog-search"><i class="bi bi-search"></i><input id="productSearch" type="search" placeholder="اسم، كود، لون أو مقاس" aria-label="بحث المنتجات" oninput="renderProducts()"></div>
     <div class="catalog-filter-pair"><select id="productAudienceFilter" aria-label="تصفية الجمهور" onchange="renderProducts()"><option value="">كل الفئات</option>{% for key,title in catalog_schema.audiences.items() %}<option value="{{ key }}">{{ title }}</option>{% endfor %}</select><select id="productAvailabilityFilter" aria-label="تصفية التوفر" onchange="renderProducts()"><option value="">كل الحالات</option><option value="available">متوفر</option><option value="out">غير متوفر</option><option value="unknown">يحتاج تأكيد</option><option value="hidden">مخفي</option></select></div>
     <div class="catalog-filter-pair"><select id="productGroupFilter" aria-label="تصفية المجموعة" onchange="renderProducts()"><option value="">كل المجموعات</option></select><select id="productSort" aria-label="ترتيب المنتجات" onchange="renderProducts()"><option value="name">الاسم</option><option value="priority">أولوية الاقتراح</option><option value="code">الكود</option></select></div>
@@ -81,6 +83,6 @@
 </main>
 <script id="catalogSchema" type="application/json">{{ catalog_schema|tojson }}</script>
 <div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script><script src="/static/js/products.js?v=19"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script><script src="/static/js/products.js?v=20"></script>
 {% include "_mobile_nav.html" %}
 </body></html>

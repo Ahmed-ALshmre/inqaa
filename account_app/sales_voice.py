@@ -38,13 +38,15 @@ def buying_choice(question, product):
     requested=product_variants.requested(question)
     ages=product_variants.child_ages(question)
     sizes=requested['sizes'] or ([product_variants.age_text(ages[0])] if len(ages)==1 else [])
+    if product.get('size_system')=='none':sizes=['']
     colors=requested['colors'] or product_variants.colors(product.get('colors'))
     if len(sizes)!=1 or len(colors)!=1:
         return None
     if product_variants.order_choice_error(product,'size',sizes[0]) or product_variants.order_choice_error(product,'color',colors[0]):
         return None
     return dict(items=[dict(product_id=product['product_id'],product_name=product.get('product_name'),
-                            color=colors[0],size=sizes[0],quantity=sales_playbook.requested_quantity(question) or 1)])
+                            color=colors[0],size=sizes[0],size_type='none' if product.get('size_system')=='none' else 'size',
+                            quantity=sales_playbook.requested_quantity(question) or 1)])
 
 
 def child_detail_reply(question, product, inspection_policy):

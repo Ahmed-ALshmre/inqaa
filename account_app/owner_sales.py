@@ -304,6 +304,10 @@ def result(text='', *, human='', silent=False):
 
 def next_step(product, context, customer, history=()):
     try:
+        from . import catalog_profile
+    except ImportError:
+        import catalog_profile
+    try:
         from .sales_playbook import customer_selection, weight_cart_choices, weight_fit_already_answered
     except ImportError:
         from sales_playbook import customer_selection, weight_cart_choices, weight_fit_already_answered
@@ -332,7 +336,8 @@ def next_step(product, context, customer, history=()):
             if plan['question'] == 'شنو القياس المطلوب؟' and 'شنو القياس المطلوب' in recent:
                 return 'شنو القياس اللي يناسبج؟'
             return plan['question']
-    elif not years and not known['size'] and not weight_fit_already_answered(known,history):
+    elif not years and not catalog_profile.no_size(product) and not known['size'] and not weight_fit_already_answered(known,history):
+        if catalog_profile.shoe(product):return 'شنو قياس الحذاء المطلوب؟'
         if 'size' in sales_strategy.repeated_choice_dimensions(history):
             return ''
         if 'شكد قياس تلبسين' in recent:

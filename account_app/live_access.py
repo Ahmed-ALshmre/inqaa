@@ -12,6 +12,7 @@ from flask import g, jsonify, render_template, request, send_file, session
 
 # New schema columns and tables are never exposed implicitly.
 RESOURCES = {
+    'classifications': ('catalog_classifications','store_id kind id name family size_system active aliases'),
     'conversations': ('customers', 'id sender_id page_id platform first_seen_at last_seen_at name store_name phone province address notes gender store_id lead_score lead_stage inbox_reviewed_message_id'),
     'messages': ('messages', 'id sender_id direction message_type text image_url ad_id ref created_at store_id media_json'),
     'orders': ('orders', 'id sender_id customer_name phone province address product_id product_name color size notes status order_items created_at store_id product_total delivery_fee total_amount is_paid'),
@@ -40,7 +41,7 @@ RESOURCES = {
     'voice': ('voice_interpretations', 'message_id store_id model transcripts created_at'),
 }
 PRODUCT_FIELDS = set(('store_id product_id product_name ref ad_id ad_ids post_id post_ids keywords category description visual_description price offer colors sizes stock delivery image_url image_urls images status notes fabric material length age_range size_chart variants customer_answers '
-    'age_max_months age_min_months audience bundle_contents closure faq fit_notes image_colors inspection_policy lining measurements occasions order_name product_type real_photo_notes recommendation_enabled recommendation_groups recommendation_notes recommendation_priority related_product_ids reply_category sale_unit sales_cues size_system stock_quantity stretch style transparency video_url weight_max_kg weight_min_kg').split())
+    'age_max_months age_min_months audience bundle_contents closure faq fit_notes image_colors inspection_policy lining measurements occasions order_name product_type product_type_label product_family real_photo_notes recommendation_enabled recommendation_groups recommendation_notes recommendation_priority related_product_ids reply_category sale_unit sales_cues size_system stock_quantity stretch style transparency video_url weight_max_kg weight_min_kg').split())
 SECRET_KEY = re.compile(r'password|secret|authorization|api.?key|webhook.?key|cookie|^headers$|^(?:access_|refresh_|bearer_|auth_|bot_|csrf_)?token$|token_hash', re.I)
 SECRET_TEXT = re.compile(r'inq_live_[A-Za-z0-9_-]{43}|sk-(?:or-v1-)?[A-Za-z0-9_-]{20,}|Bearer\s+[A-Za-z0-9_.-]{20,}', re.I)
 

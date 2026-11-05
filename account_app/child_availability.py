@@ -11,13 +11,16 @@ except ImportError:
 def reply(product, products, question, *, known_color='', history=()):
     try:
         from .checkout import explicit_purchase
+        from . import catalog_profile
     except ImportError:
         from checkout import explicit_purchase
+        import catalog_profile
     if explicit_purchase(question):
         return None
     ages = product_variants.child_ages(question)
     if not product or not ages:
         return None
+    if catalog_profile.no_size(product):return None
     try:
         from .sales_answers import topics
     except ImportError:
@@ -29,6 +32,10 @@ def reply(product, products, question, *, known_color='', history=()):
         return None  # Mixed facts and buying instructions keep the complete answer/checkout flow.
     if product_variants.requested(question)['colors']:
         return None  # The color-specific answer must be checked along with the ages.
+    if catalog_profile.shoe(product):
+        if product_variants.requested(question)['sizes']:return None
+        text='شنو قياس الحذاء للطفل حتى أتأكد من المتوفر؟'
+        return dict(reply=text,reply_parts=[text],create_order=False,order={},requires_human=False,_local_reply=True)
     state = product_albums.stock_state(product)
     data = product_variants.size_data(customer_copy.fact(product.get('sizes'), 'sizes'))
     if state == 'unknown' or (state == 'available' and not data['years']):

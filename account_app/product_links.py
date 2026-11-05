@@ -69,6 +69,8 @@ def _audience(product):
 
 
 def _category(product):
+    if catalog_profile.custom_type(product.get('product_type')):
+        return product['product_type']
     if product.get('product_type') in catalog_profile.TYPES and product.get('product_type') != 'other':
         return product['product_type']
     text = _facts(product, 'category')
@@ -81,6 +83,8 @@ def _category(product):
         ('skirts', r'تنور|تنانير|skirt'),
         ('trousers', r'بنطل|بنطر|شروال|trouser|pants'),
         ('tops', r'بلوز|قميص|قمصان|shirt|blouse'),
+        ('shoes', r'حذاء|حذوه|احذيه|جوتي|قندر|نعال|صندل|shoe|sneaker'),
+        ('bags', r'حقيب|حقائب|جنط|شنط|bag'),
     )
     matched = next((name for name, pattern in groups if re.search(pattern, text)), '')
     if not matched:
@@ -120,6 +124,8 @@ def eligible_related_products(product, products, *, size='', age_years=None,
     """
     if not isinstance(product, dict):
         return []
+    if catalog_profile.no_size(product):size,age_years,weight='',None,None
+    elif catalog_profile.shoe(product):age_years,weight=None,None
     category = _category(product)
     if not category:
         return []
