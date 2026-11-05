@@ -22,9 +22,9 @@ def topics(question):
                  r'(?:قطعتين|قطعتان|القطعة)\s+(?:شكد|بشكد|بكم|بيش)',
         'advice': r'شنو\s+تنصح|شنو\s+راي|شنو\s+تقترح|اختار\s+شنو',
         'colors': r'الوان|(?<!\w)(?:و?ال)?لون(?:ه|ها)?(?!\w)|الاسود|الابيض|الوردي|الجوزي',
-        'sizes': r'قياس|مقاس|سايز|(?:شكد|شنو|كم|يا)\s*(?:ال)?(?:عمره|عمرها|اعمار(?:ه|ها)?|العمر)(?!\w)',
+        'sizes': r'قياس|مقاس|سايز|(?:شكد|كم)\s+يلب[سش]|(?:شكد|شنو|كم|يا)\s*(?:ال)?(?:عمره|عمرها|اعمار(?:ه|ها)?|العمر)(?!\w)',
         'availability': r'متوفر|موجود|(?:شنو|ايش)\s+(?:ال)?باقي',
-        'fabric': r'قماش|خام[ةهت]',
+        'fabric': r'قماش|قوماش|قناش|خام[ةهت]',
         'cut': r'تتوسع من (?:جوه|الاسفل)|وسعها من (?:جوه|الاسفل)|(?<!\w)(?:و?ال|و)?(?:[كک]لوش|(?:كص|قص)(?:[هةت]|(?=\s|$)))',
         'fabric_feel': r'(?:قماش|خام[ةهت]|سمك|ملمس).{0,45}(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم)|'
                        r'(?:ثقيل|ثخين|سميك|خفيف|بارد|ناعم).{0,20}(?:القماش|خامته|باللبس)|(?<!\w)(?:ثقيل|ثخين|سميك|خفيف)(?!\w)',
@@ -50,7 +50,9 @@ def topics(question):
         'composition': r'هو\s+قطعتين|قطعتين\s+يعني|(?:هو|هي|الموديل|الفستان)\s+قطعة\s+وحد[ةه]|(?:فستان|تنور[ةه])\s+لو\s+(?:فستان|تنور[ةه]|قطعتين)',
     }
     for key, pattern in patterns.items():
-        if re.search(pattern, text):
+        evidence = (re.sub(r'(?:شارع|حي|منطقه|قرب)\s+(?:ال)?(?:كص|قص)(?!\w)', '', text)
+                    if key == 'cut' else text)
+        if re.search(pattern, evidence):
             result.append(key)
     if 'care' in result and 'colors' in result:
         color_question = re.sub(r'(?:يذب|يثبت|ثبات|يغير)\s*(?:ال)?لون', '', text)
@@ -161,9 +163,14 @@ def product_fragments(question, product):
     # Unrecognized clauses remain visible to staff instead of disappearing
     # behind the parts we can answer. Customer choices/statements are not gaps.
     clauses = re.split(r'\n+|[؟?]|\s+و(?=شنو|شكد|كم|منين|وين|متى|شلون|هل)', str(question or ''))
+    try:
+        from .sales_context import discovery_request
+    except ImportError:
+        from sales_context import discovery_request
     for clause in clauses:
         if (re.search(r'شنو|شكد|منين|وين|متى|شلون|كيف|هل\s', normalized(clause))
-                and not clarification_question(clause) and not topics(clause)):
+                and not clarification_question(clause) and not topics(clause)
+                and not discovery_request(clause)):
             gaps.append('بقية التفاصيل المطلوبة تحتاج تأكيد من المتجر.')
             break
     return list(dict.fromkeys(facts)), list(dict.fromkeys(gaps))
@@ -206,8 +213,8 @@ def care_fact(product):
 def season_fact(product):
     if field_fact(product, 'season'):
         return field_fact(product, 'season')
-    recorded = ' '.join(customer_copy.fact((product or {}).get(key), key)
-                        for key in ('fabric', 'description', 'fit_notes', 'faq'))
+    recorded = '\n'.join(customer_copy.fact((product or {}).get(key), key)
+                        for key in ('fabric', 'description', 'fit_notes', 'notes', 'faq'))
     return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
                      if len(part) <= 220 and re.search(r'(?<!\w)(?:شتوي[هة]?|صيفي[هة]?|بهاري[هة]?|خريفي[هة]?)(?!\w)', part)
                      and not customer_copy.has_instructions(part))

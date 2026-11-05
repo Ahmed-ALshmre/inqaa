@@ -42,6 +42,8 @@ let storeAIRevision = 0;
 const storeAIWriteVersions = new Map();
 const storeAIPending = new Set();
 let currentConversationAIEnabled = true;
+const conversationAIWritePending = new Set();
+const conversationAIWriteVersions = new Map();
 let audioUnlocked     = false;
 const messageSound    = new Audio('/aud/cheerful-527.mp3');
 const reviewSound     = new Audio('/aud/young-rooster-cock-a-doodle-doo.mp3');
@@ -303,6 +305,11 @@ async function loadConversations(showSpinner = true, isLoadMore = false, resetLi
     const selected = allConversations.find(c => c.sender_id === currentSenderId);
     if (selected && currentCustomer) {
       for (const key of ['pending_reviews_count', 'problem_count', 'human_attention_count', 'human_review_reason', 'problem_reason']) currentCustomer[key] = selected[key];
+      if (!conversationAIWritePending.has(currentSenderId)) {
+        currentCustomer.ai_enabled = selected.ai_enabled;
+        currentConversationAIEnabled = selected.ai_enabled !== 0 && selected.ai_enabled !== false;
+        renderConversationAIToggle();
+      }
       if (selected.human_attention_count > 0) showHumanIntervention(); else hideHumanIntervention();
     }
     if (isLoadMore && hasMoreConv) requestAnimationFrame(() => {
@@ -994,7 +1001,7 @@ async function hiLinkProduct() {
       return;
     }
     const sent = data.auto_reply && data.auto_reply.sent;
-    showToast(sent ? 'تم ربط المنتج وإرسال رد' : 'تم ربط المنتج — لم يُرسل رد تلقائي', sent ? 'success' : 'warning');
+    showToast(sent ? 'تم ربط المنتج وإرسال رد' : data.error || 'تم ربط المنتج — لم يُرسل رد تلقائي', sent ? 'success' : 'warning');
     if (!sent) return;
     _hiCloseModal();
     hideHumanIntervention();
@@ -1991,7 +1998,7 @@ function renderConversationAIToggle() {
   const btn = document.getElementById('conversationAiBtn');
   const txt = document.getElementById('conversationAiText');
   if (!btn || !txt) return;
-  btn.disabled = !globalAIEnabled;
+  btn.disabled = !globalAIEnabled || conversationAIWritePending.has(currentSenderId);
   btn.classList.toggle('btn-warning', !currentConversationAIEnabled);
   btn.classList.toggle('btn-outline-warning', currentConversationAIEnabled);
   txt.textContent = !globalAIEnabled ? 'AI متوقف للمتجر' : currentConversationAIEnabled ? 'AI يعمل هنا' : 'AI متوقف هنا';
@@ -2048,27 +2055,37 @@ async function toggleGlobalAI() {
 
 async function toggleConversationAI() {
   if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
+  const senderId = currentSenderId;
+  if (conversationAIWritePending.has(senderId)) return;
+  const version = (conversationAIWriteVersions.get(senderId) || 0) + 1;
+  conversationAIWriteVersions.set(senderId, version);
   const next = !currentConversationAIEnabled;
+  conversationAIWritePending.add(senderId);
+  renderConversationAIToggle();
   try {
-    const res = await apiFetch(`/api/conversations/${currentSenderId}/ai`, {
+    const res = await apiFetch(`/api/conversations/${encodeURIComponent(senderId)}/ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: next }),
     });
-    const data = await res.json();
-    if (data.ok) {
-      currentConversationAIEnabled = data.ai_enabled;
-      if (currentCustomer) currentCustomer.ai_enabled = data.ai_enabled ? 1 : 0;
-      renderConversationAIToggle();
-      showToast(
-        currentConversationAIEnabled ? 'تم تسليم هذه المحادثة إلى AI' : 'تم إيقاف AI في هذه المحادثة فقط',
-        currentConversationAIEnabled ? 'success' : 'warning',
-      );
-      loadConversations(false);
-    } else {
-      showToast('فشل تغيير حالة AI للمحادثة', 'danger');
+    const data = await res.clone().json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'تعذر تغيير حالة AI');
+    applyInboxAttention(senderId, data);
+    conversationAIWritePending.delete(senderId);
+    renderConversationAIToggle();
+    if (data.job_id) {
+      const result = await waitForAIJob(res, senderId);
+      if (conversationAIWriteVersions.get(senderId) !== version) return;
+      if ('ai_enabled' in result || result.attention) applyInboxAttention(senderId, result);
+      if (senderId !== currentSenderId) return;
+      if (result.error) showToast(result.error, 'warning');
+      else if (result.auto_reply?.sent) { showToast('تم تشغيل AI وإرسال الرد', 'success'); loadMessages(senderId); }
+      else showToast(result.ai_enabled ? 'AI يعمل في هذه المحادثة' : 'AI متوقف في هذه المحادثة', 'info');
+    } else if (senderId === currentSenderId) {
+      showToast(next ? 'تم تشغيل AI في هذه المحادثة' : 'تم إيقاف AI في هذه المحادثة فقط', next ? 'success' : 'warning');
     }
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); }
+  finally { conversationAIWritePending.delete(senderId); renderConversationAIToggle(); }
 }
 
 // ══ Quick Actions ══════════════════════════════════════════════════════════
@@ -2204,13 +2221,15 @@ function applyInboxAttention(senderId, data) {
   const patch = {...(data.attention || {})};
   if ('ai_enabled' in data) patch.ai_enabled = data.ai_enabled ? 1 : 0;
   if (row) Object.assign(row, patch);
-  pendingReviewsBySender[senderId] = patch.pending_reviews_count || 0;
-  openProblemsBySender[senderId] = patch.problem_count || 0;
+  if ('pending_reviews_count' in patch) pendingReviewsBySender[senderId] = patch.pending_reviews_count;
+  if ('problem_count' in patch) openProblemsBySender[senderId] = patch.problem_count;
   if (currentSenderId === senderId) {
     if (currentCustomer) Object.assign(currentCustomer, patch);
     if ('ai_enabled' in patch) currentConversationAIEnabled = Boolean(patch.ai_enabled);
     renderConversationAIToggle();
-    if (patch.human_attention_count > 0) showHumanIntervention(); else hideHumanIntervention();
+    if ('human_attention_count' in patch) {
+      if (patch.human_attention_count > 0) showHumanIntervention(); else hideHumanIntervention();
+    }
   }
   if (row) {
     const aiFilter = document.getElementById('filterAI')?.value;
