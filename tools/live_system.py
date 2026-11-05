@@ -60,6 +60,14 @@ def save_profile(token, token_id, expires_at, base=BASE, path=None):
 
 class Client:
     def __init__(self, path=None):
+        # Cloud network secrets can be proxy placeholders: pass them through
+        # unchanged and never write them into a profile or validation report.
+        # The environment credential is pinned to this application's HTTPS host.
+        if path is None and os.environ.get('INQAA_LIVE_TOKEN'):
+            self.base=BASE
+            self.session=requests.Session()
+            self.session.headers.update(Authorization='Bearer '+os.environ['INQAA_LIVE_TOKEN'].strip())
+            return
         location=Path(path or profile_path())
         if not location.exists():
             raise RuntimeError('Live connection is not configured. See docs/live-system-access.md')
@@ -166,6 +174,9 @@ def main():
 if __name__=='__main__':
     try:
         main()
-    except (OSError,ValueError,RuntimeError,KeyError,requests.RequestException) as exc:
+    except requests.RequestException:
+        print('Live API connection failed; check the allowed HTTPS host and connection configuration.',file=sys.stderr)
+        sys.exit(1)
+    except (OSError,ValueError,RuntimeError,KeyError) as exc:
         print(str(exc),file=sys.stderr)
         sys.exit(1)
