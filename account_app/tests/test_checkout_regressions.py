@@ -435,7 +435,10 @@ class CheckoutRegressionTests(unittest.TestCase):
         result = {"reply": "تم تثبيت الطلب", "create_order": True, "order": self.data()}
         with patch.object(self.m, "call_main_ai", return_value=result), patch.object(self.m, "is_ai_enabled", return_value=True), patch.object(self.m, "send_webhook_result_to_facebook", return_value=True):
             response = client.post(f"/api/conversations/{self.sender}/ai", json={"enabled": True})
-        self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.status_code, 202)
+            job=dict(self.db.execute('SELECT * FROM ai_jobs WHERE id=?',(response.json['job_id'],)).fetchone())
+            completed=self.m.run_ai_job(job,json.loads(job['payload']))
+            self.assertTrue(completed['auto_reply']['sent'])
         self.assertEqual(self.db.execute("SELECT count(*) FROM orders WHERE sender_id=?", (self.sender,)).fetchone()[0], 1)
 
     def test_old_reviewed_image_does_not_silence_new_question(self):

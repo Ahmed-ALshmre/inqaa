@@ -44,7 +44,7 @@ def enqueue(db, store, sender, kind, payload, key, delay=0):
     identity = hashlib.sha256(f'{store}:{sender}:{kind}:{key}'.encode()).hexdigest()
     now = time.time()
     old = db.execute('SELECT * FROM ai_jobs WHERE dedupe_key=?', (identity,)).fetchone()
-    if old and old['status'] == 'done' and kind == 'preview':
+    if old and old['status'] == 'done' and kind in {'preview','resume'}:
         # A deliberate new request may produce a new draft; pending duplicates coalesce.
         db.execute("UPDATE ai_jobs SET dedupe_key=? WHERE id=? AND status='done'", (old['id'], old['id']))
     elif old and old['status'] == 'failed' and not db.execute(

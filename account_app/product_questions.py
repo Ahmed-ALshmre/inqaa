@@ -59,7 +59,7 @@ def missing(question, product):
     return missing
 
 
-def capture(db, store, sender, product, question, topics, review_id, now):
+def capture(db, store, sender, product, question, topics, review_id, now, *, increment=True):
     ids = []
     if not topics and re.search(r'باجر|باچر|المندوب|وين.{0,12}طلب|تاخر',customer_copy.normalized(question)):
         topics=['service']
@@ -70,7 +70,8 @@ def capture(db, store, sender, product, question, topics, review_id, now):
         prior = db.execute("SELECT id FROM product_questions WHERE store_id=? AND product_id=? AND topic=? AND status='pending' ORDER BY id LIMIT 1",
                            (store, product['product_id'], topic)).fetchone()
         if prior:
-            db.execute('UPDATE product_questions SET occurrences=occurrences+1,updated_at=? WHERE id=?', (now, prior['id']))
+            if increment:
+                db.execute('UPDATE product_questions SET occurrences=occurrences+1,updated_at=? WHERE id=?', (now, prior['id']))
             ids.append(prior['id'])
         else:
             db.execute('''INSERT INTO product_questions(store_id,product_id,product_name,topic,question,question_key,
