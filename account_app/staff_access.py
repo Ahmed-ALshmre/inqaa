@@ -75,7 +75,7 @@ def required_permission(path, method):
             and len(path.strip('/').split('/')) == 4):
         return 'reply|settings'
     if path == '/orders' or path.startswith('/api/orders'): return 'orders'
-    if path == '/products' or path.startswith('/api/products/manage'): return 'products'
+    if path in {'/products','/products/','/product-categories'} or path.startswith('/api/products/manage'): return 'products'
     if path == '/advisor' or path == '/settings/advisor' or path.startswith('/api/advisor'): return 'advisor'
     if path.startswith(('/settings', '/api/settings', '/api/stores', '/api/followups')): return 'settings'
     return 'owner'  # New endpoints do not silently grant new staff privileges.

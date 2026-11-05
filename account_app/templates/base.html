@@ -56,6 +56,7 @@
     <a href="/rewards"><i class="bi bi-stars"></i> رصيد الإنجاز</a>
     <a href="/orders"><i class="bi bi-receipt"></i> الطلبات</a>
     <a href="/products"><i class="bi bi-box-seam"></i> المنتجات</a>
+    {% if can('products') %}<a href="/product-categories"><i class="bi bi-tags"></i> الفئات والمجموعات</a>{% endif %}
     {% if can('reply') or can('products') %}<a href="/product-questions"><i class="bi bi-chat-square-text"></i> أسئلة تحتاج جواباً</a>{% endif %}
     <a href="/advisor"><i class="bi bi-chat-square-heart"></i> مستشار صوف</a>
     <a href="/settings"><i class="bi bi-gear"></i> الإعدادات</a>

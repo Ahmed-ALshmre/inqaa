@@ -161,7 +161,11 @@ def is_free_size_product(product):
 
 def owner_adult_labels(product):
     """Store-owner stock declaration; never a universal weight conversion."""
-    if (product or {}).get('audience') in {'boys', 'girls', 'children'} or (product or {}).get('size_system') == 'none':
+    try:
+        from . import catalog_profile
+    except ImportError:
+        import catalog_profile
+    if catalog_profile.shoe(product) or (product or {}).get('audience') in {'boys', 'girls', 'children'} or (product or {}).get('size_system') == 'none':
         return ()
     text = normalized(' '.join(str((product or {}).get(k) or '') for k in ('product_name', 'category', 'sizes')))
     if re.search(r'اطفال|طفل|بناتي|ولادي|سنوات|سنين|سن[ةه]|شهر', text):
@@ -387,10 +391,11 @@ def size_data(value):
         elif explicit or (lo>=10 and hi<=80 and not re.search(r'وزن|كيلو|سنوات',text)):
             ranges.append((lo,hi))
         spans.append(match.span())
-    labels=list(dict.fromkeys(m[0].upper() for m in SIZE_RE.finditer(text)))
+    labels=list(dict.fromkeys([m[0].upper() for m in SIZE_RE.finditer(text)]+
+        re.findall(r'(?<!\d)\d{2}\.5(?!\d)',text)))
     numbers=[]
     if re.fullmatch(r'[\d\s،,./–—\-]+',text):
-        numbers=[int(n) for n in re.findall(r'\d+',text)
+        numbers=[int(n) for n in re.findall(r'\d+',re.sub(r'\d{2}\.5','',text))
                  if 10<=int(n)<=80]
     return {'ranges':ranges,'numbers':numbers,'labels':labels,'years':years,'weights':weights,
             'known':bool(ranges or numbers or labels)}
@@ -515,7 +520,7 @@ def color_quantities(value):
 def requested(question):
     text=size_choice_text(question)
     sizes=list(dict.fromkeys(m[1].upper() for m in re.finditer(
-        r'(?:قياس(?:ي|ه|ها)?|مقاس(?:ي|ه|ها)?|سايز)\s*(\d{1,3}|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',text)))
+        r'(?:قياس(?:ي|ه|ها)?|مقاس(?:ي|ه|ها)?|سايز)\s*(\d{1,3}(?:\.5)?|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?![\w.])',text)))
     sizes = list(dict.fromkeys(sizes + [m[0].upper() for m in SIZE_RE.finditer(text)]))
     if FREE_SIZE_RE.search(text) and 'فري سايز' not in sizes:
         sizes.append('فري سايز')
@@ -605,9 +610,9 @@ def reply_error(reply,product,question):
 def order_choice_error(product,field,value):
     """Reject only choices that contradict explicit, current catalog options."""
     try:
-        from . import customer_copy
+        from . import customer_copy,catalog_profile
     except ImportError:
-        import customer_copy
+        import customer_copy,catalog_profile
     text=normalized(value)
     if field=='color':
         offered=colors(customer_copy.fact(product.get('colors'),'colors'))
@@ -632,7 +637,7 @@ def order_choice_error(product,field,value):
             lo, hi = map(int, requested_range.groups())
             valid = lo <= hi and all(n in data['numbers'] or any(a <= n <= b for a, b in data['ranges']) for n in (lo, hi))
             return '' if valid else 'نطاق القياس المطلوب مو موجود بهالموديل'
-        if not data['known'] or (text.isdigit() and not (data['ranges'] or data['numbers'])):
+        if not data['known'] or (text.isdigit() and not (data['ranges'] or data['numbers']) and not catalog_profile.shoe(product)):
             return ''  # Weight/age guidance is not a garment size inventory.
         numeric=re.fullmatch(r'\d{1,3}',text)
         if numeric:

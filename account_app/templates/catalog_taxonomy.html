@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}الفئات والمجموعات — صوف{% endblock %}
+{% block styles %}<link rel="stylesheet" href="/static/css/catalog_taxonomy.css?v=1">{% endblock %}
+{% block content %}
+<header class="taxonomy-heading"><div><p class="admin-kicker">الكتالوج</p><h1>الفئات والمجموعات</h1><p>رتّب منتجات المتجر حتى يقترح المساعد بدائل تناسب طلب الزبون.</p></div><a class="btn btn-outline-primary" id="backToProducts" href="/products">إضافة وتعديل المنتجات</a></header>
+<div class="taxonomy-tabs" role="tablist"><button id="categoriesTab" role="tab" aria-selected="true" onclick="showClassificationKind('category')">فئات المنتجات <span id="categoryCount"></span></button><button id="groupsTab" role="tab" aria-selected="false" onclick="showClassificationKind('group')">مجموعات الاقتراح <span id="groupCount"></span></button></div>
+<div class="taxonomy-layout">
+<section class="taxonomy-editor"><h2 id="classificationFormTitle">إضافة فئة</h2><p id="classificationHelp">مثل: أحذية رياضية، حقائب يد، دشاديش شتوية.</p>
+<form id="classificationForm"><input id="classificationId" type="hidden"><label for="classificationName">الاسم</label><input class="form-control" id="classificationName" required maxlength="60" autocomplete="off">
+<div id="categoryFields"><label for="classificationFamily">نوع المنتجات</label><select class="form-select" id="classificationFamily">{% for key,name in families.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select>
+<label for="classificationSize">طريقة المقاس الافتراضية</label><select class="form-select" id="classificationSize">{% for key,name in size_systems.items() %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select><small>الأحذية تُسأل عن قياس الحذاء. اختر «لا يحتاج قياساً» للحقائب التي لا تباع بمقاسات.</small></div>
+<label class="taxonomy-check"><input type="checkbox" id="classificationActive" checked> تظهر عند إضافة منتج جديد</label><p id="classificationFormStatus" role="status"></p><div class="taxonomy-actions"><button class="btn btn-primary" id="saveClassification" type="submit">حفظ الفئة</button><button class="btn btn-outline-secondary" type="button" onclick="newClassification()">إلغاء التعديل</button></div></form></section>
+<section class="taxonomy-library"><div class="taxonomy-list-head"><div><h2 id="classificationListTitle">الفئات الموجودة</h2><p id="classificationListHelp">اختر الفئة عند إضافة المنتج. كل فئة تحتفظ ببدائلها المناسبة.</p></div><label class="taxonomy-check"><input id="includeInactive" type="checkbox" onchange="renderClassifications()"> إظهار المخفي</label></div><input class="form-control" id="classificationSearch" type="search" placeholder="البحث بالاسم" oninput="renderClassifications()" aria-label="البحث عن فئة أو مجموعة"><p id="classificationStatus" role="status"></p><div id="classificationList"></div></section>
+</div>
+<script id="classificationFamilies" type="application/json">{{ families|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="/static/js/catalog_taxonomy.js?v=1"></script>{% endblock %}

@@ -68,7 +68,7 @@ def chat_wording(text):
 
 
 def reply_category(product):
-    return fact((product or {}).get('reply_category')).strip()
+    return fact((product or {}).get('reply_category') or (product or {}).get('product_type_label')).strip()
 
 
 def public_product_wording(result, products):

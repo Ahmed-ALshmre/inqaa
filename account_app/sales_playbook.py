@@ -328,15 +328,15 @@ def customer_selection(context, customer=None):
             selected['color_options'] = []
             continue
         # A bare number belongs to the one dimension asked in the previous turn.
-        if re.fullmatch(r'\d{1,3}', text):
+        if re.fullmatch(r'\d{1,3}(?:\.5)?', text):
             dimensions = [name for name, pattern in (
                 ('size', r'قياس|مقاس|سايز'), ('age', r'عمر'), ('weight', r'وزن|كيلو'))
                 if re.search(pattern, question)]
             if dimensions == ['size']:
                 selected['size'] = text
             elif dimensions == ['age']:
-                selected['age'] = int(text)
-                selected['ages'] = [int(text)]
+                selected['age'] = float(text) if '.' in text else int(text)
+                selected['ages'] = [selected['age']]
             continue
         if re.fullmatch(r'[2-6]?xl|xxl|xxxl|xs|[sml]', text):
             selected['size'] = text.upper()
@@ -360,7 +360,7 @@ def customer_selection(context, customer=None):
                 if not requested_sizes[0].isdigit() or len(numbers) == 1:
                     selected['size'] = requested_sizes[0]
             continue
-        size_pattern = r'(?:قياسي|مقاسي|البس|قياس|مقاس|سايز|(?:خلي|اعتمدي|بدلي)\s*(?:قياس)?)\s*(\d{1,2}|[2-6]?xl|xxl|xxxl|xs|[sml])(?!\w)'
+        size_pattern = r'(?:قياسي|مقاسي|البس|قياس|مقاس|سايز|(?:خلي|اعتمدي|بدلي)\s*(?:قياس)?)\s*(\d{1,2}(?:\.5)?|[2-6]?xl|xxl|xxxl|xs|[sml])(?![\w.])'
         sizes = [hit[1].upper() for hit in re.finditer(size_pattern, text)
                  if not re.search(r'(?:مو|لا|ما اريد)\s*$', text[max(0, hit.start()-15):hit.start()])]
         size_range = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/]\s*(\d{2})(?!\d)', text)
@@ -515,6 +515,10 @@ def selection_conflicts(product, context, customer=None):
 def price_next_step(product, context, customer=None, history=(), *, delivery_requires_province=False):
     """Move to the next unanswered selection without inferring purchase consent."""
     selected = customer_selection(context, customer)
+    try:
+        from . import catalog_profile
+    except ImportError:
+        import catalog_profile
     context, customer = context or {}, customer or {}
     if context.get('open_details'):
         return ''
@@ -547,7 +551,8 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
                 return 'يا قياس تحبين نعتمدلج؟'
             return 'شنو القياس اللي يناسبج؟'
         return q
-    if not age_based and not selected['size'] and not weight_fit_already_answered(selected,history):
+    if not age_based and not catalog_profile.no_size(product) and not selected['size'] and not weight_fit_already_answered(selected,history):
+        if catalog_profile.shoe(product):return 'شنو قياس الحذاء المطلوب؟'
         if 'size' in sales_strategy.repeated_choice_dimensions(history):
             return ''
         if re.search(r'شنو\s+(?:ال)?قياس|شكد\s+قياس|أي\s+قياس|اي\s+قياس', recent):
@@ -565,9 +570,11 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
             supported = any(low <= chosen_age <= high for low, high in sizes['years'])
         except (TypeError, ValueError):
             supported = False
-    else:
+    elif not catalog_profile.no_size(product):
         checks = product_variants.assess(product, 'قياس ' + str(selected['size']))
         supported = bool(checks and checks[0]['supported'] is True)
+    else:
+        supported=True
     if not supported or context.get('open_details'):
         return ''
     colors = product_variants.colors(customer_copy.fact(product.get('colors'), 'colors'))
