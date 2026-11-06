@@ -76,3 +76,13 @@ class MobileWorkspaceTests(unittest.TestCase):
             m.save_message(m.get_db(), 'default::cw-1-3', 'incoming', 'text', 'مرحبا', None, None, None, {})
         self.assertEqual(self.client.get('/api/dashboard_stats?store_id=default').json['unanswered_conversations'], 1)
         self.assertEqual(self.client.get('/api/dashboard_stats?store_id=khuyoot').json['unanswered_conversations'], 0)
+
+    def test_product_list_exposes_exact_ad_mappings_as_strings(self):
+        self.authenticate()
+        product = {'product_id': 'p1', 'store_id': 'default', 'product_name': 'قطعة',
+                   'ad_id': '120212345678901234', 'ad_ids': ['44', '45'], 'ref': 'owner-ref'}
+        with patch.object(m, 'load_active_products', return_value=[product]):
+            result = self.client.get('/api/products?store_id=default').json['products'][0]
+        self.assertEqual(result['store_id'], 'default')
+        self.assertEqual(result['ad_ids'], ['120212345678901234', '44', '45'])
+        self.assertEqual(result['ref'], 'owner-ref')
