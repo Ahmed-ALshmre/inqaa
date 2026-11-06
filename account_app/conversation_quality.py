@@ -118,8 +118,10 @@ def operational_request(text):
     if age and not re.search(r'[؟?]|متوفر|اكو|يلبس|شكد|كم|اذا|لو ', text):
         unit = 'شهر' if age[2] in {'شهر', 'اشهر'} else 'سنة'
         return {'kind': 'size', 'value': f'{int(age[1])} {unit}'}
-    match = re.search(r"(?:بدل|بدلي|غير|غيري|عدل|عدلي|قياس)\s*(?:القياس|قياس)?\s*(\d{2})", text)
-    if match and not re.search(r"[؟?]|متوفر|اكو|يلبس|شكد|كم", text):
+    match = re.search(r"(?:بدل|بدلي|غير|غيري|عدل|عدلي|قياس)\s*(?:القياس|قياس)?\s*(?:الي|الى|لـ)?\s*(\d{2})", text)
+    browsing=bool(re.search(r'فساتين|موديلات|اشوف|شوفي|دزي|صور|متوفر|اكو|عندكم|عدكم',text)
+                  and not re.search(r'بدلي|غيري|عدلي|طلبت|طالبه|حاجزه|حجزت|طلبي|طلبتي|بالطلب',text))
+    if match and not browsing and not re.search(r"[؟?]|متوفر|اكو|يلبس|شكد|كم", text):
         return {"kind": "size", "value": match.group(1)}
     if re.search(r"غير|بدل|ضيف|اضيف|استعجل|تأخر|تاخر|ماوصل|ما وصل|شوكت|يمتى|متى|رقم المندوب", text):
         return {"kind": "service", "value": text[:300]}

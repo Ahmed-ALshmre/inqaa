@@ -238,6 +238,13 @@ def unresolved_purchase_terms(text):
     than blocking every question mark or every occurrence of "if".
     """
     clean = normalized(text)
+    # Hypothetical delivery questions describe the published estimate. A real
+    # deadline/demand remains unresolved and must never be promised by a model.
+    if (re.search(r'اذا\s+(?:اطلب|احجز)',clean)
+            and re.search(r'شوكت|متى|يمتى|شكد|شگد|كم|[؟?]',clean)
+            and re.search(r'يوصل|توصل|توصيل',clean)
+            and not re.search(r'بشرط|لازم|ضروري|مضمون|تضمن|ما\s*اريد|ماريد|ما\s*اطلب|ما\s*احجز|باجر|باچر|غدا|اليوم',clean)):
+        return 'unanswered_price_or_shipping'
     # Inspection/return at the courier is the published policy, not a demand
     # for a discount or free shipping on a kept purchase.
     if (re.search(r'ارجع|يرجع|ترجع|رجع|فحص|افحص', clean)

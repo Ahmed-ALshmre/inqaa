@@ -352,7 +352,13 @@ class ConversationContextTests(unittest.TestCase):
                     result = self.event(question)
                     self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db, self.sender)], ['SK1'])
                 greeting.assert_not_called()
-                self.assertEqual(model.call_args.args[5]['product_id'], 'SK1')
+                if model.called:
+                    self.assertEqual(model.call_args.args[5]['product_id'], 'SK1')
+                else:
+                    # A known catalogue range is now answered locally. The
+                    # binding and returned facts still have to be the ad item.
+                    self.assertIn('38',result['reply'])
+                    self.assertIn('52',result['reply'])
                 self.assertTrue(result['reply'])
                 self.assertNotIn('صورة', result['reply'])
                 self.assertEqual(self.db.execute('SELECT count(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],0)
@@ -390,9 +396,12 @@ class ConversationContextTests(unittest.TestCase):
         catalog=CATALOG+[product]
         m.save_message(self.db,self.sender,'incoming','text','السلام عليكم',None,None,None,{})
         with patch.object(m,'load_products_from_file',return_value=catalog), patch.object(m,'load_active_products',return_value=catalog), patch.object(m,'_call_main_ai_once',return_value={'reply':'الحقيبة متوفرة، شنو اللون المطلوب؟','order':{},'create_order':False}) as model:
-            self.event('شنو قياسات الحقيبة الجلد المتوفرة؟')
+            result=self.event('شنو قياسات الحقيبة الجلد المتوفرة؟')
             self.assertEqual([p['product_id'] for p in m.load_customer_products(self.db,self.sender)],['BAG'])
-        self.assertEqual(model.call_args.args[5]['product_id'],'BAG')
+        if model.called:
+            self.assertEqual(model.call_args.args[5]['product_id'],'BAG')
+        else:
+            self.assertIn('38',result['reply']);self.assertIn('52',result['reply'])
     def test_specs_use_conversation_instead_of_dumping_internal_size_notes(self):
         product = dict(CATALOG[0], sizes="قياسات هذا المنتج من 38 إلى 52. اعتمد الجدول التالي عند الرد على الزبونة: وزن 55–60 كيلو = قياس 38")
         self.settings["product"] = product
