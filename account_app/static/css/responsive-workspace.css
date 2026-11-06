@@ -3,6 +3,12 @@
 .soof-bottom-nav>.desktop-nav-brand { display:none!important; }
 .desktop-customer-panel { min-width:0; min-height:0; }
 
+/* Compact shortcuts keep both actions together without stretching across the composer. */
+.messenger-page .reply-shortcuts { align-items:center; flex-wrap:nowrap; gap:6px; margin-bottom:6px; }
+.messenger-page .reply-shortcuts button { flex:0 0 auto; min-height:28px; padding:4px 9px; border-radius:9px!important; font-size:10px; line-height:1.5; gap:5px; white-space:nowrap; }
+.messenger-page .reply-shortcuts button i { font-size:13px; }
+.messenger-page .reply-shortcuts button:hover { background:#edf7f0; border-color:#bedccb; }
+
 /* A single, clearly separated recording and playback surface. */
 .messenger-page .voice-composer {
   max-height:none; overflow:visible; margin:0 0 10px; padding:14px;
@@ -84,8 +90,8 @@
   .messenger-page .msg-bubble { padding:11px 16px; font-size:14px!important; }
   .human-intervention-card { width:calc(100% - 48px); margin:6px 24px 10px; padding:12px 15px; }
   .messenger-page .input-area { align-self:center; width:100%; max-width:1020px; padding:12px 24px 18px!important; border-top:1px solid #e6ede7!important; background:white!important; }
-  .messenger-page .reply-shortcuts { gap:8px; margin-bottom:10px; }
-  .messenger-page .reply-shortcuts button { flex:0 0 auto; min-height:34px; padding:7px 12px; border-radius:10px!important; font-size:11px; background:#f7faf7; }
+  .messenger-page .reply-shortcuts { gap:6px; margin-bottom:6px; }
+  .messenger-page .reply-shortcuts button { flex:0 0 auto; min-height:28px; padding:4px 9px; border-radius:9px!important; font-size:10px; background:#f7faf7; }
   .messenger-page .input-row { gap:10px!important; }
   .messenger-page .ui-composer-hint { display:flex; margin-top:8px; font-size:10px; }
   .messenger-page #messageInput { min-height:48px!important; border-radius:13px!important; padding:11px 14px!important; font-size:14px; }
