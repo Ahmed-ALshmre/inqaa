@@ -174,7 +174,8 @@ def saved_order_total(text, order):
 
 def cart_total_question(text):
     clean=sales_strategy.normalized(text)
-    return bool(re.search(r'حسابي|حسابنا|الحساب|المجموع|اجمالي|سعرن[اعه]',clean)
+    short_total=re.fullmatch(r'(?:هسه\s+)?(?:اشكد|شكد|جكد|كم)\s+(?:يطلع|صار|يصير)(?:\s+(?:كله|هسه|بالكامل))?[؟?!.،\s]*',clean)
+    return bool((short_total or re.search(r'حسابي|حسابنا|الحساب|المجموع|اجمالي|سعرن[اعه]',clean))
         and not re.search(r'قماش|لون|قياس|عمر|طول|بطان|متى|شوكت|استلمت|دفعت|الغ|لغي|بشرط|اذا|(?<!\w)لو(?!\w)|خصم|تخفيض|تنزل|خلي',clean))
 
 
@@ -184,8 +185,8 @@ def delivery_price_question(text):
     text = sales_strategy.normalized(text).strip(' ؟?!.،')
     text = re.sub(r'^(?:السلام عليكم|سلام عليكم)\s*[،,]?\s*', '', text)
     return bool(re.fullmatch(
-        r'(?:شكد|اشكد|كم)\s+(?:تصير|يصير|المبلغ|السعر|سعره|سعرها|'
-        r'سعر\s+(?:السوت|الفستان|الموديل|القطعة))\s*(?:ويا|مع)\s*التوصيل'
+        r'(?:شكد|اشكد|كم|بيش|بكم|بشكد)\s+(?:تصير|يصير|المبلغ|السعر|سعره|سعرها|'
+        r'سعر\s+(?:السوت|الفستان|الموديل|القطعة))\s*(?:ويا|مع)\s*(?:ال)?توصيل'
         r'(?:\s*(?:ل|الى)\s*بغداد)?(?:\s*و?شكد\s*(?:بي|بيه)\s*قياسات)?', text))
 
 
@@ -238,7 +239,7 @@ def quote_quantity(question,context=None):
     for value in [question]+[i.get('text') or '' for i in reversed(evidence)]:
         clean=sales_strategy.normalized(value)
         count=requested_quantity(clean)
-        if count and re.search(r'اريد|ريد|اخذ|اخد|احجز|حجزي|ثبت',clean):return count
+        if count and re.search(r'اريد|ريد|رايد|اخذ|اخد|احجز|حجزي|ثبت',clean):return count
         if (re.search(r'(?:اريد|ريد|اخذ|اخد|خليلي)\s*(?:بس\s+)?(?:واحد[هة]?|1)(?!\w)',clean)
                 and not re.search(r'ثاني|ثان[ية]|وواحد|و\s+واحد|\bو\b',clean)):
             return 1
@@ -493,6 +494,34 @@ def weight_cart_choices(product, context, customer=None, current_text=''):
     return {'items':items,'weight':weight}
 
 
+def same_size_color_cart(product,context,customer=None):
+    """One explicitly chosen garment size, with a known quantity for each color."""
+    if (product_variants.weight_only_ranges(product)
+            or product_variants.size_data(product.get('sizes'))['years']):return None
+    selected=customer_selection(context,customer)
+    size=selected.get('size');colors=selected['colors']
+    if not size or len(colors)<2 or selected['color_options']:return None
+    evidence=list(selection_evidence(context))
+    sizes={value for item in evidence for value in product_variants.requested(item['text'])['sizes']}
+    if len(sizes)>1:return None  # Different per-color sizes need their own allocation.
+    if product_variants.order_choice_error(product,'size',str(size)):return None
+    if any(product_variants.order_choice_error(product,'color',color) for color in colors):return None
+    counts=quantities_for_colors(context,customer)
+    declared=None
+    for item in reversed(evidence):
+        clean=sales_strategy.normalized(item['text'])
+        if not re.search(r'اريد|نريد|رايد|اخذ|احجز|حجزي|ثبت',clean) or re.search(r'[؟?]|اذا|لو\s|شكد|اشكد|بكم|بيش',clean):continue
+        declared=requested_quantity(clean)
+        if not declared and re.search(r'(?:اريد|نريد|رايد[هة]?|اخذ)\s*(?:بس\s*)?(?:واحد[هة]?|1)(?!\w)|قطعة\s+وحد[هة]',clean):declared=1
+        if declared:break
+    if declared==len(colors) and not any(counts.get(c) not in (None,1) for c in colors):
+        counts={color:1 for color in colors}
+    if not all(counts.get(color) for color in colors):return None
+    if declared and sum(counts[color] for color in colors)!=declared:return None
+    return {'items':[dict(product_id=product['product_id'],product_name=product.get('product_name'),
+        color=color,size=str(size),size_type='size',quantity=counts[color]) for color in colors]}
+
+
 def selection_conflicts(product, context, customer=None):
     selected = customer_selection(context, customer)
     if any(product_variants.order_choice_error(product, 'color', color) for color in selected['colors']):
@@ -584,6 +613,7 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
         if any(re.search(r'قطعة\s+من\s+كل\s+لون|قطعه\s+من\s+كل\s+لون',
                          sales_strategy.normalized(item.get('text'))) for item in selection_evidence(context)):
             return booking_invitation(context, history)
+        if same_size_color_cart(product,context,customer):return booking_invitation(context,history)
         return 'قطعة من كل لون؟'
     if len(selected['color_options']) > 1:
         if any(color not in colors for color in selected['color_options']):

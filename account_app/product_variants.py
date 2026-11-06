@@ -521,6 +521,12 @@ def requested(question):
     text=size_choice_text(question)
     sizes=list(dict.fromkeys(m[1].upper() for m in re.finditer(
         r'(?:قياس(?:ي|ه|ها)?|مقاس(?:ي|ه|ها)?|سايز)\s*(\d{1,3}(?:\.5)?|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?![\w.])',text)))
+    # A narrow stock question supplies a preferred garment size, never consent.
+    # Do not read an amount, weight, age or size range as a clothing size.
+    stock_size=re.fullmatch(r'(?:متوفر[هة]?|موجود[هة]?|اكو)\s*(\d{2}(?:\.5)?)\s*[؟?!.،]*|'
+                           r'(\d{2}(?:\.5)?)\s*(?:متوفر[هة]?|موجود[هة]?|اكو)\s*[؟?!.،]*',text.strip())
+    if stock_size:
+        sizes=list(dict.fromkeys(sizes+[stock_size[1] or stock_size[2]]))
     sizes = list(dict.fromkeys(sizes + [m[0].upper() for m in SIZE_RE.finditer(text)]))
     if FREE_SIZE_RE.search(text) and 'فري سايز' not in sizes:
         sizes.append('فري سايز')

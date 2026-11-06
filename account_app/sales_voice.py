@@ -111,6 +111,36 @@ def remembered_age_availability(question, product, context, customer=None):
                 requires_human=False, _local_reply=True, _browse_only=True, _contextual_stock_reply=True)
 
 
+def needs_fit_explanation(question):
+    text=customer_copy.normalized(question)
+    return bool(re.search(r'اخاف|خايف|اخشي|يعني\s+شنو\s+(?:ال)?قياس|'
+                          r'(?:قياس|مقاس|سايز).{0,25}(?:نفس|اكبر|اصغر|جبير|كبير|صغير|ضيق|واسع)|'
+                          r'(?:يناسب|يرهم).{0,15}(?:وزن|طول)',text))
+
+
+def other_category_reply(question, product, products):
+    """An enquiry about shirts/scarves must not confirm the remembered skirt."""
+    text=customer_copy.normalized(question)
+    if not re.search(r'اريد|عدكم|عندكم|اكو|موجود|متوفر|صور',text):return None
+    if re.search(r'طول|عرض|قماش|بطان|كمر|سحاب|يجي\s+ويا|وياه|وياها|اضيف|ضيف|بدل|غيري',text):return None
+    profiles=(('tops','قمصان',r'قميص|قمصان|بلوز'),('accessories','وشاحات',r'وشاح|سكارف'))
+    for family,label,pattern in profiles:
+        if not re.search(pattern,text):continue
+        def matches(item):
+            identity=customer_copy.normalized(' '.join(str(item.get(k) or '') for k in
+                ('product_name','reply_category','product_type_label','category')))
+            return bool(re.search(pattern,identity) or family=='tops' and item.get('product_type')=='tops')
+        if product and matches(product):return None
+        available=[p for p in products if matches(p) and product_albums.stock_state(p)=='available']
+        if not available:
+            reply='حالياً ما عدنا '+label+' متوفرة.'
+            return dict(reply=reply,reply_parts=[reply],create_order=False,order={},requires_human=False,
+                        _local_reply=True,_browse_only=True,_suppress_product_images=True,_category_enquiry=True)
+        # Preserve the real catalogue route when the requested category exists.
+        return None
+    return None
+
+
 def answer(question, product, context, customer, history, delivery):
     comparison = bool(re.search(r'(?:بس|فقط)\s+(?:اقارن|أقارن|استفسر|أستفسر|اسأل|أسأل)', question or ''))
     if not product or (explicit_purchase(question) and not comparison):
@@ -119,8 +149,10 @@ def answer(question, product, context, customer, history, delivery):
     text = customer_copy.normalized(question)
     selected = set(sales_answers.topics(question))
     supported = {'fabric','fabric_feel','season','stretch','cut','lining','closure','care',
-                 'colors','sizes','availability','price','delivery','payment','inspection','delivery_time'}
+                 'colors','sizes','availability','price','delivery','payment','inspection','delivery_time','length','width'}
     if not selected or selected - supported or product_albums.stock_state(product) != 'available':
+        return None
+    if needs_fit_explanation(question):
         return None
     if (not comparison and 'اذا' in text) or re.search(r'ارخص|بديل|غير موديل|باجر|باچر|بشرط|صور[ةه]?.{0,15}(?:ثاني|اكثر)', text):
         return None
@@ -135,7 +167,7 @@ def answer(question, product, context, customer, history, delivery):
         if 'price' in selected:
             return None
         count,price=1,None
-    if count != 1 or sales_answers.wholesale_unit(product):
+    if sales_answers.wholesale_unit(product) or count != 1 and selected & {'price','delivery'}:
         return None
     parts = []
     available_colors = product_variants.colors(product.get('colors'))
@@ -158,6 +190,11 @@ def answer(question, product, context, customer, history, delivery):
                 facts.append(value)
     if 'care' in selected:
         facts.append(sales_answers.care_fact(product))
+    for dimension in ('length','width'):
+        if dimension in selected:
+            value=sales_strategy.measurement_fact(product,dimension)
+            if not value:return None
+            facts.append(value)
     if facts:
         greeting = 'وعليكم السلام، ' if re.search(r'(?:السلام|سلام)\s+عليكم',text) else ''
         opening = '' if any(item.get('direction') == 'outgoing' for item in history) else greeting + 'أهلا وسهلا عيوني، '
@@ -214,6 +251,10 @@ def answer(question, product, context, customer, history, delivery):
         parts.append('وأكيد إلج حق الفحص بوجود المندوب قبل الدفع، وإذا بيها إشكال ترجع مجاناً بدون دفع حتى أجور التوصيل.')
     colors = product_variants.colors(product.get('colors'))
     step = '' if paused else sales_playbook.price_next_step(product, context, customer, history)
+    if sizes and re.search(r'قياس',step):
+        # The caller may not have persisted the triggering stock question yet.
+        current=sales_context_for_answer(context,question)
+        step=sales_playbook.price_next_step(product,current,customer,history)
     known_colors = product_variants.chosen_colors(question)
     photo_request=bool(re.search(r'صور|شوفيلي\s+صور',text))
     if (len(ages)>1 and len(requested.get('colors') or [])>1
@@ -249,3 +290,11 @@ def answer(question, product, context, customer, history, delivery):
                 _image_option_colors=known_colors if photo_request else [],
                 image_product_ids=[product['product_id']] if show_colors else [],
                 _suppress_product_images=not show_colors)
+
+
+def sales_context_for_answer(context,question):
+    try:
+        from . import sales_context
+    except ImportError:
+        import sales_context
+    return sales_context.advance(context,[dict(direction='incoming',text=question)])
