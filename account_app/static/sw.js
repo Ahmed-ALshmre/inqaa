@@ -1,7 +1,7 @@
 /* Minimal service worker — needed for installability + offline fallback */
-const CACHE_NAME = 'soof-mobile-v34';
+const CACHE_NAME = 'soof-mobile-v35';
 const APP_SHELL = [
-  '/static/css/mobile-shell.css?v=2',
+  '/static/css/mobile-shell.css?v=3',
   '/static/js/image_composer.js?v=1',
   '/static/icons/soof-mark.svg',
   '/static/css/theme.css?v=2',
@@ -18,13 +18,9 @@ const APP_SHELL = [
   '/static/css/messenger.css?v=5',
   '/static/js/mobile_app.js?v=4',
   '/static/css/rewards.css?v=4',
-  '/static/js/rewards.js?v=4',
-  '/static/js/mascot.js?v=1',
-  '/static/icons/icon-192.png?v=7',
-  '/static/icons/icon-512.png?v=7',
-  '/static/icons/soof-mascot-idle.png?v=1',
-  '/static/icons/soof-mascot-wave.png?v=1',
-  '/static/icons/soof-mascot-celebrate.png?v=1',
+  '/static/js/rewards.js?v=5',
+  '/static/icons/icon-192.png?v=8',
+  '/static/icons/icon-512.png?v=8',
 ];
 
 self.addEventListener('install', (event) => {

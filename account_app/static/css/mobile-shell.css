@@ -288,3 +288,8 @@ summary::-webkit-details-marker { display:none; }
 .inbox-empty i{font-size:30px;color:#4c8e76}
 .inbox-empty span{font-size:11px}
 .dashboard-drawer .store-ai-shortcut{color:var(--primary-dark);background:var(--primary-soft);border:1px solid #c7e4d5}
+
+/* One approved mark across navigation, sign-in and installed app icons. */
+.navbar-brand .app-brand-logo,.admin-brand .app-brand-logo,.catalog-brand>img { object-fit:contain; background:transparent!important; border:0; border-radius:0; padding:0; }
+.login-brand-mark { width:96px; height:96px; padding:12px; background:#d7f3e5!important; border-radius:28px; box-shadow:none!important; }
+.login-brand-mark img { object-fit:contain; border-radius:0; filter:none!important; }
