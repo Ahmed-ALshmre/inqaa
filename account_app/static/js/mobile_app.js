@@ -34,5 +34,12 @@
   window.addEventListener('resize', updateViewport, {passive: true});
   window.visualViewport?.addEventListener('resize', updateViewport, {passive: true});
   window.visualViewport?.addEventListener('scroll', updateViewport, {passive: true});
-  document.addEventListener('DOMContentLoaded', updateViewport, {once: true});
+  document.addEventListener('DOMContentLoaded', () => {
+    updateViewport();
+    document.querySelectorAll('.soof-bottom-nav a').forEach(link => {
+      if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page');
+      const store = new URLSearchParams(location.search).get('store_id');
+      if (store) { const url = new URL(link.href); url.searchParams.set('store_id',store); link.href = url.pathname + url.search; }
+    });
+  }, {once: true});
 })();

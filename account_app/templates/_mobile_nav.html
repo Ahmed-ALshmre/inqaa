@@ -1,1 +1,12 @@
-{# Bottom navigation removed from all pages. #}
+<nav class="soof-bottom-nav" aria-label="التنقل الرئيسي">
+  <a href="/dashboard" data-nav-page="dashboard"><span><i class="bi bi-chat-heart"></i><b class="nav-live-dot"></b></span>المحادثات</a>
+  {% if can('orders') %}<a href="/orders" data-nav-page="orders"><span><i class="bi bi-clipboard"></i></span>الطلبات</a>{% endif %}
+  <a href="/products" data-nav-page="products"><span><i class="bi bi-bag"></i></span>المنتجات</a>
+  {% if request.path == '/dashboard' %}
+  <button type="button" class="dashboard-drawer-toggle" onclick="toggleDashboardDrawer()" aria-label="المزيد من الأدوات والصفحات"><span><i class="bi bi-three-dots"></i></span>المزيد</button>
+  {% elif request.path.startswith('/products') or request.path.startswith('/orders') %}
+  <a href="/settings" data-nav-page="settings"><span><i class="bi bi-three-dots"></i></span>المزيد</a>
+  {% else %}
+  <button type="button" class="admin-menu-btn" onclick="toggleAdminNav()" aria-label="المزيد من الأدوات والصفحات"><span><i class="bi bi-three-dots"></i></span>المزيد</button>
+  {% endif %}
+</nav>

@@ -1,12 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <script>window.workspacePerson = {{ staff_person|tojson }};</script>
-  <script src="/static/js/workspace.js?v=1"></script>
-  <meta name="theme-color" content="#33243f">
+  <script src="/static/js/workspace.js?v=3"></script>
+  <meta name="theme-color" content="#fafbf8">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="صوف">
@@ -21,37 +21,30 @@
   <link rel="stylesheet" href="/static/css/dashboard.css?v=25">
   <link rel="stylesheet" href="/static/css/messenger.css?v=5">
   <link rel="stylesheet" href="/static/css/workspace.css?v=1">
-  <link rel="stylesheet" href="/static/css/rewards.css?v=3">
+  <link rel="stylesheet" href="/static/css/rewards.css?v=4">
   <script defer src="/static/js/mascot.js?v=1"></script>
   <script defer src="/static/js/rewards.js?v=4"></script>
-  <link rel="stylesheet" href="/static/css/theme.css?v=1">
-  <link rel="stylesheet" href="/static/css/ui.css?v=1">
-  <link rel="stylesheet" href="/static/css/inbox.css?v=1">
-  <link rel="stylesheet" href="/static/css/store-ai.css?v=1">
-  <script defer src="/static/js/ui.js?v=1"></script>
+  <link rel="stylesheet" href="/static/css/theme.css?v=2">
+  <link rel="stylesheet" href="/static/css/ui.css?v=2">
+  <link rel="stylesheet" href="/static/css/store-ai.css?v=2">
+  <script defer src="/static/js/ui.js?v=2"></script>
+  <link rel="stylesheet" href="/static/css/mobile-shell.css?v=1">
 </head>
 <body class="messenger-page">
 
 <!-- Navbar -->
-<nav class="navbar navbar-dark navbar-custom fixed-top px-3">
+<nav class="navbar navbar-custom fixed-top px-3 soof-topbar">
   <div class="nav-main d-flex align-items-center gap-2">
-    <button class="mobile-toggle" onclick="toggleSidebar()">
-      <i class="bi bi-list"></i>
-    </button>
     <span class="navbar-brand fw-bold fs-6 mb-0">
-      <button class="mascot-button me-2" type="button" data-mascot-action aria-label="لوّح لصوف" title="لوّح لصوف">
-        <img class="app-brand-logo" data-soof-mascot src="/static/icons/soof-mascot-idle.png?v=1" alt="شعار صوف">
-      </button>صوف
+      <img class="soof-mark" src="/static/icons/soof-mark.svg" alt="">صوف
     </span>
     <button class="dashboard-drawer-toggle" type="button" onclick="toggleDashboardDrawer()" title="القائمة">
       <i class="bi bi-grid-3x3-gap"></i>
       <span>القائمة</span>
     </button>
-    <button class="store-ai-shortcut" type="button" onclick="openStoreAIControls()" aria-controls="storeAIControls" aria-label="التحكم بذكاء جميع المتاجر" title="تشغيل الذكاء الاصطناعي لكل متجر">
-      <i class="bi bi-toggles" aria-hidden="true"></i><span>ذكاء المتاجر</span><small id="storeAIQuickCount">…</small>
-    </button>
+
   </div>
-{% include "_rewards_bar.html" %}
+    <div class="soof-presence"><span class="presence-dot"></span><span id="topbarConnection">جاري الاتصال</span><span class="soof-profile" title="{{ staff_person.name if staff_person else 'حسابك' }}">{{ (staff_person.name if staff_person else 'صوف')[:1] }}</span></div>
     </nav>
 
 <!-- Mobile Overlay -->
@@ -74,6 +67,7 @@
     <span class="badge bg-success fs-7" id="statOrders">0 طلب</span>
     <span class="badge bg-light text-dark fs-7" id="statMessages">0 رسالة</span>
   </div>
+  {% include "_rewards_bar.html" %}
 
   <section class="store-ai-panel" id="storeAIControls" aria-labelledby="storeAIHeading" tabindex="-1">
     <div class="store-ai-heading"><div><span class="store-ai-eyebrow">الرد التلقائي</span><h2 id="storeAIHeading">ذكاء المتاجر</h2></div><button type="button" class="store-ai-refresh" onclick="refreshStoreAIStates()" aria-label="تحديث حالة ذكاء المتاجر"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button></div>
@@ -134,32 +128,34 @@
 
   <!-- Column 1: Sidebar -->
   <div class="sidebar" id="sidebarPanel">
-    <div class="inbox-heading">
-      <div class="ui-inbox-title"><span class="ui-inbox-symbol" aria-hidden="true"><i class="bi bi-chat-square-text"></i></span><div><small>صندوق الوارد</small><h1>المحادثات</h1></div></div>
-      <div class="inbox-heading-actions"><span id="inboxConnection" role="status" data-state="connecting">جاري الاتصال</span><button type="button" id="refreshInboxButton" class="inbox-refresh" onclick="loadConversations(false)" aria-label="تحديث المحادثات" title="تحديث المحادثات"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button></div>
-    </div>
+    <div class="inbox-heading"><div><h1>مساحة عملك</h1><p>كل محادثة، فرصة جديدة</p></div><span id="inboxConnection" role="status" data-state="connecting">جاري الاتصال</span></div>
+    <section class="inbox-overview" aria-label="نظرة اليوم">
+      <h2>نظرة اليوم</h2>
+      <div class="overview-metrics">
+        <button type="button" onclick="openStatsModal()" aria-label="طلبات اليوم والإحصائيات"><strong id="overviewOrders">—</strong><span>طلب جديد</span></button>
+        <button type="button" onclick="setFilter('unanswered')"><strong id="overviewWaiting">—</strong><span>بانتظار الرد</span></button>
+      </div>
+    </section>
     <div id="inboxFilterPanel" class="inbox-filter-panel">
-    <div class="inbox-search-tools">
-      <select class="form-select form-select-sm" id="conversationStoreFilter" onchange="setConversationStoreFilter(this.value)" aria-label="المتجر">
-        <option value="all">كل المتاجر</option>
-
-      </select>
-      <div class="input-group input-group-sm inbox-search">
+    <div class="p-2 border-bottom" style="border-color:var(--border)!important; background:var(--sidebar-bg);">
+      <div class="input-group input-group-sm">
         <span class="input-group-text border-0"><i class="bi bi-search" style="color:var(--text-muted)"></i></span>
         <input type="text" class="form-control border-0" id="searchInput"
           aria-label="بحث المحادثات" placeholder="ابحث عن محادثة…" oninput="filterCustomers()">
       </div>
     </div>
-    <div class="inbox-quick-filters">
-      <div role="group" aria-label="حالة المحادثات" id="conversationFilters">
-        <button class="btn active" type="button" data-filter="all" onclick="setFilter('all',this)" aria-pressed="true"><i class="bi bi-chat-dots" aria-hidden="true"></i>الكل</button>
-        <button class="btn" type="button" data-filter="unanswered" onclick="setFilter('unanswered',this)" aria-pressed="false"><i class="bi bi-reply" aria-hidden="true"></i>بانتظار الرد</button>
-        <button class="btn" type="button" data-filter="problems" onclick="setFilter('problems',this)" aria-pressed="false" title="المحادثات التي تحتاج تدخلاً بشرياً"><i class="bi bi-person-exclamation" aria-hidden="true"></i>تدخل بشري</button>
-        <button class="btn" type="button" data-filter="booked" onclick="setFilter('booked',this)" aria-pressed="false"><i class="bi bi-bag-check" aria-hidden="true"></i>تم الحجز</button>
-        <button class="btn" type="button" data-filter="system_issues" onclick="setFilter('system_issues',this)" aria-pressed="false" title="أخطاء تقنية أو تكرار خطوات الحجز؛ المراجعات المعلّقة تظهر أيضاً ضمن التدخل البشري"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>مشاكل النظام</button>
+    <div class="inbox-toolbar"><h2>المحادثات</h2><label class="inbox-store-picker"><i class="bi bi-shop" aria-hidden="true"></i><select id="conversationStoreFilter" aria-label="تصفية حسب المتجر" onchange="setConversationStoreFilter(this.value)"><option value="all">كل المتاجر</option></select></label><button class="inbox-filter-toggle" type="button" aria-label="تصفية متقدمة" aria-controls="advancedInboxFilters" aria-expanded="false" onclick="toggleAdvancedFilters(this)"><i class="bi bi-filter"></i></button></div>
+    <div class="px-2 py-1 border-bottom" style="border-color:var(--border)!important; background:var(--sidebar-bg);">
+      <div class="btn-group btn-group-sm w-100" role="group" id="conversationFilters">
+        <button class="btn btn-outline-secondary active" data-filter="all" onclick="setFilter('all',this)">الكل</button>
+        <button class="btn btn-outline-secondary" data-filter="unanswered" onclick="setFilter('unanswered',this)">بانتظار الرد</button>
+        <button class="btn btn-outline-secondary" data-filter="problems" onclick="setFilter('problems',this)">
+          تدخل بشري
+        </button>
       </div>
     </div>
-    <details class="inbox-filters"><summary><i class="bi bi-sliders2"></i> تصفية متقدمة <span id="activeFilterCount"></span></summary>
+    <details class="inbox-filters" id="advancedInboxFilters"><summary><i class="bi bi-sliders2"></i> تصفية متقدمة <span id="activeFilterCount"></span></summary>
+      <div class="advanced-status-filters"><button type="button" data-filter="booked" onclick="setFilter('booked',this)"><i class="bi bi-bag-check"></i> تم الطلب</button><button type="button" data-filter="system_issues" onclick="setFilter('system_issues',this)"><i class="bi bi-exclamation-circle"></i> مشاكل النظام</button></div>
       <div class="inbox-filter-grid">
         <label>مرحلة الزبون<select id="filterStage" onchange="refreshInboxFilters()"><option value="all">كل المراحل</option><option value="new">جديد</option><option value="warm">مهتم</option><option value="hot">جاد</option><option value="booked">تم الحجز</option></select></label>
         <label>المنصة<select id="filterPlatform" onchange="refreshInboxFilters()"><option value="all">كل المنصات</option><option value="facebook">فيسبوك</option><option value="instagram">إنستغرام</option></select></label>
@@ -208,7 +204,7 @@
 
       <!-- Header -->
       <div class="chat-header">
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 chat-identity">
           <button class="mobile-chat-back" type="button" onclick="closeMobileConversation()" aria-label="الرجوع إلى قائمة المحادثات" title="الرجوع إلى المحادثات">
             <i class="bi bi-chevron-right" aria-hidden="true"></i>
           </button>
@@ -223,22 +219,20 @@
             <span id="chatAdText"></span>
           </span>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <details class="chat-header-menu"><summary aria-label="أدوات المحادثة"><i class="bi bi-three-dots"></i></summary><div class="chat-menu-actions">
           <button class="btn btn-sm btn-outline-primary" id="chatControlBtn" type="button" onclick="toggleControl()" title="لوحة التحكم" aria-label="لوحة التحكم" aria-controls="controlPanel">
             <i class="bi bi-sliders" aria-hidden="true"></i>
           </button>
-          <button class="btn btn-sm btn-outline-warning" id="conversationAiBtn" onclick="toggleConversationAI()" title="إيقاف/تسليم AI لهذه المحادثة">
-            <i class="bi bi-robot"></i>
-            <span id="conversationAiText">AI</span>
-          </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="loadMessages(currentSenderId)">
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadMessages(currentSenderId)" aria-label="تحديث الرسائل" title="تحديث الرسائل">
             <i class="bi bi-arrow-clockwise"></i>
           </button>
           <button class="btn btn-sm btn-outline-danger" onclick="deleteConversation()" title="حذف المحادثة">
             <i class="bi bi-trash"></i>
           </button>
-        </div>
+        </div></details>
       </div>
+      <button class="conversation-ai-ribbon" id="conversationAiBtn" onclick="toggleConversationAI()" title="إيقاف أو تشغيل AI في المحادثة"><i class="bi bi-stars"></i><span id="conversationAiText">صوف يساعدك بالرد</span><span class="ribbon-dot"></span></button>
+      <button id="chatProductCard" class="chat-product-card" type="button" onclick="toggleControl()" hidden aria-label="تفاصيل المنتج المرتبط"></button>
 
       <aside id="conversationAdContext" class="conversation-ad-context" hidden aria-label="مصدر المحادثة">
         <img id="conversationAdImage" hidden alt="صورة الإعلان" referrerpolicy="no-referrer">
@@ -265,10 +259,12 @@
         <div class="hi-banner-cta"><i class="bi bi-arrow-left"></i></div>
       </div>
 
-      <!-- AI Preview -->
+      {% if can('reply') %}<button class="human-intervention-card" type="button" onclick="openInterventionDialog()"><span class="intervention-card-copy"><strong><i class="bi bi-person-check"></i> التدخل البشري</strong><span>راجع المحادثة وأكمل الرد أو اربط المنتج</span></span><span class="intervention-card-action">فتح <i class="bi bi-arrow-left"></i></span></button>{% endif %}
+
+      <!-- Explicit staff drafting preview -->
       <div id="aiReplyPreview" style="display:none;" class="ai-preview mx-3 mb-2">
         <div class="d-flex justify-content-between align-items-center mb-1">
-          <small class="fw-semibold" style="color:var(--primary-light)"><i class="bi bi-robot me-1"></i>اقتراح AI</small>
+          <small class="fw-semibold" style="color:var(--primary-light)"><i class="bi bi-pencil me-1"></i>مسودة الرد للمراجعة</small>
           <button class="btn btn-sm py-0 btn-outline-secondary" onclick="dismissAIPreview()">
             <i class="bi bi-x"></i>
           </button>
@@ -292,41 +288,28 @@
           <button type="button" id="voiceSendBtn" class="btn btn-sm btn-primary" onclick="sendRecordedVoice()" hidden>إرسال الصوت</button>
           <button type="button" class="btn btn-sm btn-outline-secondary" onclick="discardRecordedVoice()">حذف التسجيل</button>
         </div>
-        <div id="imagePreview" class="mb-2 position-relative d-inline-block" style="display:none!important;">
-          <img id="previewImg" src="" alt="preview" style="height:72px; border-radius:8px; border:2px solid var(--border);">
-          <div id="imageUploadStatus" class="small mt-1" role="status" aria-live="polite"></div>
-          <button class="btn btn-danger btn-sm position-absolute top-0 end-0 p-0 px-1" onclick="clearImage()" style="font-size:10px;">
-            <i class="bi bi-x"></i>
-          </button>
-        </div>
+        <section id="imagePreview" class="composer-attachments" hidden aria-label="الصور المحددة للإرسال"><div class="attachment-heading"><span id="imageUploadStatus" role="status" aria-live="polite"></span><button id="clearComposerImagesBtn" type="button" onclick="clearImage()" aria-label="إزالة جميع الصور">إزالة الكل</button></div><div id="composerImageList" class="composer-image-list"></div></section>
         <div class="reply-shortcuts" aria-label="اختصارات الرد">
-          {% if can('reply') %}<button type="button" onclick="openCatalogDialog()"><i class="bi bi-images"></i> إرسال الكتالوج</button>
-          <button type="button" onclick="openImageDialog()"><i class="bi bi-image"></i> إرسال صورة</button>
-          <button type="button" id="voiceRecordBtn" onclick="toggleVoiceRecording()"><i class="bi bi-mic"></i> تسجيل صوت</button>{% endif %}
           {% if can('orders') %}<button type="button" onclick="openOrderModal()"><i class="bi bi-bag-check"></i> تثبيت طلب</button>{% endif %}
-          <button type="button" onclick="toggleControl()"><i class="bi bi-person-lines-fill"></i> بيانات وأدوات</button>
+          <button type="button" onclick="toggleControl()"><i class="bi bi-person"></i> بيانات الزبون</button>
         </div>
         <div class="input-row">
+          <details class="composer-more"><summary aria-label="إرفاق صور وأدوات الرد"><i class="bi bi-plus-lg"></i></summary><div class="composer-more-menu">
+            {% if can('reply') %}<button type="button" onclick="openImageDialog();this.closest('details').open=false"><i class="bi bi-images"></i> اختيار عدة صور</button><button type="button" onclick="document.getElementById('imageUpload').click();this.closest('details').open=false"><i class="bi bi-upload"></i> صور من الجهاز</button><button type="button" onclick="openCatalogDialog();this.closest('details').open=false"><i class="bi bi-grid"></i> الكتالوج</button>
+            <button class="input-btn improve-btn" id="improveBtn" type="button" onclick="improveMessage();this.closest('details').open=false"><i class="bi bi-magic"></i> تحسين الرسالة</button><button class="input-btn ai-btn" id="askAIBtn" type="button" onclick="askAI();this.closest('details').open=false"><i class="bi bi-stars"></i><span>صياغة رد</span></button>{% endif %}
+          </div></details>
           <textarea class="form-control form-control-sm input-textarea" id="messageInput" rows="1" aria-label="رسالة إلى الزبون" aria-describedby="composerHint"
-            placeholder="اكتب رسالة للزبون..."
+            placeholder="اكتب رسالتك…"
             onkeydown="handleKeyDown(event)"></textarea>
           <div class="input-actions">
-            <button class="btn btn-outline-secondary btn-sm input-btn" onclick="document.getElementById('imageUpload').click()" title="رفع صورة">
-              <i class="bi bi-paperclip"></i><span>صورة</span>
-            </button>
-            <button class="btn btn-warning btn-sm input-btn improve-btn" id="improveBtn" onclick="improveMessage()" title="تحسين الرسالة بالقواعد">
-              <i class="bi bi-magic"></i><span>تحسين</span>
-            </button>
-            <button class="btn btn-info btn-sm input-btn ai-btn" id="askAIBtn" onclick="askAI()" title="حلل المحادثة وصغ رداً">
-              <i class="bi bi-stars"></i><span>صياغة رد</span>
-            </button>
+            {% if can('reply') %}<button class="voice-record-button" type="button" id="voiceRecordBtn" onclick="toggleVoiceRecording()" aria-label="تسجيل رسالة صوتية" title="تسجيل صوت"><i class="bi bi-mic"></i></button>{% endif %}
             <button class="btn btn-primary btn-sm input-btn send-btn" id="sendBtn" onclick="sendMessage()" title="إرسال">
               <i class="bi bi-send-fill"></i><span>إرسال</span>
             </button>
           </div>
         </div>
         <div class="ui-composer-hint" id="composerHint"><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> للإرسال · Enter لسطر جديد</span><span>راجع الرد قبل الإرسال</span></div>
-        <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+        <input type="file" id="imageUpload" accept="image/jpeg,image/png,image/webp" multiple hidden onchange="handleImageUpload(event)">
       </div>
 
     </div>
@@ -651,9 +634,11 @@
 <div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/mobile_app.js?v=3"></script>
-<script src="/static/js/dashboard.js?v=41"></script>
-<script src="/static/js/conversation_tools.js?v=3"></script>
+<script src="/static/js/mobile_app.js?v=4"></script>
+{% include "_mobile_nav.html" %}
+<script src="/static/js/dashboard.js?v=42"></script>
+<script src="/static/js/image_composer.js?v=1"></script>
+<script src="/static/js/conversation_tools.js?v=4"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

@@ -35,23 +35,44 @@ async function openCatalogDialog() {
 }
 async function openImageDialog() {
   if(!currentSenderId) return showToast('اختر محادثة أولاً','warning');
+  if(_isSending) return showToast('انتظر اكتمال الإرسال','warning');
   const sender=currentSenderId;
   const store=currentCustomer?.store_id || 'default';
-  const dialog=toolDialog('imageChooseDialog','مكتبة الصور'); dialog.querySelector('.tool-content')?.remove();
+  const dialog=toolDialog('imageChooseDialog','اختيار الصور'); dialog.querySelector('.tool-content')?.remove();
   const content=document.createElement('div'); content.className='tool-content';
-  const upload=document.createElement('button'); upload.className='btn btn-primary'; upload.textContent='رفع صورة جديدة من الجهاز';
+  const selected=new Set(), choices=new Map();
+  const upload=document.createElement('button'); upload.className='btn btn-primary'; upload.textContent='اختيار عدة صور من الجهاز';
   upload.onclick=()=>{dialog.close();if(sender===currentSenderId)document.getElementById('imageUpload').click();};content.append(upload);
-  const hint=document.createElement('p'); hint.className='mt-3'; hint.textContent='صور الجهاز محفوظة هنا لإعادة استخدامها. اختر صورة ثم اضغط إرسال؛ النص اختياري.';content.append(hint);
+  const hint=document.createElement('p'); hint.className='mt-3 small'; hint.textContent='حدد الصور المطلوبة من المكتبة والمنتجات، ثم أضفها للرسالة. حتى 10 صور في الدفعة الواحدة.';content.append(hint);
   const title=document.createElement('h3');title.className='h6';title.textContent='صورك المحفوظة';content.append(title);
   const grid=document.createElement('div');grid.className='tool-image-grid';content.append(grid);
+  const footer=document.createElement('div');footer.className='image-selection-footer';
+  const count=document.createElement('span');
+  const confirm=document.createElement('button');confirm.className='btn btn-primary';confirm.type='button';confirm.textContent='إضافة للرسالة';
+  footer.append(count,confirm);
+  function updateSelection(){
+    count.textContent=`${selected.size} محددة · ${composerImages.length} في الرسالة`;
+    confirm.disabled=!selected.size;
+    for(const [url,buttons] of choices)for(const button of buttons)button.setAttribute('aria-pressed',String(selected.has(url) || composerImages.some(item=>item.url===url)));
+  }
   function addImage(target,url,label){
-    const button=document.createElement('button');button.type='button';button.className='tool-image-choice';
+    if(!safeMediaUrl(url))return;
+    const button=document.createElement('button');button.type='button';button.className='tool-image-choice';button.setAttribute('aria-label','تحديد '+label);
     const image=document.createElement('img');image.src=url;image.alt=label;image.loading='lazy';
     const caption=document.createElement('span');caption.textContent=label;button.append(image,caption);
-    button.onclick=()=>{if(sender!==currentSenderId)return;clearImage();uploadedImageUrl=url;document.getElementById('previewImg').src=url;document.getElementById('imagePreview').style.cssText='display:block!important;';dialog.close();};target.append(button);
+    if(!choices.has(url))choices.set(url,[]);choices.get(url).push(button);
+    button.disabled=composerImages.some(item=>item.url===url);
+    button.onclick=()=>{
+      if(sender!==currentSenderId || _isSending)return;
+      if(selected.has(url))selected.delete(url);
+      else if(selected.size+composerImages.length<COMPOSER_IMAGE_LIMIT)selected.add(url);
+      else showToast('يمكن اختيار 10 صور في الدفعة الواحدة','warning');
+      updateSelection();
+    };target.append(button);updateSelection();
   }
+  confirm.onclick=()=>{if(sender!==currentSenderId || _isSending)return;if(addComposerImages([...selected]))dialog.close();};
   const state=document.createElement('p');state.className='small';content.append(state);
-  const more=document.createElement('button');more.className='btn btn-outline-primary';more.textContent='عرض المزيد';more.hidden=true;content.append(more);
+  const more=document.createElement('button');more.type='button';more.className='btn btn-outline-primary';more.textContent='عرض المزيد';more.hidden=true;content.append(more);
   let offset=0;
   async function loadSaved(){
     more.disabled=true;state.textContent='جاري تحميل الصور المحفوظة…';
@@ -69,5 +90,5 @@ async function openImageDialog() {
   const productTitle=document.createElement('h3');productTitle.className='h6 mt-3';productTitle.textContent='صور المنتجات';content.append(productTitle);
   const productsGrid=document.createElement('div');productsGrid.className='tool-image-grid';content.append(productsGrid);
   for(const product of allProducts)for(const url of productImageList(product))addImage(productsGrid,url,product.product_name || 'صورة المنتج');
-  dialog.append(content);dialog.showModal();await loadSaved();
+  content.append(footer);updateSelection();dialog.append(content);dialog.showModal();await loadSaved();
 }

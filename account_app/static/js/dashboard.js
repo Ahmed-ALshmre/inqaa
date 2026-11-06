@@ -27,11 +27,9 @@ let pollMsgTimer      = null;
 let messageRequest = null;
 const messageCache = new Map();
 let renderedMessageSender = null;
-let uploadedImageUrl  = null;
-let imageUploadPromise = null;
-let imageUploadController = null;
+let composerImages = [];
+let composerSendIdentity = null;
 let imageUploadGeneration = 0;
-let imagePreviewObjectUrl = null;
 let aiPendingReply    = null;
 let allProducts       = [];
 let productRequestVersion = 0;
@@ -259,6 +257,7 @@ async function loadConversations(showSpinner = true, isLoadMore = false, resetLi
     convOffset = allConversations.length;
     document.getElementById("inboxConnection").textContent = "محدّث الآن";
     document.getElementById('inboxConnection').dataset.state = 'online';
+    setText("topbarConnection", "متصل الآن");
     if (!showSpinner && !isLoadMore) {
       for (const c of allConversations) {
         const prev = previousPending.get(c.sender_id) || pendingReviewsBySender[c.sender_id] || 0;
@@ -327,6 +326,7 @@ async function loadConversations(showSpinner = true, isLoadMore = false, resetLi
     if (e.name === "AbortError" || inboxRequest !== controller) return;
     document.getElementById("inboxConnection").textContent = "تعذر التحديث";
     document.getElementById('inboxConnection').dataset.state = 'error';
+    setText("topbarConnection", "تعذر التحديث");
     console.error("loadConversations error:", e);
     if (isLoadMore) {
       inboxLoadError = 'تعذر تحميل المزيد. أعد المحاولة من الزر أدناه.';
@@ -379,7 +379,7 @@ function loadMoreConversations() {
 }
 
 function syncConversationFilterUI() {
-  const group = document.getElementById('conversationFilters');
+  const group = document.getElementById('inboxFilterPanel');
   if (!group) return;
   const validFilters = new Set(['all', 'booked', 'problems', 'system_issues', 'unanswered']);
   if (!validFilters.has(currentFilter)) currentFilter = 'all';
@@ -387,6 +387,12 @@ function syncConversationFilterUI() {
     button.classList.toggle('active', button.dataset.filter === currentFilter);
     button.setAttribute('aria-pressed', String(button.dataset.filter === currentFilter));
   });
+}
+
+function toggleAdvancedFilters(button) {
+  const details = document.getElementById('advancedInboxFilters');
+  details.open = !details.open;
+  button.setAttribute('aria-expanded', String(details.open));
 }
 
 function setFilter(f, btn = null) {
@@ -440,7 +446,7 @@ function refreshInboxFilters() {
 }
 function scheduleInboxSearch() { clearTimeout(inboxSearchTimer); inboxSearchTimer = setTimeout(refreshInboxFilters,300); }
 function filterCustomers() { scheduleInboxSearch(); }
-function setConversationStoreFilter(storeId) { currentStoreFilter = storeId || 'all'; refreshInboxFilters(); }
+function setConversationStoreFilter(storeId) { currentStoreFilter = storeId || 'all'; document.getElementById('dashboardStatsStore').value = currentStoreFilter; refreshInboxFilters(); loadStats(); }
 function resetInboxFilters() {
   currentFilter = 'all'; currentStoreFilter = 'all';
   document.getElementById('conversationStoreFilter').value = 'all';
@@ -449,7 +455,8 @@ function resetInboxFilters() {
     const el = document.getElementById(id);
     if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
   }
-  syncConversationFilterUI(); refreshInboxFilters();
+  document.getElementById('dashboardStatsStore').value = 'all';
+  syncConversationFilterUI(); refreshInboxFilters(); loadStats();
 }
 
 function onCustomerListScroll() {
@@ -568,7 +575,7 @@ function renderConversations({resetScroll = false} = {}) {
 
 // ══ Select Conversation ════════════════════════════════════════════════════
 async function selectConversation(senderId) {
-  if (currentSenderId !== senderId) { clearImage(); discardRecordedVoice(); }
+  if (currentSenderId !== senderId) { clearImage(); discardRecordedVoice(); dismissAIPreview(); }
   currentSenderId = senderId;
   renderReviewCloseButtons();
   closeAllPanels();
@@ -640,6 +647,7 @@ async function selectConversation(senderId) {
   renderConversations();
   await Promise.all([messagesReady, productsReady]);
   if (currentSenderId !== senderId) return;
+  renderChatProductCard();
   await loadCustomerInstructions(senderId);
   const activeConv = allConversations.find(c => c.sender_id === senderId) || currentCustomer || conv;
   if ((activeConv.human_attention_count || activeConv.pending_reviews_count || 0) > 0) {
@@ -738,6 +746,7 @@ function renderConversationAdContext(ad) {
 }
 
 function safeMediaUrl(value) {
+  if (!String(value || '').trim()) return '';
   try {
     const url = new URL(String(value || ''), location.origin);
     return ['http:','https:'].includes(url.protocol) ? url.href : '';
@@ -822,12 +831,14 @@ function renderMessages(messages, scroll = true, sender = currentSenderId) {
     if (!node) {
       node = document.createElement('div');
       node.className = `msg-wrapper ${m.direction === 'incoming' ? 'incoming' : 'outgoing'}`;
+      node.classList.toggle('staff-message', m.sender_type === 'staff');
       node.dataset.messageId = m.id;
       const next = [...area.children].find(el => Number(el.dataset.messageId) > m.id);
       area.insertBefore(node, next || null);
       added = true; prepended ||= Boolean(next);
     }
     if (node.dataset.signature !== signature) {
+      node.classList.toggle('staff-message', m.sender_type === 'staff');
       node.innerHTML = messageMarkup(m);
       node.dataset.signature = signature;
       node.querySelectorAll('img').forEach(img => { if (img.complete && img.naturalWidth) mediaLoaded(img); });
@@ -1138,6 +1149,7 @@ async function refreshLinkedProductSync() {
   if (!currentSenderId) return;
   const conv = allConversations.find(c => c.sender_id === currentSenderId);
   if (!conv) return;
+  currentCustomer = conv;
   const linkedNames = splitPipeList(conv.product_names || conv.product_name);
   const linkedIds = splitPipeList(conv.product_ids || conv.product_id);
   const linkedBox = document.getElementById('linkedProductInfo');
@@ -1163,6 +1175,7 @@ async function refreshLinkedProductSync() {
     currentConversationAIEnabled = conv.ai_enabled !== 0 && conv.ai_enabled !== false;
     renderConversationAIToggle();
   }
+  renderChatProductCard();
 }
 
 async function resolveWithAI() {
@@ -1203,8 +1216,13 @@ function voiceControls() {
   const button = document.getElementById('voiceRecordBtn');
   const send = document.getElementById('voiceSendBtn');
   wrap.hidden = !active && !voiceBlob;
-  button.disabled = voiceSending;
-  button.innerHTML = active ? '<i class="bi bi-stop-fill"></i> إيقاف التسجيل' : '<i class="bi bi-mic"></i> تسجيل صوت';
+  if (button) {
+    button.disabled = voiceSending;
+    button.classList.toggle('is-recording', active);
+    button.setAttribute('aria-label', active ? 'إيقاف التسجيل' : 'تسجيل رسالة صوتية');
+    button.title = active ? 'إيقاف التسجيل' : 'تسجيل صوت';
+    button.innerHTML = active ? '<i class="bi bi-stop-fill"></i>' : '<i class="bi bi-mic"></i>';
+  }
   send.hidden = !voiceBlob || active;
   send.disabled = voiceSending;
 }
@@ -1294,6 +1312,7 @@ function _setSendingState(busy) {
       ? '<span class="spinner-border spinner-border-sm" role="status"></span>'
       : '<i class="bi bi-send-fill"></i><span>إرسال</span>';
   }
+  if (typeof renderComposerImages === 'function') renderComposerImages();
   if (aiBtn)    aiBtn.disabled = busy || !canUseAI();
   if (sendAIBtn) sendAIBtn.disabled = busy;
   renderAIActionButtons();
@@ -1308,28 +1327,34 @@ async function sendMessage(text = null, imgUrl = null) {
   const txt = text !== null ? text : (document.getElementById('messageInput').value || '').trim();
   _setSendingState(true);
   try {
-    if (imgUrl === null && imageUploadPromise) {
-      showToast('جاري تجهيز الصورة للإرسال…', 'info');
-      if (!await imageUploadPromise) return false;
-    }
+    if (imgUrl === null && !await waitForComposerImages()) return false;
     if (currentSenderId !== sendingTo || (imgUrl === null && generation !== imageUploadGeneration)) return false;
-    const img = imgUrl !== null ? imgUrl : uploadedImageUrl;
-    if (!txt && !img) { showToast('اكتب رسالة أو اختر صورة', 'warning'); return false; }
+    const images = imgUrl !== null ? [imgUrl] : composerImages.map(item => item.url);
+    if (!txt && !images.length) { showToast('اكتب رسالة أو اختر صورة', 'warning'); return false; }
+    if (imgUrl === null) {
+      const signature = JSON.stringify([sendingTo,txt,images]);
+      if (composerSendIdentity?.signature !== signature) composerSendIdentity = {signature,id:globalThis.crypto?.randomUUID?.() || Date.now().toString(36)+Math.random().toString(36).slice(2)};
+    }
     const res  = await apiFetch(`/api/conversations/${encodeURIComponent(sendingTo)}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: txt, image_url: img }),
+      body: JSON.stringify(imgUrl !== null ? {text:txt,image_url:imgUrl} : {text:txt,image_urls:images,client_send_id:composerSendIdentity.id}),
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      if (currentSenderId === sendingTo && document.getElementById('messageInput').value.trim() === txt) { document.getElementById('messageInput').value = ''; if (generation === imageUploadGeneration) clearImage(); }
+      if (currentSenderId === sendingTo && imgUrl === null && generation === imageUploadGeneration) {
+        if (document.getElementById('messageInput').value.trim() === txt) document.getElementById('messageInput').value = '';
+        clearImage();
+        composerSendIdentity = null;
+      }
       if (data.warning) showToast(data.warning, 'warning');
       else showToast('تم الإرسال', 'success');
       await loadMessages(sendingTo, currentSenderId === sendingTo);
       return true;
     } else {
-      const detail = data.warning || data.error || 'Chatwoot لم يؤكد الإرسال';
+      const detail = data.warning || data.error || 'مزود الرسائل لم يؤكد الإرسال';
       showToast('فشل الإرسال: ' + detail, 'danger');
+      if (data.sent_image_urls?.length || data.text_sent) await loadMessages(sendingTo, currentSenderId === sendingTo);
       return false;
     }
   } catch (e) { showToast('خطأ: ' + e.message, 'danger'); return false; }
@@ -1433,6 +1458,24 @@ async function askAI(options = {}) {
     _isAskingAI = false;
     renderAskAIButton();
   }
+}
+
+function renderChatProductCard() {
+  const card = document.getElementById('chatProductCard');
+  if (!card) return;
+  const ids = splitPipeList(currentCustomer?.product_ids || currentCustomer?.product_id);
+  const names = splitPipeList(currentCustomer?.product_names || currentCustomer?.product_name);
+  card.replaceChildren(); card.hidden = !ids.length && !names.length;
+  if (card.hidden) return;
+  const product = allProducts.find(item => ids.includes(item.product_id));
+  const url = product && safeMediaUrl(productImageList(product)[0]);
+  if (url) { const img = document.createElement('img'); img.src=url; img.alt=product.product_name; img.onerror=()=>img.remove(); card.append(img); }
+  else { const icon=document.createElement('i'); icon.className='bi bi-bag product-card-icon'; card.append(icon); }
+  const copy=document.createElement('span'), title=document.createElement('strong'), detail=document.createElement('small');
+  title.textContent=names.join('، ') || product?.product_name || 'المنتج المرتبط';
+  detail.textContent=ids.length > 1 ? `${ids.length} منتجات مرتبطة` : product?.price ? `${product.price} د.ع` : 'تفاصيل المنتج';
+  copy.append(title,detail);
+  const arrow=document.createElement('i'); arrow.className='bi bi-chevron-left'; card.append(copy,arrow);
 }
 
 function resetConversationView() {
@@ -1565,67 +1608,6 @@ async function prepareComposerImage(file) {
   finally { bitmap?.close(); }
 }
 
-async function handleImageUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  clearImage();
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    showToast('اختر صورة JPG أو PNG أو WEBP', 'warning'); return;
-  }
-  if (file.size > 20 * 1024 * 1024) {
-    showToast('الصورة كبيرة جداً؛ الحد الأقصى 20 ميغابايت', 'warning'); return;
-  }
-  const generation = imageUploadGeneration;
-  const sender = currentSenderId;
-  const controller = new AbortController();
-  imageUploadController = controller;
-  imagePreviewObjectUrl = URL.createObjectURL(file);
-  document.getElementById('previewImg').src = imagePreviewObjectUrl;
-  document.getElementById('imagePreview').style.cssText = 'display:block!important;';
-  const status = document.getElementById('imageUploadStatus');
-  if (status) status.textContent = 'جاري تجهيز ورفع الصورة…';
-  const timeout = setTimeout(() => controller.abort(), 45000);
-  imageUploadPromise = (async () => {
-    try {
-      const prepared = await prepareComposerImage(file);
-      if (generation !== imageUploadGeneration || sender !== currentSenderId || controller.signal.aborted) return false;
-      const fd = new FormData(); fd.append('image', prepared); fd.append('purpose', 'library');
-      const res = await apiFetch('/api/upload_image?store_id=' + encodeURIComponent(currentCustomer?.store_id || 'default'), {method: 'POST', body: fd, signal: controller.signal});
-      const data = await res.json();
-      if (generation !== imageUploadGeneration || sender !== currentSenderId) return false;
-      if (!res.ok || !data.image_url) throw new Error(data.error || 'تعذر رفع الصورة');
-      uploadedImageUrl = data.image_url;
-      if (status) status.textContent = 'الصورة جاهزة؛ اضغط إرسال — النص اختياري';
-      return true;
-    } catch (error) {
-      if (generation === imageUploadGeneration && sender === currentSenderId) {
-        clearImage();
-        showToast(error.name === 'AbortError' ? 'انتهت مهلة رفع الصورة؛ حاول مجدداً' : error.message, 'danger');
-      }
-      return false;
-    } finally {
-      clearTimeout(timeout);
-      if (generation === imageUploadGeneration) { imageUploadController = null; imageUploadPromise = null; }
-    }
-  })();
-  return await imageUploadPromise;
-}
-
-function clearImage() {
-  imageUploadGeneration++;
-  imageUploadController?.abort();
-  imageUploadController = null;
-  imageUploadPromise = null;
-  uploadedImageUrl = null;
-  if (imagePreviewObjectUrl) URL.revokeObjectURL(imagePreviewObjectUrl);
-  imagePreviewObjectUrl = null;
-  document.getElementById('imagePreview').style.cssText = 'display:none!important;';
-  document.getElementById('previewImg').src = '';
-  document.getElementById('imageUpload').value = '';
-  const status = document.getElementById('imageUploadStatus');
-  if (status) status.textContent = '';
-}
-
 // ══ Customer Info ══════════════════════════════════════════════════════════
 function getSelectedGender(groupName) {
   const el = document.querySelector(`input[name="${groupName}"]:checked`);
@@ -1700,6 +1682,7 @@ async function loadProducts(storeId = 'default') {
       `<option value="${esc(p.product_id)}">${esc(p.product_name)} — ${esc(p.price)} (${esc(p.stock)})</option>`
     ).join('');
     document.getElementById('productSelect').innerHTML  = '<option value="">— اختر منتجاً —</option>' + opts;
+    renderChatProductCard();
 
   } catch (e) {}
 }
@@ -1824,6 +1807,8 @@ async function loadStats() {
     if(questionsLink)questionsLink.href='/product-questions?store_id='+encodeURIComponent(storeId==='all'?'default':storeId);
     document.getElementById('statOrders').textContent   = `${data.orders_today    || 0} طلب`;
     document.getElementById('statMessages').textContent = `${data.messages_today  || 0} رسالة`;
+    setText('overviewOrders', fmtNumber(data.orders_today || 0));
+    setText('overviewWaiting', fmtNumber(data.unanswered_conversations || 0));
     setText('statTotalMessages', fmtNumber(data.people_total || data.total_conversations || 0));
     setText('statTotalOrders', fmtNumber(data.orders_total || 0));
     setText('statBookedPeople', fmtNumber(data.booked_people || 0));
@@ -1843,7 +1828,7 @@ async function loadStats() {
     renderTopProducts(data.top_products || []);
     // Statistics may cover all stores; they never control a selected store.
   } catch (e) {
-    if (e.name !== 'AbortError') setText('statsScope', 'تعذر تحديث الإحصائيات. حاول مرة ثانية.');
+    if (e.name !== 'AbortError') { setText('statsScope', 'تعذر تحديث الإحصائيات. حاول مرة ثانية.'); setText('overviewOrders', '—'); setText('overviewWaiting', '—'); }
   } finally {
     if (statsRequest === controller) statsRequest = null;
   }
@@ -2001,7 +1986,8 @@ function renderConversationAIToggle() {
   btn.disabled = !globalAIEnabled || conversationAIWritePending.has(currentSenderId);
   btn.classList.toggle('btn-warning', !currentConversationAIEnabled);
   btn.classList.toggle('btn-outline-warning', currentConversationAIEnabled);
-  txt.textContent = !globalAIEnabled ? 'AI متوقف للمتجر' : currentConversationAIEnabled ? 'AI يعمل هنا' : 'AI متوقف هنا';
+  txt.textContent = !globalAIEnabled ? 'صوف متوقف في المتجر' : currentConversationAIEnabled ? 'صوف يساعدك بالرد' : 'المحادثة بيد الموظف';
+  btn.classList.toggle('is-paused', !canUseAI());
   btn.title = !globalAIEnabled ? 'شغّل AI لهذا المتجر أولاً' : currentConversationAIEnabled
     ? 'إيقاف AI في هذه المحادثة فقط'
     : 'تسليم هذه المحادثة إلى AI';
