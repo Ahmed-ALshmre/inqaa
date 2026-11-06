@@ -132,7 +132,11 @@ class ZernioTests(unittest.TestCase):
     def test_debounce_latest_text_without_referral_keeps_first_message_ad(self):
         self.incoming('مرحبا', referral=True)
         self.incoming()
-        self.assertIn('16,000', self.process_latest()['reply'])
+        result=self.process_latest()
+        self.assertIn('16 ألف',result['reply'])
+        self.assertNotIn('12 ألف',result['reply'])
+        with m.app.app_context():
+            self.assertEqual(m.get_db().execute("SELECT product_id FROM customer_product_interests WHERE status='active'").fetchone()[0],'F2')
 
     def test_instagram_referral_uses_same_product_resolution(self):
         self.payload['account'].update(id=self.instagram, accountId=self.instagram, platform='instagram')
