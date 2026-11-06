@@ -364,10 +364,11 @@ function updateInboxPagination() {
   if (!button || !status) return;
   button.disabled = Boolean(inboxRequest) || (!hasMoreConv && !inboxLoadError);
   button.dataset.loading = String(isLoadingMoreConv);
-  button.textContent = isLoadingMoreConv ? 'جارٍ تحميل المحادثات…'
-    : inboxLoadError ? 'إعادة المحاولة' : hasMoreConv ? 'تحميل محادثات أقدم' : 'كل المحادثات معروضة';
-  status.textContent = inboxLoadError || (isLoadingMoreConv ? 'تبقى القائمة في مكانها أثناء التحميل'
-    : hasMoreConv ? 'حمّل المزيد بالزر أو تابع التمرير' : `${allConversations.length} محادثة في هذه القائمة`);
+  button.textContent = isLoadingMoreConv ? 'جارٍ التحميل…'
+    : inboxLoadError ? 'إعادة المحاولة' : hasMoreConv ? 'محادثات أقدم' : 'اكتملت القائمة';
+  status.textContent = inboxLoadError || `${allConversations.length} محادثة`;
+  status.dataset.error = String(Boolean(inboxLoadError));
+  status.title = status.textContent;
 }
 
 function loadMoreConversations() {
