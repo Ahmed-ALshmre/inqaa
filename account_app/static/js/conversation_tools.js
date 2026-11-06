@@ -13,7 +13,17 @@ function toolDialog(id, title) {
 }
 document.addEventListener('DOMContentLoaded', () => {
   const panel = document.getElementById('controlPanel');
-  if(panel) toolDialog('customerToolsDialog','بيانات الزبون وأدوات المحادثة').append(panel);
+  if (panel) {
+    const dialog = toolDialog('customerToolsDialog','بيانات الزبون وأدوات المحادثة');
+    const desktop = document.getElementById('desktopCustomerTools');
+    const query = matchMedia('(min-width:1440px)');
+    const arrange = () => {
+      if (dialog.open) dialog.close();
+      if (desktop) desktop.hidden = !query.matches;
+      (query.matches && desktop ? desktop : dialog).append(panel);
+    };
+    query.addEventListener('change', arrange); arrange();
+  }
 });
 async function openCatalogDialog() {
   if(!currentSenderId) return showToast('اختر محادثة أولاً','warning');

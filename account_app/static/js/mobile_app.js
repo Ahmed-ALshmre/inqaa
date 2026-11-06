@@ -36,6 +36,9 @@
   window.visualViewport?.addEventListener('scroll', updateViewport, {passive: true});
   document.addEventListener('DOMContentLoaded', () => {
     updateViewport();
+    const desktop = matchMedia('(min-width:1024px)');
+    const arrangeHeader = () => { const menu = document.querySelector('.chat-header-menu'); if (menu) menu.open = desktop.matches; };
+    desktop.addEventListener('change', arrangeHeader); arrangeHeader();
     document.querySelectorAll('.soof-bottom-nav a').forEach(link => {
       if (new URL(link.href).pathname === location.pathname) link.setAttribute('aria-current', 'page');
       const store = new URLSearchParams(location.search).get('store_id');
