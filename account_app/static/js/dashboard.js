@@ -575,7 +575,7 @@ function renderConversations({resetScroll = false} = {}) {
 
 // ══ Select Conversation ════════════════════════════════════════════════════
 async function selectConversation(senderId) {
-  if (currentSenderId !== senderId) { clearImage(); discardRecordedVoice(); dismissAIPreview(); }
+  if (currentSenderId !== senderId) { clearImage(); discardRecordedVoice(); dismissAIPreview(); hideHumanIntervention(); }
   currentSenderId = senderId;
   renderReviewCloseButtons();
   closeAllPanels();
@@ -649,8 +649,9 @@ async function selectConversation(senderId) {
   if (currentSenderId !== senderId) return;
   renderChatProductCard();
   await loadCustomerInstructions(senderId);
+  if (currentSenderId !== senderId) return;
   const activeConv = allConversations.find(c => c.sender_id === senderId) || currentCustomer || conv;
-  if ((activeConv.human_attention_count || activeConv.pending_reviews_count || 0) > 0) {
+  if (humanInterventionRequired(activeConv)) {
     showHumanIntervention();
   } else {
     hideHumanIntervention();
@@ -904,9 +905,20 @@ function _hiCurrentMode() {
   return 'text';
 }
 
+function humanInterventionRequired(conversation) {
+  if (!conversation) return false;
+  // A server-provided total takes precedence over older individual counters.
+  if (conversation.human_attention_count !== undefined && conversation.human_attention_count !== null) {
+    return Number(conversation.human_attention_count) > 0;
+  }
+  return ['pending_reviews_count', 'problem_count', 'system_issue_count']
+    .some(field => Number(conversation[field] || 0) > 0);
+}
+
 function _hiShowBanner(visible, mode = 'text') {
   const banner = document.getElementById('hiBanner');
   if (!banner) return;
+  banner.hidden = !visible;
   if (!visible) { banner.style.display = 'none'; return; }
   banner.style.display = 'flex';
   const titleEl = document.getElementById('hiBannerTitle');
@@ -921,7 +933,8 @@ function _hiShowBanner(visible, mode = 'text') {
 }
 
 function showHumanIntervention() {
-  if (!currentSenderId) return;
+  const conversation = allConversations.find(c => c.sender_id === currentSenderId) || currentCustomer;
+  if (!currentSenderId || !humanInterventionRequired(conversation)) { hideHumanIntervention(); return; }
   const mode = _hiCurrentMode();
   _hiShowBanner(true, mode);
   // الصوت يُشغّل فقط من loadConversations/loadMessages عند المحادثات الأخرى.
