@@ -15890,6 +15890,9 @@ def api_products():
     return jsonify({"products": [
         {
             "product_id":   p.get("product_id"),
+            "store_id":     p.get("store_id") or current_store_id(),
+            "ad_ids":       ad_attribution.product_ids(p),
+            "ref":          p.get("ref") or "",
             "product_name": p.get("product_name"),
             "price":        p.get("price"),
             "stock":        p.get("stock"),

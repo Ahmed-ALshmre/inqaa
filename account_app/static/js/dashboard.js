@@ -5,6 +5,7 @@ const INITIAL_SENDER_ID = DASH_PARAMS.get('sender_id') || '';
 let initialSenderOpened = false;
 let currentSenderId   = null;
 let currentCustomer   = null;
+let currentAdContext  = null;
 let allConversations  = [];
 let currentFilter     = 'all';
 let currentStoreFilter = DASH_PARAMS.get('store_id') || 'all';
@@ -706,10 +707,28 @@ async function loadMessages(senderId, scroll = true, older = false) {
   }
 }
 
+function adMatchesLinkedProduct(ad) {
+  if (!ad?.ad_id || !currentCustomer) return false;
+  const linked = splitPipeList(currentCustomer.product_ids || currentCustomer.product_id);
+  const storeId = currentCustomer.store_id || 'default';
+  const matches = allProducts.filter(product => product.store_id === storeId &&
+    ((product.ad_ids || []).includes(String(ad.ad_id).trim()) ||
+     (ad.ref && String(product.ref || '').trim() === String(ad.ref).trim())));
+  return matches.length === 1 && linked.includes(matches[0].product_id);
+}
+
 function renderConversationAdContext(ad) {
+  currentAdContext = ad;
   const panel = document.getElementById('conversationAdContext');
   if (!panel) return;
   panel.hidden = !ad || !Object.values(ad).some(Boolean);
+  const compact = !panel.hidden && adMatchesLinkedProduct(ad);
+  panel.classList.toggle('is-linked-ad', compact);
+  const summary = document.getElementById('conversationAdSummary');
+  summary.hidden = !compact;
+  document.getElementById('conversationAdCopy').hidden = compact;
+  document.getElementById('conversationAdId').textContent = compact ? String(ad.ad_id).trim() : '';
+  summary.removeAttribute('href');
   const image = document.getElementById('conversationAdImage');
   const link = document.getElementById('conversationAdLink');
   const video = document.getElementById('conversationAdVideo');
@@ -722,6 +741,15 @@ function renderConversationAdContext(ad) {
   document.getElementById('conversationAdTitle').textContent = '';
   document.getElementById('conversationAdDetails').textContent = '';
   if (panel.hidden) return;
+  const absoluteWebUrl = value => {
+    try { const u = new URL(value); return ['https:', 'http:'].includes(u.protocol) && !u.username && !u.password ? u.href : ''; }
+    catch { return ''; }
+  };
+  const sourceUrl = absoluteWebUrl(ad.source_url);
+  if (compact) {
+    if (sourceUrl) summary.href = sourceUrl;
+    return;
+  }
   const title = ad.headline || (ad.ad_id ? 'قادم من إعلان' : 'مصدر المحادثة');
   const details = [ad.ad_id && `الإعلان: ${ad.ad_id}`,
     !ad.ad_id && ad.source_id && `المصدر: ${ad.source_id}`,
@@ -733,17 +761,12 @@ function renderConversationAdContext(ad) {
   const detailNode = document.getElementById('conversationAdDetails');
   detailNode.textContent = details;
   detailNode.title = details;
-  const absoluteWebUrl = value => {
-    try { const u = new URL(value); return ['https:', 'http:'].includes(u.protocol) && !u.username && !u.password ? u.href : ''; }
-    catch { return ''; }
-  };
   const imageUrl = absoluteWebUrl(ad.image_url);
   if (imageUrl) {
     image.onerror = () => { image.hidden = true; };
     image.src = imageUrl;
     image.hidden = false;
   }
-  const sourceUrl = absoluteWebUrl(ad.source_url);
   if (sourceUrl) { link.href = sourceUrl; link.hidden = false; }
   const videoUrl = absoluteWebUrl(ad.video_url);
   if (videoUrl) { video.href = videoUrl; video.hidden = false; }
@@ -1371,6 +1394,7 @@ async function askAI(options = {}) {
 }
 
 function renderChatProductCard() {
+  renderConversationAdContext(currentAdContext);
   const card = document.getElementById('chatProductCard');
   if (!card) return;
   const ids = splitPipeList(currentCustomer?.product_ids || currentCustomer?.product_id);
@@ -1393,6 +1417,7 @@ function resetConversationView() {
   discardRecordedVoice();
   currentSenderId = null;
   currentCustomer = null;
+  renderConversationAdContext(null);
   syncActiveStoreAI();
   document.body.classList.remove('mobile-conversation-open');
   if (pollMsgTimer) {

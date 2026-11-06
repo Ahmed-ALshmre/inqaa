@@ -60,10 +60,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(process.argv[1], 'utf8');
-const code = source.slice(source.indexOf('function renderConversationAdContext('), source.indexOf('function safeMediaUrl('));
-const nodes = Object.fromEntries(['Context','Image','Link','Video','Title','Details'].map(name =>
-  ['conversationAd'+name, {hidden: true, removeAttribute(name) {delete this[name];}}]));
-const context = vm.createContext({URL, location: {origin:'https://store.example'},
+const code = source.slice(source.indexOf('function adMatchesLinkedProduct('), source.indexOf('function safeMediaUrl('));
+const nodes = Object.fromEntries(['Context','Image','Link','Video','Title','Details','Summary','Copy','Id'].map(name =>
+  ['conversationAd'+name, {hidden: true, classList: {toggle() {}}, removeAttribute(name) {delete this[name];}}]));
+const context = vm.createContext({URL, currentCustomer:null, currentAdContext:null, location: {origin:'https://store.example'},
   document: {getElementById: id => nodes[id]}});
 vm.runInContext(code, context);
 context.renderConversationAdContext({ad_id:'44',headline:'Winter ad',video_url:'https://cdn.example/ad.mp4',source_url:'https://example.com/post'});
