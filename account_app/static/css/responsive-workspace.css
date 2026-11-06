@@ -122,3 +122,35 @@
   .desktop-customer-panel { flex-basis:300px; width:300px; }
 }
 @media(prefers-reduced-motion:reduce) { .voice-visualizer i { animation:none; height:15px; transform:none; } }
+
+/* Quiet motion signals that conversation AI is enabled, without changing layout. */
+.conversation-ai-ribbon { position:relative; overflow:hidden; isolation:isolate; }
+.conversation-ai-ribbon>i,.conversation-ai-ribbon>span { position:relative; z-index:1; }
+.conversation-ai-ribbon:not(.is-paused):not(:disabled)::before {
+  content:''; position:absolute; top:-60%; bottom:-60%; left:-50%; width:35%;
+  background:linear-gradient(90deg,transparent,#ffffff85,transparent); pointer-events:none;
+  animation:soof-ribbon-sheen 6s ease-in-out infinite;
+}
+.conversation-ai-ribbon:not(.is-paused):not(:disabled)>.bi-stars { display:inline-block; transform-origin:center; animation:soof-ribbon-stars 3.4s ease-in-out infinite; }
+.conversation-ai-ribbon:not(.is-paused):not(:disabled)>.ribbon-dot::after {
+  content:''; position:absolute; inset:-3px; border:1px solid #199969; border-radius:50%; pointer-events:none;
+  animation:soof-ribbon-pulse 2.8s ease-out infinite;
+}
+@keyframes soof-ribbon-sheen {
+  0%,60% { transform:translateX(-120%) skewX(-18deg); opacity:0; }
+  68% { opacity:.7; }
+  90%,100% { transform:translateX(500%) skewX(-18deg); opacity:0; }
+}
+@keyframes soof-ribbon-stars {
+  0%,62%,100% { transform:rotate(0) scale(1); opacity:1; }
+  74% { transform:rotate(-9deg) scale(1.16); opacity:.8; }
+  85% { transform:rotate(7deg) scale(1.08); opacity:1; }
+}
+@keyframes soof-ribbon-pulse {
+  0% { transform:scale(.65); opacity:.65; }
+  72%,100% { transform:scale(1.8); opacity:0; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .conversation-ai-ribbon::before,.conversation-ai-ribbon>.ribbon-dot::after { display:none; animation:none!important; }
+  .conversation-ai-ribbon>.bi-stars { animation:none!important; transform:none; }
+}

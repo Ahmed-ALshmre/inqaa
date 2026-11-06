@@ -15,7 +15,7 @@
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/static/css/products.css?v=2">
   <link rel="stylesheet" href="/static/css/mobile-shell.css?v=3">
-  <link rel="stylesheet" href="/static/css/responsive-workspace.css?v=2">
+  <link rel="stylesheet" href="/static/css/responsive-workspace.css?v=3">
 </head>
 {% macro input(id, label, placeholder='', type='text', wide=false) -%}
 <div class="catalog-field {{ 'wide' if wide else '' }}"><label for="{{ id }}">{{ label }}</label><input class="form-control" id="{{ id }}" type="{{ type }}" placeholder="{{ placeholder }}" {% if type=='number' %}min="0" step="1"{% endif %}></div>
