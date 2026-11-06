@@ -1,7 +1,7 @@
 /* Minimal service worker — needed for installability + offline fallback */
-const CACHE_NAME = 'soof-mobile-v33';
+const CACHE_NAME = 'soof-mobile-v34';
 const APP_SHELL = [
-  '/static/css/mobile-shell.css?v=1',
+  '/static/css/mobile-shell.css?v=2',
   '/static/js/image_composer.js?v=1',
   '/static/icons/soof-mark.svg',
   '/static/css/theme.css?v=2',

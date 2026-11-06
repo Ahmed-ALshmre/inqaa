@@ -111,8 +111,8 @@ body.advisor-workspace .admin-main { height:calc(var(--advisor-viewport,100dvh) 
 .inbox-store-picker select { max-width:135px; border:0; background:transparent; color:var(--text); font:inherit; font-size:10px; min-height:24px; }
 .inbox-filter-toggle { background:#fff; color:var(--text); border:1px solid var(--border); width:35px; height:35px; border-radius:11px; font-size:22px; display:grid; place-items:center; }
 .messenger-page #inboxFilterPanel>.px-2 { background:transparent!important; border:0!important; padding:0 10px!important; }
-.messenger-page #conversationFilters { padding:8px; display:flex; gap:9px; flex-wrap:nowrap; }
-.messenger-page #conversationFilters button { flex:1; border:0; min-height:30px; padding:4px; border-radius:13px!important; font-size:11px; background:#eaf1ec; color:#52645e; box-shadow:none; white-space:nowrap; }
+.messenger-page #conversationFilters { display:flex!important; flex-flow:row nowrap; align-items:center; gap:5px; padding:5px 8px; min-width:0; }
+.messenger-page #conversationFilters .btn { flex:1 1 0; min-width:0; border:0; min-height:28px; padding:4px 6px; border-radius:10px!important; font-size:10px; line-height:1.5; background:#eaf1ec; color:#52645e; box-shadow:none; white-space:nowrap; }
 .messenger-page #conversationFilters button.active { color:white; background:#007e70!important; }
 .inbox-filters { background:transparent; border:0; padding:0 18px; }
 .inbox-filters:not([open]) { display:none; }
