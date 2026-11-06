@@ -87,7 +87,7 @@
         frame = requestAnimationFrame(() => {
           if (!composer.getClientRects().length) return;
           composer.style.setProperty('height', 'auto', 'important');
-          const minimum = matchMedia('(max-width:768px)').matches ? 64 : 56;
+          const minimum = 40;
           const height = Math.min(148, Math.max(minimum, composer.scrollHeight + 2));
           composer.style.setProperty('height', height + 'px', 'important');
           composer.style.overflowY = composer.scrollHeight > height ? 'auto' : 'hidden';

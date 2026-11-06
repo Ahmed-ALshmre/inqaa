@@ -19,7 +19,7 @@
 .store-ai-switch[aria-checked=true]>span{transform:translateX(18px)}
 .store-ai-switch[aria-busy=true]>span{border:2px solid #ffffff80;border-top-color:#168169;animation:store-ai-saving .7s linear infinite}
 .store-ai-switch:disabled{opacity:.6;cursor:wait}
-.store-ai-switch:focus-visible,.store-ai-refresh:focus-visible,.store-ai-shortcut:focus-visible{outline:3px solid #9781be;outline-offset:3px}
+.store-ai-switch:focus-visible,.store-ai-refresh:focus-visible,.store-ai-shortcut:focus-visible{outline:3px solid #7ec1a9;outline-offset:3px}
 .store-ai-status{font-size:10px;line-height:1.8;color:var(--text-muted);margin:12px 0 0}
 @keyframes store-ai-saving{to{rotate:360deg}}
 @media(max-width:480px){.store-ai-shortcut{padding:7px 8px;gap:5px}.store-ai-shortcut>span{display:none}.messenger-page .dashboard-drawer-toggle{display:none}.store-ai-panel{padding:12px}.store-ai-row{padding:11px 9px}}

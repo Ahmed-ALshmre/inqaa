@@ -15353,9 +15353,20 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
 @_dash_require
 def api_send_message(sender_id):
     data      = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or not isinstance(data.get('text', ''), (str, type(None))) or not isinstance(data.get('image_url', ''), (str, type(None))):
+        return jsonify({"error": "Invalid message payload"}), 400
     text      = (data.get("text")      or "").strip()
     image_url = (data.get("image_url") or "").strip()
-    if not text and not image_url:
+    selected_images = data.get("image_urls", [])
+    if not isinstance(selected_images, list) or any(not isinstance(url, str) or not url.strip() for url in selected_images):
+        return jsonify({"error": "image_urls must be a list of image URLs"}), 400
+    selected_images = list(dict.fromkeys(([image_url] if image_url else []) + [url.strip() for url in selected_images]))
+    if len(selected_images) > 10:
+        return jsonify({"error": "يمكن إرسال 10 صور كحد أقصى في الدفعة الواحدة"}), 400
+    client_send_id = data.get('client_send_id', '')
+    if not isinstance(client_send_id, str) or len(client_send_id) > 100:
+        return jsonify({"error": "Invalid client_send_id"}), 400
+    if not text and not selected_images:
         return jsonify({"error": "text or image_url required"}), 400
 
     db  = get_db()
@@ -15383,7 +15394,8 @@ def api_send_message(sender_id):
     image_result = None
     manual_tag = MANYCHAT_DEFAULT_MESSAGE_TAG
     incoming_id = db.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=? AND direction='incoming'", (sender_id,)).fetchone()[0]
-    delivery_id = 'manual:' + hashlib.sha256(ai_efficiency.dumps([owner_store, sender_id, incoming_id, text, image_url]).encode()).hexdigest()
+    image_identity = selected_images if len(selected_images) > 1 else (selected_images[0] if selected_images else '')
+    delivery_id = 'manual:' + hashlib.sha256(ai_efficiency.dumps([owner_store, sender_id, client_send_id or incoming_id, text, image_identity]).encode()).hexdigest()
     if text:
         delivered_parts = []
         for part in approved_reply_parts({}, text):
@@ -15398,7 +15410,8 @@ def api_send_message(sender_id):
                 save_message(db, sender_id, 'outgoing', 'text', part, None, None, None,
                              dict(reply_meta, delivery_id=delivery_id))
         text_result = dict(text_result or {}, parts_sent=len(delivered_parts))
-    image_urls = list(dict.fromkeys(([image_url] if image_url else []) + reply_meta.get('image_urls', [])))
+    image_urls = list(dict.fromkeys(selected_images + reply_meta.get('image_urls', [])))
+    sent_image_urls = []
     for image_to_send in image_urls:
         public_img = build_public_image_url(image_to_send)
         print(f"[Dashboard] Sending image: {public_img}", flush=True)
@@ -15406,6 +15419,8 @@ def api_send_message(sender_id):
             image_result = ai_jobs.deliver(db, delivery_id, ['image', public_img],
                 lambda: send_image_via_manychat_detailed(sender_id, public_img, platform=platform,
                     message_tag=manual_tag, page_id=page_id))
+            if image_result.get('ok'):
+                sent_image_urls.append(image_to_send)
             if image_result.get('ok') and not db.execute("SELECT 1 FROM messages WHERE sender_id=? AND image_url=? AND raw_payload LIKE ?",
                     (sender_id, public_img, '%' + delivery_id + '%')).fetchone():
                 save_message(db, sender_id, 'outgoing', 'image', None, public_img, None, None,
@@ -15420,7 +15435,7 @@ def api_send_message(sender_id):
     manychat_key = (os.environ.get("ZERNIO_API_KEY", "") if zernio.enabled_for_store(owner_store)
                     else os.environ.get("CHATWOOT_API_TOKEN", "") if chatwoot.enabled()
                     else manychat_api_key_for_page(page_id, current_store_id()))
-    primary = text_result or image_result or {}
+    primary = (image_result if image_result and not image_result.get('ok') else text_result) or image_result or {}
     warning = None
     if not manychat_key and not sent:
         warning = "مفتاح إرسال الرسائل غير مُهيّأ — تم حفظ الرسالة في القاعدة فقط"
@@ -15445,6 +15460,8 @@ def api_send_message(sender_id):
         "subscriber_id": sender_id,
         "text_result": text_result,
         "image_result": image_result,
+        "sent_image_urls": sent_image_urls,
+        "text_sent": bool(text_result and text_result.get('ok')),
     })
 
 
@@ -16799,6 +16816,11 @@ def api_dashboard_stats():
         "goal_gap": max(0, goal_people - cohort_buyers),
         "pending_reviews":     db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'" + review_where, review_params).fetchone()[0],
         "product_questions_pending": db.execute("SELECT COUNT(*) FROM product_questions WHERE status='pending'" + review_where, review_params).fetchone()[0],
+        "unanswered_conversations": db.execute(
+            """SELECT COUNT(*) FROM customers c JOIN messages m ON m.id =
+               (SELECT id FROM messages WHERE sender_id=c.sender_id ORDER BY id DESC LIMIT 1)
+               WHERE m.direction='incoming'""" + (" AND COALESCE(NULLIF(c.store_id,''),'default')=?" if store_id else ""),
+            review_params).fetchone()[0],
         "orders_today":        conversion_growth.cohort_metrics(db, today, (datetime.now(BAGHDAD_TZ).date() + timedelta(days=1)).isoformat(), store_id or None, booking_source=booking_source)['orders'],
         "messages_today":      db.execute("SELECT COUNT(*) FROM messages WHERE created_at >= ?" + review_where, [today] + review_params).fetchone()[0],
         "messages_total":      total_people,

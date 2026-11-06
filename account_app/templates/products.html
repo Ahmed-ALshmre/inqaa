@@ -9,10 +9,11 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/dashboard.css?v=25"><link rel="stylesheet" href="/static/css/theme.css?v=1">
-  <link rel="stylesheet" href="/static/css/ui.css?v=1"><script defer src="/static/js/ui.js?v=1"></script>
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=25"><link rel="stylesheet" href="/static/css/theme.css?v=2">
+  <link rel="stylesheet" href="/static/css/ui.css?v=2"><script defer src="/static/js/ui.js?v=2"></script>
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/static/css/products.css?v=2">
+  <link rel="stylesheet" href="/static/css/mobile-shell.css?v=1">
 </head>
 {% macro input(id, label, placeholder='', type='text', wide=false) -%}
 <div class="catalog-field {{ 'wide' if wide else '' }}"><label for="{{ id }}">{{ label }}</label><input class="form-control" id="{{ id }}" type="{{ type }}" placeholder="{{ placeholder }}" {% if type=='number' %}min="0" step="1"{% endif %}></div>
@@ -24,7 +25,7 @@
 <div class="catalog-field"><label for="{{ id }}">{{ label }}</label><select class="form-select" id="{{ id }}"><option value="">{{ empty }}</option>{% for value,title in options.items() %}<option value="{{ value }}">{{ title }}</option>{% endfor %}</select></div>
 {%- endmacro %}
 <body class="products-page catalog-workspace">
-<header class="catalog-topbar"><a href="/dashboard" class="catalog-brand"><img src="/static/icons/soof-mascot-idle.png" alt="صوف"><span>صوف <small>إدارة المنتجات</small></span></a><nav aria-label="تنقل الصفحة"><a href="/dashboard">المحادثات</a><a href="/orders">الطلبات</a><a href="/settings">الإعدادات</a></nav><details class="catalog-tools"><summary><i class="bi bi-three-dots"></i><span>أدوات الكتالوج</span></summary><div><button type="button" onclick="exportProducts()">تصدير المنتجات</button><button type="button" onclick="document.getElementById('productsImportInput').click()">استيراد المنتجات</button><a href="/settings/maintenance">النسخ الاحتياطي</a></div></details><input type="file" id="productsImportInput" accept="application/json,.json" hidden onchange="importProductsFile(this)"></header>
+<header class="catalog-topbar"><a href="/dashboard" class="catalog-brand"><img src="/static/icons/soof-mark.svg" alt="صوف"><span>صوف <small>إدارة المنتجات</small></span></a><nav aria-label="تنقل الصفحة"><a href="/dashboard">المحادثات</a><a href="/orders">الطلبات</a><a href="/settings">الإعدادات</a></nav><details class="catalog-tools"><summary><i class="bi bi-three-dots"></i><span>أدوات الكتالوج</span></summary><div><button type="button" onclick="exportProducts()">تصدير المنتجات</button><button type="button" onclick="document.getElementById('productsImportInput').click()">استيراد المنتجات</button><a href="/settings/maintenance">النسخ الاحتياطي</a></div></details><input type="file" id="productsImportInput" accept="application/json,.json" hidden onchange="importProductsFile(this)"></header>
 <main class="products-layout catalog-layout">
 <aside class="products-list-panel catalog-library" aria-label="مكتبة المنتجات">
   <div class="catalog-library-heading"><div><span class="catalog-eyebrow">الكتالوج</span><h1>المنتجات <span id="productsCount">—</span></h1></div><button class="catalog-icon-button" type="button" onclick="loadProducts()" aria-label="تحديث المنتجات"><i class="bi bi-arrow-clockwise"></i></button></div><a class="btn btn-outline-secondary m-3" id="manageCategoriesLink" href="/product-categories?store_id={{ request.args.get('store_id','default')|urlencode }}">إدارة الفئات والمجموعات</a>
