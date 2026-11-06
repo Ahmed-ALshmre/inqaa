@@ -249,17 +249,8 @@
       <div class="messages-area" id="messagesArea" aria-label="رسائل المحادثة"></div>
       <button id="newMessagesButton" type="button" class="new-messages-button" hidden onclick="scrollToLatestMessage()">رسائل جديدة ↓</button>
 
-      <!-- Human Review Banner (clickable to open the single dialog) -->
-      <div class="hi-banner" id="hiBanner" style="display:none;" onclick="openInterventionDialog()">
-        <div class="hi-banner-icon"><i class="bi bi-person-exclamation"></i></div>
-        <div class="hi-banner-text">
-          <div class="hi-banner-title" id="hiBannerTitle">تدخل بشري مطلوب</div>
-          <div class="hi-banner-sub" id="hiBannerSub">اضغط لفتح خيارات المعالجة</div>
-        </div>
-        <div class="hi-banner-cta"><i class="bi bi-arrow-left"></i></div>
-      </div>
-
-      {% if can('reply') %}<button class="human-intervention-card" type="button" onclick="openInterventionDialog()"><span class="intervention-card-copy"><strong><i class="bi bi-person-check"></i> التدخل البشري</strong><span>راجع المحادثة وأكمل الرد أو اربط المنتج</span></span><span class="intervention-card-action">فتح <i class="bi bi-arrow-left"></i></span></button>{% endif %}
+      <!-- One actionable card, revealed only for an active human intervention. -->
+      {% if can('reply') %}<button id="hiBanner" class="human-intervention-card" type="button" onclick="openInterventionDialog()" hidden><span class="intervention-card-copy"><strong><i class="bi bi-person-check"></i> <span id="hiBannerTitle">التدخل البشري</span></strong><span id="hiBannerSub">راجع المحادثة وأكمل الرد أو اربط المنتج</span></span><span class="intervention-card-action">فتح <i class="bi bi-arrow-left"></i></span></button>{% endif %}
 
       <!-- Explicit staff drafting preview -->
       <div id="aiReplyPreview" style="display:none;" class="ai-preview mx-3 mb-2">
@@ -636,7 +627,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=4"></script>
 {% include "_mobile_nav.html" %}
-<script src="/static/js/dashboard.js?v=42"></script>
+<script src="/static/js/dashboard.js?v=43"></script>
 <script src="/static/js/image_composer.js?v=1"></script>
 <script src="/static/js/conversation_tools.js?v=4"></script>
 <script>
