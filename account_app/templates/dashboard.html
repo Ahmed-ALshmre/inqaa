@@ -29,12 +29,14 @@
   <link rel="stylesheet" href="/static/css/store-ai.css?v=2">
   <script defer src="/static/js/ui.js?v=2"></script>
   <link rel="stylesheet" href="/static/css/mobile-shell.css?v=3">
+  <link rel="stylesheet" href="/static/css/responsive-workspace.css?v=1">
 </head>
 <body class="messenger-page">
 
 <!-- Navbar -->
 <nav class="navbar navbar-custom fixed-top px-3 soof-topbar">
   <div class="nav-main d-flex align-items-center gap-2">
+    <div class="desktop-workspace-heading"><strong>المحادثات والعملاء</strong><span>مساحة عمل صوف</span></div>
     <span class="navbar-brand fw-bold fs-6 mb-0">
       <img class="soof-mark" src="/static/icons/soof-mark.svg" alt="">صوف
     </span>
@@ -44,7 +46,7 @@
     </button>
 
   </div>
-    <div class="soof-presence"><span class="presence-dot"></span><span id="topbarConnection">جاري الاتصال</span><span class="soof-profile" title="{{ staff_person.name if staff_person else 'حسابك' }}">{{ (staff_person.name if staff_person else 'صوف')[:1] }}</span></div>
+    <div class="soof-presence"><span class="desktop-user-name">{{ staff_person.name if staff_person else '' }}</span><span class="presence-dot"></span><span id="topbarConnection">جاري الاتصال</span><span class="soof-profile" title="{{ staff_person.name if staff_person else 'حسابك' }}">{{ (staff_person.name if staff_person else 'صوف')[:1] }}</span></div>
     </nav>
 
 <!-- Mobile Overlay -->
@@ -266,12 +268,13 @@
 
       <!-- Input Area -->
       <div class="input-area">
-        <div id="voiceComposer" class="voice-composer" hidden>
-          <span id="voiceStatus" role="status" aria-live="polite">التسجيل جاهز</span>
-          <audio id="voicePreview" controls preload="metadata" hidden aria-label="استماع إلى التسجيل قبل الإرسال"></audio>
-          <button type="button" id="voiceSendBtn" class="btn btn-sm btn-primary" onclick="sendRecordedVoice()" hidden>إرسال الصوت</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="discardRecordedVoice()">حذف التسجيل</button>
-        </div>
+        <section id="voiceComposer" class="voice-composer" data-state="idle" hidden aria-label="رسالة صوتية">
+          <div class="voice-heading"><span class="voice-state-icon" aria-hidden="true"><i id="voiceStateIcon" class="bi bi-mic"></i></span><div class="voice-heading-copy"><strong id="voiceTitle">رسالة صوتية</strong><span id="voiceStatus" role="status" aria-live="polite">التسجيل جاهز</span></div><time id="voiceDuration" class="voice-duration" aria-label="مدة التسجيل">0:00</time></div>
+          <div id="voiceVisualizer" class="voice-visualizer" hidden aria-hidden="true"><i style="--bar:0"></i><i style="--bar:1"></i><i style="--bar:2"></i><i style="--bar:3"></i><i style="--bar:4"></i><i style="--bar:5"></i><i style="--bar:6"></i><i style="--bar:7"></i><i style="--bar:8"></i><i style="--bar:9"></i><i style="--bar:10"></i><i style="--bar:11"></i><i style="--bar:12"></i><i style="--bar:13"></i><i style="--bar:14"></i><i style="--bar:15"></i><i style="--bar:16"></i><i style="--bar:17"></i><i style="--bar:18"></i></div>
+          <audio id="voicePreview" preload="metadata" hidden aria-label="معاينة التسجيل الصوتي"></audio>
+          <div id="voicePlayback" class="voice-playback" hidden><button id="voicePlayBtn" type="button" class="voice-play-button" onclick="toggleVoicePlayback()" aria-label="تشغيل التسجيل"><i class="bi bi-play-fill"></i></button><div class="voice-seek-wrap"><label class="visually-hidden" for="voiceSeek">موضع تشغيل التسجيل</label><input id="voiceSeek" type="range" min="0" max="100" step="0.1" value="0" oninput="seekRecordedVoice(this.value)" aria-label="موضع تشغيل التسجيل"><div class="voice-playback-times"><span id="voicePlaybackTime">0:00</span><span id="voiceTotalTime">0:00</span></div></div></div>
+          <div class="voice-action-row"><button id="voiceDiscardBtn" type="button" class="voice-discard-button" onclick="discardRecordedVoice()" aria-label="حذف التسجيل" title="حذف التسجيل"><i class="bi bi-trash3"></i></button><button id="voiceRestartBtn" type="button" class="voice-restart-button" onclick="restartVoiceRecording()" hidden aria-label="إعادة التسجيل" title="إعادة التسجيل"><i class="bi bi-arrow-counterclockwise"></i></button><button id="voiceStopBtn" type="button" class="voice-stop-button" onclick="stopVoiceRecording()" hidden><i class="bi bi-stop-fill"></i> إيقاف ومراجعة</button><button id="voiceSendBtn" type="button" class="voice-send-button" onclick="sendRecordedVoice()" hidden><i class="bi bi-send-fill"></i><span>إرسال الصوت</span></button></div>
+        </section>
         <section id="imagePreview" class="composer-attachments" hidden aria-label="الصور المحددة للإرسال"><div class="attachment-heading"><span id="imageUploadStatus" role="status" aria-live="polite"></span><button id="clearComposerImagesBtn" type="button" onclick="clearImage()" aria-label="إزالة جميع الصور">إزالة الكل</button></div><div id="composerImageList" class="composer-image-list"></div></section>
         <div class="reply-shortcuts" aria-label="اختصارات الرد">
           {% if can('orders') %}<button type="button" onclick="openOrderModal()"><i class="bi bi-bag-check"></i> تثبيت طلب</button>{% endif %}
@@ -298,6 +301,8 @@
 
     </div>
   </div>
+
+  <aside id="desktopCustomerTools" class="desktop-customer-panel" hidden aria-label="بيانات المحادثة"><header><i class="bi bi-person-vcard"></i><div><strong>بيانات المحادثة</strong><span>الزبون والمنتجات والإجراءات</span></div></header></aside>
 
   <!-- Column 3: Control Panel -->
   <div class="control-panel" id="controlPanel" tabindex="-1">
@@ -618,11 +623,12 @@
 <div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/mobile_app.js?v=4"></script>
+<script src="/static/js/mobile_app.js?v=5"></script>
 {% include "_mobile_nav.html" %}
-<script src="/static/js/dashboard.js?v=43"></script>
+<script src="/static/js/dashboard.js?v=44"></script>
 <script src="/static/js/image_composer.js?v=1"></script>
-<script src="/static/js/conversation_tools.js?v=4"></script>
+<script src="/static/js/voice_composer.js?v=1"></script>
+<script src="/static/js/conversation_tools.js?v=5"></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

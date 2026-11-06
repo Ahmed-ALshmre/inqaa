@@ -1,0 +1,118 @@
+/* Phone controls remain compact; desktop gets its own working layout. */
+.desktop-workspace-heading,.desktop-user-name { display:none; }
+.soof-bottom-nav>.desktop-nav-brand { display:none!important; }
+.desktop-customer-panel { min-width:0; min-height:0; }
+
+/* A single, clearly separated recording and playback surface. */
+.messenger-page .voice-composer {
+  max-height:none; overflow:visible; margin:0 0 10px; padding:14px;
+  border:1px solid #cce4d8; border-radius:20px; background:#f2faf5;
+  box-shadow:0 5px 18px #123d3010; display:flex; flex-direction:column; flex-wrap:nowrap; align-items:stretch; gap:12px;
+}
+.voice-heading { display:flex; align-items:center; gap:10px; min-width:0; }
+.voice-state-icon { display:grid; place-items:center; flex-shrink:0; width:39px; height:39px; border-radius:13px; color:#007e70; background:#d7f0e2; font-size:21px; }
+.voice-heading-copy { display:flex; flex-direction:column; gap:3px; min-width:0; flex:1; }
+.voice-heading-copy strong { color:#173e36; font-size:13px; }
+.voice-heading-copy>span { color:#6b8177; font-size:10px; line-height:1.7; }
+.voice-composer #voiceStatus { font-size:10px; font-weight:400; color:#6b8177; line-height:1.7; }
+.voice-duration { flex-shrink:0; font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; color:#265c4a; background:white; padding:5px 10px; border-radius:11px; direction:ltr; }
+.voice-composer[data-state=recording] { background:#fff9f7; border-color:#efd6cc; }
+.voice-composer[data-state=recording] .voice-state-icon { background:#fbe7e0; color:#bc5844; }
+.voice-composer[data-state=recording] .voice-duration::before { content:''; display:inline-block; width:6px; height:6px; margin-right:6px; border-radius:50%; background:#cc624b; }
+.voice-visualizer { display:flex; align-items:center; justify-content:center; gap:5px; height:35px; padding:3px 6px; }
+.voice-visualizer i { display:block; width:4px; height:27px; transform:scaleY(.33); border-radius:4px; background:#c8816c; animation:voice-capture-pulse .9s ease-in-out infinite alternate; animation-delay:calc(var(--bar) * -95ms); }
+@keyframes voice-capture-pulse { to { transform:scaleY(1); opacity:.6; } }
+.voice-playback { display:flex; align-items:center; gap:12px; padding:10px; border:1px solid #dcebe1; border-radius:15px; background:white; direction:ltr; }
+.voice-play-button { display:grid; place-items:center; width:42px; height:42px; flex-shrink:0; padding:0; border:0; border-radius:50%; background:#007e70; color:white; font-size:24px; }
+.voice-seek-wrap { flex:1; min-width:0; }
+.voice-seek-wrap input { display:block; width:100%; height:22px; margin:0; accent-color:#007e70; cursor:pointer; }
+.voice-playback-times { display:flex; justify-content:space-between; color:#7c8e84; font-size:9px; font-variant-numeric:tabular-nums; }
+.voice-action-row { display:flex; align-items:center; gap:8px; }
+.voice-action-row>button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:42px; border-radius:12px; font:inherit; font-size:12px; font-weight:600; transition:background-color .15s; }
+.voice-action-row>button:disabled { opacity:.55; cursor:wait; }
+.voice-discard-button,.voice-restart-button { flex:0 0 42px; padding:0; width:42px; border:1px solid #d6e5db; background:white; color:#647a6c; font-size:17px!important; }
+.voice-discard-button { color:#ad6656; }
+.voice-stop-button { flex:1; padding:9px 15px; border:1px solid #e8bfae; background:#fbe8df; color:#9f4e38; }
+.voice-send-button { flex:1; padding:9px 15px; border:1px solid #007e70; background:#007e70; color:white; }
+.voice-send-button:hover:not(:disabled) { background:#00685d; }
+.voice-record-button { transition:background-color .15s,border-color .15s; }
+@media(max-width:768px) {
+  .messenger-page .input-area.voice-active .input-row,.messenger-page .input-area.voice-active .reply-shortcuts { display:none!important; }
+  .messenger-page .voice-composer { margin-bottom:2px; padding:12px; border-radius:18px; gap:11px; }
+  .voice-heading-copy strong { font-size:12px; }
+  .voice-heading-copy>span { font-size:9px; }
+  .voice-composer #voiceStatus { font-size:9px; }
+  .voice-duration { font-size:15px; padding-inline:8px; }
+}
+
+@media(min-width:1024px) {
+  :root { --bottom-nav-h:0px; --desktop-nav-w:88px; }
+  .soof-bottom-nav { inset-inline-start:0; inset-inline-end:auto; top:0; bottom:0; width:var(--desktop-nav-w); height:100dvh; padding:18px 10px; border-top:0; border-inline-end:1px solid #dce6df; flex-direction:column; justify-content:flex-start; gap:9px; background:#fff; }
+  .soof-bottom-nav>a,.soof-bottom-nav>button { flex:0 0 auto; width:100%; min-height:66px; max-width:none; gap:6px; border-radius:15px; font-size:10px; }
+  .soof-bottom-nav i { font-size:23px; }
+  .soof-bottom-nav>.desktop-nav-brand { display:flex!important; min-height:78px; margin-bottom:18px; font-size:16px; font-weight:800; }
+  .soof-bottom-nav>.desktop-nav-brand[aria-current=page] { background:transparent; }
+  .desktop-nav-brand img { width:39px; height:37px; object-fit:contain; }
+  .soof-bottom-nav>a[aria-current=page] { background:#e1f4e9; color:#006d5c; }
+  .messenger-page .soof-topbar { inset-inline-start:var(--desktop-nav-w); padding-inline:28px!important; height:70px!important; }
+  .soof-topbar .navbar-brand,.soof-topbar .dashboard-drawer-toggle { display:none!important; }
+  .desktop-workspace-heading { display:flex; flex-direction:column; gap:2px; }
+  .desktop-workspace-heading strong { font-size:16px; color:#18392f; }
+  .desktop-workspace-heading>span { font-size:10px; color:#809085; }
+  .desktop-user-name { display:inline; margin-inline-end:10px; color:#355a4b; font-size:12px; }
+  .messenger-page { padding-top:70px!important; }
+  .messenger-page .main-container { height:calc(var(--app-viewport-height,100dvh) - 70px)!important; width:calc(100% - var(--desktop-nav-w)); margin-inline-start:var(--desktop-nav-w); padding:20px!important; gap:18px!important; background:#edf3ee; }
+  .messenger-page .sidebar { position:relative!important; inset:auto!important; transform:none!important; flex:0 0 328px; width:328px!important; min-width:0; height:100%; border-radius:19px; background:#fff!important; box-shadow:none; }
+  .messenger-page .inbox-heading { padding:20px 20px 12px; }
+  .messenger-page .inbox-heading h1 { font-size:24px; }
+  .messenger-page .inbox-heading p { font-size:11px; }
+  .messenger-page .customer-item { margin-inline:12px; padding:13px 8px; border-radius:10px; }
+  .messenger-page .customer-item.active { margin-inline:12px; padding-inline:8px; }
+  .messenger-page .cust-avatar { width:40px; height:40px; }
+  .messenger-page .chat-panel { min-width:0; height:100%; border-radius:19px; background:#fff!important; }
+  .messenger-page .chat-header { min-height:80px; padding:16px 24px!important; border-bottom:1px solid #e6ede7!important; background:white!important; }
+  .messenger-page #chatName { font-size:17px; }
+  .messenger-page .chat-header .avatar-circle { width:46px; height:46px; }
+  .chat-header-menu>summary { display:none; }
+  .chat-menu-actions { position:static; min-width:0; padding:0; border:0; box-shadow:none; background:transparent; gap:8px; }
+  .chat-menu-actions .btn { width:39px; height:39px; min-height:39px; background:#f8faf8; border-color:#e0e9e3; }
+  .conversation-ai-ribbon { align-self:flex-start; min-height:28px; margin:12px 24px 8px; padding:5px 12px; border-radius:8px; font-size:10px; }
+  .chat-product-card { max-width:420px; margin:0 24px 8px; width:calc(100% - 48px); }
+  .messenger-page .chat-sync-bar { padding-inline:24px; }
+  .messenger-page .messages-area { padding:24px max(24px,calc((100% - 820px)/2))!important; gap:16px; background:#f8faf7!important; }
+  .messenger-page .msg-wrapper { max-width:78%; }
+  .messenger-page .msg-bubble { padding:11px 16px; font-size:14px!important; }
+  .human-intervention-card { width:calc(100% - 48px); margin:6px 24px 10px; padding:12px 15px; }
+  .messenger-page .input-area { align-self:center; width:100%; max-width:1020px; padding:12px 24px 18px!important; border-top:1px solid #e6ede7!important; background:white!important; }
+  .messenger-page .reply-shortcuts { gap:8px; margin-bottom:10px; }
+  .messenger-page .reply-shortcuts button { flex:0 0 auto; min-height:34px; padding:7px 12px; border-radius:10px!important; font-size:11px; background:#f7faf7; }
+  .messenger-page .input-row { gap:10px!important; }
+  .messenger-page .ui-composer-hint { display:flex; margin-top:8px; font-size:10px; }
+  .messenger-page #messageInput { min-height:48px!important; border-radius:13px!important; padding:11px 14px!important; font-size:14px; }
+  .messenger-page .input-actions .send-btn { width:92px!important; min-width:92px; height:46px!important; min-height:46px!important; display:flex!important; gap:8px; border-radius:13px!important; font-size:16px!important; }
+  .messenger-page .input-actions .send-btn span:not(.spinner-border) { display:inline!important; font-size:12px; }
+  .messenger-page .voice-record-button,.composer-more>summary { width:46px!important; height:46px!important; min-height:46px!important; border-radius:13px!important; }
+  .messenger-page .voice-composer { max-width:620px; }
+  .desktop-customer-panel { flex:0 0 284px; width:284px; height:100%; overflow-y:auto; border:1px solid #dce5de; border-radius:19px; background:white; scrollbar-width:thin; overscroll-behavior:contain; }
+  .desktop-customer-panel>header { display:flex; align-items:center; gap:10px; padding:19px 16px; position:sticky; top:0; z-index:2; background:white; border-bottom:1px solid #e6ede7; }
+  .desktop-customer-panel>header>i { display:grid; place-items:center; width:36px; height:36px; background:#edf7f0; border-radius:11px; font-size:20px; color:#378168; }
+  .desktop-customer-panel>header>div { display:flex; flex-direction:column; gap:4px; }
+  .desktop-customer-panel>header strong { font-size:13px; }
+  .desktop-customer-panel>header span { font-size:10px; color:#809085; }
+  .desktop-customer-panel .control-panel { position:static!important; transform:none!important; display:block!important; width:100%!important; min-width:0!important; height:auto!important; max-height:none!important; border:0!important; box-shadow:none!important; overflow:visible!important; padding:0!important; background:white!important; }
+  .desktop-customer-panel .ctrl-section { margin:12px; padding:13px; border-radius:13px; }
+  .desktop-customer-panel .ctrl-header { font-size:12px; }
+  .desktop-customer-panel .form-control,.desktop-customer-panel .form-select { font-size:12px; }
+  .orders-page .navbar-custom,.products-page .catalog-topbar { margin-inline-start:var(--desktop-nav-w); width:calc(100% - var(--desktop-nav-w)); }
+  .orders-page .orders-layout,.products-page .catalog-layout.products-layout { margin-inline-start:var(--desktop-nav-w)!important; width:calc(100% - var(--desktop-nav-w)); padding-bottom:28px!important; }
+  .catalog-workspace .catalog-savebar { bottom:0!important; }
+  .admin-shell .soof-bottom-nav { display:none; }
+  .admin-main { padding-bottom:24px!important; }
+  body.advisor-workspace .admin-main { height:calc(var(--advisor-viewport,100dvh) - 66px); padding-bottom:12px!important; }
+}
+@media(min-width:1600px) {
+  .messenger-page .main-container { padding:24px!important; gap:22px!important; }
+  .messenger-page .sidebar { flex-basis:354px; width:354px!important; }
+  .desktop-customer-panel { flex-basis:300px; width:300px; }
+}
+@media(prefers-reduced-motion:reduce) { .voice-visualizer i { animation:none; height:15px; transform:none; } }

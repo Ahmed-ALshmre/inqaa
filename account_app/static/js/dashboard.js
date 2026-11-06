@@ -143,6 +143,8 @@ function toggleSidebar() {
 }
 
 function toggleControl() {
+  const desktop = document.getElementById('desktopCustomerTools');
+  if (desktop && !desktop.hidden) { closeDashboardDrawer(); desktop.scrollTop = 0; document.getElementById('controlPanel')?.focus({preventScroll:true}); return; }
   const dialog = document.getElementById('customerToolsDialog');
   if (dialog) { closeDashboardDrawer(); dialog.showModal(); return; }
   const cp = document.getElementById('controlPanel');
@@ -1208,112 +1210,6 @@ function openLightbox(url) {
 // ══ Send Message ═══════════════════════════════════════════════════════════
 let _isSending = false;
 let _isAskingAI = false;
-let voiceRecorder = null;
-let voiceStream = null;
-let voiceBlob = null;
-let voiceUrl = '';
-let voiceSender = null;
-let voiceTimer = null;
-let voiceDiscarded = false;
-let voiceSending = false;
-
-function voiceMime() {
-  if (!window.MediaRecorder) return '';
-  return ['audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm']
-    .find(type => MediaRecorder.isTypeSupported(type)) || '';
-}
-
-function voiceControls() {
-  const active = voiceRecorder?.state === 'recording';
-  const wrap = document.getElementById('voiceComposer');
-  const button = document.getElementById('voiceRecordBtn');
-  const send = document.getElementById('voiceSendBtn');
-  wrap.hidden = !active && !voiceBlob;
-  if (button) {
-    button.disabled = voiceSending;
-    button.classList.toggle('is-recording', active);
-    button.setAttribute('aria-label', active ? 'إيقاف التسجيل' : 'تسجيل رسالة صوتية');
-    button.title = active ? 'إيقاف التسجيل' : 'تسجيل صوت';
-    button.innerHTML = active ? '<i class="bi bi-stop-fill"></i>' : '<i class="bi bi-mic"></i>';
-  }
-  send.hidden = !voiceBlob || active;
-  send.disabled = voiceSending;
-}
-
-function discardRecordedVoice() {
-  voiceDiscarded = true;
-  if (voiceRecorder?.state === 'recording') voiceRecorder.stop();
-  voiceStream?.getTracks().forEach(track => track.stop());
-  clearTimeout(voiceTimer);
-  if (voiceUrl) URL.revokeObjectURL(voiceUrl);
-  voiceRecorder = null; voiceStream = null; voiceBlob = null; voiceUrl = ''; voiceSender = null;
-  const preview = document.getElementById('voicePreview');
-  preview.pause(); preview.removeAttribute('src'); preview.hidden = true;
-  document.getElementById('voiceStatus').textContent = 'التسجيل جاهز';
-  voiceControls();
-}
-
-async function toggleVoiceRecording() {
-  if (voiceRecorder?.state === 'recording') { voiceRecorder.stop(); return; }
-  if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
-  const mime = voiceMime();
-  if (!mime || !navigator.mediaDevices?.getUserMedia) {
-    showToast('المتصفح يحتاج إذن الميكروفون واتصالاً آمناً لتسجيل الصوت', 'warning'); return;
-  }
-  discardRecordedVoice();
-  const sender = currentSenderId;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-    if (currentSenderId !== sender) { stream.getTracks().forEach(track => track.stop()); return; }
-    const chunks = [];
-    voiceDiscarded = false; voiceStream = stream; voiceSender = sender;
-    voiceRecorder = new MediaRecorder(stream, {mimeType: mime, audioBitsPerSecond: 64000});
-    voiceRecorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
-    voiceRecorder.onstop = () => {
-      stream.getTracks().forEach(track => track.stop());
-      clearTimeout(voiceTimer);
-      voiceStream = null; voiceRecorder = null;
-      if (voiceDiscarded || currentSenderId !== sender) return;
-      const blob = new Blob(chunks, {type: mime.split(';')[0]});
-      if (!blob.size) { discardRecordedVoice(); showToast('التسجيل فارغ', 'warning'); return; }
-      voiceBlob = blob; voiceUrl = URL.createObjectURL(blob);
-      const preview = document.getElementById('voicePreview');
-      preview.src = voiceUrl; preview.hidden = false;
-      document.getElementById('voiceStatus').textContent = 'استمع للتسجيل، ثم أرسله أو احذفه';
-      voiceControls();
-    };
-    voiceRecorder.start(250);
-    voiceTimer = setTimeout(() => { if (voiceRecorder?.state === 'recording') voiceRecorder.stop(); }, 60000);
-    document.getElementById('voiceStatus').textContent = 'جارٍ تسجيل الصوت… الحد الأقصى دقيقة';
-    voiceControls();
-  } catch (error) {
-    voiceStream?.getTracks().forEach(track => track.stop());
-    voiceStream = null; voiceRecorder = null; voiceControls();
-    showToast('تعذر تشغيل الميكروفون: ' + error.message, 'danger');
-  }
-}
-
-async function sendRecordedVoice() {
-  if (!voiceBlob || voiceSending || !voiceSender || voiceSender !== currentSenderId) return;
-  voiceSending = true; voiceControls();
-  try {
-    const type = voiceBlob.type.split(';')[0];
-    const ext = {'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/webm': 'webm'}[type];
-    if (!ext) throw new Error('صيغة التسجيل غير مدعومة');
-    const form = new FormData();
-    form.append('audio', new File([voiceBlob], `voice.${ext}`, {type}));
-    const response = await apiFetch(`/api/conversations/${encodeURIComponent(voiceSender)}/send_audio`,
-      {method: 'POST', body: form});
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || 'مزود الرسائل لم يؤكد إرسال الصوت');
-    const sentTo = voiceSender;
-    discardRecordedVoice();
-    await loadMessages(sentTo, currentSenderId === sentTo);
-    showToast('تم إرسال التسجيل الصوتي', 'success');
-  } catch (error) { showToast('فشل إرسال الصوت: ' + error.message, 'danger'); }
-  finally { voiceSending = false; voiceControls(); }
-}
-
 function _setSendingState(busy) {
   _isSending = busy;
   const sendBtn  = document.getElementById('sendBtn');
@@ -1493,6 +1389,7 @@ function renderChatProductCard() {
 
 function resetConversationView() {
   clearImage();
+  discardRecordedVoice();
   currentSenderId = null;
   currentCustomer = null;
   syncActiveStoreAI();
