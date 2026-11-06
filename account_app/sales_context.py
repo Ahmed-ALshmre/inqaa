@@ -3,11 +3,11 @@ import json
 import re
 
 try:
-    from . import sales_decision, product_variants
+    from . import sales_decision, product_variants, catalog_profile
     from .checkout import normalized, phone_number, invalid_shipping_address, is_confirmation, accepts_inspection_offer
     from .delivery_state import VISIBLE_SQL
 except ImportError:
-    import sales_decision, product_variants
+    import sales_decision, product_variants, catalog_profile
     from checkout import normalized, phone_number, invalid_shipping_address, is_confirmation, accepts_inspection_offer
     from delivery_state import VISIBLE_SQL
 
@@ -16,7 +16,7 @@ PRODUCT_KNOWLEDGE_FIELDS = (
     'bundle_contents', 'sale_unit', 'real_photo_notes', 'video_url', 'faq', 'inspection_policy',
     'fabric_feel', 'cut', 'season', 'care_instructions',
 )
-EVIDENCE_VERSION = 11
+EVIDENCE_VERSION = 12
 
 
 def browse_request(text):
@@ -94,6 +94,8 @@ def question_from_turn(turn):
 def context_evidence(text, turn):
     clean = normalized(product_variants.normalize_size_words(text))
     if product_variants.requested(clean)['sizes']:
+        return True
+    if catalog_profile.query_type(clean) or catalog_profile.query_occasions(clean):
         return True
     if re.search(r'(?:اريد|ريد|اخذ|اخد|اشتري|خليلي)\s*(?:بس\s+)?(?:ثنين|اثنين|ثنتين|واحد[هة]?|\d{1,2}(?!\d))', clean):
         return True  # Keep declared quantities even without the word "قطعة".

@@ -73,6 +73,7 @@ def _category(product):
         return product['product_type']
     if product.get('product_type') in catalog_profile.TYPES and product.get('product_type') != 'other':
         return product['product_type']
+    if catalog_profile.effective_family(product):return catalog_profile.effective_family(product)
     text = _facts(product, 'category')
     if not text or text in {'غير مصنف', 'غير مصنفة', 'uncategorized'}:
         text = _facts(product, 'product_name')
@@ -115,7 +116,7 @@ def _shared_sizes(left, right):
 
 
 def eligible_related_products(product, products, *, size='', age_years=None,
-                              audience='', limit=2, weight=None):
+                              audience='', limit=2, weight=None, occasions=()):
     """Resolve source links to different, compatible, currently offered models.
 
     Explicit customer size/age takes precedence over a broad overlap of catalog
@@ -155,6 +156,12 @@ def eligible_related_products(product, products, *, size='', age_years=None,
             continue
         if candidate.get('recommendation_enabled') is False:
             continue
+        uses=catalog_profile.product_occasions(candidate)
+        if occasions:
+            if not set(occasions).issubset(uses):continue
+        else:
+            source_uses=set(product.get('occasions') or []) & {'home','outing'}
+            if source_uses and not source_uses & uses:continue
         quantity = candidate.get('stock_quantity')
         if quantity not in (None, ''):
             try:
@@ -209,12 +216,16 @@ def catalog_alternatives(product, products, *, size='', age_years=None, color=''
     requested_categories = [category for category, pattern in (
         ('dresses', r'فستان|فساتين|فصاطين'), ('sets', r'طقم|اطقم|بلوز[ةه]\s*و?\s*تنور|قميص\s*و?\s*تنور'),
         ('abaya', r'عباي|عباء'), ('skirts', r'تنور'), ('tops', r'بلوز|قميص')) if re.search(pattern, clean)]
+    explicit_type=catalog_profile.query_type(request)
+    if explicit_type:requested_categories=[explicit_type]
     allowed = requested_categories or [_category(product)]
     result = []
     for category in dict.fromkeys(allowed):
         source = dict(product, category=category, related_product_ids=[str(p['product_id']) for p in candidates])
+        if requested_categories:source.update(product_type=category,product_family=category)
         for candidate in candidates:
-            if not eligible_related_products(source, [candidate], size=size, age_years=age_years, audience=_audience(product), limit=1, weight=weight):
+            if not eligible_related_products(source, [candidate], size=size, age_years=age_years, audience=catalog_profile.query_audience(request) or _audience(product), limit=1, weight=weight,
+                    occasions=catalog_profile.query_occasions(request)):
                 continue
             if color and any(v['supported'] is not True for v in product_variants.assess(candidate, 'لون ' + color)):
                 continue
