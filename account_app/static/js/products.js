@@ -48,6 +48,8 @@ const fields = {
 document.addEventListener('DOMContentLoaded', async () => {
   await initProductsStoreSelector();
   await loadProducts(true);
+  const requestedProduct=new URLSearchParams(location.search).get('product_id');
+  if(requestedProduct&&allProducts.some(p=>p.product_id===requestedProduct))editProduct(requestedProduct,true);
   byId('productImages').addEventListener('input', () => { renderImagePreview(); markProductDirty(); });
   byId('relatedProductsSearch').addEventListener('input', renderRelatedProducts);
   byId('productId').addEventListener('input', renderRelatedProducts);
@@ -128,11 +130,15 @@ function filteredProducts() {
   const audience = byId('productAudienceFilter').value;
   const availability = byId('productAvailabilityFilter').value;
   const group = byId('productGroupFilter').value;
+  const type=byId('productTypeFilter')?.value||'';
+  const use=byId('productUseFilter')?.value||'';
   return allProducts.filter(p => {
     const state = p.status !== 'active' ? 'hidden' : p.catalog_meta?.stock_state || 'unknown';
     return (!audience || (p.audience || p.catalog_meta?.audience) === audience)
       && (!availability || state === availability)
       && (!group || (p.recommendation_groups || []).includes(group))
+      && (!type || p.product_type===type)
+      && (!use || (p.occasions||[]).includes(use))
       && (!query || ['product_id','product_name','keywords','category','colors','sizes','recommendation_groups']
         .some(key => String(p[key] || '').toLocaleLowerCase('ar').includes(query)));
   }).sort((a,b) => byId('productSort').value === 'priority'

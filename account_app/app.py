@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy
+    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
     from .media import extract_media, media_type, message_media, known_sticker
@@ -5394,10 +5394,14 @@ def _catalog_words(text):
 
 
 def _product_search_haystack(product):
-    return _catalog_text(" ".join(str(product.get(field) or "") for field in (
+    identity = " ".join(str(product.get(field) or "") for field in (
         "product_name", "keywords", "category", "description",
-        "visual_description", "colors", "sizes", "notes",
-    ))).lower()
+        "visual_description", "colors", "sizes", "notes", "reply_category", "product_type_label",
+    ))
+    labels = [catalog_profile.TYPES.get(catalog_profile.effective_family(product), ''),
+              catalog_profile.AUDIENCES.get(product.get('audience'), '')]
+    labels += [catalog_profile.OCCASIONS.get(key, '') for key in catalog_profile.product_occasions(product)]
+    return _catalog_text(' '.join([identity, *labels])).lower()
 
 
 def _extract_age_years(text):
@@ -5515,10 +5519,12 @@ def _product_matches_request(product, request_info):
 
 def search_available_products_for_request(text, products, limit=5):
     request_info = _extract_product_request(text)
+    if catalog_profile.query_type(text) or catalog_profile.query_audience(text) or catalog_profile.query_occasions(text):
+        request_info.update(is_search=True, has_specific_filter=True)
     if not request_info.get("is_search"):
         return {"request": request_info, "matches": []}
     matches = []
-    for product in products or []:
+    for product in catalog_profile.discovery_candidates(text, products or []):
         match = _product_matches_request(product, request_info)
         if match:
             matches.append(match)
@@ -14252,6 +14258,12 @@ def product_categories_page():
     return render_template('catalog_taxonomy.html',families=catalog_profile.TYPES,size_systems=catalog_profile.SIZE_SYSTEMS)
 
 
+@app.get('/product-links')
+@_dash_require
+def product_links_page():
+    return render_template('product_links.html',catalog_schema=catalog_editor_schema())
+
+
 @app.route('/api/products/manage/classifications',methods=['GET','POST'])
 @app.route('/api/products/manage/classifications/<kind>/<identity>',methods=['PUT','DELETE'])
 @_dash_require
@@ -16083,7 +16095,39 @@ def _sync_related_product_links(products, changed):
 def api_manage_products():
     include_inactive = request.args.get("all", "1") != "0"
     products = load_products_from_file() if include_inactive else load_active_products(None)
-    return jsonify(products=[product_payload(p) for p in products],catalog_schema=catalog_editor_schema())
+    return jsonify(products=[product_payload(p) for p in products],catalog_schema=catalog_editor_schema(),
+                   revision=catalog_linking.revision(products,current_store_id()))
+
+
+@app.post('/api/products/manage/classify')
+@app.post('/api/products/manage/classify-preview')
+@_dash_require
+def api_classify_products():
+    import secrets
+    token=session.get('csrf_token') or ''
+    if not token or not secrets.compare_digest(request.headers.get('X-CSRF-Token',''),token):
+        return jsonify(error='حدّث الصفحة ثم حاول مجدداً.'),403
+    data=request.get_json(silent=True)
+    if not isinstance(data,dict):return jsonify(error='بيانات التصنيف غير صحيحة.'),400
+    with _products_file_lock:
+        products=load_products_from_file(all_stores=True);store=current_store_id()
+        if data.get('revision')!=catalog_linking.revision(products,store):
+            return jsonify(error='تغيّرت بيانات المنتجات؛ حدّث القائمة وراجع الاختيار قبل الحفظ.'),409
+        try:
+            registry=catalog_taxonomy.listing(get_db(),store,products)
+            preview=request.path.endswith('classify-preview')
+            updated=catalog_linking.classify(products,store,data,registry) if data.get('changes') else products
+            if preview:
+                source=next((p for p in updated if p.get('store_id','default')==store and p['product_id']==data.get('source_id')),None)
+                if not source:raise ValueError('اختر منتجاً من المتجر لتجربة اقتراح بدائله.')
+                matches=catalog_linking.preview(source,updated,data)
+                return jsonify(products=[product_payload(p) for p in matches],draft=bool(data.get('changes')),
+                    explanation='تجربة للروابط والمجموعات مع الجمهور والاستخدام والفئة والقياس والتوفر الحالي؛ لا ترسل رسائل ولا تنشئ طلباً.')
+            if not data.get('changes'):raise ValueError('حدد التعديلات المطلوبة أولاً.')
+        except (ValueError,TypeError) as exc:return jsonify(error=str(exc)),400
+        save_products_to_file(updated)
+    return jsonify(ok=True,changed=len(data['product_ids']),
+        revision=catalog_linking.revision(load_products_from_file(),store))
 
 
 @app.route("/api/products/manage", methods=["POST"])
@@ -16145,7 +16189,7 @@ def api_product_recommendation_preview():
         if len(size) > 30:
             raise ValueError('المقاس طويل؛ اكتبي القياس المطلوب فقط.')
         matches = product_links.eligible_related_products(source, candidates,
-            age_years=age, size=size, audience=audience)
+            age_years=age, size=size, audience=audience,occasions=[occasion] if occasion else [])
     except (ValueError, TypeError) as exc:
         return jsonify(error=str(exc)), 400
     return jsonify(products=[product_payload(p) for p in matches],

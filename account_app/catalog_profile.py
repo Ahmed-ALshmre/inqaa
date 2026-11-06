@@ -5,11 +5,13 @@ import re
 AUDIENCES = {'boys': 'ولادي', 'girls': 'بناتي', 'children': 'أطفال للجنسين',
              'women': 'نسائي', 'men': 'رجالي', 'adults': 'بالغين للجنسين'}
 TYPES = {'dresses': 'فستان', 'sets': 'طقم / سوت', 'abaya': 'عباية', 'skirts': 'تنورة',
+         'tracksuits': 'تراك', 'dishdasha': 'دشداشة',
          'trousers': 'بنطلون', 'tops': 'قميص / بلوزة', 'outerwear': 'جاكيت / معطف',
          'shoes': 'أحذية', 'bags': 'حقائب', 'accessories': 'إكسسوارات', 'other': 'أخرى'}
 SIZE_SYSTEMS = {'legacy': 'المقاسات المحفوظة', 'age': 'عمر الطفل', 'clothing': 'قياس الملابس',
                 'weight': 'نطاق وزن تقريبي', 'shoe': 'قياس الحذاء', 'none': 'لا يحتاج قياساً'}
 OCCASIONS = {'everyday': 'يومي', 'birthday': 'عيد ميلاد', 'eid': 'العيد',
+             'home': 'بيتي', 'outing': 'طلعة / خروج',
              'occasion': 'مناسبات', 'school': 'مدرسة', 'winter': 'شتوي', 'summer': 'صيفي'}
 FIELDS = ('reply_category', 'audience', 'product_type', 'product_type_label', 'product_family', 'size_system', 'age_min_months', 'age_max_months',
           'weight_min_kg', 'weight_max_kg', 'occasions', 'recommendation_groups',
@@ -35,9 +37,28 @@ def shoe(product):
 
 def query_type(text):
     text=str(text or '').translate(str.maketrans('أإآة','اااه')).lower()
-    if re.search(r'حذاء|احذيه|جوتي|قندر|نعال|صندل|\bshoes?\b|sneaker',text):return 'shoes'
-    if re.search(r'حقيب|حقائب|جنط|شنط|\bbags?\b',text):return 'bags'
-    return ''
+    patterns={'shoes':r'حذاء|احذيه|جوتي|قندر|نعال|صندل|\bshoes?\b|sneaker',
+        'bags':r'حقيب|حقائب|جنط|شنط|\bbags?\b','tracksuits':r'تراك(?:ات)?|tracksuit',
+        'dishdasha':r'دشداش|دشاديش','dresses':r'فستان|فساتين|فساتن|فصاطين|\bdress',
+        'sets':r'سوت|طقم|اطقم|\bsets?\b','skirts':r'تنور|تنانير|\bskirt',
+        'trousers':r'بنطل|بنطر|شروال|\bpants?\b','tops':r'قميص|قمصان|بلوز|\bshirt',
+        'abaya':r'عباي|عباء|\babaya','outerwear':r'جاكيت|معطف|ترانشكوت|\bcoat'}
+    hits=[]
+    for kind,pattern in patterns.items():
+        for hit in re.finditer(pattern,text):
+            if not re.search(r'(?:ما\s*اريد|ماريد|مو|بدل|بغير|بدون|لا)\s*(?:ال)?$',text[max(0,hit.start()-20):hit.start()]):
+                hits.append((hit.start(),kind))
+    kinds={kind for _,kind in hits}
+    return next(iter(kinds)) if len(kinds)==1 else ''
+
+
+def effective_family(product):
+    explicit=family(product)
+    if explicit:return explicit
+    identity=' '.join(str(product.get(k) or '') for k in ('category','product_name','reply_category'))
+    # A set may name its components; those are not separate product types.
+    if re.match(r'^\s*(?:طقم|سوت|بكج)',identity.strip()):return 'sets'
+    return query_type(identity)
 
 
 def normalize(product, strict=False):
@@ -147,11 +168,14 @@ def query_audience(text):
 
 
 def query_occasions(text):
-    text = str(text or '').replace('أ', 'ا').replace('إ', 'ا')
+    text = str(text or '').translate(str.maketrans('أإآة','اااه'))
     patterns = {'birthday': r'عيد ميلاد|ميلاد', 'eid': r'(?<!ميلاد )\bالعيد\b',
                 'school': r'مدرس[هة]|دوام', 'winter': r'شتوي|شتاء', 'summer': r'صيفي|صيف',
-                'occasion': r'مناسب[هة]|عرس|حفله|حفلة', 'everyday': r'يومي|للبيت'}
-    return [key for key, pattern in patterns.items() if re.search(pattern, text)]
+                'occasion': r'مناسب[هة]|عرس|حفله', 'everyday': r'يومي',
+                'home':r'بيتي|بيتيات|للبيت|بالبيت|للمنزل', 'outing':r'طلعه|طلعات|للخروج|خروج|برا البيت'}
+    return [key for key, pattern in patterns.items() if any(not re.search(
+        r'(?:ما\s*اريد|ماريد|مو|بدل|بغير|بدون|لا)\s*(?:ال)?$',text[max(0,hit.start()-20):hit.start()])
+        for hit in re.finditer(pattern,text))]
 
 
 def discovery_candidates(text, products):
@@ -169,7 +193,7 @@ def discovery_candidates(text, products):
     for product in products:
         if product.get('recommendation_enabled') is False or product_albums.stock_state(product) != 'available':
             continue
-        if requested_type and family(product)!=requested_type:
+        if requested_type and effective_family(product)!=requested_type:
             continue
         if audience:
             try:
@@ -186,10 +210,21 @@ def discovery_candidates(text, products):
             checks = product_variants.assess(product, text)
             if not checks or any(check['supported'] is not True for check in checks):
                 continue
-        if occasions and not set(occasions) & set(product.get('occasions') or []):
+        if occasions and not set(occasions).issubset(product_occasions(product)):
             continue
         result.append(product)
     return sorted(result, key=lambda p: -normalize(p)['recommendation_priority'])
+
+
+def product_occasions(product):
+    tags=set(product.get('occasions') or [])
+    if not tags & {'winter','summer'}:
+        try:
+            from . import sales_answers
+        except ImportError:
+            import sales_answers
+        tags.update(set(query_occasions(sales_answers.season_fact(product))) & {'winter','summer'})
+    return tags
 
 
 def contextual_candidates(text, products, context):
@@ -207,8 +242,15 @@ def contextual_candidates(text, products, context):
         [selected['age']] if selected.get('age') is not None else [])
     size = selected.get('size')
     query = AUDIENCES.get(audience, '')
-    requested_type=query_type(text)
+    requested_type=query_type(text) or next((query_type(item.get('text')) for item in reversed(evidence)
+                                            if query_type(item.get('text'))),'')
     if requested_type:query+=' '+TYPES[requested_type]
+    occasions=set()
+    for question in [item.get('text') for item in evidence]+[text]:
+        found=set(query_occasions(question))
+        for dimension in ({'home','outing'},{'winter','summer'},set(OCCASIONS)-{'home','outing','winter','summer'}):
+            if found & dimension:occasions=(occasions-dimension)|(found & dimension)
+    query+=' '+' '.join(OCCASIONS[key] for key in occasions)
     query += ' ' + ' '.join('عمر ' + product_variants.age_text(age) for age in ages)
     if size and not ages and requested_type!='bags':
         query += ' قياس ' + str(size)
