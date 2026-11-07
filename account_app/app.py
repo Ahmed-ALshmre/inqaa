@@ -9568,13 +9568,19 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     if remembered_stock:
         return owner_result_surface(remembered_stock, ev, customer, history)
     album_question = len(customer_products or []) > 1 and bool(re.search(r'الاول|الأول|الثاني|الثانية', ev.get('text') or ''))
+    album_topics=set(sales_answers.topics(ev.get('text') or ''))
+    factual_album=bool(product_albums.single_product_album(ev.get('_image_matches') or [],chosen)
+        and album_topics and not album_topics-{'fabric','fabric_feel','season','stretch','cut','lining','closure','care',
+                                             'sizes','availability','length','width'}
+        and not sales_strategy._explicit_purchase(ev.get('text'))
+        and not re.search(r'الاول|الأول|الثاني|الاخير|فرق|مقارن',ev.get('text') or ''))
     if (album_question and has_app_context() and ev.get('sender_id') and not ev.get('_image_matches')
             and re.search(r'ال[أا]ول',ev.get('text') or '') and re.search(r'الثاني',ev.get('text') or '')):
         positions=customer_image_positions(get_db(),ev['sender_id'])
         known={p['product_id'] for p in products}
         if len(positions)>1 and all(p.get('product_found') and p.get('product_id') in known for p in positions):
             ev=dict(ev,_image_matches=positions)
-    if chosen and not ev.get('_post_order') and len(ev.get('_image_matches') or [])<=1 and not album_question:
+    if chosen and not ev.get('_post_order') and (len(ev.get('_image_matches') or [])<=1 or factual_album) and not album_question:
         if re.search(r'ماكو.{0,12}غير.{0,8}(?:هاي|هال).*صور|صوري(?:ه|ها)|تدزين نفس',sales_strategy.normalized(ev.get('text'))):
             return unanswered_product_handoff(ev,chosen,['service'])
         if current_store_id() == baraah.STORE_ID and has_app_context():
@@ -9620,13 +9626,15 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     # Complete a valid checkout first. Pure catalogue questions can then use
     # verified facts even when the model service is down.
     if (result is None and chosen and not ev.get('_post_order') and len(customer_products or [])<=1
-            and len(ev.get('_image_matches') or [])<=1 and not album_question):
+            and (len(ev.get('_image_matches') or [])<=1 or factual_album) and not album_question):
         factual_topics=set(sales_answers.topics(ev.get('text') or ''))
         if (factual_topics and not factual_topics-{'fabric','fabric_feel','season','stretch','cut','lining','closure','care',
                 'sizes','availability','length','width'} and factual_topics!={'availability'}
                 and not sales_strategy._explicit_purchase(ev.get('text'))
                 and not re.search(r'صور|تصوير|حقيقي|لعد|ليش|كاتب|نحدد|اقصد|قصدي|(?<!\w)لو(?!\w)|موديل\s*(?:ثاني|اخر)|غير\s+موديل',sales_strategy.normalized(ev.get('text')))
-                and not (has_app_context() and ev.get('sender_id') and len(customer_image_positions(get_db(),ev['sender_id']))>1)):
+                and not (has_app_context() and ev.get('sender_id')
+                         and len(customer_image_positions(get_db(),ev['sender_id']))>1
+                         and not product_albums.single_product_album(customer_image_positions(get_db(),ev['sender_id']),chosen))):
             result=sales_voice.answer(ev.get('text') or '',chosen,context,customer,history,{})
     if result is None and not sales_voice.needs_fit_explanation(ev.get('text')):
         result = owner_sales.reply(ev, chosen, customer, context, history,
@@ -12313,18 +12321,25 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         return resolve_product_choice(db, ev, products)
     ev = zernio.product_event(sys.modules[__name__], db, ev, products)
     recover_mapped_ad_review(db, ev, products)
+    policy_text=ev.get('_context_latest_text') or ev.get('text') or ''
+    partial_policy=bool(policy_text!=ev.get('text') and str(ev.get('text') or '').endswith(policy_text))
+    if partial_policy and (sales_strategy._explicit_purchase(ev.get('text')) or contact_fields(ev.get('text'),customer)):
+        policy_text=ev.get('text') or ''
+        partial_policy=False  # Complete a ready checkout rather than consuming only its last question.
     if (message_type=='text' and not ev.get('image_url') and not ev.get('attachments')
-            and sales_recovery.policy_question(ev.get('text'))
+            and sales_recovery.policy_question(policy_text)
             and not is_existing_order_followup(ev.get('text'))):
         advertised=ad_attribution.product_candidates(products,ev,current_store_id())
         policy_product=(advertised[0] if len(advertised)==1 else
                         select_customer_context_product(ev.get('text') or '',customer_products))
-        policy=store_policy_question_reply(ev['text'],policy_product,ev=ev,customer=customer,history=history)
+        policy=store_policy_question_reply(policy_text,policy_product,ev=dict(ev,text=policy_text),customer=customer,history=history)
         if policy and not policy.get('_needs_fact_review'):
             if len(advertised)==1:
                 complete_customer_product_link(db,ev['sender_id'],advertised[0],'ad_id',
                     source='ad_ref',resume_ai=False,close_reviews=False)
-            return saved_checkout_reply(db,ev,policy['reply'],{'store_policy_reply':True})
+            policy_meta={'store_policy_reply':True,'partial_policy_reply':partial_policy}
+            return saved_checkout_reply(db,ev,policy['reply'],policy_meta,
+                payload=dict(policy_meta,_partial_policy_reply=True) if partial_policy else None)
     pending_service_reply = pending_image_service_followup(db, ev, products)
     if pending_service_reply:
         return pending_service_reply

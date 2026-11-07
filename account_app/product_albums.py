@@ -243,6 +243,21 @@ def _price(product, named=False):
     return f'{label} {price:,} د.ع' + (f' للبكج ({count} قطع)' if count > 1 else '')
 
 
+def single_product_album(images, product):
+    """Verified views of one product can share a factual answer, not a cart."""
+    if not product or len(images)<2:
+        return False
+    for image in images:
+        if not image.get('product_found') or image.get('product_id')!=product.get('product_id'):
+            return False
+        observed=image.get('observed_color') or ''
+        if observed:
+            checks=product_variants.assess(product,'لون '+str(observed))
+            if not checks or any(check['supported'] is not True for check in checks):
+                return False
+    return True
+
+
 def parts(images, products, question=''):
     """Group repeated identities while keeping original positions in memory."""
     positions = current_positions(images, products)

@@ -8,7 +8,10 @@ except ImportError:
 
 
 def policy_question(text):
-    clean = normalized(text).strip(' ؟?!.،\n')
+    clean = normalized(text).translate(str.maketrans('یک','يك')).strip(' ؟?!.،\n')
+    # Normalize these delivery spellings here, never addresses or saved choices.
+    clean = re.sub(r'(?<!\w)(ال)?توسيل(?!\w)',r'\1توصيل',clean)
+    clean = re.sub(r'^متي(?=\s)','متى',clean)
     # Opening/checking the parcel before payment is a store policy, not a
     # missing garment detail or a request to identify an advertising photo.
     if (re.search(r'فحص|افحص|اتفحص', clean) and re.search(r'قبل.{0,15}(?:دفع|ادفع)|المندوب', clean)
@@ -16,7 +19,7 @@ def policy_question(text):
         return 'inspection'
     if re.fullmatch(r'(?:هل (?:يمكنني|يمكن)|اكدر|اگدر|يصير)(?: ان)? (?:ادفع|الدفع) (?:عند الاستلام|للمندوب من استلم)', clean):
         return 'payment'
-    if re.fullmatch(r'كم تبلغ تكلفة التوصيل (?:الى |ل)?محافظتي', clean):
+    if re.fullmatch(r'كم تبلغ تكلفة التوصيل (?:(?:الى\s+|ل)?(?:محافظتي|منزلي)|(?:الى\s+)?البيت|للبيت)', clean):
         return 'delivery'
     if delivery_fee_inquiry(text) and not re.search(
             r'قماش|خام|عمر|قياس|مكان|عنوانكم|وين|سعر(?:ه|ها)|سعر\s+(?!التوصيل|الشحن)|دفع|فحص', clean):
