@@ -6,11 +6,14 @@ let initialSenderOpened = false;
 let currentSenderId   = null;
 const composerDrafts = new Map();
 let composerRevision = 0;
+let helperDraftRevision = 0;
+let aiPendingSource = null;
 function rememberComposerDraft() {
   if (currentSenderId) composerDrafts.set(currentSenderId,document.getElementById('messageInput')?.value || '');
 }
 document.addEventListener('input',event=>{
   if (event.target?.id==='messageInput') { composerRevision++; rememberComposerDraft(); }
+  if (event.target?.id==='hiUnifiedText') helperDraftRevision++;
 });
 let currentCustomer   = null;
 let currentAdContext  = null;
@@ -1128,6 +1131,7 @@ async function hiAskAI() {
   if (_hiBusy || !currentSenderId) return;
   const senderId = currentSenderId;
   const text = (document.getElementById('hiUnifiedText').value || '').trim();
+  const helperSource={text:document.getElementById('hiUnifiedText').value,revision:helperDraftRevision};
   const selectedProductId = (document.getElementById('hiTextProduct').value || '').trim();
   _hiSetBusy(true, 'hiBtnAskAI');
   try {
@@ -1137,6 +1141,7 @@ async function hiAskAI() {
     if (senderId !== currentSenderId) return;
     await askAI({
       staffAction: true,
+      helperSource,
       text,
       allowEmpty: true,
       rewriteMode: Boolean(text),
@@ -1159,6 +1164,7 @@ async function hiSendDirect() {
   const senderId = currentSenderId;
   let messageSent = false;
   const text = (document.getElementById('hiUnifiedText').value || '').trim();
+  const helperSource={text:document.getElementById('hiUnifiedText').value,revision:helperDraftRevision};
   if (!text) { showToast('اكتب نصاً أولاً', 'warning'); return; }
   _hiSetBusy(true, 'hiBtnSendDirect');
   try {
@@ -1169,6 +1175,10 @@ async function hiSendDirect() {
     const sent = await sendMessage(text);
     messageSent = sent;
     if (sent) {
+      if (senderId===currentSenderId && helperDraftRevision===helperSource.revision
+          && document.getElementById('hiUnifiedText').value===helperSource.text) {
+        document.getElementById('hiUnifiedText').value='';
+      }
       await finishHumanReview(senderId, {confirmCompletion: false});
       if (senderId === currentSenderId) _hiCloseModal();
     }
@@ -1269,6 +1279,7 @@ async function sendMessage(text = null, imgUrl = null) {
 
   const sendingTo = currentSenderId;
   const sendingRevision = composerRevision;
+  const helperSource = text===null && aiPendingSource?.inComposer ? aiPendingSource : null;
   const generation = imageUploadGeneration;
   const txt = text !== null ? text : (document.getElementById('messageInput').value || '').trim();
   _setSendingState(true);
@@ -1288,8 +1299,13 @@ async function sendMessage(text = null, imgUrl = null) {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      if (currentSenderId===sendingTo && helperSource && helperDraftRevision===helperSource.revision
+          && document.getElementById('hiUnifiedText').value===helperSource.text) {
+        document.getElementById('hiUnifiedText').value='';
+        if (aiPendingSource===helperSource) aiPendingSource=null;
+      }
       if (currentSenderId === sendingTo && imgUrl === null && generation === imageUploadGeneration) {
-        if (text === null && sendingRevision === composerRevision && document.getElementById('messageInput').value.trim() === txt) {
+        if (sendingRevision === composerRevision && document.getElementById('messageInput').value.trim() === txt) {
           document.getElementById('messageInput').value = '';
           rememberComposerDraft();
         }
@@ -1398,6 +1414,7 @@ async function askAI(options = {}) {
         showToast('تم تحليل المحادثة وصياغة رد جاهز للمراجعة', 'success');
       } else {
         aiPendingReply = data.reply;
+        aiPendingSource = options.helperSource || null;
         document.getElementById('aiReplyText').textContent = data.reply;
         document.getElementById('aiReplyPreview').style.display = 'block';
       }
@@ -1510,18 +1527,31 @@ async function sendAIReply() {
   if (!aiPendingReply) return;
   const senderId = currentSenderId;
   const reply = aiPendingReply;
+  const source = aiPendingSource;
   const sent = await sendMessage(reply);
   if (!sent) return;
+  if (senderId===currentSenderId && source && helperDraftRevision===source.revision
+      && document.getElementById('hiUnifiedText').value===source.text) {
+    document.getElementById('hiUnifiedText').value='';
+  }
   try {
     await finishHumanReview(senderId, {confirmCompletion: false});
   } catch (e) {
     showToast('تم إرسال الرد، لكن تعذر إغلاق المراجعة: ' + e.message, 'warning');
   }
-  dismissAIPreview();
+  if (senderId===currentSenderId && aiPendingReply===reply) dismissAIPreview();
 }
-function editAIReply()    { if (aiPendingReply) { document.getElementById('messageInput').value = aiPendingReply; dismissAIPreview(); } }
+function editAIReply() {
+  if (aiPendingReply) {
+    const source=aiPendingSource;
+    document.getElementById('messageInput').value=aiPendingReply;
+    dismissAIPreview();
+    if (source) aiPendingSource={...source,inComposer:true};
+  }
+}
 function dismissAIPreview() {
   aiPendingReply = null;
+  aiPendingSource = null;
   document.getElementById('aiReplyPreview').style.display = 'none';
 }
 

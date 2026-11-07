@@ -12,6 +12,7 @@ function setup() {
   const context = vm.createContext({
     currentSenderId:'customer-A',currentCustomer:{store_id:'store-A'},_isSending:false,
     composerRevision:0,rememberComposerDraft(){},
+    aiPendingSource:null,
     document:{getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);},createElement:element},
     URL:{createObjectURL:file=>'blob:'+file.name,revokeObjectURL:url=>revoked.push(url)},
     FormData:class { append(){} },AbortController,setTimeout,clearTimeout,Promise,Date,Math,
