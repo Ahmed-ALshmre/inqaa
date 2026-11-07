@@ -40,6 +40,12 @@ def main():
                     response=case.client.open(url.path+('?' +url.query if url.query else ''),method=req.method,data=req.post_data,headers=dict(req.headers))
                     route.fulfill(status=response.status_code,body=response.data,content_type=response.content_type)
                 page.route('**/*',route)
+                def open_helper():
+                    page.locator('#interventionModal').wait_for(state='hidden')
+                    page.evaluate("""() => new Promise(resolve => {
+                        document.querySelector('#interventionModal').addEventListener('shown.bs.modal', () => resolve(), {once:true});
+                        openInterventionDialog();
+                    })""")
                 page.goto('http://staff-workspace.test/dashboard',wait_until='domcontentloaded')
                 page.wait_for_function('allConversations.length===2')
                 page.evaluate("selectConversation('qa-a')")
@@ -74,12 +80,12 @@ def main():
                 page.locator('#sendBtn').click()
                 page.wait_for_function("document.querySelector('#messageInput').value==='' && !_isSending")
                 checks.append('A successful manual send empties the composer')
-                page.evaluate('openInterventionDialog()')
+                open_helper()
                 page.locator('#hiUnifiedText').fill('رد مباشر من المساعد')
                 page.evaluate('void hiSendDirect()')
                 page.wait_for_function("!_hiBusy && document.querySelector('#hiUnifiedText').value===''")
                 checks.append('A successful direct helper send empties its own field')
-                page.evaluate('openInterventionDialog()')
+                open_helper()
                 page.locator('#hiUnifiedText').fill('مسودة لتوليد اقتراح')
                 held.pop('ai',None);page.evaluate('void hiAskAI()');page.wait_for_function('_isAskingAI')
                 held['ai'].fulfill(status=200,body=json.dumps({'reply':'اقتراح جاهز للإرسال'}),content_type='application/json')
