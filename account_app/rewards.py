@@ -31,6 +31,9 @@ def award_pending(db, sender_id, person, cutoff=None, now=None, review_ids=None)
     """Caller holds the write transaction and closes these reviews atomically."""
     if not person or person.get('owner'):
         return
+    employee=db.execute('SELECT rewards_enabled,active FROM staff_accounts WHERE id=?',(person['id'],)).fetchone()
+    if not employee or not employee['rewards_enabled'] or not employee['active']:
+        return
     now = now or datetime.now(BAGHDAD)
     rows = db.execute("SELECT id,created_at FROM human_reviews WHERE sender_id=? AND status='pending' AND id<=?",
                       (sender_id, cutoff if cutoff is not None else 9223372036854775807)).fetchall()

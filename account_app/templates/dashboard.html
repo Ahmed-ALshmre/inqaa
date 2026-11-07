@@ -30,6 +30,7 @@
   <script defer src="/static/js/ui.js?v=2"></script>
   <link rel="stylesheet" href="/static/css/mobile-shell.css?v=3">
   <link rel="stylesheet" href="/static/css/responsive-workspace.css?v=5">
+  <link rel="stylesheet" href="/static/css/conversation-workspace.css?v=1">
 </head>
 <body class="messenger-page">
 
@@ -144,6 +145,7 @@
       <div class="btn-group btn-group-sm w-100" role="group" id="conversationFilters">
         <button class="btn btn-outline-secondary active" data-filter="all" onclick="setFilter('all',this)">الكل</button>
         <button class="btn btn-outline-secondary" data-filter="unanswered" onclick="setFilter('unanswered',this)">بانتظار الرد</button>
+        <button class="btn btn-outline-secondary" data-filter="followup" onclick="setFilter('followup',this)">المتابعة</button>
         <button class="btn btn-outline-secondary" data-filter="problems" onclick="setFilter('problems',this)">
           تدخل بشري
         </button>
@@ -214,6 +216,7 @@
             <span id="chatAdText"></span>
           </span>
         </div>
+        {% if can('reply') %}<button type="button" id="manualFollowupBtn" class="manual-followup-btn" onclick="toggleManualFollowup()" aria-pressed="false">☆ متابعة</button>{% endif %}
         <details class="chat-header-menu"><summary aria-label="أدوات المحادثة"><i class="bi bi-three-dots"></i></summary><div class="chat-menu-actions">
           <button class="btn btn-sm btn-outline-primary" id="chatControlBtn" type="button" onclick="toggleControl()" title="لوحة التحكم" aria-label="لوحة التحكم" aria-controls="controlPanel">
             <i class="bi bi-sliders" aria-hidden="true"></i>
@@ -226,8 +229,10 @@
           </button>
         </div></details>
       </div>
+      <div class="conversation-focus-bar">
       <button class="conversation-ai-ribbon" id="conversationAiBtn" onclick="toggleConversationAI()" title="إيقاف أو تشغيل AI في المحادثة"><span class="ribbon-emoji-stage" aria-hidden="true"><span class="ribbon-emoji" style="--emoji-step:0">😊</span><span class="ribbon-emoji" style="--emoji-step:1">😉</span><span class="ribbon-emoji" style="--emoji-step:2">✨</span><span class="ribbon-emoji" style="--emoji-step:3">💬</span><span class="ribbon-paused-emoji">😴</span></span><span id="conversationAiText" class="ribbon-label">صوف يساعدك بالرد</span><span class="ribbon-status" aria-hidden="true"><span class="ribbon-dot"></span><span class="ribbon-dot"></span><span class="ribbon-dot"></span></span></button>
       <button id="chatProductCard" class="chat-product-card" type="button" onclick="toggleControl()" hidden aria-label="تفاصيل المنتج المرتبط"></button>
+      </div>
 
       <aside id="conversationAdContext" class="conversation-ad-context" hidden aria-label="مصدر المحادثة">
         <a id="conversationAdSummary" class="conversation-ad-summary" hidden target="_blank" rel="noopener noreferrer" aria-label="معرّف الإعلان المرتبط بالمنتج"><i class="bi bi-megaphone" aria-hidden="true"></i><bdi id="conversationAdId"></bdi></a>
@@ -626,7 +631,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=5"></script>
 {% include "_mobile_nav.html" %}
-<script src="/static/js/dashboard.js?v=46"></script>
+<script src="/static/js/dashboard.js?v=47"></script>
 <script src="/static/js/image_composer.js?v=1"></script>
 <script src="/static/js/voice_composer.js?v=1"></script>
 <script src="/static/js/conversation_tools.js?v=5"></script>

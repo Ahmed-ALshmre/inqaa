@@ -11,6 +11,7 @@ function setup() {
   function element() { return {children:[],value:'',classList:{toggle(){}},append(...items){this.children.push(...items);},replaceChildren(){this.children=[];},setAttribute(){}}; }
   const context = vm.createContext({
     currentSenderId:'customer-A',currentCustomer:{store_id:'store-A'},_isSending:false,
+    composerRevision:0,rememberComposerDraft(){},
     document:{getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);},createElement:element},
     URL:{createObjectURL:file=>'blob:'+file.name,revokeObjectURL:url=>revoked.push(url)},
     FormData:class { append(){} },AbortController,setTimeout,clearTimeout,Promise,Date,Math,

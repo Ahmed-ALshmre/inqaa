@@ -4,6 +4,14 @@ const DASH_KEY        = DASH_PARAMS.get('key') || '';
 const INITIAL_SENDER_ID = DASH_PARAMS.get('sender_id') || '';
 let initialSenderOpened = false;
 let currentSenderId   = null;
+const composerDrafts = new Map();
+let composerRevision = 0;
+function rememberComposerDraft() {
+  if (currentSenderId) composerDrafts.set(currentSenderId,document.getElementById('messageInput')?.value || '');
+}
+document.addEventListener('input',event=>{
+  if (event.target?.id==='messageInput') { composerRevision++; rememberComposerDraft(); }
+});
 let currentCustomer   = null;
 let currentAdContext  = null;
 let allConversations  = [];
@@ -385,7 +393,7 @@ function loadMoreConversations() {
 function syncConversationFilterUI() {
   const group = document.getElementById('inboxFilterPanel');
   if (!group) return;
-  const validFilters = new Set(['all', 'booked', 'problems', 'system_issues', 'unanswered']);
+  const validFilters = new Set(['all', 'booked', 'problems', 'system_issues', 'unanswered','followup']);
   if (!validFilters.has(currentFilter)) currentFilter = 'all';
   group.querySelectorAll('[data-filter]').forEach(button => {
     button.classList.toggle('active', button.dataset.filter === currentFilter);
@@ -549,7 +557,7 @@ function renderConversations({resetScroll = false} = {}) {
     const markup = `
         <div class="cust-avatar">${esc(init)}${platformBadge(c.platform)}</div>
         <div class="cust-info">
-          <div class="cust-row-heading"><div class="cust-name">${esc(c.name || c.sender_id)} ${adBadge}</div><span class="cust-time">${time}</span></div>
+          <div class="cust-row-heading"><div class="cust-name">${esc(c.name || c.sender_id)} ${adBadge}${c.manual_followup ? '<span class="manual-followup-badge">★ متابعة</span>' : ''}</div><span class="cust-time">${time}</span></div>
           <div><span class="conversation-store-badge ${storeBadgeClass}"><i class="bi bi-shop"></i> ${esc(storeName)}</span></div>
           <div class="cust-preview" dir="auto">${preview}</div>
           <div class="cust-statuses">${leadMeta}${badge}${problemBadge}${c.system_issue_count > 0 ? '<span class="cust-status cust-status-issue" title="خطأ تقني أو تكرار خطوات الحجز؛ يحتاج مراجعة">مشكلة نظام</span>' : ''}</div>
@@ -579,6 +587,11 @@ function renderConversations({resetScroll = false} = {}) {
 
 // ══ Select Conversation ════════════════════════════════════════════════════
 async function selectConversation(senderId) {
+  if (currentSenderId!==senderId) {
+    rememberComposerDraft();
+    document.getElementById('messageInput').value=composerDrafts.get(senderId)||'';
+    composerRevision++;
+  }
   if (currentSenderId !== senderId) { clearImage(); discardRecordedVoice(); dismissAIPreview(); hideHumanIntervention(); }
   currentSenderId = senderId;
   renderReviewCloseButtons();
@@ -604,6 +617,7 @@ async function selectConversation(senderId) {
 
   const conv = allConversations.find(c => c.sender_id === senderId) || {};
   currentCustomer = conv;
+  renderManualFollowup();
   syncActiveStoreAI();
   refreshActiveStoreAI().catch(() => {});
   currentConversationAIEnabled = conv.ai_enabled !== 0 && conv.ai_enabled !== false;
@@ -821,7 +835,7 @@ function messageMarkup(m) {
   if (m.text && !media.some(item => item.url === m.text.trim())) content += `<div class="msg-bubble">${esc(m.text)}</div>`;
   if (!content) content = '<div class="msg-bubble">[رسالة بلا نص أو مرفق متاح]</div>';
   const sender = m.direction === 'outgoing'
-    ? (m.sender_type === 'staff' ? (m.ai_assisted ? 'موظف بمساعدة AI' : 'موظف')
+    ? (m.sender_type === 'staff' ? ((m.staff_name || 'موظف') + (m.ai_assisted ? ' · بمساعدة AI' : ''))
       : m.sender_type === 'ai' ? 'ذكاء اصطناعي' : 'مرسل غير محدد') : '';
   return content + `<span class="msg-time">${sender ? `<span class="msg-sender" aria-label="مصدر الرد">${esc(sender)}</span> · ` : ''}${esc(fmtDatetime(m.created_at))}</span>`;
 }
@@ -1121,7 +1135,6 @@ async function hiAskAI() {
     if (senderId !== currentSenderId) return;
     await _hiSilentLinkIfChosen();
     if (senderId !== currentSenderId) return;
-    document.getElementById('messageInput').value = text;
     await askAI({
       staffAction: true,
       text,
@@ -1153,8 +1166,7 @@ async function hiSendDirect() {
     if (senderId !== currentSenderId) return;
     await _hiSilentLinkIfChosen();
     if (senderId !== currentSenderId) return;
-    document.getElementById('messageInput').value = text;
-    const sent = await sendMessage();
+    const sent = await sendMessage(text);
     messageSent = sent;
     if (sent) {
       await finishHumanReview(senderId, {confirmCompletion: false});
@@ -1256,6 +1268,7 @@ async function sendMessage(text = null, imgUrl = null) {
   if (_isSending) { showToast('جاري الإرسال... انتظر', 'warning'); return; }
 
   const sendingTo = currentSenderId;
+  const sendingRevision = composerRevision;
   const generation = imageUploadGeneration;
   const txt = text !== null ? text : (document.getElementById('messageInput').value || '').trim();
   _setSendingState(true);
@@ -1276,7 +1289,10 @@ async function sendMessage(text = null, imgUrl = null) {
     const data = await res.json();
     if (res.ok && data.ok) {
       if (currentSenderId === sendingTo && imgUrl === null && generation === imageUploadGeneration) {
-        if (document.getElementById('messageInput').value.trim() === txt) document.getElementById('messageInput').value = '';
+        if (text === null && sendingRevision === composerRevision && document.getElementById('messageInput').value.trim() === txt) {
+          document.getElementById('messageInput').value = '';
+          rememberComposerDraft();
+        }
         clearImage();
         composerSendIdentity = null;
       }
@@ -1328,6 +1344,8 @@ async function waitForAIJob(response, senderId) {
 async function askAI(options = {}) {
   if (!currentSenderId) return;
   const senderId = currentSenderId;
+  const initialDraft = document.getElementById('messageInput').value;
+  const initialRevision = composerRevision;
   if (_isAskingAI) { showToast('جاري تجهيز اقتراح AI...', 'warning'); return; }
   if (!canUseAI() && !options.staffAction) {
     const reason = !globalAIEnabled
@@ -1371,9 +1389,10 @@ async function askAI(options = {}) {
     const data = await waitForAIJob(res, senderId);
     if (senderId !== currentSenderId) return;
     if (data.reply) {
-      if (autonomous) {
+      if (autonomous && !initialDraft && initialRevision===composerRevision && !document.getElementById('messageInput').value) {
         const composer = document.getElementById('messageInput');
         composer.value = data.reply;
+        rememberComposerDraft();
         composer.focus();
         composer.setSelectionRange(composer.value.length, composer.value.length);
         showToast('تم تحليل المحادثة وصياغة رد جاهز للمراجعة', 'success');
@@ -1391,6 +1410,29 @@ async function askAI(options = {}) {
     _isAskingAI = false;
     renderAskAIButton();
   }
+}
+
+function renderManualFollowup() {
+  const button=document.getElementById('manualFollowupBtn');
+  if (!button) return;
+  const enabled=Boolean(currentCustomer?.manual_followup);
+  button.dataset.enabled=String(enabled);button.setAttribute('aria-pressed',String(enabled));
+  button.textContent=enabled?'★ قيد المتابعة':'☆ متابعة';
+}
+async function toggleManualFollowup() {
+  const sender=currentSenderId,button=document.getElementById('manualFollowupBtn');
+  if (!sender || button.disabled) return;
+  button.disabled=true;
+  try {
+    const response=await apiFetch(`/api/conversations/${encodeURIComponent(sender)}/manual_followup`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!Boolean(currentCustomer?.manual_followup)})});
+    const data=await response.json();if(!response.ok)throw Error(data.error||'تعذر حفظ المتابعة');
+    const row=allConversations.find(c=>c.sender_id===sender);if(row)row.manual_followup=data.manual_followup;
+    if(sender===currentSenderId){currentCustomer.manual_followup=data.manual_followup;renderManualFollowup();}
+    inboxMutationRevision++;
+    if(currentFilter==='followup'&&!data.manual_followup)allConversations=allConversations.filter(c=>c.sender_id!==sender);
+    renderConversations();
+  } catch(error){showToast(error.message,'danger');} finally {button.disabled=false;}
 }
 
 function renderChatProductCard() {
@@ -1413,6 +1455,7 @@ function renderChatProductCard() {
 }
 
 function resetConversationView() {
+  rememberComposerDraft();
   clearImage();
   discardRecordedVoice();
   currentSenderId = null;
@@ -2224,7 +2267,7 @@ async function deleteConversation() {
 
 // ══ Helpers ════════════════════════════════════════════════════════════════
 function handleKeyDown(e) {
-  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); sendMessage(); }
+  if (!e.isComposing && e.ctrlKey && e.key === 'Enter') { e.preventDefault(); sendMessage(); }
 }
 
 function toggleSection(id) {

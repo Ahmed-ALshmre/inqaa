@@ -17,11 +17,14 @@ class StaffPermissionDenied(Exception):
 
 def tables(db):
     if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='staff_audit'").fetchone():
+        if 'rewards_enabled' not in {r[1] for r in db.execute('PRAGMA table_info(staff_accounts)')}:
+            db.execute('ALTER TABLE staff_accounts ADD COLUMN rewards_enabled INTEGER NOT NULL DEFAULT 1')
         return
     db.executescript('''CREATE TABLE IF NOT EXISTS staff_accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE COLLATE NOCASE NOT NULL,
         name TEXT NOT NULL, password_hash TEXT NOT NULL, permissions TEXT NOT NULL,
-        active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1);
+        active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1,
+        rewards_enabled INTEGER NOT NULL DEFAULT 1);
         CREATE TABLE IF NOT EXISTS staff_login_limits (address TEXT PRIMARY KEY, attempts INTEGER, started REAL);
         CREATE TABLE IF NOT EXISTS staff_audit (id INTEGER PRIMARY KEY AUTOINCREMENT,
         staff_id INTEGER, method TEXT, path TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);''')
@@ -59,7 +62,7 @@ def required_permission(path, method):
         if read and tail in {'messages', 'instructions'}: return 'read'
         if tail == 'create_order': return 'orders'
         if method == 'DELETE': return 'owner'
-        if tail in {'send', 'send_audio', 'ask_ai', 'send_catalog', 'customer', 'gender', 'link_product', 'unlink_product', 'mark_reviewed', 'ai', 'media'}:
+        if tail in {'send', 'send_audio', 'ask_ai', 'send_catalog', 'customer', 'gender', 'link_product', 'unlink_product', 'mark_reviewed', 'ai', 'media','manual_followup'}:
             return 'reply'
         if tail == 'save_instructions': return 'settings'
     if path == '/api/image_library' and read: return 'reply|products'
@@ -93,7 +96,8 @@ def install(app, get_db):
         row = get_db().execute('SELECT * FROM staff_accounts WHERE id=?', (session['staff_id'],)).fetchone()
         if not row or not row['active'] or row['version'] != session.get('staff_version'):
             session.clear(); return None
-        return {'id': row['id'], 'name': row['name'], 'owner': False, 'permissions': json.loads(row['permissions'])}
+        return {'id': row['id'], 'name': row['name'], 'owner': False, 'permissions': json.loads(row['permissions']),
+                'rewards_enabled':bool(row['rewards_enabled'])}
 
     @app.before_request
     def staff_guard():
@@ -145,8 +149,8 @@ def install(app, get_db):
         if not person or not person['owner']: return jsonify(error='هذه الصفحة للمالك فقط'), 403
         db = get_db(); tables(db)
         if request.method == 'GET':
-            rows = db.execute('SELECT id,username,name,permissions,active FROM staff_accounts ORDER BY id DESC').fetchall()
-            return jsonify(accounts=[dict(dict(r), permissions=json.loads(r['permissions'])) for r in rows])
+            rows = db.execute('SELECT id,username,name,permissions,active,rewards_enabled FROM staff_accounts ORDER BY id DESC').fetchall()
+            return jsonify(accounts=[dict(dict(r), permissions=json.loads(r['permissions']),rewards_enabled=bool(r['rewards_enabled'])) for r in rows])
         if not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), session.get('csrf_token') or secrets.token_hex(32)):
             return jsonify(error='حدّث الصفحة ثم حاول مجدداً'), 403
         data = request.get_json(silent=True) or {}
@@ -159,16 +163,22 @@ def install(app, get_db):
         if (not account_id or password) and not 10 <= len(password) <= 200:
             return jsonify(error='كلمة المرور من 10 إلى 200 حرف'), 400
         if not isinstance(data.get('active', True), bool): return jsonify(error='حالة الحساب غير صالحة'), 400
+        if 'rewards_enabled' in data and type(data['rewards_enabled']) is not bool:
+            return jsonify(error='حالة احتساب المكافآت غير صالحة'),400
         try:
             if account_id:
                 old = db.execute('SELECT * FROM staff_accounts WHERE id=?', (account_id,)).fetchone()
                 if not old: return jsonify(error='الموظف غير موجود'), 404
+                db.execute('UPDATE staff_accounts SET rewards_enabled=? WHERE id=?',
+                           (int(data.get('rewards_enabled',bool(old['rewards_enabled']))),account_id))
                 hashed = generate_password_hash(password) if password else old['password_hash']
                 db.execute('UPDATE staff_accounts SET name=?,username=?,password_hash=?,permissions=?,active=?,version=version+1 WHERE id=?',
                            (name, username, hashed, json.dumps(permissions), int(data.get('active', True)), account_id))
             else:
                 db.execute('INSERT INTO staff_accounts(name,username,password_hash,permissions,active) VALUES(?,?,?,?,?)',
                            (name, username, generate_password_hash(password), json.dumps(permissions), int(data.get('active', True))))
+                db.execute('UPDATE staff_accounts SET rewards_enabled=? WHERE id=last_insert_rowid()',
+                           (int(data.get('rewards_enabled',True)),))
             db.commit()
         except sqlite3.IntegrityError:
             db.rollback(); return jsonify(error='اسم الدخول مستخدم بالفعل'), 409

@@ -29,6 +29,7 @@ function batchContext(send) {
   const requests = [];
   const composer = {value: 'UNSENT CUSTOMER DRAFT'};
   const sendContext = vm.createContext({currentSenderId: 'customer-A', _isSending: false,
+    composerRevision:0,rememberComposerDraft(){},
     document: {getElementById: () => composer}, imageUploadGeneration: 0,
     showToast: () => {}, _setSendingState: () => {}, clearImage: () => {throw Error('Draft cleared');},
     loadMessages: async () => {}, apiFetch: async (url, options) => {

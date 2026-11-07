@@ -50,7 +50,7 @@ except ImportError:
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from pricing import quote as price_order, expand_bundles
     from checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
-from flask import Flask, g, has_app_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
+from flask import Flask, g, has_app_context, has_request_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
 
@@ -1262,6 +1262,7 @@ def init_db():
         _add_column_if_missing("orders", column, "INTEGER")
     _add_column_if_missing("messages", "media_json", "TEXT")
     _add_column_if_missing("customers", "inbox_reviewed_message_id", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing("customers", "manual_followup", "INTEGER NOT NULL DEFAULT 0")
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id,id)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_direction_id ON messages(sender_id,direction,id)")
     db.commit()
@@ -4944,6 +4945,11 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
         raw_payload.setdefault('sender_type', 'staff' if (
             raw_payload.get('manual_reply') or raw_payload.get('manual_order')
             or raw_payload.get('sent_via') == 'manychat_api') else 'ai')
+        if raw_payload['sender_type']=='staff' and has_request_context():
+            person=current_dashboard_person()
+            if person:
+                raw_payload['staff_name']=person['name']
+                raw_payload['staff_id']=person.get('id')
         generation = _reply_generation.get()
         if generation and generation.get('sender_id') == sender_id and raw_payload['sender_type'] != 'staff':
             raw_payload.setdefault('_delivery_status', 'generated')
@@ -14895,6 +14901,7 @@ def api_conversations():
     elif status == "problems": conditions.append("human_attention_count > 0")
     elif status == "system_issues": conditions.append("system_issue_count > 0")
     elif status == "unanswered": conditions.append("unanswered = 1")
+    elif status == "followup": conditions.append("manual_followup = 1")
     if request.args.get("ai") in ("0", "1"):
         conditions.append("ai_enabled = ?")
         params.append(int(request.args["ai"]))
@@ -14932,6 +14939,7 @@ def api_conversations():
             COALESCE(c.lead_score, 0) AS lead_score,
             COALESCE(c.lead_stage, 'new') AS lead_stage,
             c.inbox_reviewed_message_id,
+            c.manual_followup,
             m.text       AS last_message,
             m.direction  AS last_direction,
             COALESCE(m.created_at, c.last_seen_at, '') AS last_time,
@@ -15157,6 +15165,7 @@ def api_conversation_messages(sender_id):
                                'post_order_followup', 'reply_image', 'checkout_proposal', 'catalog', '_partial_policy_reply'))
                           else 'unknown')
             item['sender_type'] = source
+            item['staff_name']=str(meta.get('staff_name') or '') if source=='staff' else ''
             item['ai_assisted'] = bool(source == 'staff' and meta.get('ai_generated'))
         item["media"] = _dashboard_message_media(row)
         if row['direction'] == 'incoming' and item['text'] and any(
@@ -18985,6 +18994,22 @@ def api_close_all_human_reviews():
     # The maintenance endpoint is owner-only through staff_access.
     result = close_human_attention(get_db())
     return jsonify(ok=True, **result)
+
+
+@app.post('/api/conversations/<sender_id>/manual_followup')
+@_dash_require
+def api_manual_followup(sender_id):
+    import secrets
+    if not session.get('csrf_token') or not secrets.compare_digest(request.headers.get('X-CSRF-Token',''),session['csrf_token']):
+        return jsonify(error='حدّث الصفحة ثم حاول مجدداً'),403
+    data=request.get_json(silent=True)
+    if not isinstance(data,dict) or type(data.get('enabled')) is not bool:
+        return jsonify(error='حدد حالة المتابعة'),400
+    db=get_db()
+    row=db.execute('SELECT store_id FROM customers WHERE sender_id=?',(sender_id,)).fetchone()
+    if not row:return jsonify(error='المحادثة غير موجودة'),404
+    db.execute('UPDATE customers SET manual_followup=? WHERE sender_id=?',(int(data['enabled']),sender_id));db.commit()
+    return jsonify(ok=True,sender_id=sender_id,manual_followup=data['enabled'])
 
 
 @app.route("/api/conversations/<sender_id>/mark_reviewed", methods=["POST"])

@@ -1,0 +1,15 @@
+.messenger-page .conversation-focus-bar{display:grid;grid-template-columns:minmax(0,1fr) minmax(135px,28%);gap:10px;margin:8px 20px 10px;align-items:stretch;flex-shrink:0}
+.messenger-page .conversation-focus-bar:has(.chat-product-card[hidden]){grid-template-columns:1fr}
+.messenger-page .conversation-focus-bar .conversation-ai-ribbon{width:100%;margin:0;min-height:54px;align-self:stretch;border-radius:14px;padding:8px 14px;justify-content:space-between;font-size:13px;gap:10px}
+.messenger-page .conversation-focus-bar .chat-product-card{width:100%;max-width:none;margin:0;padding:7px;min-height:54px;gap:7px;border-radius:12px;background:#fff;border-color:#e6e2ec;box-shadow:0 2px 8px #39244306}
+.messenger-page .chat-product-card[hidden]{display:none!important}
+.messenger-page .conversation-focus-bar .chat-product-card img,.messenger-page .conversation-focus-bar .product-card-icon{height:34px;width:34px;flex:none;border-radius:8px;font-size:18px}
+.messenger-page .conversation-focus-bar .chat-product-card>span{min-width:0;font-size:11px;line-height:1.5}
+.messenger-page .conversation-focus-bar .chat-product-card strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.messenger-page .conversation-focus-bar .chat-product-card small{font-size:10px;color:#80748a}
+.manual-followup-btn{border:1px solid #ded5e8;border-radius:9px;padding:7px 11px;background:#fff;color:#715385;font:inherit;font-size:12px;white-space:nowrap}
+.manual-followup-btn[data-enabled=true]{background:#fff3d5;border-color:#ebcf85;color:#86621b}
+.manual-followup-badge{display:inline-block;margin-inline-start:5px;padding:2px 5px;border-radius:5px;background:#fff3d5;color:#86621b;font-size:9px;font-weight:500}
+.msg-sender{font-size:10px;opacity:.85}.msg-time{gap:4px}
+.messenger-page .inbox-primary-filters{flex-wrap:wrap}
+@media(max-width:600px){.messenger-page .conversation-focus-bar{grid-template-columns:minmax(0,1fr) 120px;margin:6px 10px 8px;gap:7px}.messenger-page .conversation-focus-bar .conversation-ai-ribbon{min-height:50px;padding:7px 9px;font-size:11px;gap:6px}.messenger-page .conversation-focus-bar .ribbon-label{display:block;white-space:normal;line-height:1.5}.messenger-page .conversation-focus-bar .ribbon-status{display:none}.messenger-page .conversation-focus-bar .ribbon-emoji-stage{width:28px;height:28px;flex-shrink:0}.messenger-page .conversation-focus-bar .chat-product-card{min-height:50px;padding:5px;gap:5px}.messenger-page .conversation-focus-bar .chat-product-card img,.messenger-page .conversation-focus-bar .product-card-icon{width:28px;height:32px}.messenger-page .conversation-focus-bar .chat-product-card>.bi-chevron-left{display:none}}
