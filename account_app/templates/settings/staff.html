@@ -9,7 +9,8 @@
 <label>كلمة المرور<input class="form-control" id="staffPassword" type="password" minlength="10" maxlength="200" autocomplete="new-password" placeholder="اتركها فارغة عند التعديل للاحتفاظ بالحالية"></label>
 <fieldset><legend>الصلاحيات</legend><p class="small">عرض المحادثات والمنتجات متاح لكل موظف. فعّل الإجراءات المسموحة فقط.</p>
 {% for key,label in permissions.items() %}<label class="permission-option"><input type="checkbox" name="permission" value="{{ key }}"> {{ label }}</label>{% endfor %}</fieldset>
+<label class="permission-option"><input type="checkbox" role="switch" id="staffRewardsEnabled" checked> احتساب المكافآت التلقائية</label><p class="small text-muted">إيقافه يمنع المكافآت الجديدة لهذا الموظف، ويحتفظ برصيده السابق.</p>
 <label class="permission-option"><input type="checkbox" id="staffActive" checked> الحساب فعال</label><p id="staffFormStatus" role="status"></p><button class="btn btn-primary" id="staffSave" type="submit">حفظ الحساب</button>
 </form></dialog>
 {% endblock %}
-{% block scripts %}<script src="/static/js/staff.js?v=1"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/staff.js?v=2"></script>{% endblock %}

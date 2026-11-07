@@ -11,6 +11,7 @@ function setup(onPoll) {
     return nodes[id] ||= {value: id === 'messageInput' ? 'المسودة الأصلية' : '', style: {}, focus() {}, setSelectionRange() {}};
   }};
   const context = vm.createContext({currentSenderId: 'customer-A', _isAskingAI: false,
+    composerRevision:0,rememberComposerDraft(){},
     globalAIEnabled: false, canUseAI: () => false, document,
     renderAskAIButton() {}, renderAIActionButtons() {}, showToast() {}, showHumanIntervention() {},
     setTimeout: callback => callback(),
@@ -37,5 +38,14 @@ function setup(onPoll) {
   test = setup();
   await test.context.askAI({text: 'القماش قطن'});
   assert.equal(test.calls.length, 0, 'Ordinary automatic actions respect pause; explicit staff drafting is separate');
+  test=setup();test.context.canUseAI=()=>true;
+  await test.context.askAI();
+  assert.equal(test.nodes.messageInput.value,'المسودة الأصلية');
+  assert.equal(test.nodes.aiReplyPreview.style.display,'block');
+  test=setup(context=>{context.document.getElementById('messageInput').value='نص جديد أثناء التوليد';context.composerRevision++;});
+  test.context.canUseAI=()=>true;test.context.document.getElementById('messageInput').value='';
+  await test.context.askAI();
+  assert.equal(test.nodes.messageInput.value,'نص جديد أثناء التوليد');
+  assert.equal(test.nodes.aiReplyPreview.style.display,'block');
   console.log('PASS: async proposals, explicit staff action while paused, stale conversation protection');
 })().catch(error => { console.error(error); process.exitCode = 1; });
