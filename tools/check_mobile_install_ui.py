@@ -98,17 +98,22 @@ def main():
                     a, card = ai.bounding_box(), page.locator('#chatProductCard').bounding_box()
                     focus = page.locator('.conversation-focus-bar').bounding_box()
                     assert a['width'] >= focus['width'] - 2, (a, focus)
-                    assert a['height'] >= 78, a
+                    assert 48 <= a['height'] <= 54, a
                     assert card['y'] >= a['y'] + a['height'], (a, card)
                     assert card['height'] < 50, card
                     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-                checks.append('AI ribbon takes the full row with compact product chip at 320, 390 and 1480 pixels')
+                checks.append('Compact 48-54px AI ribbon fills its row at 320, 390 and 1480 pixels without overflow')
                 page.set_viewport_size({'width': 390, 'height': 844})
-                assert ai.locator('.ribbon-emoji-stage').evaluate("e=>getComputedStyle(e).animationName") == 'soof-breathe'
-                assert ai.locator('.ribbon-sparkles').is_visible()
+                assert ai.evaluate('e=>e.getAnimations({subtree:true}).length') == 0
+                assert not ai.locator('.ribbon-sparkles').is_visible()
                 assert not ai.is_disabled()
+                before = ai.bounding_box()
+                ai.hover()
+                page.wait_for_timeout(400)
+                after = ai.bounding_box()
+                assert all(abs(before[key] - after[key]) < 0.5 for key in before), (before, after)
                 page.screenshot(path=str(OUT / 'ribbon-active.png'))
-                checks.append('Active AI has a breathing emoji, sparkles and visible active status')
+                checks.append('Active AI has static emoji and status with no animations or movement on hover')
                 page.evaluate('currentConversationAIEnabled=false;renderConversationAIToggle()')
                 assert ai.locator('.ribbon-emoji-stage').evaluate("e=>getComputedStyle(e).animationName") == 'none'
                 assert not ai.locator('.ribbon-sparkles').is_visible()
