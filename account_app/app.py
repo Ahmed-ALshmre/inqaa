@@ -12330,6 +12330,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             and sales_recovery.policy_question(policy_text)
             and not is_existing_order_followup(ev.get('text'))):
         advertised=ad_attribution.product_candidates(products,ev,current_store_id())
+        if not advertised and ev.get('_ad_product_unresolved'):
+            historical=historical_ad_candidate(db,ev,products)
+            if historical:
+                advertised=[historical]
         policy_product=(advertised[0] if len(advertised)==1 else
                         select_customer_context_product(ev.get('text') or '',customer_products))
         policy=store_policy_question_reply(policy_text,policy_product,ev=dict(ev,text=policy_text),customer=customer,history=history)
