@@ -35,6 +35,8 @@ def main():
                         return
                     if url.path.endswith('/ask_ai'):
                         held['ai']=route;return
+                    if url.path.endswith('/send'):
+                        route.fulfill(status=200,body=json.dumps({'ok':True}),content_type='application/json');return
                     response=case.client.open(url.path+('?' +url.query if url.query else ''),method=req.method,data=req.post_data,headers=dict(req.headers))
                     route.fulfill(status=response.status_code,body=response.data,content_type=response.content_type)
                 page.route('**/*',route)
@@ -68,6 +70,26 @@ def main():
                 page.wait_for_function('!_isAskingAI && !_hiBusy')
                 assert page.locator('#messageInput').input_value()=='كتبت نص جديد وأنا أنتظر'
                 checks.append('Calling the intervention assistant with an empty field keeps the main composer draft')
+                page.locator('#messageInput').fill('رسالة يدوية للإرسال')
+                page.locator('#sendBtn').click()
+                page.wait_for_function("document.querySelector('#messageInput').value==='' && !_isSending")
+                checks.append('A successful manual send empties the composer')
+                page.evaluate('openInterventionDialog()')
+                page.locator('#hiUnifiedText').fill('رد مباشر من المساعد')
+                page.evaluate('void hiSendDirect()')
+                page.wait_for_function("!_hiBusy && document.querySelector('#hiUnifiedText').value===''")
+                checks.append('A successful direct helper send empties its own field')
+                page.evaluate('openInterventionDialog()')
+                page.locator('#hiUnifiedText').fill('مسودة لتوليد اقتراح')
+                held.pop('ai',None);page.evaluate('void hiAskAI()');page.wait_for_function('_isAskingAI')
+                held['ai'].fulfill(status=200,body=json.dumps({'reply':'اقتراح جاهز للإرسال'}),content_type='application/json')
+                page.wait_for_function('!_isAskingAI && !_hiBusy')
+                assert page.locator('#hiUnifiedText').input_value()=='مسودة لتوليد اقتراح'
+                page.evaluate('editAIReply()')
+                assert page.locator('#hiUnifiedText').input_value()=='مسودة لتوليد اقتراح'
+                page.locator('#sendBtn').click()
+                page.wait_for_function("!_isSending && document.querySelector('#hiUnifiedText').value==='' && document.querySelector('#messageInput').value===''")
+                checks.append('Generation and editing keep the helper input; successful manual sending of the edited AI proposal clears both sent fields')
                 page.locator('#manualFollowupBtn').click()
                 page.wait_for_function("document.querySelector('#manualFollowupBtn').dataset.enabled==='true'")
                 page.locator('[data-filter=followup]').click()
