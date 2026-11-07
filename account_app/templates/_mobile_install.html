@@ -1,0 +1,14 @@
+<link rel="stylesheet" href="/static/css/mobile-install.css?v=1">
+<dialog id="mobileInstallDialog" class="mobile-install-dialog" aria-labelledby="mobileInstallTitle" aria-describedby="mobileInstallDescription">
+  <button class="install-close" type="button" id="mobileInstallClose" aria-label="إغلاق">×</button>
+  <div class="install-app-mark"><img src="/static/icons/soof-mark.svg" alt="" width="64" height="64"><span aria-hidden="true">✦</span></div>
+  <span class="install-eyebrow">صوف · أقرب إلك</span>
+  <h2 id="mobileInstallTitle">خلّي صوف على موبايلك</h2>
+  <p id="mobileInstallDescription">افتح محادثاتك وتابع شغلك من الشاشة الرئيسية، بخطوة أسرع كل مرة.</p>
+  <div class="install-features"><span>💬 محادثاتك</span><span>✨ مساعدك</span><span>📌 متابعتك</span></div>
+  <div id="mobileInstallGuide" class="install-guide" hidden tabindex="-1"></div>
+  <p id="mobileInstallStatus" class="install-status" role="status" aria-live="polite"></p>
+  <button id="mobileInstallAction" class="install-primary" type="button">طريقة التثبيت <span aria-hidden="true">↗</span></button>
+  <button id="mobileInstallLater" class="install-later" type="button">ليس الآن</button>
+</dialog>
+<script src="/static/js/pwa_install.js?v=1"></script>

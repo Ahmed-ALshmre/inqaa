@@ -30,7 +30,7 @@
   <script defer src="/static/js/ui.js?v=2"></script>
   <link rel="stylesheet" href="/static/css/mobile-shell.css?v=3">
   <link rel="stylesheet" href="/static/css/responsive-workspace.css?v=5">
-  <link rel="stylesheet" href="/static/css/conversation-workspace.css?v=1">
+  <link rel="stylesheet" href="/static/css/conversation-workspace.css?v=2">
 </head>
 <body class="messenger-page">
 
@@ -230,7 +230,7 @@
         </div></details>
       </div>
       <div class="conversation-focus-bar">
-      <button class="conversation-ai-ribbon" id="conversationAiBtn" onclick="toggleConversationAI()" title="إيقاف أو تشغيل AI في المحادثة"><span class="ribbon-emoji-stage" aria-hidden="true"><span class="ribbon-emoji" style="--emoji-step:0">😊</span><span class="ribbon-emoji" style="--emoji-step:1">😉</span><span class="ribbon-emoji" style="--emoji-step:2">✨</span><span class="ribbon-emoji" style="--emoji-step:3">💬</span><span class="ribbon-paused-emoji">😴</span></span><span id="conversationAiText" class="ribbon-label">صوف يساعدك بالرد</span><span class="ribbon-status" aria-hidden="true"><span class="ribbon-dot"></span><span class="ribbon-dot"></span><span class="ribbon-dot"></span></span></button>
+      <button class="conversation-ai-ribbon" id="conversationAiBtn" onclick="toggleConversationAI()" title="إيقاف أو تشغيل AI في المحادثة"><span class="ribbon-emoji-stage" aria-hidden="true"><span class="ribbon-emoji" style="--emoji-step:0">😊</span><span class="ribbon-emoji" style="--emoji-step:1">😉</span><span class="ribbon-emoji" style="--emoji-step:2">✨</span><span class="ribbon-emoji" style="--emoji-step:3">💬</span><span class="ribbon-paused-emoji">😴</span></span><span class="ribbon-copy"><span id="conversationAiText" class="ribbon-label">صوف يساعدك بالرد</span><span id="conversationAiHint" class="ribbon-hint">يتابع السياق ويجهّز الرد المناسب</span></span><span class="ribbon-sparkles" aria-hidden="true"><i>✦</i><i>✧</i><i>✦</i></span><span class="ribbon-status" aria-hidden="true"><b id="conversationAiState">فعّال</b><span class="ribbon-dot"></span><span class="ribbon-dot"></span><span class="ribbon-dot"></span></span></button>
       <button id="chatProductCard" class="chat-product-card" type="button" onclick="toggleControl()" hidden aria-label="تفاصيل المنتج المرتبط"></button>
       </div>
 
@@ -631,16 +631,10 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/mobile_app.js?v=5"></script>
 {% include "_mobile_nav.html" %}
-<script src="/static/js/dashboard.js?v=48"></script>
+<script src="/static/js/dashboard.js?v=49"></script>
 <script src="/static/js/image_composer.js?v=1"></script>
 <script src="/static/js/voice_composer.js?v=1"></script>
 <script src="/static/js/conversation_tools.js?v=5"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    });
-  }
-</script>
+{% include "_mobile_install.html" %}
 </body>
 </html>

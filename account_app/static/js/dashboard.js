@@ -110,36 +110,7 @@ window.addEventListener('popstate', () => {
 });
 
 // ══ PWA Install ═══════════════════════════════════════════════════════════
-let _pwaDeferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  _pwaDeferredPrompt = e;
-  const btn = document.getElementById('pwaInstallBtn');
-  if (btn) btn.style.display = '';
-});
-window.addEventListener('appinstalled', () => {
-  _pwaDeferredPrompt = null;
-  const btn = document.getElementById('pwaInstallBtn');
-  if (btn) btn.style.display = 'none';
-  showToast('تم تثبيت التطبيق', 'success');
-});
-
-async function installPWA() {
-  if (!_pwaDeferredPrompt) {
-    showToast('التثبيت غير متاح. افتح القائمة في المتصفح واختر "إضافة إلى الشاشة الرئيسية".', 'info');
-    return;
-  }
-  _pwaDeferredPrompt.prompt();
-  try {
-    const { outcome } = await _pwaDeferredPrompt.userChoice;
-    if (outcome === 'accepted') showToast('سيتم التثبيت', 'success');
-  } catch (e) {
-  } finally {
-    _pwaDeferredPrompt = null;
-    const btn = document.getElementById('pwaInstallBtn');
-    if (btn) btn.style.display = 'none';
-  }
-}
+function installPWA() { window.soofPWA?.open(true); }
 
 // ══ Mobile Panels ══════════════════════════════════════════════════════════
 function toggleSidebar() {
@@ -1996,6 +1967,9 @@ function renderConversationAIToggle() {
   btn.classList.toggle('btn-warning', !currentConversationAIEnabled);
   btn.classList.toggle('btn-outline-warning', currentConversationAIEnabled);
   txt.textContent = !globalAIEnabled ? 'صوف متوقف في المتجر' : currentConversationAIEnabled ? 'صوف يساعدك بالرد' : 'المحادثة بيد الموظف';
+  const hint=document.getElementById('conversationAiHint'),state=document.getElementById('conversationAiState');
+  if(hint)hint.textContent=!globalAIEnabled?'التشغيل من مفتاح المتجر':currentConversationAIEnabled?'يتابع السياق · اضغط لإيقافه هنا':'اضغط لتسليم المحادثة إلى صوف';
+  if(state)state.textContent=canUseAI()?'فعّال':'متوقف';
   btn.classList.toggle('is-paused', !canUseAI());
   btn.title = !globalAIEnabled ? 'شغّل AI لهذا المتجر أولاً' : currentConversationAIEnabled
     ? 'إيقاف AI في هذه المحادثة فقط'

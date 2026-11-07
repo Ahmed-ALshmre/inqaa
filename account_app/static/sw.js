@@ -1,5 +1,5 @@
 /* Minimal service worker — needed for installability + offline fallback */
-const CACHE_NAME = 'soof-mobile-v40';
+const CACHE_NAME = 'soof-mobile-v41';
 const APP_SHELL = [
   '/static/css/responsive-workspace.css?v=5',
   '/static/js/voice_composer.js?v=1',
@@ -12,7 +12,10 @@ const APP_SHELL = [
   '/static/css/advisor.css?v=3',
   '/static/js/advisor.js?v=8',
   '/static/css/dashboard.css?v=25',
-  '/static/js/dashboard.js?v=46',
+  '/static/js/dashboard.js?v=49',
+  '/static/css/conversation-workspace.css?v=2',
+  '/static/css/mobile-install.css?v=1',
+  '/static/js/pwa_install.js?v=1',
   '/static/css/workspace.css?v=1',
   '/static/js/workspace.js?v=3',
   '/static/css/store-ai.css?v=2',
