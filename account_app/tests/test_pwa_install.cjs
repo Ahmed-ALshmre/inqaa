@@ -28,5 +28,10 @@ async function check(name,fn){await fn();count++;}
   await check('double click launches one prompt',async()=>{const t=setup();let calls=0,resolve;t.event('beforeinstallprompt',{preventDefault(){},prompt:()=>{calls++;return new Promise(r=>resolve=r);},userChoice:Promise.resolve({outcome:'dismissed'})});const first=t.window.soofPWA.install();await t.window.soofPWA.install();assert.equal(calls,1);resolve();await first;});
   await check('blocked storage and unsupported dialogs are safe',()=>{const t=setup({storageDenied:true});t.boot();assert.equal(t.dialog.open,true);t.event('dialog:cancel');assert.equal(t.dialog.open,false);const old=setup({unsupported:true});old.boot();assert.equal(old.window.soofPWA,undefined);});
   await check('an existing modal is not interrupted',()=>{const t=setup({otherModal:true});t.boot();assert.equal(t.dialog.open,false);});
+  await check('staff questions take priority and install returns only for an empty queue',()=>{
+    for(const state of [{loading:true},{pending:true},{shown:true}]){const t=setup();t.window.soofQuestionPrompt=state;t.boot();assert.equal(t.dialog.open,false);}
+    const t=setup();t.window.soofQuestionPrompt={loading:true};t.boot();assert.equal(t.dialog.open,false);
+    t.window.soofQuestionPrompt={loading:false,pending:false,shown:false};t.event('soof:questions-checked');t.boot();assert.equal(t.dialog.open,true);
+  });
   console.log(`PASS: ${count} PWA installation cases`);
 })().catch(error=>{console.error(error);process.exitCode=1;});

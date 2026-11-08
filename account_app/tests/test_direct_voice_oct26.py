@@ -77,6 +77,9 @@ class DirectVoicePipelineTests(unittest.TestCase):
 
     def provider(self, url, **kwargs):
         request = kwargs['json']
+        if request['model'] == 'openai/gpt-6.1-sol':
+            from account_app.tests.run_isolated import offline_request
+            return offline_request(url=url, **kwargs)
         self.requests.append(request)
         self.assertEqual(url, self.m.OPENROUTER_URL)
         self.assertEqual(request['model'], self.m.get_ai_model(self.db, 'main_model', self.m.MAIN_MODEL))

@@ -83,17 +83,18 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertIsNone(matched)
         photos.assert_not_called()
 
-    def test_malformed_model_reply_recovers_through_real_pipeline(self):
+    def test_missing_sizes_consults_once_then_hands_off_without_primary_generation(self):
         product = {'product_id':'P005','product_name':'سوت حوامل','stock':'متوفر','price':'18000','status':'active'}
         ev = self.m.extract_facebook_event(self.body([{'type':'image','payload':{'url':'https://images.test/customer.jpg'}}], 'شنو سعره وقياساته؟'))
         with patch.object(self.m, 'OPENROUTER_KEY', 'test'), patch.object(self.m.requests, 'post') as post:
-            post.return_value.json.side_effect = [
-                {'choices':[{'message':{'content':'not valid JSON'}}]},
-                {'choices':[{'message':{'content':'{"reply":"السعر 18000 دينار","create_order":false,"order":{}}'}}]},
-            ]
+            post.return_value.status_code = 200
+            post.return_value.json.return_value = {'choices':[{'finish_reason':'stop','message':{'content':json.dumps({
+                'decision':'needs_human','guidance':'','reason':'قياسات المنتج غير مسجلة.','focus_product_id':None})}}]}
             result = self.m.call_main_ai(ev,'image',{},[],[product],product,{'product_found':True},'',[])
-        # Missing sizes now stop the entire turn before the provider is used.
-        post.assert_not_called()
+        # The consultant may inspect the known context, but cannot invent sizes
+        # or replace the primary model with its own customer response.
+        post.assert_called_once()
+        self.assertEqual(post.call_args.kwargs['json']['model'],'openai/gpt-6.1-sol')
         self.assertEqual(result['reply'],'')
         self.assertTrue(result['_needs_fact_review'])
         self.assertTrue(result['requires_human'])

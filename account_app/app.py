@@ -28,7 +28,7 @@ try:
 except ImportError:
     import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
 try:
-    from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media
+    from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media, reply_consultant
     from .media import extract_media, media_type, message_media, known_sticker
     from .reply_layout import approved_parts, plan_sales_bubbles, polish_surface_punctuation
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
@@ -36,7 +36,7 @@ try:
     from .pricing import quote as price_order, expand_bundles
     from .checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
-    import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media
+    import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media, reply_consultant
     import baraah
     import sales_engagement
     import menger
@@ -8033,6 +8033,8 @@ def known_product_question_reply(text, product):
 
 def known_product_questions_reply(text, product):
     """Answer every clause or defer the entire message; never drop an extra request."""
+    if product_questions.guidance_for(product, text):
+        return None
     normalized = re.sub(r'^[\s،,.!؟]*(?:السلام عليكم|صباح الخير|مساء الخير|مرحبا|هلو)\s*', '', str(text or ''))
     normalized = re.sub(r'(?:\s|[،,.!؟])*(?:بلازحمة|بلا زحمة|لو سمحتي)\s*$', '', normalized)
     clauses = [x.strip(' ،؟?!.') for x in re.split(r'\n+|\s+و(?=شنو|شكد|كم|السعر|القماش|القياسات|الألوان)', normalized)]
@@ -9051,14 +9053,14 @@ def _call_main_ai_with_context(
               "لا تطلب الاسم أو الصورة من جديد ولا تعتبر رفض بديل رغبة بالحجز. المعرفات داخلية لا تذكرها للزبون."
         )
     question = ev.get("text") or ""
-    if matched_product and not ev.get('_post_order') and 'photo_source' in sales_answers.topics(question):
+    if matched_product and not ev.get('_staff_guidance_active') and not ev.get('_consultant_guidance_active') and not ev.get('_post_order') and 'photo_source' in sales_answers.topics(question):
         recovered = recover_factual_sales_reply(ev, matched_product)
         if recovered:
             return recovered
     unknown_season = 'season' in sales_answers.topics(question) and not sales_answers.season_fact(matched_product)
     unknown_care = 'care' in sales_answers.topics(question) and not sales_answers.care_fact(matched_product)
     unknown_feel = 'fabric_feel' in sales_answers.topics(question) and not sales_answers.fabric_feel_fact(matched_product)
-    if matched_product and not ev.get('_post_order') and (unknown_season or unknown_care or unknown_feel):
+    if matched_product and not ev.get('_staff_guidance_active') and not ev.get('_consultant_guidance_active') and not ev.get('_post_order') and (unknown_season or unknown_care or unknown_feel):
         recovered = recover_factual_sales_reply(ev, matched_product)
         if recovered:
             if sales_strategy._explicit_purchase(question) or re.search(r'(?:اذا|بشرط|لازم).{0,25}(?:شتوي|صيفي|بهاري|غسل|يكش|لون)', sales_strategy.normalized(question)):
@@ -9144,29 +9146,29 @@ def _call_main_ai_with_context(
             discrepancy['reply'] = 'حقج تسألين عن فرق السعر.\n' + discrepancy['reply']
             discrepancy['reply_parts'] = [discrepancy['reply']]
             return dict(discrepancy, _needs_fact_review=True, create_order=False)
-    detail_reply = product_detail_reply(ev, matched_product, customer, customer_products, positions)
+    detail_reply = product_detail_reply(ev, matched_product, customer, customer_products, positions) if not (ev.get('_staff_guidance_active') or ev.get('_consultant_guidance_active')) else None
     if detail_reply:
         return detail_reply
-    size_choice_reply = guided_size_choice_reply(ev, matched_product, customer, customer_products, positions)
+    size_choice_reply = guided_size_choice_reply(ev, matched_product, customer, customer_products, positions) if not (ev.get('_staff_guidance_active') or ev.get('_consultant_guidance_active')) else None
     if size_choice_reply:
         return size_choice_reply
-    price_reply = transparent_price_reply(ev, matched_product, customer, customer_products, positions)
+    price_reply = transparent_price_reply(ev, matched_product, customer, customer_products, positions) if not (ev.get('_staff_guidance_active') or ev.get('_consultant_guidance_active')) else None
     if price_reply:
         return price_reply
-    specification_reply = guided_specification_reply(ev, matched_product, customer, customer_products, positions)
+    specification_reply = guided_specification_reply(ev, matched_product, customer, customer_products, positions) if not (ev.get('_staff_guidance_active') or ev.get('_consultant_guidance_active')) else None
     if specification_reply:
         return specification_reply
-    interest_reply = guided_product_interest_reply(ev, matched_product, customer, customer_products, positions)
+    interest_reply = guided_product_interest_reply(ev, matched_product, customer, customer_products, positions) if not (ev.get('_staff_guidance_active') or ev.get('_consultant_guidance_active')) else None
     if interest_reply:
         return interest_reply
-    if (matched_product and not ev.get('_post_order') and product_variants.is_lookup(question)
+    if (matched_product and not ev.get('_staff_guidance_active') and not ev.get('_consultant_guidance_active') and not ev.get('_post_order') and product_variants.is_lookup(question)
             and not ev.get('_image_matches')
             and not set(sales_answers.topics(question)) - {'colors', 'sizes', 'price', 'availability'}):
         lookup_positions = (positions if len(positions)>1 and re.search(r'الأول|الاول|الأولى|الاولى|الثاني|الثانية|الثالث|الثالثة',question)
                             and not ev.get('_manual_product_id') else
                             [{'product_found':True,'product_id':matched_product['product_id']}])
         return product_albums.response(lookup_positions, products, question)
-    missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') else ''
+    missing_fact = sales_strategy.missing_fact_reply(question, matched_product) if not ev.get('_post_order') and not ev.get('_staff_guidance_active') and not ev.get('_consultant_guidance_active') else ''
     if missing_fact and sales_answers.isolated_gap(question):
         return {'reply':missing_fact,'create_order':False,'order':{},'_needs_fact_review':sales_strategy.fact_requires_human(question, matched_product),'_suppress_product_images':True}
     if matched_product and requests_alternative_photo(question) and len(product_image_urls(matched_product)) <= 1:
@@ -9190,7 +9192,7 @@ def _call_main_ai_with_context(
             image_result, instructions_text, rules_list)
     kwargs = dict(fix_instruction=fix_instruction, customer_products=customer_products,
                   conversation_history=conversation_history, catalog_search_context=catalog_search_context)
-    factual = factual_customer_request(ev, products, matched_product, customer=customer, history=history)
+    factual = factual_customer_request(ev, products, matched_product, customer=customer, history=history) if not (ev.get('_staff_guidance_active') or ev.get('_consultant_guidance_active')) else None
     if factual:
         return factual
     photo_reply = offered_product_photo_reply(ev, products, matched_product, continuation)
@@ -9201,7 +9203,7 @@ def _call_main_ai_with_context(
         return linked_reply
     result = _call_main_ai_once(*args, **kwargs)
     availability_problem = product_albums.availability_error(result.get('reply'), matched_product, products, positions)
-    internal_language = (customer_copy.has_instructions(result.get('reply')) or bool(re.search(r'بيانات.{0,20}قليل|معلومات.{0,20}قليل|حسب (?:البيانات|الكتالوج)|غير موثق|فيديو حقيقي موثق', str(result.get('reply') or ''))))
+    internal_language = (customer_copy.has_instructions(result.get('reply')) or reply_consultant.copies_advice(result.get('reply')) or product_questions.copies_guidance(result.get('reply'), matched_product, question) or bool(re.search(r'بيانات.{0,20}قليل|معلومات.{0,20}قليل|حسب (?:البيانات|الكتالوج)|غير موثق|فيديو حقيقي موثق', str(result.get('reply') or ''))))
     grounding = (catalog_reply_error(result.get('reply'), ev, matched_product, customer, customer_products,
                                     positions, related_candidates)
                  or conversation_quality.grounded_error(result.get("reply"), matched_product, products)
@@ -9228,6 +9230,18 @@ def _call_main_ai_with_context(
     # The provider client already retries transient HTTP failures.
     permanent_failure = result.get("_provider_retries_exhausted") or result.get("failure_reason") in {"provider_http_400", "provider_http_401", "provider_http_402", "provider_http_403", "provider_http_404", "no_api_key"}
     if needs_review and not permanent_failure and not fix_instruction and not ev.get('_staff_preview') and not (image_result or {}).get("unmatched_customer_image"):
+        advice = None
+        consultation = reply_consultant.current()
+        if _consultant_allowed(consultation, result):
+            problems = [name for name, problem in [('lost_context', lost_context), ('repeated_contact', repeated_contact),
+                ('missing_answers', missing_answers), ('unsupported_claim', grounding), ('stock_contradiction', availability_problem),
+                ('internal_language', internal_language), ('premature_close', premature_close), ('empty_checkout', empty_checkout),
+                ('model_handoff', result.get('requires_human') or is_ai_handoff_reply(result.get('reply'))),
+                ('generation_failure', result.get('failed') or not str(result.get('reply') or '').strip())] if problem]
+            advice = _consult_difficult_reply(consultation, result, problems)
+            if not advice:
+                return dict(result, reply='', reply_parts=[], create_order=False, requires_human=True,
+                            failed=True, failure_reason=result.get('failure_reason') or 'consultant_' + (consultation.reason or 'unresolved'))
         kwargs["fix_instruction"] = (
             "راجع قرار التحويل قبل اعتماده. أجب عن أسئلة السعر واللون والقياس والخامة والتوصيل والفحص "
             "من بيانات المنتج والمتجر والطلب المرفقة. الربط الموجود صالح ولا يحتاج إعادة ربط يدوي. "
@@ -9260,7 +9274,15 @@ def _call_main_ai_with_context(
                 ' إذا بقي خيار مجهول اسأل عنه وحده، ولا تطلب بيانات الاتصال المعروفة أو موافقة ثانية ولا تخمن.')
         if format_failure:
             kwargs["fix_instruction"] += ' الرد السابق تعذر قراءته. أرجع كائن JSON صالح فقط بلا شرح خارجه، يتضمن reply وreply_parts وcreate_order وorder. لا تؤكد حجزاً دون بيانات مكتملة وموافقة الزبون.'
+        if advice:
+            kwargs['fix_instruction'] += reply_consultant.instruction(advice)
+            ev = dict(ev, _consultation_retry=True, _consultant_guidance_active=True)
+            args = (ev, *args[1:])
         result = _call_main_ai_once(*args, **kwargs)
+    if ev.get('_consultation_retry') and (result.get('failed') or result.get('requires_human')
+            or is_ai_handoff_reply(result.get('reply')) or not str(result.get('reply') or '').strip()):
+        return dict(result, reply='', reply_parts=[], create_order=False, requires_human=True,
+                    failed=True, failure_reason=result.get('failure_reason') or 'consulted_main_failed')
     if (empty_checkout and not result.get('failed')
             and unfulfilled_checkout_ack(get_db(), ev, result)):
         return dict(reply='', order={}, create_order=False, failed=True, requires_human=True,
@@ -9285,7 +9307,7 @@ def _call_main_ai_with_context(
                 recovered['reply'] = 'هذا ' + customer_copy.fact(matched_product.get('product_name')) + '.\n' + recovered['reply']
                 recovered['reply_parts'] = [recovered['reply']]
             return dict(recovered, _catalog_truth_recovered=True)
-    if customer_copy.has_instructions(result.get('reply')):
+    if customer_copy.has_instructions(result.get('reply')) or reply_consultant.copies_advice(result.get('reply')) or product_questions.copies_guidance(result.get('reply'), matched_product, question):
         return {'reply': '', 'create_order': False, 'order': {}, 'failed': True,
                 'requires_human': True, 'failure_reason': 'internal_instructions_in_reply'}
     if product_albums.availability_error(result.get('reply'), matched_product, products, positions):
@@ -9488,7 +9510,7 @@ def _call_main_ai_with_context(
         ordered = product_albums.response(positions, products, question, str(result.get('reply') or ''))
         result = dict(result, reply=ordered['reply'], reply_parts=ordered['reply_parts'],
                       _single_message=bool(ordered.get('_single_message')), _ordered_album=True)
-    return result
+    return dict(result, _consulted_reply=True) if ev.get('_consultation_retry') else result
 
 
 def customer_identity_handoff(ev):
@@ -9517,6 +9539,9 @@ def unanswered_product_handoff(ev, product, topics=None):
                   handoff_reason='سؤال عن المنتج يحتاج جواباً معتمداً من الموظف',
                   _direct_fact_handoff=True,_needs_fact_review=True,
                   missing_topics=topics)
+    if ev.get('_defer_product_handoff'):
+        return dict(result, _deferred_product_id=product.get('product_id'),
+                    _deferred_question_text=ev.get('text') or '')
     if not has_app_context() or not ev.get('sender_id'):
         return result
     db = get_db()
@@ -9542,13 +9567,106 @@ def missing_catalog_images_reply(db, ev):
                                            'reason': 'catalog_images_unavailable'})
 
 
+def _consultant_allowed(state, result):
+    if not state or not state.enabled or state.attempted:
+        return False
+    if result.get('_customer_handoff_review_id') or result.get('handoff_reason') == 'customer_requested_human':
+        return False
+    return result.get('failure_reason') not in {
+        'no_api_key', 'provider_http_400', 'provider_http_401', 'provider_http_402', 'provider_http_403', 'provider_http_404'}
+
+
+def _consult_difficult_reply(state, result, problems):
+    data = state.data
+    if data.get('ev', {}).get('sender_id'):
+        db = get_db()
+        data['customer'] = checkout_customer_data(db, data['ev']['sender_id'], {})
+        draft = dict(order={})
+        restore_checkout_draft(db, data['ev'], draft, data.get('matched_product'))
+        data['checkout_draft'] = {'items': (draft.get('order') or {}).get('items') or []}
+    return reply_consultant.advise(state, result, problems, key=OPENROUTER_KEY,
+        endpoint=OPENROUTER_URL, post=ai_transport.post,
+        record=lambda payload, elapsed: ai_efficiency.record_usage(get_db(), current_store_id(),
+            'reply_consultation', reply_consultant.MODEL, payload, elapsed))
+
+
+def _consulted_reply_failed(result):
+    return bool(result.get('failed') or result.get('requires_human') or result.get('_needs_fact_review')
+                or result.get('_deferred_product_id') or is_ai_handoff_reply(result.get('reply'))
+                or (not str(result.get('reply') or '').strip() and not result.get('create_order')))
+
+
 def call_main_ai(ev, message_type, customer, history, products, matched_product,
+                 image_result, instructions_text, rules_list, fix_instruction=None,
+                 customer_products=None, conversation_history=None, catalog_search_context=None):
+    active = bool(has_app_context() and reply_consultant.enabled() and OPENROUTER_KEY
+        and not ev.get('_staff_preview') and not ev.get('_post_order')
+        and not sales_playbook.human_requested(ev.get('text'))
+        and not (image_result or {}).get('unmatched_customer_image'))
+    prepared_ev = dict(ev, _defer_product_handoff=True) if active else ev
+    with reply_consultant.scope(active, original_ev=ev, already_attempted=ev.get('_reply_consultation_used'),
+            ev=prepared_ev, store_id=current_store_id(), message_type=message_type, customer=customer or {},
+            history=ai_efficiency.merge_history(history or [], conversation_history), products=products,
+            matched_product=matched_product, image_result=image_result, instructions_text=instructions_text,
+            rules_list=rules_list, customer_products=customer_products or [],
+            conversation_history=conversation_history, catalog_search_context=catalog_search_context) as state:
+        result = _call_main_ai_primary(prepared_ev, message_type, customer, history, products, matched_product,
+            image_result, instructions_text, rules_list, fix_instruction=fix_instruction,
+            customer_products=customer_products, conversation_history=conversation_history,
+            catalog_search_context=catalog_search_context)
+        pending = dict(result) if result.get('_deferred_product_id') else None
+        if _consulted_reply_failed(result) and _consultant_allowed(state, result):
+            advice = _consult_difficult_reply(state, result, ['before_human_review'])
+            if advice:
+                data = state.data
+                rescue_ev = dict(data['ev'], _consultation_retry=True, _consultant_guidance_active=True)
+                result = _call_main_ai_with_context(rescue_ev, message_type, customer, history,
+                    data['products'], data.get('matched_product'), image_result, instructions_text, rules_list,
+                    fix_instruction=reply_consultant.instruction(advice),
+                    customer_products=data.get('customer_products'), conversation_history=conversation_history,
+                    catalog_search_context=catalog_search_context)
+                identity = [result.get('reply'), *(result.get('reply_parts') or [])]
+                if any(sales_playbook.assistant_identity_statement(text) for text in identity if isinstance(text, str)):
+                    result = customer_identity_handoff(ev)
+                else:
+                    result = owner_result_surface(result, rescue_ev, customer, history)
+        if state.enabled and state.attempted:
+            failed = _consulted_reply_failed(result) or state.status in {'failed', 'needs_human'}
+            state.status = state.status if state.status in {'failed', 'needs_human'} else ('failed_validation' if failed else 'recovered')
+            if failed:
+                result = dict(result, reply='', reply_parts=[], create_order=False, requires_human=True,
+                              failure_reason=result.get('failure_reason') or ('consultant_' + state.reason if state.reason else 'consultation_unresolved'))
+            result = dict(result, _reply_consultation=state.metadata())
+        if result.get('_deferred_product_id'):
+            pending = result
+        if pending and _consulted_reply_failed(result):
+            product = next((p for p in state.data.get('products', []) if p.get('product_id') == pending['_deferred_product_id']),
+                           state.data.get('matched_product'))
+            if product:
+                final_ev = dict(prepared_ev, _defer_product_handoff=False, text=pending['_deferred_question_text'])
+                final = unanswered_product_handoff(final_ev, product, pending.get('missing_topics'))
+                final['order'] = result.get('order') or pending.get('order') or {}
+                if state.attempted:
+                    final['_reply_consultation'] = state.metadata()
+                return final
+        if (state.enabled and state.attempted and _consulted_reply_failed(result) and ev.get('sender_id')
+                and not result.get('_customer_handoff_review_id')):
+            reason = result.get('handoff_reason') or 'تعذر إكمال الرد بعد الاستشارة: ' + str(result.get('failure_reason') or 'consultation_unresolved')
+            db = get_db()
+            review_id = create_human_review(db, ev, reason, notify_telegram=False)
+            set_customer_ai_enabled(db, ev['sender_id'], False, reason='reply_consultation_unresolved')
+            cancel_followups_for_sender(db, ev['sender_id'], 'reply_consultation_unresolved')
+            result = dict(result, handoff_reason=reason, _reply_consultation_review_id=review_id)
+        return result
+
+
+def _call_main_ai_primary(ev, message_type, customer, history, products, matched_product,
                  image_result, instructions_text, rules_list, fix_instruction=None,
                  customer_products=None, conversation_history=None, catalog_search_context=None):
     if sales_playbook.human_requested(ev.get('text')):
         return customer_identity_handoff(ev)
     if has_app_context():
-        products = product_questions.apply(get_db(), current_store_id(), products)
+        products = product_questions.apply(get_db(), current_store_id(), products, sender=ev.get('sender_id'))
         if matched_product:
             matched_product = next((p for p in products if p['product_id']==matched_product.get('product_id')), matched_product)
     products = [product_albums.sales_product(p) for p in products]
@@ -9565,7 +9683,15 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
              if not matched_product and message_type == 'text' and not ev.get('image_url') and not ev.get('_image_matches') else [])
     chosen = matched_product or (named[0] if len(named) == 1 else
                                 customer_products[0] if len(customer_products or []) == 1 else None)
+    notes = product_questions.guidance_for(chosen, ev.get('text'))
+    ev['_staff_guidance_active'] = bool(notes)
+    if chosen and notes:
+        chosen = dict(chosen, _active_staff_guidance=[row['guidance'] for row in notes])
     ev['_reply_product'] = chosen
+    state = reply_consultant.current()
+    if state and state.enabled:
+        state.data.update(ev=ev, products=products, matched_product=chosen, customer_products=customer_products,
+                          memory=context, customer=customer, delivery=get_delivery_settings(get_db()))
     category_reply=sales_voice.other_category_reply(ev.get('text') or '',chosen,products)
     if category_reply:
         return owner_result_surface(category_reply,ev,customer,history)
@@ -9589,7 +9715,7 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
     if chosen and not ev.get('_post_order') and (len(ev.get('_image_matches') or [])<=1 or factual_album) and not album_question:
         if re.search(r'ماكو.{0,12}غير.{0,8}(?:هاي|هال).*صور|صوري(?:ه|ها)|تدزين نفس',sales_strategy.normalized(ev.get('text'))):
             return unanswered_product_handoff(ev,chosen,['service'])
-        if current_store_id() == baraah.STORE_ID and has_app_context():
+        if current_store_id() == baraah.STORE_ID and has_app_context() and not notes:
             policy = customer_copy.fact(chosen.get('inspection_policy')) or get_delivery_settings(get_db()).get('inspection_message')
             detail = sales_voice.child_detail_reply(ev.get('text') or '', chosen, policy)
             if detail:
@@ -9597,17 +9723,17 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
         missing_facts = product_questions.missing(ev.get('text') or '', chosen)
         if missing_facts:
             return unanswered_product_handoff(ev, chosen, missing_facts)
-        offer = sales_voice.mixed_child_offer(ev.get('text') or '', chosen)
+        offer = sales_voice.mixed_child_offer(ev.get('text') or '', chosen) if not notes else None
         if offer:
             return owner_result_surface(offer, ev, customer, history)
-        exact = product_questions.exact_answer(chosen, ev.get('text') or '')
+        exact = product_questions.exact_answer(chosen, ev.get('text') or '') if not notes else ''
         if exact:
             return owner_result_surface(dict(reply=exact,create_order=False,order={}), ev, customer, history)
         factual_topics=set(sales_answers.topics(ev.get('text') or ''))
         fabric_only=(factual_topics=={'fabric'} and re.fullmatch(
             r'(?:بس\s+)?(?:كوليلي\s+)?(?:شنو|شنهو|ما\s*هو)\s+(?:نوع(?:ي[هة])?\s+)?(?:ال)?قماش(?:ه|ها)?[؟?!.،\s]*',
             sales_strategy.normalized(ev.get('text'))))
-        if factual_topics == {'fabric','season'} or fabric_only:
+        if not notes and (factual_topics == {'fabric','season'} or fabric_only):
             natural=sales_voice.answer(ev.get('text') or '',chosen,context,customer,history,{})
             if natural:
                 return owner_result_surface(natural,ev,customer,history)
@@ -9631,7 +9757,7 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
                 or resume_known_checkout(get_db(),ev,chosen,customer,customer_products,context))
     # Complete a valid checkout first. Pure catalogue questions can then use
     # verified facts even when the model service is down.
-    if (result is None and chosen and not ev.get('_post_order') and len(customer_products or [])<=1
+    if (result is None and chosen and not notes and not ev.get('_post_order') and len(customer_products or [])<=1
             and (len(ev.get('_image_matches') or [])<=1 or factual_album) and not album_question):
         factual_topics=set(sales_answers.topics(ev.get('text') or ''))
         if (factual_topics and not factual_topics-{'fabric','fabric_feel','season','stretch','cut','lining','closure','care',
@@ -9642,7 +9768,7 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
                          and len(customer_image_positions(get_db(),ev['sender_id']))>1
                          and not product_albums.single_product_album(customer_image_positions(get_db(),ev['sender_id']),chosen))):
             result=sales_voice.answer(ev.get('text') or '',chosen,context,customer,history,{})
-    if result is None and not sales_voice.needs_fit_explanation(ev.get('text')):
+    if result is None and not notes and not sales_voice.needs_fit_explanation(ev.get('text')):
         result = owner_sales.reply(ev, chosen, customer, context, history,
                                   photo_count=len(product_image_urls(chosen)) if chosen else 0)
     if result is None:
@@ -9704,7 +9830,7 @@ def owner_result_surface(result, ev, customer=None, history=()):
     image_matches=ev.get('_image_matches') or []
     single_verified_image=bool(product and len(image_matches)==1 and image_matches[0].get('product_found')
                                and image_matches[0].get('product_id')==product.get('product_id'))
-    if (product and has_app_context() and not ev.get('_post_order') and (not image_matches or single_verified_image)
+    if (product and has_app_context() and not result.get('_consulted_reply') and not ev.get('_staff_guidance_active') and not ev.get('_consultant_guidance_active') and not ev.get('_post_order') and (not image_matches or single_verified_image)
             and not result.get('requires_human') and not result.get('_fit_recommendation_size')
             and not result.get('_catalog_model_album') and not result.get('_plural_color_reply')
             and not result.get('_contextual_stock_reply') and not result.get('_category_enquiry')
@@ -10012,6 +10138,7 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + catalog_truth.GUIDE
     system_prompt += "\n\n" + owner_sales.GUIDE
     system_prompt += "\n\n" + owner_sales.address_guidance(customer['gender'])
+    system_prompt += "\n\n" + product_questions.guidance_prompt(matched_product, question_text)
     if not post_order and matched_product:
         system_prompt += "\n\n" + sales_strategy.persuasion_guidance(
             matched_product,
@@ -10254,6 +10381,7 @@ def _call_main_ai_once(
                 "temperature": get_ai_temperature(db, "main", 0.7),
             },
             timeout=30,
+            **({'max_attempts': 1, 'budget_seconds': 45} if ev.get('_consultation_retry') else {}),
         )
         resp.raise_for_status()
         payload = resp.json()
@@ -19069,14 +19197,21 @@ def api_product_questions():
     if status not in {'pending','answered'}:
         return jsonify(error='حالة غير صالحة'),400
     before = request.args.get('before',type=int)
-    sql = '''SELECT id,product_id,product_name,topic,question,answer,status,occurrences,created_at,updated_at
-             FROM product_questions WHERE store_id=? AND status=?'''
-    args = [current_store_id(),status]
+    limit = max(1, min(50, request.args.get('limit', default=50, type=int)))
+    all_stores = request.args.get('all_stores') == '1'
+    scope = '' if all_stores else ' AND q.store_id=?'
+    args = [status] + ([] if all_stores else [current_store_id()])
+    sql = '''SELECT q.id,q.store_id,COALESCE(s.name,q.store_id) AS store_name,q.product_id,q.product_name,
+                    q.topic,q.question,q.answer,q.guidance,q.status,q.occurrences,q.created_at,q.updated_at
+             FROM product_questions q LEFT JOIN stores s ON s.store_id=q.store_id WHERE q.status=?''' + scope
     if before:
-        sql += ' AND id<?'; args.append(before)
-    rows = [dict(row) for row in db.execute(sql+' ORDER BY id DESC LIMIT 51',args)]
-    return jsonify(questions=rows[:50],has_more=len(rows)>50,
-                   pending=db.execute("SELECT COUNT(*) FROM product_questions WHERE store_id=? AND status='pending'",(current_store_id(),)).fetchone()[0],
+        sql += ' AND q.id<?'; args.append(before)
+    rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC LIMIT ?',args+[limit+1])]
+    for row in rows:
+        row['revision'] = product_questions.revision(row)
+    return jsonify(questions=rows[:limit],has_more=len(rows)>limit,
+                   pending=db.execute("SELECT COUNT(*) FROM product_questions q WHERE q.status='pending'"+scope,
+                                      [] if all_stores else [current_store_id()]).fetchone()[0],
                    topics=product_questions.LABELS)
 
 
@@ -19090,13 +19225,23 @@ def api_product_question_answer(identity):
     if question and question['topic']=='price' and person and not person.get('owner') and 'products' not in person.get('permissions',[]):
         return jsonify(error='تصحيح السعر يحتاج صلاحية إدارة المنتجات'),403
     try:
-        row = product_questions.save_answer(get_db(),current_store_id(),identity,
-            (request.get_json(silent=True) or {}).get('answer'), (person or {}).get('name','الموظف'),now_baghdad_iso())
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            return jsonify(error='بيانات غير صالحة'),400
+        author = (person or {}).get('name','الموظف')
+        if 'guidance' in body:
+            row = product_questions.save_guidance(get_db(),current_store_id(),identity,body['guidance'],author,
+                now_baghdad_iso(),expected_revision=body.get('expected_revision'))
+        else:
+            row = product_questions.save_answer(get_db(),current_store_id(),identity,body.get('answer'),author,now_baghdad_iso())
+    except product_questions.GuidanceConflict as error:
+        return jsonify(error=str(error)),409
     except ValueError as error:
         return jsonify(error=str(error)),400
     if not row:
         return jsonify(error='السؤال غير موجود في هذا المتجر'),404
-    return jsonify(ok=True,id=row['id'],answer=row['answer'],status=row['status'])
+    return jsonify(ok=True,id=row['id'],answer=row['answer'],guidance=row['guidance'],status=row['status'],
+                   revision=product_questions.revision(row))
 
 
 chatwoot.install(sys.modules[__name__])

@@ -12,6 +12,7 @@
   function refresh(){action.textContent=deferred?'تثبيت التطبيق الآن ↓':'طريقة التثبيت ↗';}
   function close(snooze=true){if(snooze)write('soof.install.snooze',Date.now()+86400000);if(dialog.open)dialog.close();}
   function open(force=false){
+    if(!force&&(window.soofQuestionPrompt?.loading||window.soofQuestionPrompt?.pending||window.soofQuestionPrompt?.shown))return;
     if(standalone()||(!force&&(!mobile()||shown||read('soof.install.installed')==='1'||Number(read('soof.install.snooze'))>Date.now())))return;
     if(document.querySelector('dialog[open],.modal.show'))return;
     refresh();if(!dialog.open){dialog.showModal();shown=true;}
@@ -33,6 +34,7 @@
     finally{busy=false;action.disabled=false;refresh();}
   }
   window.soofPWA={open,install,dismiss:()=>close(true)};
+  window.addEventListener('soof:questions-checked',()=>{if(!window.soofQuestionPrompt?.shown)setTimeout(()=>open(false),1000);});
   window.addEventListener('beforeinstallprompt',event=>{
     event.preventDefault();deferred=event;write('soof.install.installed','0');refresh();
     const button=document.getElementById('pwaInstallBtn');if(button)button.style.display='';

@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}أسئلة تحتاج جواباً — صوف{% endblock %}
-{% block styles %}<link rel="stylesheet" href="/static/css/product_questions.css?v=1">{% endblock %}
+{% block styles %}<link rel="stylesheet" href="/static/css/product_questions.css?v=2">{% endblock %}
 {% block content %}
-<div class="pq-heading"><div><span class="pq-eyebrow">معرفة المتجر</span><h1>أسئلة تحتاج جواباً</h1><p>أضف المعلومة الصحيحة مرة واحدة، ليعرفها البوت عند السؤال عن المنتج نفسه لاحقاً.</p></div><span id="pqCount" class="pq-count">…</span></div>
-<div class="pq-toolbar"><label for="pqStatus">عرض الأسئلة<select id="pqStatus" class="form-select"><option value="pending">بانتظار جواب</option><option value="answered">تمت الإجابة</option></select></label><button id="pqRefresh" class="btn btn-outline-secondary" type="button">تحديث</button></div>
-<p class="pq-note">عند نقص المعلومة يتوقف الرد الآلي للمحادثة بصمت وتظهر في التدخل البشري. حفظ الجواب هنا يحدّث معرفة المنتج؛ لا يرسل رسالة للزبون ولا يعيد تشغيل محادثته.</p>
+<div class="pq-heading"><div><span class="pq-eyebrow">نعلّم صوف من خبرتكم</span><h1>أسئلة تحتاج توضيحكم</h1><p>اشرح المعلومة وطريقة التعامل مع السؤال؛ البوت يصيغ الجواب حسب المحادثة باللهجة العراقية، بدل نسخ الشرح حرفياً.</p></div><span id="pqCount" class="pq-count">…</span></div>
+<div class="pq-toolbar"><label for="pqStatus">عرض الأسئلة<select id="pqStatus" class="form-select"><option value="pending">بانتظار توجيه</option><option value="answered">تم توضيحها</option></select></label><button id="pqRefresh" class="btn btn-outline-secondary" type="button">تحديث</button></div>
+<p class="pq-note">حفظ التوجيه لا يرسل رسالة للزبون ولا يعيد تشغيل محادثته أو يغلق مراجعتها البشرية. يخصّ المنتج والموضوع المعروضين، ولا يغيّر الأسعار أو شروط الحجز.</p>
 <p id="pqStatusMessage" role="status" aria-live="polite"></p>
 <div id="pqList" class="pq-list" aria-busy="true"></div>
 <button id="pqMore" class="btn btn-outline-secondary pq-more" type="button" hidden>تحميل أسئلة أخرى</button>
 {% endblock %}
-{% block scripts %}<script src="/static/js/product_questions.js?v=1"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/product_question_editor.js?v=1"></script><script src="/static/js/product_questions.js?v=2"></script>{% endblock %}

@@ -91,13 +91,18 @@ class DeepConversionTests(unittest.TestCase):
         self.customer('budget')
         self.m.save_message(self.db, 'budget', 'incoming', 'text', 'ميزانيتي 18 الف', None, None, None, {})
         self.m.save_message(self.db, 'budget', 'outgoing', 'text', 'قماشه باربي.', None, None, None, {})
-        with patch.object(self.m, '_call_main_ai_once', return_value={'reply': 'أحجزه الج؟'}):
+        with patch.object(self.m, '_call_main_ai_once', return_value={'reply': 'أحجزه الج؟'}), \
+             patch.object(self.m.reply_consultant, 'advise', wraps=self.m.reply_consultant.advise) as advisor:
             answer = self.m.call_main_ai({'sender_id': 'budget', 'text': 'غالي بس قماشه شنو؟'}, 'text',
                                         {}, [], [PRODUCT], PRODUCT, None, '', [])
-        self.assertIn('الميزانية اللي ذكرتها واضحة', answer['reply'])
-        self.assertIn('باربي', answer['reply'])
+        # The consultant sees the saved budget. A primary model that continues
+        # to push checkout afterwards now goes to a silent human review.
+        advisor.assert_called_once()
+        self.assertIn('18', json.dumps(advisor.call_args.args[0].data['memory'], ensure_ascii=False))
+        self.assertEqual(answer['reply'], '')
         self.assertNotIn('شنو حدود', answer['reply'])
         self.assertTrue(answer['_needs_fact_review'])
+        self.assertTrue(answer['requires_human'])
 
     def test_refusal_closes_before_ad_mapping_and_product_selection(self):
         answer = self.event('شكرا ما اريد')

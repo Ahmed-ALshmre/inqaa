@@ -150,6 +150,9 @@ def grounded_error(reply, product, products):
         if count > 1 and re.search(r"(?:المفرد|مفرد|قطعه وحده|قطعة وحدة).{0,25}(?:سعر|الف|الاف|\d)", text):
             return "هذا المنتج يباع بكجاً فقط؛ لا يوجد سعر مفرد معتمد."
         recorded = normalized(" ".join(str(product.get(k) or "") for k in ("description", "notes", "fabric", "sizes", "lining", "stretch", "measurements", "bundle_contents")))
+        # These notes are selected server-side from staff teaching for THIS
+        # question/product only. They never change prices, stock or order rules.
+        recorded += ' ' + normalized(' '.join(product.get('_active_staff_guidance') or []))
         if re.search(r"(?:طولها|طوله|طول الموديل)\s*\d", text) and not re.search(r"طول|سم", recorded):
             return "طول المنتج غير مسجل؛ لا تستنتجه من طول الزبون."
         if re.search(r"(?:بدون|بلا|مع|ويه) شال", text) and "شال" not in recorded:

@@ -26,6 +26,11 @@ def init(db):
         created_at TEXT NOT NULL, updated_at TEXT NOT NULL, answered_by TEXT,
         UNIQUE(store_id,product_id,topic,question_key))''')
     db.execute('CREATE INDEX IF NOT EXISTS idx_product_questions_pending ON product_questions(store_id,status,id)')
+    if 'guidance' not in {row[1] for row in db.execute('PRAGMA table_info(product_questions)')}:
+        # Keep historical factual answers intact. Explanatory coaching must not
+        # become a price, a specification, an FAQ or a verbatim customer reply.
+        db.execute("ALTER TABLE product_questions ADD COLUMN guidance TEXT NOT NULL DEFAULT ''")
+    db.execute('CREATE INDEX IF NOT EXISTS idx_product_questions_queue ON product_questions(status,id)')
 
 
 def question_key(question):
@@ -51,8 +56,20 @@ def missing(question, product):
         'length': lambda: sales_strategy.measurement_fact(product, 'length'),
         'location': lambda: sales_answers.field_fact(product,'shop_address'),
     }
-    missing = [topic for topic, known in checks.items() if topic in selected and not known()]
+    guided = {row['topic'] for row in guidance_for(product, question)} - {'price', 'service'}
+    missing = [topic for topic, known in checks.items() if topic in selected and not known() and topic not in guided]
     _, gaps = sales_answers.product_fragments(question, product)
+    # A mixed question still needs review if any OTHER requested fact is
+    # unknown. Coaching about fabric must never hide an unknown price/lining.
+    gap_topics = {'سعر الموديل': 'price',
+                  'عدد قطع وحدة': 'wholesale', 'مصدر الصورة': 'photo_source',
+                  'الموسم': 'season', 'العناية': 'care', 'توفر': 'availability',
+                  'سمك القماش': 'fabric_feel', 'ألوان': 'colors', 'قياسات': 'sizes',
+                  'القماش': 'fabric', 'البطانة': 'lining', 'المطاط': 'stretch',
+                  'الإغلاق': 'closure', 'قصة القطعة': 'cut', 'عرض القطعة': 'width',
+                  'طول القطعة': 'length', 'فيديو': 'video'}
+    gaps = [gap for gap in gaps if next((topic for prefix, topic in gap_topics.items()
+                                       if gap.startswith(prefix)), 'details') not in guided]
     negotiation = re.search(r'ارخص|ميزاني|بديل|عدكم|عندكم|غالي|خصم|تخفيض',customer_copy.normalized(question))
     if not missing and gaps and not negotiation and not exact_answer(product, question):
         missing.append('price' if 'price' in selected else 'details')
@@ -86,33 +103,107 @@ def capture(db, store, sender, product, question, topics, review_id, now, *, inc
     return ids
 
 
-def apply(db, store, products):
+def apply(db, store, products, *, sender=None):
     if db is None:
         return list(products)
     rows = db.execute("SELECT * FROM product_questions WHERE store_id=? AND status='answered' ORDER BY updated_at,id", (store,)).fetchall()
     grouped = {}
     for row in rows:
-        if row['topic']=='service':
+        if row['topic']=='service' and (not sender or row['sender_id'] != sender):
             continue
         grouped.setdefault(row['product_id'], []).append(dict(row))
     result = []
     for original in products:
         product = dict(original)
+        product.pop('_staff_guidance', None)
+        product.pop('_active_staff_guidance', None)
         approved = [dict(row) for row in rows if row['topic']=='location'] + [row for row in grouped.get(product.get('product_id'), []) if row['topic']!='location']
-        for row in approved:
+        factual = [row for row in approved if row['answer'] and row['topic'] != 'service']
+        for row in factual:
             field = FIELDS.get(row['topic'])
             if field:
                 product[field] = row['answer']
             elif row['topic'] in {'length', 'width'}:
                 label = 'الطول' if row['topic']=='length' else 'العرض'
                 product['measurements'] = str(product.get('measurements') or '') + '\n' + label + ': ' + row['answer']
-        if approved:
-            product['_staff_answers'] = [{key:row[key] for key in ('topic','question_key','answer')} for row in approved]
+        if factual:
+            product['_staff_answers'] = [{key:row[key] for key in ('topic','question_key','answer')} for row in factual]
             product['_catalog_faq'] = product.get('_catalog_faq',str(product.get('faq') or ''))
             product['faq'] = product['_catalog_faq'] + '\n' + '\n'.join(
-                LABELS.get(row['topic'], 'معلومة') + ': ' + row['answer'] for row in approved)
+                LABELS.get(row['topic'], 'معلومة') + ': ' + row['answer'] for row in factual)
+        # Only the latest teaching for each topic is active. Details and
+        # case-specific service notes require the same normalized question.
+        notes = {}
+        for row in approved:
+            if row.get('guidance'):
+                key = (row['topic'], row['question_key'] if row['topic'] in {'details', 'service'} else '')
+                notes[key] = {key: row[key] for key in ('topic', 'question_key', 'guidance')}
+        if notes:
+            product['_staff_guidance'] = list(notes.values())
         result.append(product)
     return result
+
+
+def guidance_for(product, question):
+    selected = set(sales_answers.topics(question))
+    key = question_key(question)
+    return [row for row in (product or {}).get('_staff_guidance', [])
+            if (row['question_key'] == key if row['topic'] in {'details', 'service'}
+                else row['topic'] in selected)]
+
+
+def guidance_prompt(product, question):
+    notes = guidance_for(product, question)
+    if not notes:
+        return ''
+    return ('[شرح الموظف لطريقة التعامل مع هذا السؤال عن المنتج الحالي]\n'
+            'هذا شرح داخلي لفهم الجواب، وليس رسالة جاهزة للزبون. افهمي المقصود وصيغي جواباً جديداً '
+            'قصيراً باللهجة العراقية وبصوت بنت تشتغل بالمتجر، يناسب سجل المحادثة وآخر سؤال. '
+            'لا تنقلي الشرح حرفياً ولا تقولي إن الموظف وجّهك. لا تعيدي ترحيباً أو سؤالاً عن معلومة معروفة. '
+            'تبقى أسعار وخصومات ومخزون ومقاسات المنتج وقواعد حفظ الطلب المعتمدة هي المرجع؛ '
+            'الشرح لا يعدّلها ولا يثبت حجزاً. إذا لم يكفِ الشرح والحقائق لإجابة مؤكدة، '
+            'حوّلي لمراجعة بشرية بصمت ولا تختلقي معلومة.\n'
+            + json.dumps([{'الموضوع': LABELS.get(row['topic'], 'تفصيل المنتج'),
+                           'الشرح': row['guidance']} for row in notes], ensure_ascii=False))
+
+
+def copies_guidance(reply, product, question):
+    text = customer_copy.normalized(reply)
+    return any(len(note) >= 24 and note in text for note in
+               (customer_copy.normalized(row['guidance']) for row in guidance_for(product, question)))
+
+
+def revision(row):
+    return hashlib.sha256(json.dumps([row.get(key) for key in
+        ('id', 'status', 'answer', 'guidance', 'updated_at')], ensure_ascii=False).encode()).hexdigest()
+
+
+class GuidanceConflict(ValueError):
+    pass
+
+
+def save_guidance(db, store, identity, guidance, author, now, *, expected_revision=None):
+    guidance = str(guidance or '').strip()
+    if not 5 <= len(guidance) <= 4000:
+        raise ValueError('اكتب شرحاً لطريقة الإجابة من 5 إلى 4000 حرف.')
+    if re.search(r'تجاهل.{0,30}(?:تعليم|قاعد)|ignore.{0,25}instructions|system\s*prompt',
+                 customer_copy.normalized(guidance)):
+        raise ValueError('اشرح التعامل مع السؤال، دون تعليمات لتجاوز قواعد النظام.')
+    found = db.execute('SELECT * FROM product_questions WHERE id=? AND store_id=?', (identity, store)).fetchone()
+    if not found:
+        return None
+    row = dict(found)
+    if expected_revision is not None and expected_revision != revision(row):
+        raise GuidanceConflict('حفظ موظف آخر تحديثاً لهذا السؤال. شرحك محفوظ في الحقل؛ حدّث الأسئلة قبل الحفظ مجدداً.')
+    changed = db.execute("""UPDATE product_questions SET guidance=?,status='answered',answered_by=?,updated_at=?
+        WHERE id=? AND store_id=? AND status=? AND answer=? AND guidance=? AND updated_at=?""",
+        (guidance, author, now, identity, store, row['status'], row['answer'], row['guidance'], row['updated_at']))
+    if changed.rowcount != 1:
+        db.rollback()
+        raise GuidanceConflict('تغيّر السؤال أثناء الحفظ. شرحك ما زال في الحقل؛ حدّث الأسئلة ثم راجعه.')
+    db.commit()
+    # Knowledge editing never sends, resumes AI or closes a human review.
+    return dict(db.execute('SELECT * FROM product_questions WHERE id=? AND store_id=?', (identity, store)).fetchone())
 
 
 def exact_answer(product, question):

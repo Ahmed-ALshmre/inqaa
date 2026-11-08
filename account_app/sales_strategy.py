@@ -537,6 +537,7 @@ def reply_error(reply, question, product=None):
     if re.search(r'(?:انا|اني|انيه|وياج|وياك)\s+(?:(?:موظف|موظفه)(?:\s+المبيعات)?|بشر|انسان)|(?:انا|اني)\s+(?:مو|لست|ما)\s*(?:ذكاء|بوت|روبوت)', text):
         return 'لا تدع أنك موظف بشري؛ أنت المساعد الآلي للمتجر. إذا سُئلت عن هويتك أجب بصدق مع متابعة الإجابة عن السؤال.'
     evidence = normalized(' '.join(str((product or {}).get(k) or '') for k in ('stock','stock_quantity','offer','notes','description','real_photo_notes')))
+    evidence += ' ' + normalized(' '.join((product or {}).get('_active_staff_guidance') or []))
     marketing_error = persuasion_error(reply, product, question=question)
     if marketing_error:
         return marketing_error
