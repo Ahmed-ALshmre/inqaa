@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     picker.addEventListener('change', () => {
       const url = new URL(location.href);
       url.searchParams.set('store_id', picker.value);
+      url.searchParams.delete('all_stores');
       location.href = url.toString();
     });
   } catch { picker.replaceChildren(new Option('تعذر تحميل المتاجر', '')); }

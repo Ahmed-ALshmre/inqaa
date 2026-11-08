@@ -10,7 +10,31 @@ from unittest.mock import patch
 import base64
 import hashlib
 import io
+import json
+import requests
 from PIL import Image
+
+
+def offline_request(*args, **kwargs):
+    """Mock the NEW external dependency for legacy primary-model fixtures.
+
+    A known missing fact remains a human case. Recoverable bad primary outputs
+    receive generic advice so existing retry/checkout assertions still run.
+    Dedicated consultant tests override this with success/failure wire fixtures.
+    This function never opens a socket; every other HTTP call is rejected.
+    """
+    url = kwargs.get('url') or next((arg for arg in args if isinstance(arg, str) and arg.startswith('https://')), '')
+    payload = kwargs.get('json') or {}
+    if url == 'https://openrouter.ai/api/v1/chat/completions' and payload.get('model') == 'openai/gpt-6.1-sol':
+        context = json.loads(payload['messages'][-1]['content'])
+        missing = (context.get('unsuccessful_answer') or {}).get('missing_topics')
+        advice = dict(decision='needs_human' if missing else 'assist',
+            guidance='' if missing else 'راجعي السياق والاختيارات المعروفة وأجيبي عن كل أجزاء السؤال من حقائق المنتج، دون اختراع معلومات أو إعادة سؤال معروف.',
+            reason='Synthetic consultant fixture; no network.', focus_product_id=None)
+        response = requests.Response();response.status_code = 200
+        response._content = json.dumps({'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(advice)}}]}).encode()
+        return response
+    raise RuntimeError('Real network calls are disabled in tests')
 
 
 def fixture_image(url):
@@ -40,7 +64,7 @@ def main():
             TELEGRAM_BOT_TOKEN="offline-test-only",
             TELEGRAM_CHAT_ID="-10000000001",
         )
-        with patch("requests.sessions.Session.request", side_effect=RuntimeError("Real network calls are disabled in tests")):
+        with patch("requests.sessions.Session.request", side_effect=offline_request):
             suite = unittest.defaultTestLoader.discover(str(Path(__file__).parent))
             with patch('account_app.app._download_image_to_data_url', side_effect=fixture_image):
                 result = unittest.TextTestRunner(verbosity=1).run(suite)

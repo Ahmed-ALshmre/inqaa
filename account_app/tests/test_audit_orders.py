@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from account_app.checkout import is_confirmation, contact_fields
+from account_app.tests.run_isolated import offline_request
 
 
 class AuditFixTests(unittest.TestCase):
@@ -20,7 +21,7 @@ class AuditFixTests(unittest.TestCase):
         self.client = m.app.test_client()
         with self.client.session_transaction() as session:
             session['dashboard_authenticated'] = True
-        self.net = patch('requests.sessions.Session.request', side_effect=AssertionError('Unexpected network'))
+        self.net = patch('requests.sessions.Session.request', side_effect=offline_request)
         self.net.start()
 
     def tearDown(self):

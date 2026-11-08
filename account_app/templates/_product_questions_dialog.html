@@ -1,0 +1,19 @@
+{% if can('reply') or can('products') %}
+<link rel="stylesheet" href="/static/css/product_questions.css?v=2">
+<dialog id="productQuestionsDialog" class="pq-dialog" aria-labelledby="pqDialogTitle" aria-describedby="pqDialogDescription">
+  <header class="pq-dialog-header">
+    <div><span class="pq-eyebrow">نعلّم صوف من خبرتكم</span><h2 id="pqDialogTitle" tabindex="-1">أسئلة تحتاج توضيحكم</h2></div>
+    <button id="pqDialogClose" class="pq-close" type="button" aria-label="إغلاق الأسئلة">×</button>
+  </header>
+  <div class="pq-dialog-body">
+    <p id="pqDialogDescription">هذه أسئلة ما قدر البوت يجاوب عنها. اشرحوا له المعلومة وشلون يتعامل ويا السؤال، بدل كتابة رسالة جاهزة للزبون.</p>
+    <div class="pq-dialog-summary"><strong id="pqDialogCount"></strong><span>الحفظ ما يرسل رسالة ولا يشغّل محادثة متوقفة.</span></div>
+    <p id="pqDialogStatus" role="status" aria-live="polite"></p>
+    <div id="pqDialogList" class="pq-list"></div>
+    <button id="pqDialogMore" class="btn btn-outline-secondary pq-more" type="button" hidden>عرض أسئلة أخرى</button>
+  </div>
+  <footer class="pq-dialog-footer"><a id="pqDialogManage" href="/product-questions">فتح صفحة الأسئلة</a><button id="pqDialogLater" type="button" class="btn btn-outline-secondary">أكملها لاحقاً</button></footer>
+</dialog>
+<script src="/static/js/product_question_editor.js?v=1"></script>
+<script src="/static/js/product_questions_dialog.js?v=1"></script>
+{% endif %}

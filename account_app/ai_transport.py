@@ -58,6 +58,10 @@ def _post(url, **kwargs):
     HTTP dashboard requests, own the potentially long provider wait.
     """
     started = time.monotonic()
+    # Advisory work and its final rewrite share the transport/semaphore, while
+    # imposing a smaller, explicit budget than a normal primary generation.
+    attempts = max(1, min(2, int(kwargs.pop('max_attempts', 2))))
+    budget = max(5, min(130, float(kwargs.pop('budget_seconds', 130))))
     timeout = kwargs.pop('timeout', 30)
     read_timeout = max(READ_TIMEOUT, min(60, float(timeout if isinstance(timeout, (int, float)) else timeout[-1])))
     # requests also applies the connect socket timeout while uploading a body.
@@ -65,11 +69,11 @@ def _post(url, **kwargs):
     # timeouts on the live upload path even though inference itself was healthy.
     payload_bytes = len(json.dumps(kwargs.get('json') or {}, ensure_ascii=True).encode('utf-8'))
     connect_timeout = 15 if payload_bytes >= 512_000 else 5
-    deadline = started + 130
+    deadline = started + budget
     metrics = {'queue_ms': 0, 'attempts': 0, 'elapsed_ms': 0}
     _metrics.set(metrics)
     last_error = None
-    for attempt in range(2):
+    for attempt in range(attempts):
         waiting = time.monotonic()
         if not _slots.acquire(timeout=max(0, min(15, deadline - waiting))):
             raise requests.Timeout('AI capacity busy; retryable queue wait')
@@ -81,11 +85,11 @@ def _post(url, **kwargs):
             if remaining <= connect_timeout:
                 raise requests.Timeout('AI request deadline exceeded')
             response = requests.post(url, timeout=(connect_timeout, min(read_timeout, remaining - connect_timeout)), **kwargs)
-            if response.status_code not in TRANSIENT or attempt == 1:
+            if response.status_code not in TRANSIENT or attempt == attempts - 1:
                 return response
         except (requests.Timeout, requests.ConnectionError) as exc:
             last_error = exc
-            if attempt == 1:
+            if attempt == attempts - 1:
                 raise
         finally:
             _slots.release()
