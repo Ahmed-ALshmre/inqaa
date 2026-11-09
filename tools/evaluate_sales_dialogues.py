@@ -194,6 +194,13 @@ class HTTPGate:
             except ValueError:
                 body = {}
             usage = body.get('usage') or {}
+            try:
+                decision=json.loads(body['choices'][0]['message']['content'])
+                if isinstance(decision,dict):
+                    record['decision']={k:decision[k] for k in ('create_order','image_product_ids','image_color','sales_plan') if k in decision}
+                    record['decision']['items']=[{k:item[k] for k in ('product_id','color','size','size_type','weight','quantity') if k in item}
+                        for item in (decision.get('order') or {}).get('items',[]) if isinstance(item,dict)]
+            except (ValueError,TypeError,KeyError,IndexError):pass
             record.update(status=response.status_code, prompt_tokens=usage.get('prompt_tokens'),
                           completion_tokens=usage.get('completion_tokens'), reported_cost_usd=usage.get('cost'))
             record['finish_reasons'] = [choice.get('finish_reason') for choice in body.get('choices', [])]

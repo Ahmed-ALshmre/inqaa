@@ -397,6 +397,12 @@ def customer_selection(context, customer=None):
             selected['ages'] = declared_ages or [age]
         colors = product_variants.requested(text)['colors'] or list(product_variants.color_quantities(text))
         if len(colors) == 1:
+            if (selected['colors'] and colors[0] not in selected['colors']
+                    and re.search(r'قطع[ةه]\s*(?:ثاني[ةه]|اضافي[ةه])|ضيفي|اضيفي|زودي',text)
+                    and not re.search(r'(?<!\w)(?:مو|بدل|لا)(?!\w)|ما\s*اريد',text)):
+                selected['colors']=list(dict.fromkeys([*selected['colors'],colors[0]]))
+                selected['color']=None;selected['color_options']=[]
+                continue
             if (len(selected['colors'])>1 and product_variants.color_quantities(text)
                     and colors[0] in selected['colors'] and not re.search(r'(?<!\w)(?:بس|فقط|عوفي|بدل)(?!\w)',text)):
                 continue  # A count for one line does not remove the other selected color.

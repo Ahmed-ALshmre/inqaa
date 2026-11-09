@@ -20,6 +20,9 @@ class WriterTests(unittest.TestCase):
             normalized=d.canonical_cart_colors(draft,[dict(product_id='K',colors='اسود جوزي')])
             self.assertEqual(normalized['order']['items'][0],dict(product_id='K',color='أسود',size='44',quantity=2))
             self.assertEqual(draft['order']['items'][0]['color'],alias)
+        self.assertEqual(product_variants.colors('جوزية'),['جوزي'])
+        self.assertEqual(product_variants.colors('نيلية'),['نيلي'])
+        self.assertEqual(product_variants.colors('لبنية عمر 3 سنوات'),[])
     def test_side_answer_does_not_repeat_unanswered_contact_request(self):
         history=[dict(direction='outgoing',text='دزيلي رقم الموبايل والعنوان.')]
         draft={'reply':'قماشه فرو ومبطن. بس دزيلي رقم الموبايل والعنوان حتى أثبت الطلب.'}
@@ -38,6 +41,12 @@ class WriterTests(unittest.TestCase):
         self.assertFalse(checkout.chosen_color_error(plan['items'],history,[product]))
         self.assertIsNone(product_variants.color_replacement('خلي الرصاصي بدل الماروني إذا موجود'))
         self.assertEqual(product_variants.color_replacement('لا اعتمدي الاسود بدل النيلي يبقى 44 والجوزي 46'),('أسود','نيلي'))
+        numbered=[dict(direction='incoming',text=t) for t in ('اريد نيلي قياس 44',
+            'وخلي جوزي قياس 46 قطعة ثانية','لا اعتمدي الاسود بدل النيلي يبقى 44 والجوزي 46')]
+        chosen=sales_playbook.customer_selection(sales_context.advance({},numbered))
+        self.assertEqual(set(chosen['colors']),{'أسود','جوزي'})
+        items=[dict(product_id='K',color='أسود',size='44',quantity=1),dict(product_id='K',color='جوزي',size='46',quantity=1)]
+        self.assertFalse(checkout.chosen_color_error(items,numbered,[dict(product_id='K',colors='اسود نيلي جوزي')]))
 
     def test_only_text_can_change_and_decisions_are_preserved(self):
         draft=dict(reply='نعم، اللون الماروني قياس 48 متوفر. أرسلي العنوان فقط.',order={'items':[{'size':'48'}]},create_order=False,
@@ -86,6 +95,10 @@ class DirectorPipelineTests(unittest.TestCase):
         self.assertEqual(r.status_code,200,r.json)
         saved=client.get(url).json
         self.assertTrue(saved['sales_director_enabled']);self.assertEqual(saved['ai_enabled'],before)
+        page=client.get('/settings/ai?store_id=baraah-kids')
+        self.assertEqual(page.status_code,200)
+        for field in ('salesDirectorEnabled','directorModelInput','writerModelInput'):
+            self.assertIn('id="'+field+'"',page.get_data(as_text=True))
         self.assertFalse(client.get('/api/settings/ai?store_id=khuyoot').json['sales_director_enabled'])
         self.assertEqual(client.post(url,json={'director_model':'Terra'},headers=headers).status_code,400)
         self.assertEqual(client.get(url).json['director_model'],'openai/gpt-6.1-terra')
@@ -105,6 +118,8 @@ class DirectorPipelineTests(unittest.TestCase):
         self.enable()
         self.save('incoming','اريد نيلي قياس 44')
         self.save('incoming','لا جوزي بدل النيلي نفس القياس')
+        self.m.save_message(self.db,self.sender,'outgoing','text','أعرضلج هالاختيار.',None,None,None,
+            {'director_state':{'plan':{'recommended_product_ids':['K1'],'next_step':'choose'}}})
         self.m.set_store_setting(self.db,'ai_director_model','openai/gpt-6.1-sol','baraah-kids')
         self.m.set_store_setting(self.db,'ai_writer_model','google/gemini-3.8-flash','baraah-kids')
         draft=dict(reply='الجوزي قياس 44 متوفر. أرسلي رقم الهاتف والعنوان.',create_order=False,order={},sales_plan={'next_step':'collect_contact'})
@@ -113,6 +128,7 @@ class DirectorPipelineTests(unittest.TestCase):
         self.assertEqual(len(provider.call_args_list),2,result)
         self.assertEqual([c.kwargs['json']['model'] for c in provider.call_args_list],['openai/gpt-6.1-sol','google/gemini-3.8-flash'])
         self.assertIn('جوزي',str(provider.call_args_list[0].kwargs['json']['messages']))
+        self.assertIn('recommended_product_ids',str(provider.call_args_list[0].kwargs['json']['messages']))
         self.assertIn('44',result['reply']);self.assertEqual(result['_sales_writer'],d.WRITER_MODEL)
 
     def test_complete_director_order_is_saved_once_and_confirmation_cannot_be_rewritten(self):
@@ -172,6 +188,14 @@ class DirectorPipelineTests(unittest.TestCase):
             result=self.m.call_main_ai(dict(self.ev,text='اريد موظفة'),'text',{},[],[self.product],self.product,None,'',[],customer_products=[self.product])
         provider.assert_not_called();self.assertEqual(result['reply'],'')
 
+    def test_missing_fact_consultation_keeps_the_selected_director_mode(self):
+        self.enable()
+        ev=dict(self.ev,text='بيه ليكرا؟',_defer_product_handoff=True)
+        with self.m.reply_consultant.scope(True) as state,patch.object(self.m,'_call_main_ai_once') as provider:
+            result=self.m._call_main_ai_primary(ev,'text',{},[],[self.product],self.product,None,'',[],customer_products=[self.product])
+            self.assertTrue(state.data['ev']['_director_mode'])
+        provider.assert_not_called();self.assertTrue(result.get('_needs_fact_review'))
+
     def test_partial_saved_cart_does_not_append_contact_request_to_side_answer(self):
         self.enable()
         self.save('incoming','اريد نيلي قياس 44 قطعة وحدة')
@@ -187,6 +211,27 @@ class DirectorPipelineTests(unittest.TestCase):
             result=self.m.process_webhook(self.db,{},use_debounce=False)
         self.assertNotIn('رقم',result['reply']);self.assertNotIn('عنوان',result['reply'])
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM orders WHERE sender_id=?',(self.sender,)).fetchone()[0],0)
+
+    def test_second_piece_then_color_correction_saves_the_directors_two_lines(self):
+        self.enable()
+        for text in ('اريد نيلي قياس 44','وخلي جوزي قياس 46 قطعة ثانية',
+                     'لا اعتمدي الاسود بدل النيلي يبقى 44 والجوزي 46','تمام موافقة ثبتي القطعتين'):
+            self.save('incoming',text)
+        self.save('outgoing','دزيلي الرقم والعنوان.')
+        generated=dict(reply='وصلت التفاصيل.',_sales_director=d.DIRECTOR_MODEL,create_order=True,
+            order={'items':[dict(product_id='K1',color='أسود',size='44',quantity=1),
+                            dict(product_id='K1',color='جوزي',size='46',quantity=1)]})
+        def features(name,default,db=None):return name=='sales_director_enabled'
+        with patch.object(self.m,'extract_facebook_event',return_value=dict(self.ev,text='07700000001 بغداد حي الاختبار قرب مدرسة التجربة')), \
+             patch.object(self.m,'is_ai_enabled',return_value=True), \
+             patch.object(self.m,'is_customer_ai_enabled',return_value=True), \
+             patch.object(self.m,'is_store_feature_enabled',side_effect=features), \
+             patch.object(self.m,'_call_main_ai_once',return_value=generated):
+            result=self.m.process_webhook(self.db,{},use_debounce=False)
+        self.assertEqual(result['reply'],self.m.DEFAULT_ORDER_CONFIRMATION_TEXT,result)
+        order=self.db.execute('SELECT * FROM orders WHERE sender_id=?',(self.sender,)).fetchone()
+        self.assertEqual(order['total_amount'],37000)
+        self.assertEqual({(i['color'],i['size']) for i in json.loads(order['order_items'])},{('أسود','44'),('جوزي','46')})
 
     def test_long_context_last_correction_survives_side_questions(self):
         self.enable()

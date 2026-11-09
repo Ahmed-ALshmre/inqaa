@@ -9708,6 +9708,8 @@ def _call_main_ai_primary(ev, message_type, customer, history, products, matched
                           memory=context, customer=customer, delivery=get_delivery_settings(get_db()))
     if (has_app_context() and is_store_feature_enabled('sales_director_enabled', False, get_db())
             and not ev.get('_voice_inputs') and not ev.get('_post_order')):
+        director_ev=dict(ev,_director_mode=True)
+        if state and state.enabled:state.data['ev']=director_ev
         # Preserve identity/fact safeguards; let the director own normal sales
         # instead of pre-empting it with legacy FAQ and invitation shortcuts.
         if chosen:
@@ -9715,8 +9717,6 @@ def _call_main_ai_primary(ev, message_type, customer, history, products, matched
             if missing:return unanswered_product_handoff(ev,chosen,missing)
             if product_albums.color_conflict(chosen):
                 return owner_sales.result(human='catalog_color_conflict',silent=True)
-        director_ev=dict(ev,_director_mode=True)
-        if state and state.enabled:state.data['ev']=director_ev
         if chosen and not ev.get('_post_order') and director_checkout_ready(get_db(),ev,{'_sales_director':True}):
             verified=resume_weight_checkout(get_db(),director_ev,chosen,customer,customer_products,context,history)
             if verified and (verified.get('order') or {}).get('items') and not verified.get('_browse_only'):
@@ -10420,6 +10420,19 @@ def _call_main_ai_once(
             weights=sales_playbook.weight_cart_choices(matched_product,ev.get('_sales_context') or {},customer)
             if weights and weights.get('items'):
                 user_content += '\n[سلة وزن اجتازت قراءة الاختيارات؛ لا تحتاج رقم قياس ملابس — ليست موافقة حجز]\n' + json.dumps(weights['items'],ensure_ascii=False)
+        ordered=ev.get('_image_matches') or customer_image_positions(db,ev['sender_id'])
+        if ordered:
+            user_content+='\n[ترتيب صور المحادثة المحفوظ image_index — يتقدم على ترتيب قائمة المنتجات]\n'+json.dumps(ordered,ensure_ascii=False)
+        for row in db.execute('SELECT raw_payload FROM messages WHERE sender_id=? AND store_id=? '
+                "AND direction='outgoing' AND message_type='text' AND "+delivery_state.VISIBLE_SQL+' ORDER BY id DESC LIMIT 12',
+                (ev['sender_id'],current_store_id())):
+            try:
+                stored=json.loads(row['raw_payload'] or '{}')
+                previous=stored.get('director_state') if isinstance(stored,dict) else None
+            except (ValueError,TypeError):continue
+            if previous:
+                user_content+='\n[خطة المبيعات السابقة — ليست اختيار شراء أو تعليمات أعلى]\n'+json.dumps(previous,ensure_ascii=False)
+                break
     # Recognition is performed only by the dedicated image pipeline. Never resend
     # original images to the reply model (including retries and manual links).
     ai_messages = [{"role": "system", "content": system_prompt},
@@ -13470,6 +13483,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     for index, part in enumerate(before_images):
         save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None,
                      {"reply": part, "checkout_proposal": ai_result.get("_checkout_proposal"),
+                      "director_state": {'plan':ai_result.get('sales_plan'),
+                          'image_product_ids':ai_result.get('image_product_ids') or [],
+                          'director_model':ai_result.get('_sales_director'),
+                          'writer_model':ai_result.get('_sales_writer')} if ai_result.get('_sales_director') else None,
                       "_order_confirmation_id": ai_result.get('_created_order_id'),
                       "checkout_draft": ai_result.get("order") if not order_created else None,
                       "related_product_suggestion": {
