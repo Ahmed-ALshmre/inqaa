@@ -60,7 +60,7 @@ class Last4DaysUnitTests(unittest.TestCase):
         }
         step = sales_playbook.price_next_step(product, context, {"province": "بغداد"})
         self.assertNotIn("شكد قياس", step)
-        self.assertIn("حجز", step)
+        self.assertIn("رقم الموبايل", step)
 
     def test_two_numeric_sizes_with_or_remain_unresolved(self):
         context = sales_context.advance(

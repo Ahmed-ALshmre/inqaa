@@ -12,7 +12,7 @@ DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "012345678901
 
 def normalized(value):
     text = unicodedata.normalize("NFKC", str(value or "")).translate(DIGITS)
-    return re.sub(r"[ـ\u064b-\u065f\u0670]", "", text).replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").lower()
+    return re.sub(r"[ـ\u064b-\u065f\u0670]", "", text).translate(str.maketrans('أإآیک', 'ااايك')).lower()
 
 
 def explicit_purchase(value):
@@ -33,7 +33,7 @@ PHONE = re.compile(r"(?<!\d)(?:(?:\+?964|00964)[\s()-]*7|07)(?:[\s()-]*\d){9}(?!
 PROVINCES = {
     "بغداد": ("بغداد",), "البصرة": ("البصرة", "البصره", "بصره", "بصرة"),
     "نينوى": ("نينوى", "الموصل", "موصل"), "أربيل": ("اربيل", "هولير"),
-    "دهوك": ("دهوك",), "السليمانية": ("السليمانية", "سليمانية", "سليمانيه"),
+    "دهوك": ("دهوك",), "السليمانية": ("السليمانية", "سليمانية", "سليمانيه", "سليماني"),
     "كركوك": ("كركوك",), "الأنبار": ("الانبار", "انبار"),
     "النجف": ("النجف", "نجف"), "كربلاء": ("كربلاء", "كربلا"),
     "بابل": ("بابل", "الحلة", "حلة", "حله"), "واسط": ("واسط", "الكوت", "كوت"),
@@ -44,7 +44,7 @@ PROVINCES = {
 DISTRICT_PROVINCES = {
     "بغداد": ("الكرادة", "كرادة", "الدورة", "دوره ميكانيك", "ميكانيك الدورة",
               "الاعظمية", "الكاظمية", "الزعفرانية", "البنوك", "العامرية", "الغزالية",
-              "الحارثية", "البياع", "السيدية", "زيونة", "مدينة الصدر", "الشعلة",
+              "الحارثية", "البياع", "السيدية", "زيونة", "مدينة الصدر", "الشعلة", "المنصور",
               "ابو غريب", "المحمودية", "اليوسفية", "اللطيفية", "المدائن", "النهروان", "التاجي", "الطارمية"),
     "صلاح الدين": ("طوزخورماتو", "طوز خورماتو", "سامراء", "بلد", "بيجي", "الدجيل", "الشرقاط", "الضلوعية", "ضلوعية"),
     "الأنبار": ("الرمادي", "رمادي", "الفلوجة", "فلوجة", "هيت", "حديثة", "القائم", "راوه", "راوة", "عنه", "عانة", "الرطبة", "الكرمة", "الخالدية", "الحبانية"),
@@ -147,7 +147,7 @@ def contact_fields(text, previous=None):
         if address and address != previous["address"]:
             return {"address": address}
     without_phone = PHONE.sub("", original).strip(" ,،.\n")
-    explicit = re.search(r"(?:عنواني|العنوان)\s*[:：-]?\s*(.+)", without_phone, re.S)
+    explicit = re.search(r"(?<!\w)(?:عنواني|العنوان|عنوان)(?!\w)\s*[:：-]?\s*(.+)", without_phone, re.S)
     location_marker = re.search(r"\b(?:حي|قرب|شارع|سريع|محلة|محله|زقاق|دار|قرية|قريه|قضاء|ناحية|ناحيه|مجمع|مستشفى|جامع|جامعة|جامعه|مدرسة|مدرسه|صيدلية|صيدليه|مول|محطة|محطه|مقابل|خلف|زون|منطقة|منطقه|مرتفعات)\b|(?:رقم\s*(?:ال)?دار|دار|زقاق)\s*\d+", normalized(without_phone))
     if explicit:
         address = explicit.group(1).strip(" ,،.\n")
@@ -435,6 +435,20 @@ def chosen_color_error(items, history, catalog):
     return ''
 
 
+def optional_order_weight(item, product):
+    """A chosen garment size does not require an exact body-weight value.
+
+    Keep imprecise customer evidence in conversation memory, not the numeric
+    weight column sent to fulfillment. Weight-based orders remain strict.
+    """
+    value = normalized(item.get('weight')).strip()
+    if (item.get('size_type') != 'weight' and item.get('size')
+            and not product_variants.order_choice_error(product, 'size', str(item['size']))
+            and not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?', value)):
+        return ''
+    return value
+
+
 def order_line_error(raw_items, catalog, *, review_color=False):
     """Reject an invalid line instead of silently dropping it from a purchase."""
     by_id = {str(p.get("product_id")): p for p in catalog}
@@ -458,7 +472,8 @@ def order_line_error(raw_items, catalog, *, review_color=False):
             quantity = 0
         if not 1 <= quantity <= 20:
             return f"نحتاج كمية صحيحة من {label} قبل التثبيت."
-        weight = normalized(item.get('weight') or (item.get('size') if item.get('size_type') == 'weight' else '')).strip()
+        weight = (normalized(item.get('weight') or item.get('size')).strip() if item.get('size_type') == 'weight'
+                  else optional_order_weight(item, product))
         if weight and (not re.fullmatch(r'\d{1,3}(?:\.\d{1,2})?', weight) or float(weight) <= 0):
             return f'حتى نسجل {label} بصورة صحيحة، شكد الوزن بالكيلو برقم واحد؟ النطاق وحده ما يكفي لتسجيل الطلب.'
         if item.get('size_type') == 'weight' and not weight:

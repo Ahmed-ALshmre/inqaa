@@ -235,7 +235,9 @@ def repair_inspection_reply(reply, policy):
     if not inspection_claim_error(reply, policy):
         return str(reply or '')
     allowed = normalized(policy)
-    parts = re.split(r'(?<=[.!؟?؛])\s+|\n+|،', str(reply or ''))
+    # A comma can separate a condition from its consequence. Never leave
+    # "إذا ما طابقت طلبج،" behind after removing an unsupported promise.
+    parts = re.split(r'(?<=[.!؟?؛])\s+|\n+', str(reply or ''))
     kept = []
     for part in parts:
         clean = normalized(part)
@@ -248,7 +250,9 @@ def repair_inspection_reply(reply, policy):
                 and re.search(r'يرجع|ترجع|نرجع|ارجاع|بدون\s+(?:ما\s+)?تدفع|بدون\s+دفع|مجانا', clean)):
             continue
         kept.append(part.strip())
-    return '، '.join(kept).strip(' ،')
+    if policy and not any(re.search(r'فحص|مندوب', normalized(p)) for p in kept):
+        kept.insert(0, str(policy).strip(' .،') + '.')
+    return ' '.join(kept).strip(' ،')
 
 
 def explicit_pause(question):

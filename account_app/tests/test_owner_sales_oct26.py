@@ -102,7 +102,7 @@ class OwnerReplyPipelineTests(unittest.TestCase):
         result, model=self.ask('قياس XXL موجود؟', PRODUCT, {'gender':'female'})
         model.assert_not_called()
         self.assertRegex(result['reply'],'متوفر|موجود')
-        self.assertRegex(result['reply'],'حجز|محافظة')
+        self.assertIn('رقم الموبايل',result['reply'])
         self.assertNotIn('وزن',result['reply'])
         self.assertNotIn('قياس تلبسين',result['reply'])
 

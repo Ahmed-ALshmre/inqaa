@@ -138,6 +138,15 @@ def unsupported_claim(reply):
     return bool(re.search(r"(?:بلغت|بلغنا|استعجلت|استعجلنا|اتصلت|اتصلنا|دا اتابع|هسه اتابع).{0,45}(?:شرك|مندوب)|(?:سجلت|ثبتت).{0,35}(?:نبلغ|نوفر|قياسات اكبر)|(?:تم الغاء|الغيت|الغينا|عدلت|غيرت).{0,25}(?:طلب|حجز)", text))
 
 
+def without_restock_subscription_offer(reply):
+    """No restock-subscription executor exists; keep actual stock answers."""
+    parts = re.split(r'(?<=[.!؟?])\s+|\n+', str(reply or ''))
+    kept = [part for part in parts if not re.search(
+        r'(?:اذا|من|اول\s*ما|بس|لما)\s+(?:تتوفر|يتوفر|توفر\w*|ينزل|تنزل|نوفر|تجي|يجي).{0,90}'
+        r'(?:ابلغ|نبلغ|ادزلج|ندزلج|نراسلك|نتواصل)', normalized(part))]
+    return ' '.join(kept).strip()
+
+
 def grounded_error(reply, product, products):
     text = normalized(reply)
     if unsupported_claim(reply):

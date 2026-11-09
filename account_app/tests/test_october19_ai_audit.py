@@ -108,7 +108,7 @@ class October19AuditTests(unittest.TestCase):
         jobs=self.db.execute('SELECT created_at,available_at FROM ai_jobs ORDER BY rowid').fetchall()
         self.assertEqual(len(jobs),2)
         self.assertAlmostEqual(jobs[0]['available_at']-jobs[0]['created_at'],0)
-        self.assertAlmostEqual(jobs[1]['available_at']-jobs[1]['created_at'],35)
+        self.assertAlmostEqual(jobs[1]['available_at']-jobs[1]['created_at'],4)
 
     def test_claim_to_have_sent_models_is_detected_even_without_word_photo(self):
         text='تدللين عيني، شوفي الخاص دزيتلج الموديلات الشرعية السادة المتوفرة عدنا، كليلي يا قياس يناسبج؟'

@@ -325,7 +325,7 @@ class SalesCoreTests(unittest.TestCase):
             "items": [{"product_id": "P001"}],
         }}, None)
         self.assertIsNone(result)
-        self.assertIn("المحافظة", reply)
+        self.assertIn("لون", reply)  # المنصور already identifies Baghdad; selection is still incomplete.
 
     def test_post_order_acknowledgements_are_safe_and_changes_are_not(self):
         self.assertTrue(post_order_acknowledgement_reply("تمام"))

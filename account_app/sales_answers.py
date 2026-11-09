@@ -58,6 +58,10 @@ def topics(question):
     for key, pattern in patterns.items():
         evidence = (re.sub(r'(?:شارع|حي|منطقه|قرب)\s+(?:ال)?(?:كص|قص)(?!\w)', '', text)
                     if key == 'cut' else text)
+        if key == 'closure':
+            # A courier receiving a location on WhatsApp is not a question
+            # about a zipper. Remove the app name, not other garment clauses.
+            evidence = re.sub(r'(?<!\w)(?:بال|ال|ب)?وات\s*س\s*ا?ب(?!\w)', '', evidence)
         if re.search(pattern, evidence):
             result.append(key)
     if 'care' in result and 'colors' in result:
