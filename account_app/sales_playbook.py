@@ -421,8 +421,6 @@ def quantities_for_colors(context, customer=None, current_text=''):
         chosen=customer_selection({'evidence':prefix},customer)['colors']
         text=item.get('text') or ''
         question=item.get('in_reply_to') or ''
-        if len(chosen)>1:
-            for color in chosen:counts.setdefault(color,None)
         replacement=product_variants.color_replacement(text)
         proposed=product_variants.color_replacement(question)
         if proposed and is_confirmation(text):replacement=proposed
@@ -431,6 +429,8 @@ def quantities_for_colors(context, customer=None, current_text=''):
             count=counts.pop(old)
             if new in counts:count=(counts[new]+count) if counts[new] and count else None
             counts[new]=count
+        if len(chosen)>1:
+            for color in chosen:counts.setdefault(color,None)
         counts.update(product_variants.color_quantities(text))
         matches=list(product_variants.COLOR_RE.finditer(sales_strategy.normalized(text)))
         for match in matches:
@@ -461,14 +461,18 @@ def color_weight_cart(product, context, customer=None, current_text=''):
     ranges=product_variants.weight_only_ranges(product)
     if len(colors)<2 or not ranges or selected['color_options']:return None
     max_weight=max(high for _,high in ranges)
+    offered=product_variants.colors(product.get('colors'))
     weights={}
     for entry in [*selection_evidence(context),*([{'text':current_text}] if current_text else [])]:
         text=sales_strategy.normalized(entry.get('text') or '')
+        replacement=product_variants.color_replacement(text)
+        if replacement and replacement[1] in weights:
+            weights[replacement[0]]=weights.pop(replacement[1])
         matches=[(m,product_variants.ALIASES.get(m[1])) for m in product_variants.COLOR_RE.finditer(text)]
         for index,(match,color) in enumerate(matches):
-            if color not in colors:continue
+            if color not in offered:continue
             fragment=text[match.end():matches[index+1][0].start() if index+1<len(matches) else None]
-            number=re.search(r'(?:وزن|كيلو|قياس)\s*(\d{2,3})',fragment)
+            number=re.search(r'(?:وزن|كيلو|قياس|يبقى|تبقى)\s*(\d{2,3})',fragment)
             weight=float(number[1]) if number else (max_weight if re.search(r'اكبر\s*قياس',fragment) else None)
             if weight and any(low<=weight<=high for low,high in ranges):weights[color]=int(weight)
     if not weights:return None

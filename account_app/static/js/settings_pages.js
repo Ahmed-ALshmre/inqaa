@@ -44,6 +44,9 @@ async function initAISettingsPage() {
   
   const mainModelEl = document.getElementById('mainModelInput');
   if (mainModelEl) mainModelEl.value = data.main_model || '';
+  document.getElementById('salesDirectorEnabled').checked = !!data.sales_director_enabled;
+  document.getElementById('directorModelInput').value = data.director_model || 'openai/gpt-6.1-terra';
+  document.getElementById('writerModelInput').value = data.writer_model || 'google/gemini-3.8-flash';
   document.getElementById('visionEnabled').checked = !!data.vision_enabled;
   document.getElementById('catalogMatchEnabled').checked = !!data.catalog_match_enabled;
   document.getElementById('checkerEnabled').checked = !!data.checker_enabled;
@@ -64,6 +67,9 @@ async function initAISettingsPage() {
           body: JSON.stringify({
             enabled: document.getElementById('aiEnabled').checked,
             main_model: document.getElementById('mainModelInput').value.trim(),
+            sales_director_enabled: document.getElementById('salesDirectorEnabled').checked,
+            director_model: document.getElementById('directorModelInput').value.trim(),
+            writer_model: document.getElementById('writerModelInput').value.trim(),
             vision_enabled: document.getElementById('visionEnabled').checked,
             catalog_match_enabled: document.getElementById('catalogMatchEnabled').checked,
             checker_enabled: document.getElementById('checkerEnabled').checked,

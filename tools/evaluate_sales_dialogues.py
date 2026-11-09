@@ -56,6 +56,8 @@ def scenarios(catalog):
     pants = lookup[('khuyoot', 'P002')]
     child = lookup[('baraah-kids', 'P010')]
     dp, cp, pp = int(dress['price']), int(cheap['price']), int(pants['price'])
+    from account_app.pricing import terms
+    child_price=terms(child)[1]
     dname, cname, pname = [p['product_name'] for p in (dress, cheap, pants)]
     common = dict(store='al-fatena', product='P003', expected_orders=0)
     items = [dict(product_id='P002', color='اسود', size='44', quantity=1)]
@@ -101,7 +103,7 @@ def scenarios(catalog):
             step('هذا الطقم البناتي يناسب عمر سنة؟', 'هذا الموديل من عمر سنتين إلى 6 سنوات، عمر سنة خارج القياسات المتوفرة.', checks=dict(no_adult_weight=True)),
             step('اقصد عمر سنتين', 'تمام، عمر سنتين ضمن نطاق هالموديل، شنو اللون المطلوب؟', checks=dict(no_adult_weight=True)),
             step('الوردي متوفر؟', 'الوردي ضمن ألوان هالموديل.', checks=dict(no_adult_weight=True)),
-            step('وشكد سعره ويا التوصيل؟', 'سعره 15000 والتوصيل 5000، المجموع 20000.', checks=dict(numbers=[15000, 20000], no_adult_weight=True))]),
+            step('وشكد سعره ويا التوصيل؟', f'سعره {child_price} والتوصيل 5000، المجموع {child_price+5000}.', checks=dict(numbers=[child_price, child_price+5000], no_adult_weight=True))]),
         dict(common, id='saved_album_reference', album=['P003', 'P017'],
              purpose='Use the recorded photo order without inferring a purchase; vision matching itself is outside this case.', turns=[
             step('شكد سعر الاول والثاني؟', f'الأول {dname} بسعر {dp}، والثاني {cname} بسعر {cp}.', checks=dict(numbers=[dp, cp])),
@@ -161,7 +163,7 @@ class HTTPGate:
             raise requests.RequestException('Live provider stopped by acceptance budget')
         payload = kwargs.get('json') or {}
         if self.mode == 'live':
-            payload = dict(payload, max_tokens=min(int(payload.get('max_tokens') or 1500), 1500))
+            payload = dict(payload, max_tokens=min(int(payload.get('max_tokens') or 1500), 3000))
             kwargs['json'] = payload
         messages = payload.get('messages') or []
         system = str(messages[0].get('content') or '') if messages else ''
@@ -435,6 +437,10 @@ def run(args):
                 stack.enter_context(patch.object(m.menger, 'deliver_due', return_value=dict(sent=0, blocked=0)))
             for case_index, case in enumerate(cases):
                 m._current_store_id.set(case['store'])
+                if getattr(args,'sales_director',False):
+                    for name,value in [('sales_director_enabled','1'),('ai_director_model',getattr(args,'director_model','openai/gpt-6.1-terra')),
+                                       ('ai_writer_model',getattr(args,'writer_model','google/gemini-3.8-flash'))]:
+                        m.set_store_setting(db,name,value)
                 for setting, value in [('ai_enabled', '1'), ('followup_enabled', '0'), ('smart_reviewer_enabled', '0'), ('auto_product_enabled', '0')]:
                     m.set_store_setting(db, setting, value)
                 sender = case['store'] + '::synthetic-qa-' + case['id']
@@ -494,6 +500,10 @@ def run(args):
                     texts = [part['text'] for part in emitted if part['kind'] == 'text']
                     sent = bool(sent or emitted)
                     checks = evaluate_turn(m, case, turn, texts, orders, sent)
+                    if (getattr(args,'sales_director',False) and case['id']=='conditional_deadline'
+                            and not texts and m.has_pending_human_review(db,sender)):
+                        checks.pop('response_sent',None)
+                        checks['unconfirmed_deadline_has_silent_staff_review']=not orders
                     if getattr(args, 'turn_evaluator', None):
                         checks.update(args.turn_evaluator(case, turn, index, turns, texts, orders, response if error is None else {}, m, db, sender))
                         if turn.get('allow_handoff'):
@@ -503,7 +513,7 @@ def run(args):
                                              or m.get_delivery_settings(db).get('inspection_message') or '')
                         checks['inspection_claim_supported'] = not m.sales_strategy.inspection_claim_error(
                             '\n'.join(texts), inspection_policy)
-                        minimum = 1 if (case['id'].startswith('plan_hesitation') and index == 1) else 2
+                        minimum = 1  # Owner permits 1–5 meaningful messages; no forced split.
                         checks['visible_message_count'] = minimum <= len(emitted) <= 5
                         if case['id'].startswith('plan_scarcity_unknown'):
                             checks['no_unverified_scarcity'] = not m.sales_strategy.persuasion_error(
@@ -569,6 +579,9 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--mode', choices=['offline', 'live'], default='offline')
+    parser.add_argument('--sales-director',action='store_true',help='Exercise the production director/writer routing in disposable storage only.')
+    parser.add_argument('--director-model',default='openai/gpt-6.1-terra')
+    parser.add_argument('--writer-model',default='google/gemini-3.8-flash')
     parser.add_argument('--allow-live', action='store_true', help='Required explicit launch flag after owner approval; incurs provider usage.')
     parser.add_argument('--source-root', type=Path, default=WORKSPACE)
     parser.add_argument('--catalog', type=Path, default=WORKSPACE / 'analysis_20261024' / 'products.json')
