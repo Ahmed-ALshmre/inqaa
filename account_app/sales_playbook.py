@@ -361,7 +361,7 @@ def customer_selection(context, customer=None):
                 if not requested_sizes[0].isdigit() or len(numbers) == 1:
                     selected['size'] = requested_sizes[0]
             continue
-        size_pattern = r'(?:قياسي|مقاسي|البس|قياس|مقاس|سايز|(?:خلي|اعتمدي|بدلي)\s*(?:قياس)?)\s*(\d{1,2}(?:\.5)?|[2-6]?xl|xxl|xxxl|xs|[sml])(?![\w.])'
+        size_pattern = r'(?:قياس(?:ي|ه|ها)?|مقاس(?:ي|ه|ها)?|البس|سايز|(?:خلي|اعتمدي|بدلي)\s*(?:قياس)?)\s*(?:هو\s+|هي\s+)?(\d{1,2}(?:\.5)?|[2-6]?xl|xxl|xxxl|xs|[sml])(?![\w.])'
         sizes = [hit[1].upper() for hit in re.finditer(size_pattern, text)
                  if not re.search(r'(?:مو|لا|ما اريد)\s*$', text[max(0, hit.start()-15):hit.start()])]
         size_range = re.search(r'(?:قياس|قياسي|البس)\s*(\d{2})\s*[،,/]\s*(\d{2})(?!\d)', text)
@@ -512,6 +512,12 @@ def same_size_color_cart(product,context,customer=None):
         clean=sales_strategy.normalized(item['text'])
         if not re.search(r'اريد|نريد|رايد|اخذ|احجز|حجزي|ثبت',clean) or re.search(r'[؟?]|اذا|لو\s|شكد|اشكد|بكم|بيش',clean):continue
         declared=requested_quantity(clean)
+        # "اريد نيلي وجوزي قطعتين" declares the cart total, not two brown
+        # pieces plus an unknown navy quantity. Explicit per-color counts win.
+        outline = product_variants.COLOR_RE.sub('@', clean)
+        if (declared == len(colors) and len(product_variants.requested(clean)['colors']) == len(colors)
+                and re.fullmatch(r'(?:اريد|نريد|رايد[هة]?|اخذ)\s*@(?:\s*(?:و\s*)?@)+\s*(?:قطعتين|قطعتان|ثنين|اثنين|2\s*قطع(?:ه)?|3\s*قطع|ثلاث\s*قطع)[ .!،]*', outline)):
+            counts = {color: 1 for color in colors}
         if not declared and re.search(r'(?:اريد|نريد|رايد[هة]?|اخذ)\s*(?:بس\s*)?(?:واحد[هة]?|1)(?!\w)|قطعة\s+وحد[هة]',clean):declared=1
         if declared:break
     if declared==len(colors) and not any(counts.get(c) not in (None,1) for c in colors):
@@ -551,6 +557,13 @@ def price_next_step(product, context, customer=None, history=(), *, delivery_req
     context, customer = context or {}, customer or {}
     if context.get('open_details'):
         return ''
+    try:
+        from .sales_progress import contact_invitation
+    except ImportError:
+        from sales_progress import contact_invitation
+    contact_step = contact_invitation(product, context, customer, history)
+    if contact_step and (not delivery_requires_province or customer.get('province')):
+        return contact_step
     recent = ' '.join(str(item.get('text') or '') for item in (history or [])[-8:]
                       if item.get('direction') == 'outgoing')
     province = customer.get('province') or next((sales_recovery.policy_province(item.get('text'))

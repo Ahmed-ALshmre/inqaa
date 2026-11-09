@@ -201,12 +201,12 @@ class WeightColorCheckoutTests(unittest.TestCase):
         self.assertIn('قطعة من كل لون',reply)
         self.assertNotIn('رقم الموبايل',reply);self.assertNotIn('قياس',reply)
 
-    def test_recent_endearment_is_removed_from_the_next_generated_reply(self):
+    def test_recent_endearment_does_not_remove_natural_warmth(self):
         history=[{'direction':'outgoing','text':'حبيبتي، الماروني متوفر.'}]
         result=self.m.owner_result_surface({'reply':'روحي السعر 18 ألف، التوصيل 5 آلاف.',
                                            'reply_parts':['روحي السعر 18 ألف،','التوصيل 5 آلاف.']},
                                           dict(self.ev,text='شكد سعره؟'),{'gender':'female'},history)
-        self.assertFalse(owner_sales.AFFECTION.search(result['reply']))
+        self.assertTrue(owner_sales.AFFECTION.search(result['reply']))
         self.assertIn('18 ألف',result['reply']);self.assertIn('5 آلاف',result['reply'])
 
     def test_empty_local_human_review_is_not_replaced_with_product_reask(self):
@@ -249,8 +249,8 @@ class NaturalWarmthTests(unittest.TestCase):
             self.assertEqual(reply.count('الطلب'),1,reply)
             self.assertNotIn('الحجز الطلب',reply)
 
-    def test_warmth_policy_avoids_repeated_endearments_and_respects_formal_request(self):
-        self.assertFalse(owner_sales.warmth_allowed('اي',[
+    def test_warmth_policy_has_no_turn_counter_and_respects_formal_request(self):
+        self.assertTrue(owner_sales.warmth_allowed('اي',[
             {'direction':'outgoing','text':'حبيبتي، الأسود متوفر.'}]))
         self.assertFalse(owner_sales.warmth_allowed('بلا ألقاب خلينا رسمي',[]))
         self.assertFalse(owner_sales.warmth_allowed('ليش ما ثبت طلبي، انزعجت',[]))

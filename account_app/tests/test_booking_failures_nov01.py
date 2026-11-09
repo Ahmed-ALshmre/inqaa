@@ -101,7 +101,7 @@ class BookingPipelineNov01Tests(unittest.TestCase):
         self.assertIn('5 سنوات', reply['reply'])
         self.assertNotIn('لعمر سنة ', reply['reply'])
 
-    def test_soft_answer_gets_a_complete_consent_question_without_booking(self):
+    def test_resolved_selection_can_invite_contacts_without_booking(self):
         self.product.update(colors='أخضر')
         self.save('incoming', 'أخضر لعمر 4 سنوات قطعة وحدة')
         self.save('outgoing', 'تحبون نثبت الحجز هسه؟')
@@ -112,8 +112,8 @@ class BookingPipelineNov01Tests(unittest.TestCase):
             with self.subTest(prefix=prefix), patch.object(self.m, '_call_main_ai_once', return_value=generated):
                 result = self.m.call_main_ai(dict(self.ev, text='ان شاء الله'), 'text', {}, [],
                     [self.product], self.product, None, '', [], customer_products=[self.product])
-            self.assertIn('؟', result['reply'])
-            self.assertNotIn('الموبايل', result['reply'])
+            self.assertIn('الموبايل', result['reply'])
+            self.assertIn('العنوان', result['reply'])
             self.assertFalse(result.get('create_order'))
         self.assertEqual(self.count(), 0)
 

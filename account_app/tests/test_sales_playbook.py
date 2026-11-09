@@ -83,8 +83,8 @@ class ReviewedLessonTests(unittest.TestCase):
             (PRODUCT, {'open_details': ['width']}, {'size': '44', 'color': 'أسود'}),
         ]:
             self.assertEqual(playbook.price_next_step(product, context, customer), '')
-        self.assertIn('أثبتلج حجز', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود'}))
-        self.assertIn('أثبتلج حجز', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود', 'province': 'بغداد'}))
+        self.assertIn('رقم الموبايل', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود'}))
+        self.assertIn('رقم الموبايل', playbook.price_next_step(PRODUCT, {}, {'size': '44', 'color': 'أسود', 'province': 'بغداد'}))
 
     def test_next_question_can_be_answered_with_a_number_without_confusing_age_and_size(self):
         from account_app import sales_context

@@ -21,6 +21,14 @@ def inspection_only(value):
     return re.sub(r'^' + _COVERAGE, '', text, count=1).strip(' .،')
 
 
+def inspection_policy(product, store_policy):
+    """Misfiled dimensions are not a product-specific inspection exception."""
+    explicit = customer_copy.fact((product or {}).get('inspection_policy')).strip()
+    if re.search(r'فحص|تفحص|استبدال|استرجاع|ارجاع|إرجاع|يرجع|ترجع|تجرب|ترجيع|مرتجع', explicit):
+        return explicit
+    return str(store_policy or '').strip()
+
+
 def inspection_reply(value):
     """Use the owner's approved wording for the plain policy, retaining exceptions."""
     text = inspection_only(value)

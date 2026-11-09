@@ -185,7 +185,7 @@ def warmth_allowed(question, history=()):
         return False
     outgoing=[str(m.get('text') or m.get('content') or '') for m in history
               if m.get('direction')=='outgoing' or m.get('role')=='assistant']
-    return not any(AFFECTION.search(t) for t in outgoing[-4:])
+    return True  # Warmth follows context and preference, not a four-turn timer.
 
 
 def surface(text, gender='', seed='', *, warm=True, store_id='', allow_endearments=True):
@@ -240,9 +240,7 @@ def surface(text, gender='', seed='', *, warm=True, store_id='', allow_endearmen
                           lambda match: match[1] + after + (match[2] or ''), text)
         choice = ('حبيبتي', 'عمري', 'روحي', 'حياتي', 'عيني')[int(hashlib.sha256(str(seed).encode()).hexdigest()[:8], 16) % 5]
         matches = list(AFFECTION.finditer(text))
-        if matches:
-            text = AFFECTION.sub(lambda m: choice if m.start() == matches[0].start() else '', text)
-        elif warm:
+        if not matches and warm:
             text = choice + '، ' + text
     else:
         text = neutral_address(text)
@@ -303,6 +301,13 @@ def result(text='', *, human='', silent=False):
 
 
 def next_step(product, context, customer, history=()):
+    try:
+        from .sales_progress import contact_invitation
+    except ImportError:
+        from sales_progress import contact_invitation
+    contact_step = contact_invitation(product, context, customer, history)
+    if contact_step:
+        return contact_step
     try:
         from . import catalog_profile
     except ImportError:

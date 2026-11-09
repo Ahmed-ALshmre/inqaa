@@ -84,8 +84,12 @@ def capture(db, store, sender, product, question, topics, review_id, now, *, inc
         key = question_key(question)
         # One unresolved card per product/topic; retain the first original
         # question and count further occurrences without duplicating the queue.
-        prior = db.execute("SELECT id FROM product_questions WHERE store_id=? AND product_id=? AND topic=? AND status='pending' ORDER BY id LIMIT 1",
-                           (store, product['product_id'], topic)).fetchone()
+        # Broad physical fields can share a card. Generic details and service
+        # questions cannot: a courier instruction is not a size question.
+        exact_scope = " AND question_key=?" if topic in {'details', 'service'} else ''
+        params = (store, product['product_id'], topic) + ((key,) if exact_scope else ())
+        prior = db.execute("SELECT id FROM product_questions WHERE store_id=? AND product_id=? AND topic=? AND status='pending'"
+                           + exact_scope + " ORDER BY id LIMIT 1", params).fetchone()
         if prior:
             if increment:
                 db.execute('UPDATE product_questions SET occurrences=occurrences+1,updated_at=? WHERE id=?', (now, prior['id']))

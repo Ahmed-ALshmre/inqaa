@@ -10,7 +10,7 @@ PRODUCT = fixtures.PRODUCT
 class SalesTurnSelectionTests(unittest.TestCase):
     def test_province_is_needed_for_regional_quote_but_not_a_fixed_fee(self):
         product = dict(PRODUCT, colors='اسود')
-        self.assertEqual(sales_playbook.price_next_step(product, {}, {'size': '44'}), 'أثبتلج حجز؟')
+        self.assertIn('رقم الموبايل', sales_playbook.price_next_step(product, {}, {'size': '44'}))
         regional = sales_playbook.price_next_step(product, {}, {'size': '44'}, delivery_requires_province=True)
         self.assertIn('حتى أحسبلج أجور التوصيل', regional)
         initial = sales_playbook.price_next_step(product, {})
@@ -137,10 +137,10 @@ class SalesTurnPipelineTests(unittest.TestCase):
         product = dict(PRODUCT, colors='اسود')
         result, provider = self.ask('متوفر', product=product, customer={'size': '44'})
         provider.assert_not_called()
-        self.assertIn('أثبتلج حجز؟', result['reply'])
+        self.assertIn('رقم الموبايل', result['reply'])
         self.assertNotIn('محافظ', result['reply'])
         self.assertNotIn('اختيارج فد شي حلو', result['reply'])
-        self.assertEqual(len(self.m.plan_sales_bubbles(result, result['reply'])['reply_parts']), 1)
+        self.assertTrue(1 <= len(self.m.plan_sales_bubbles(result, result['reply'])['reply_parts']) <= 2)
         self.assertFalse(result['create_order'])
 
     def test_checkout_after_consent_requests_mobile_and_only_missing_fields(self):
@@ -161,7 +161,7 @@ class SalesTurnPipelineTests(unittest.TestCase):
         provider.assert_not_called()
         self.assertRegex(result['reply'],'متوفر|موجود')
         self.assertNotIn('فيت', result['reply'])  # Availability is not evidence of fit on this customer's body.
-        self.assertRegex(result['reply'],'حجز|محافظة')
+        self.assertIn('رقم الموبايل',result['reply'])
         self.assertNotIn('وزن', result['reply'])
         self.assertFalse(result['create_order'])
         parts = self.m.plan_sales_bubbles(result, result['reply'])['reply_parts']

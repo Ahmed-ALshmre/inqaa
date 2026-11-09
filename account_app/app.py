@@ -24,9 +24,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
-    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
+    from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, sales_progress, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
 except ImportError:
-    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
+    import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, sales_progress, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
 try:
     from . import baraah, sales_engagement, menger, chatwoot, zernio, ad_attribution, ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, sales_recovery, inbound_media, reply_consultant
     from .media import extract_media, media_type, message_media, known_sticker
@@ -34,7 +34,7 @@ try:
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from .pricing import quote as price_order, expand_bundles
-    from .checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from .checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media, reply_consultant
     import baraah
@@ -49,7 +49,7 @@ except ImportError:
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from pricing import quote as price_order, expand_bundles
-    from checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 from flask import Flask, g, has_app_context, has_request_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
@@ -3035,8 +3035,7 @@ def local_reply_validation(reply, matched_product, customer_products, products=N
         }
 
     if has_app_context():
-        policy = (customer_copy.fact((matched_product or {}).get('inspection_policy')).strip()
-                  or str(get_delivery_settings(get_db()).get('inspection_message') or ''))
+        policy = delivery_copy.inspection_policy(matched_product, get_delivery_settings(get_db()).get('inspection_message'))
         inspection_problem = sales_strategy.inspection_claim_error(reply, policy)
         if inspection_problem:
             return {'approved': False, 'problem': inspection_problem,
@@ -5327,6 +5326,8 @@ def customer_product_target(text, products, context_product=None):
     # never silently become an available model sharing its category.
     named = first_message_named_products(text, products)
     target = (named[0] if len(named) == 1 else None) if named else _text_match_product(text, products)
+    if not target and not named and not context_product:
+        target = sales_progress.unique_category_product(text, products, current_store_id())
     # A generic garment word inside negotiation is a reference to the known
     # photo, not an instruction to switch to a different SKU named "فستان".
     generic = customer_copy.normalized((target or {}).get('product_name')).strip()
@@ -8381,8 +8382,7 @@ def store_policy_parts(topics, text='', matched_product=None):
         if current_store_id() == baraah.STORE_ID and charged_delivery and owner_sales.delivery_objection(text):
             delivery = delivery_copy.carrier_quote(delivery)
         parts.append(delivery)
-    policy = (customer_copy.fact((matched_product or {}).get('inspection_policy')).strip()
-              or str(settings.get('inspection_message') or '').strip())
+    policy = delivery_copy.inspection_policy(matched_product, settings.get('inspection_message'))
     if 'inspection' in topics:
         inspection = delivery_copy.inspection_reply(policy)
         if inspection and not customer_copy.has_instructions(inspection):
@@ -8453,8 +8453,7 @@ def store_policy_question_reply(text, matched_product=None, *, ev=None, customer
     topics = ({'delivery', 'inspection', 'payment'} if intent == 'payment' else
               {'delivery', 'inspection'} if intent == 'delivery' else {intent})
     if intent in {'payment', 'delivery'}:
-        policy = (customer_copy.fact((matched_product or {}).get('inspection_policy')).strip()
-                  or str(get_delivery_settings(get_db()).get('inspection_message') or '').strip())
+        policy = delivery_copy.inspection_policy(matched_product, get_delivery_settings(get_db()).get('inspection_message'))
         if not policy and not re.search(r'فحص|افحص|تفحص', sales_strategy.normalized(text)):
             topics.discard('inspection')
     parts, missing = store_policy_parts(topics, text, matched_product)
@@ -9394,8 +9393,7 @@ def _call_main_ai_with_context(
                 if recovered:
                     return dict(recovered, _marketing_repaired=True)
     if matched_product and not ev.get('_post_order') and has_app_context():
-        policy = (customer_copy.fact(matched_product.get('inspection_policy')).strip()
-                  or str(get_delivery_settings(get_db()).get('inspection_message') or ''))
+        policy = delivery_copy.inspection_policy(matched_product, get_delivery_settings(get_db()).get('inspection_message'))
         if sales_strategy.inspection_claim_error(result.get('reply'), policy):
             repaired = sales_strategy.repair_inspection_reply(result.get('reply'), policy)
             if repaired:
@@ -9405,6 +9403,9 @@ def _call_main_ai_with_context(
                                                         order=result.get('order'))
                 if recovered:
                     return dict(recovered, _inspection_repaired=True)
+    executable = conversation_quality.without_restock_subscription_offer(result.get('reply'))
+    if executable != str(result.get('reply') or ''):
+        result = dict(result, reply=executable, reply_parts=[])
     if (conversation_quality.grounded_error(result.get("reply"), matched_product, products)
             or sales_strategy.reply_error(result.get("reply"), question, matched_product)):
         if 'المساعد الآلي للمتجر' in sales_strategy.reply_error(result.get('reply'), question, matched_product):
@@ -9492,7 +9493,8 @@ def _call_main_ai_with_context(
     if natural_money != result.get('reply'):
         result = dict(result, reply=natural_money, reply_parts=[])
     single_step = conversation_quality.one_next_question(result.get('reply'))
-    if (has_app_context() and ev.get('sender_id') and not ev.get('_post_order')
+    ready_contact = sales_progress.contact_invitation(matched_product, context, customer, history, question)
+    if (has_app_context() and ev.get('sender_id') and not ev.get('_post_order') and not ready_contact
             and 'checkout_help' not in sales_answers.topics(question)
             and not checkout_requested(get_db(), ev, result)):
         single_step = conversation_quality.defer_contact_until_consent(single_step)
@@ -9716,7 +9718,7 @@ def _call_main_ai_primary(ev, message_type, customer, history, products, matched
         if re.search(r'ماكو.{0,12}غير.{0,8}(?:هاي|هال).*صور|صوري(?:ه|ها)|تدزين نفس',sales_strategy.normalized(ev.get('text'))):
             return unanswered_product_handoff(ev,chosen,['service'])
         if current_store_id() == baraah.STORE_ID and has_app_context() and not notes:
-            policy = customer_copy.fact(chosen.get('inspection_policy')) or get_delivery_settings(get_db()).get('inspection_message')
+            policy = delivery_copy.inspection_policy(chosen, get_delivery_settings(get_db()).get('inspection_message'))
             detail = sales_voice.child_detail_reply(ev.get('text') or '', chosen, policy)
             if detail:
                 return owner_result_surface(dict(reply=detail,create_order=False,order={},_workbook_detail=True),ev,customer,history)
@@ -9796,7 +9798,9 @@ def owner_result_surface(result, ev, customer=None, history=()):
         return result
     if not re.search(r'\w', original):
         return dict(result, reply='', reply_parts=[])
-    if not ev.get('_post_order') and not sales_strategy._explicit_purchase(ev.get('text')):
+    ready_contact = sales_progress.contact_invitation(ev.get('_reply_product'), ev.get('_sales_context') or {},
+        customer, history, ev.get('text') or '')
+    if not ev.get('_post_order') and not ready_contact and not result.get('_contact_invitation') and not sales_strategy._explicit_purchase(ev.get('text')):
         focused = conversation_quality.defer_repeated_choice_questions(original, history)
         if focused != original:
             original = focused
@@ -9835,7 +9839,7 @@ def owner_result_surface(result, ev, customer=None, history=()):
             and not result.get('_catalog_model_album') and not result.get('_plural_color_reply')
             and not result.get('_contextual_stock_reply') and not result.get('_category_enquiry')
             and not result.get('_transparent_price') and not result.get('_mixed_child_offer') and not result.get('_workbook_detail')
-            and (catalog_dump or result.get('_factual_recovery') or simple_facts or compound_facts)):
+            and (catalog_dump or result.get('_factual_recovery'))):
         context = ev.get('_sales_context') or sales_context.advance({}, history)
         context = sales_context.advance(context,[{'direction':'incoming','text':ev.get('text') or ''}])
         delivery=get_delivery_settings(get_db())
@@ -9872,7 +9876,27 @@ def owner_result_surface(result, ev, customer=None, history=()):
                 original=checkout_contact_prompt(get_db(),ev['sender_id'],interest,product,' و'.join(missing))
                 order=result.get('order') if (result.get('order') or {}).get('items') else interest
                 result.update(reply=original,reply_parts=[original],order=order,_checkout_interest=True,_suppress_product_images=True)
+    contact_step = ''
+    if (product and not ev.get('_post_order') and not result.get('create_order')
+            and not result.get('requires_human') and not result.get('failed')
+            and len(ev.get('_image_matches') or []) <= 1
+            and not result.get('_browse_only') and not result.get('_checkout_interest')):
+        contact_step = sales_progress.contact_invitation(product, ev.get('_sales_context') or {},
+            customer, history, ev.get('text') or '')
+        if contact_step:
+            # The transport surface runs again without the generation context.
+            # Carry this verified invitation through it; it grants no order write.
+            result['_contact_invitation'] = True
+            # Preserve the answer, replacing only a redundant booking invitation.
+            invitation = r'(?:تحبين\s+)?(?:أثبتلج|اثبتلج|أحجزلج|احجزلج|نثبت|نكمل)\s*(?:ال)?(?:حجز\w*|طلب\w*)?[^؟?\n.]{0,40}[؟?]'
+            rewritten = re.sub(invitation, contact_step, original)
+            if rewritten == original and not re.search(r'رقم|عنوان|[؟?]', original):
+                rewritten = original.rstrip() + ' ' + contact_step
+            if rewritten != original:
+                original = rewritten
+                result.update(reply=original, reply_parts=[], _contact_invitation=True)
     if (has_app_context() and ev.get('sender_id') and not ev.get('_post_order')
+            and not contact_step and not result.get('_contact_invitation')
             and not result.get('_checkout_interest') and 'checkout_help' not in selected and not checkout_requested(get_db(),ev,result)):
         deferred = conversation_quality.defer_contact_until_consent(original)
         if deferred != original:
@@ -9883,7 +9907,7 @@ def owner_result_surface(result, ev, customer=None, history=()):
         original = focused
         result.update(reply=focused,reply_parts=[focused])
     if (selected and not ev.get('_post_order') and not result.get('create_order')
-            and not result.get('requires_human') and not result.get('_checkout_interest')
+            and not result.get('requires_human') and not result.get('_checkout_interest') and not contact_step and not result.get('_contact_invitation')
             and not checkout_selection_answer(ev.get('text') or '')
             and not sales_strategy._explicit_purchase(ev.get('text') or '')):
         deferred = conversation_quality.defer_repeated_choice_questions(original,
@@ -10139,6 +10163,8 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + owner_sales.GUIDE
     system_prompt += "\n\n" + owner_sales.address_guidance(customer['gender'])
     system_prompt += "\n\n" + product_questions.guidance_prompt(matched_product, question_text)
+    if not post_order:
+        system_prompt += "\n\n" + sales_progress.brief(ev, matched_product, customer, history)
     if not post_order and matched_product:
         system_prompt += "\n\n" + sales_strategy.persuasion_guidance(
             matched_product,
@@ -10557,7 +10583,7 @@ def normalize_order_items(order_data, matched_product=None, products=None):
             "color": str(raw.get("color") or "").strip(),
             "size": product_variants.normalize_size_words(raw.get("size")).strip(),
             "size_type": str(raw.get("size_type") or raw.get("measurement_type") or "").strip().lower(),
-            "weight": str(raw.get("weight") or "").strip(),
+            "weight": optional_order_weight(raw, product or {}),
             "notes": str(raw.get("notes") or "").strip(),
             "quantity": quantity,
         })
@@ -12308,8 +12334,9 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # حتى يفهم السياق كاملاً ويعطي رداً واحداً دقيقاً بدلاً من ردود مكررة.
     if use_debounce and DEBOUNCE_DELAY > 0 and message_type != "image":
         saved_at = now_baghdad_iso()
-        log(5, "DEBOUNCE", f"Waiting {DEBOUNCE_DELAY}s to collect all customer messages before AI...")
-        time.sleep(DEBOUNCE_DELAY)
+        delay = sales_progress.debounce_seconds(ev.get('text'), message_type, DEBOUNCE_DELAY)
+        log(5, "DEBOUNCE", f"Waiting {delay}s to collect customer messages before AI...")
+        time.sleep(delay)
         # هل وصلت رسائل أحدث خلال فترة الانتظار؟
         newer_rows = db.execute(
             "SELECT id, message_type FROM messages WHERE sender_id=? AND direction='incoming' AND created_at > ?",
@@ -13688,7 +13715,7 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
         if background_after_intake:
             payload = dict(zip(('fake_body', 'subscriber_id', 'platform', 'outbound_subscriber_id', 'saved_id'), args))
             delay = (0 if detect_message_type(ev) == 'text' and sales_recovery.policy_question(ev.get('text'))
-                     else DEBOUNCE_DELAY)
+                     else sales_progress.debounce_seconds(ev.get('text'), detect_message_type(ev), DEBOUNCE_DELAY))
             ai_jobs.enqueue(db, current_store_id(), subscriber_id, 'webhook', payload, str(saved_id), delay=delay)
             if os.environ.get('ENABLE_BACKGROUND_JOBS', '1') == '1':
                 ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
@@ -13701,7 +13728,8 @@ def _finish_customer_webhook_async(fake_body, subscriber_id, platform, outbound_
         db = get_db()
         _current_store_id.set(extract_facebook_event(fake_body).get("store_id") or DEFAULT_STORE_ID)
         if DEBOUNCE_DELAY > 0 and not ai_jobs.active_job.get():
-            time.sleep(DEBOUNCE_DELAY)
+            event = extract_facebook_event(fake_body)
+            time.sleep(sales_progress.debounce_seconds(event.get('text'), detect_message_type(event), DEBOUNCE_DELAY))
         if not acquire_sender_lock(db, subscriber_id, wait_seconds=1 if ai_jobs.active_job.get() else 90):
             if ai_jobs.active_job.get():
                 raise ai_jobs.Busy()

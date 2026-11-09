@@ -107,12 +107,13 @@ class CarrierDeliveryPipelineTests(unittest.TestCase):
         self.assertTrue(reply.endswith(('شنو اللون اللي يعجبج؟', 'شنو اللون اللي يعجبك؟', 'شنو اللون اللي يعجبكم؟')))
         self.assertNotIn('توافق', reply)
 
-    def test_known_variants_advance_to_booking_question(self):
+    def test_known_variants_advance_to_missing_contact(self):
         self.save('incoming', 'اريد وردي عمر سنة')
         reply = self.visible(self.call('شكد التوصيل؟'))
         self.assertNotIn(CARRIER, reply)
-        self.assertTrue(reply.endswith('أثبت الطلب؟'), reply)
-        self.assertEqual(reply.count('؟'), 1)
+        self.assertIn('رقم الموبايل', reply)
+        self.assertIn('العنوان', reply)
+        self.assertNotIn('أثبت الطلب؟', reply)
 
     def test_regional_actual_fee_and_product_free_shipping_are_preserved(self):
         self.m.save_delivery_settings(self.db, dict(baghdad_fee=5000, other_fee=7000))
