@@ -432,6 +432,12 @@ def quantities_for_colors(context, customer=None, current_text=''):
             if new in counts:count=(counts[new]+count) if counts[new] and count else None
             counts[new]=count
         counts.update(product_variants.color_quantities(text))
+        matches=list(product_variants.COLOR_RE.finditer(sales_strategy.normalized(text)))
+        for match in matches:
+            before=sales_strategy.normalized(text)[max(0,match.start()-25):match.start()]
+            if re.search(r'(?:قطعة\s*(?:واحد[هة]|1)|(?:واحد[هة]|1)\s*قطعة)\s*(?:من\s*)?$',before):
+                color=product_variants.ALIASES.get(match[1])
+                if color in chosen:counts[color]=1
         if color_choices.one_each(text,{'last_staff_turn':[{'text':question}]}):
             counts.update({color:1 for color in chosen})
         number=product_variants.quantity_number(text)
@@ -448,11 +454,54 @@ def quantities_for_colors(context, customer=None, current_text=''):
     return {color:count for color,count in counts.items() if color in chosen}
 
 
+def color_weight_cart(product, context, customer=None, current_text=''):
+    """Keep a distinct stated body weight for each selected color."""
+    selected=customer_selection(context,customer)
+    colors=selected['colors']
+    ranges=product_variants.weight_only_ranges(product)
+    if len(colors)<2 or not ranges or selected['color_options']:return None
+    max_weight=max(high for _,high in ranges)
+    weights={}
+    for entry in [*selection_evidence(context),*([{'text':current_text}] if current_text else [])]:
+        text=sales_strategy.normalized(entry.get('text') or '')
+        matches=[(m,product_variants.ALIASES.get(m[1])) for m in product_variants.COLOR_RE.finditer(text)]
+        for index,(match,color) in enumerate(matches):
+            if color not in colors:continue
+            fragment=text[match.end():matches[index+1][0].start() if index+1<len(matches) else None]
+            number=re.search(r'(?:وزن|كيلو|قياس)\s*(\d{2,3})',fragment)
+            weight=float(number[1]) if number else (max_weight if re.search(r'اكبر\s*قياس',fragment) else None)
+            if weight and any(low<=weight<=high for low,high in ranges):weights[color]=int(weight)
+    if not weights:return None
+    missing=[color for color in colors if color not in weights]
+    if missing:return {'question':'شنو الوزن أو القياس المطلوب للون '+missing[0]+'؟'}
+    counts=quantities_for_colors(context,customer,current_text)
+    evidence=list(selection_evidence(context))
+    declared=next((requested_quantity(sales_strategy.normalized(row['text'])) for row in reversed(evidence)
+                   if re.search(r'اريد|نريد|اخذ|ثبت|احجز',sales_strategy.normalized(row['text']))
+                   and requested_quantity(sales_strategy.normalized(row['text']))),None)
+    if declared==len(colors) and all(counts.get(c) in (None,1) for c in colors):
+        counts={color:1 for color in colors}
+    if not all(counts.get(color) for color in colors):return {'question':'قطعة من كل لون؟'}
+    if declared and sum(counts[color] for color in colors)!=declared:
+        return {'question':'شكد قطعة من كل لون؟'}
+    return {'items':[dict(product_id=product['product_id'],product_name=product.get('product_name'),
+        color=color,size=str(weights[color]),size_type='weight',weight=str(weights[color]),
+        quantity=counts[color]) for color in colors]}
+
+
 def weight_cart_choices(product, context, customer=None, current_text=''):
     ranges=product_variants.weight_only_ranges(product)
     if not ranges:return None
+    allocated=color_weight_cart(product,context,customer,current_text)
+    if allocated:return allocated
     selected=customer_selection(context,customer)
     size=selected.get('size');weight=selected.get('weight');size_type='weight'
+    if not weight and not size:
+        for entry in reversed(list(selection_evidence(context))):
+            text=sales_strategy.normalized(entry['text'])
+            match=re.search(r'(?:ال)?(?:احجام|اوزان|وزن|قياس|كيلو)\s*(\d{2,3})(?!\d)',text)
+            if match and any(low<=int(match[1])<=high for low,high in ranges):
+                weight=match[1];break
     if not size and not weight and product_variants.is_free_size_product(product):
         size='فري سايز'
     if size and not str(size).isdigit():
@@ -482,6 +531,12 @@ def weight_cart_choices(product, context, customer=None, current_text=''):
         return {'question':'ال'+' وال'.join(missing)+' مو متوفر بهالموديل؛ المتوفر ال'+' وال'.join(offered)+'.'}
     counts=quantities_for_colors(context,customer,current_text)
     if len(chosen)>1:
+        declared=next((requested_quantity(sales_strategy.normalized(row['text']))
+            for row in reversed(list(selection_evidence(context)))
+            if re.search(r'اريد|نريد|اخذ|ثبت|احجز',sales_strategy.normalized(row['text']))
+            and requested_quantity(sales_strategy.normalized(row['text']))),None)
+        if declared==len(chosen) and all(counts.get(color) in (None,1) for color in chosen):
+            counts={color:1 for color in chosen}
         missing=[color for color in chosen if not counts.get(color)]
         if len(missing)==len(chosen):return {'question':'قطعة من كل لون؟'}
         if missing:return {'question':'شكد قطعة من ال'+missing[0]+'؟'}

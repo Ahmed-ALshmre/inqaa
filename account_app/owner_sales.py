@@ -8,9 +8,11 @@ import re
 
 try:
     from . import customer_copy, product_variants, sales_answers, sales_strategy
+    from .checkout import unresolved_purchase_terms
     from .pricing import terms, offer_tiers, quote
 except ImportError:
     import customer_copy, product_variants, sales_answers, sales_strategy
+    from checkout import unresolved_purchase_terms
     from pricing import terms, offer_tiers, quote
 
 WORKBOOK_VOICE = """[أمثلة دفتر ردود المتاجر — استعملي المعلومة الموثقة للقطعة الحالية]
@@ -433,6 +435,7 @@ def negotiation_reply(ev, product, customer, context, history, *, delivery_optio
     unit = 'البكج' if count > 1 else 'القطعة'
     label = 'سعر البكج' if count > 1 else 'سعره'
     if kind == 'price':
+        conditional=unresolved_purchase_terms(ev.get('text') or '') == 'conditional_purchase_terms'
         offered = bool(customer_copy.fact(product.get('offer')) or
                        re.search(r'(?<!\w)بدل(?!\w)', customer_copy.normalized(product.get('price'))))
         refusal = ('ما نكدر ننزل أكثر، عليه عرض حاليًا' if offered else 'هذا السعر النهائي، ما عدنا تخفيض حاليًا')
@@ -442,6 +445,22 @@ def negotiation_reply(ev, product, customer, context, history, *, delivery_optio
             opening=f'{refusal}، القطعتين بـ{customer_copy.chat_amount(amount)} والقطعة تستاهل.'
         else:
             opening = f'{refusal}، {label} {customer_copy.chat_amount(price)} و{unit} تستاهل.'
+        if conditional:
+            amount_match=re.search(r'(?:اذا|لو)\s*(?:(?:ال)?سعر\s*|ب|على\s*)?\s*(\d+)(?:\s*(الف|الاف))?\s*(?:ثبتي|ثبت|احجزي|احجز|اطلب|حجزي)',
+                customer_copy.normalized(ev.get('text') or ''))
+            requested_amount=(int(amount_match[1]) * (1000 if amount_match[2] or int(amount_match[1]) < 1000 else 1)
+                              if amount_match else None)
+            requested=customer_copy.chat_amount(requested_amount) if requested_amount else 'المبلغ اللي طلبتيه'
+            fees={fee for _,fee in delivery_options}
+            if amount_match and len(fees)==1:
+                fee=next(iter(fees))
+                items=ev.get('_negotiation_items') or [dict(product_id=product['product_id'],quantity=(quantity or 1) if count==1 else 1)]
+                if all(item.get('product_id')==product['product_id'] for item in items):
+                    total=quote(items,[product],fee)
+                    actual=customer_copy.chat_amount(total['product_total']+total['delivery_fee'])
+                    opening=f'حبيبتي ما نكدر ننزل أكثر حتى نوصل لـ{requested}، {label} {customer_copy.chat_amount(price)} والمجموع ويا التوصيل {actual} حاليًا. إذا يناسبج هذا السعر خبريني ونثبتها.'
+            elif amount_match:
+                opening=f'حبيبتي ما نكدر ننزل أكثر حتى نوصل لـ{requested}، {label} {customer_copy.chat_amount(price)}. إذا يناسبج السعر خبريني ونثبتها.'
     elif kind == 'free_delivery' and delivery_options:
         try:
             fees = [(region, quote([dict(product_id=product['product_id'], quantity=count)], [product], fee)['delivery_fee'])
@@ -462,7 +481,8 @@ def negotiation_reply(ev, product, customer, context, history, *, delivery_optio
         if gaps:
             return None
         parts.extend(fact for fact in facts if not re.search(r'سعر|توصيل|د\.\s*ع', fact))
-    if not sales_strategy.purchase_block_reason(ev.get('text')):
+    if not (sales_strategy.purchase_block_reason(ev.get('text'))
+            or unresolved_purchase_terms(ev.get('text') or '') == 'conditional_purchase_terms'):
         try:
             from .sales_playbook import price_next_step
         except ImportError:

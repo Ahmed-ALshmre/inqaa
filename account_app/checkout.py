@@ -263,6 +263,8 @@ def unresolved_purchase_terms(text):
             r'(?<!\w)(?:اذا|لو|بشرط|شرط)(?!\w)[^.!؟?\n]{0,65}'
             r'(?:توصيل|سعر|مجاني|خصم|تخفيض|تحسب|يوصل|يلحق|اليوم|باجر|غدا|ساعه|ساعة|يومين|اسبوع)', clean):
         return 'conditional_purchase_terms'
+    if re.search(r'(?<!\w)(?:اذا|لو)(?!\w)\s*(?:ب|على\s*)?\s*\d+(?:\s*(?:الف|الاف))?\s*(?:ثبتي|ثبت|احجزي|احجز|اطلب|حجزي)',clean):
+        return 'conditional_purchase_terms'
     return ''
 
 

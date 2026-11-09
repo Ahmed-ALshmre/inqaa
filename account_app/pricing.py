@@ -34,7 +34,7 @@ _SINGLE_PRICE = re.compile(
     r"(" + _PRICE_AMOUNT + r")(?![\w.,٬])"
 )
 _OFFER_QUANTITY = re.compile(
-    r"(?<!\w)و?(?:(\d+)\s*قطع(?:ة)?|(?:ال)?قطعتين|(?:ال)?قطعتان)\s*"
+    r"(?<!\w)و?(?:(?:بكج|باكج)\s+)?(?:(\d+)\s*قطع(?:ة)?|(?:ال)?قطعتين|(?:ال)?قطعتان)\s*"
     r"(?:بسعر\s*|بـ?\s*|سعر(?:ه|ها|هن|هم)?\s*(?:بـ?\s*)?)"
     r"(\d+(?:[,.٬]\d{3})*(?:\.\d+)?)\s*(الف|الاف|آلاف)?"
 )
@@ -72,7 +72,11 @@ def terms(product):
     # The price field defines the sale unit. Notes and offers may describe the
     # contents of a package or a multi-item discount without changing that unit.
     counts = {int(n) for n in re.findall(r"(\d+)\s*قطع", raw)}
-    bundle = bool(re.search(r"بكج|باكج", raw)) and bool(counts)
+    if re.search(r"(?:بكج|باكج)\s+(?:ال)?قطعت(?:ين|ان)", raw):
+        counts.add(2)
+    # A leading unit price followed by "بكج قطعتين" is a retail offer.
+    # A price starting with "بكج" still denotes a package-only sale.
+    bundle = bool(re.search(r"بكج|باكج", raw)) and bool(counts) and not re.match(r'^\s*' + _PRICE_AMOUNT + r'\s*(?:او|و|[,،])\s*', raw)
     if bundle and len(counts) != 1:
         raise ValueError("عدد قطع البكج غير واضح؛ راجع بيانات المنتج")
     size = counts.pop() if bundle else 1
