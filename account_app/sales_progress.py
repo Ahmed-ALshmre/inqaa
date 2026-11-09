@@ -43,19 +43,24 @@ def contact_invitation(product, context, customer=None, history=(), question='')
     if stock_state(product) != 'available' or sales_playbook.selection_conflicts(product, context, customer):
         return ''
     selected = sales_playbook.customer_selection(context, customer)
+    weight_cart = (sales_playbook.color_weight_cart(product, context, customer, text)
+                   if product_variants.weight_only_ranges(product) and len(selected['colors']) > 1 else None)
+    if weight_cart and not weight_cart.get('items'):
+        return ''
+    resolved_weight_cart = bool(weight_cart and weight_cart.get('items'))
     size = selected.get('size')
     if not size and selected.get('age') is not None:
         size = product_variants.age_text(selected['age'])
-    if not catalog_profile.no_size(product) and (not size or product_variants.order_choice_error(product, 'size', str(size))):
+    if not resolved_weight_cart and not catalog_profile.no_size(product) and (not size or product_variants.order_choice_error(product, 'size', str(size))):
         return ''
-    if not catalog_profile.no_size(product):
+    if not resolved_weight_cart and not catalog_profile.no_size(product):
         assessed = product_variants.assess(product, 'قياس ' + str(size))
         if not assessed or assessed[0]['supported'] is not True:
             return ''
     colors = product_variants.colors(product.get('colors'))
     if selected['color_options'] or (len(colors) > 1 and not selected['color'] and not selected['colors']):
         return ''
-    if len(selected['colors']) > 1 and not sales_playbook.same_size_color_cart(product, context, customer):
+    if len(selected['colors']) > 1 and not (resolved_weight_cart or sales_playbook.same_size_color_cart(product, context, customer)):
         return ''
     data = dict(customer or {})
     for message in history:

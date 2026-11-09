@@ -8928,7 +8928,7 @@ def natural_negotiation_reply(ev, product, customer, context, history, *, kind='
     if not kind or not product or ev.get('_post_order') or _stock_state(product) != 'available':
         return None
     options = []
-    if kind == 'free_delivery' and has_app_context():
+    if kind in {'free_delivery', 'price'} and has_app_context():
         db = get_db()
         settings = get_delivery_settings(db)
         province = sales_recovery.policy_province(ev.get('text')) or (customer or {}).get('province')
@@ -8942,7 +8942,8 @@ def natural_negotiation_reply(ev, product, customer, context, history, *, kind='
         items = draft['order'].get('items') or []
         if len(items) == 1 and items[0].get('product_id') == product.get('product_id'):
             stage_customer.update({key: items[0][key] for key in ('size', 'color') if items[0].get(key)})
-    result = owner_sales.negotiation_reply(ev, product, stage_customer, context, history,
+    stage_ev = dict(ev, _negotiation_items=items) if draft['order'] else ev
+    result = owner_sales.negotiation_reply(stage_ev, product, stage_customer, context, history,
                                           delivery_options=options, kind=kind)
     if result and draft['order']:
         result['order'] = draft['order']
@@ -9787,6 +9788,11 @@ def _call_main_ai_primary(ev, message_type, customer, history, products, matched
 def owner_result_surface(result, ev, customer=None, history=()):
     result = dict(result or {})
     original = str(result.get('reply') or '')
+    if current_store_id() == 'golden-threads' and ev.get('_reply_product'):
+        corrected = sales_answers.wholesale_unit_reply(ev['_reply_product'], original, ev.get('text') or '')
+        if corrected:
+            result.update(reply=corrected, reply_parts=[corrected], create_order=False, order={}, _local_reply=True)
+            original=corrected
     unknown_copy = re.search(r'مو موضح|ما موضح|مو مذكور|غير موثق|يحتاج.{0,12}ت[أا]كيد|تحتاج.{0,12}ت[أا]كيد|ما أگدر أأكد|ما اكدر ااكد', original)
     if (ev.get('_reply_product') and not result.get('_product_question_review_id')
             and (unknown_copy or (result.get('_needs_fact_review') and

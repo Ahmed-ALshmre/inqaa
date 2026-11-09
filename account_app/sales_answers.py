@@ -198,7 +198,7 @@ def wholesale_lines(product):
     """Only explicit unit/count declarations; no inferred retail or quarter price."""
     text = customer_copy.fact((product or {}).get('description'), 'description')
     return [line.strip(' .') + '.' for line in text.splitlines()
-            if len(line) <= 220 and re.match(r'\s*(?:سعر\s+(?:ال)?(?:درزن|سيري[ةه])|أ?قل\s+كمي[ةه]\s+للطلب)\s*[:：]', line)
+            if len(line) <= 220 and re.search(r'(?:سعر\s+(?:ال)?(?:درزن|سيري[ةه])\s*(?:[:：]|بـ?)|أ?قل\s+كمي[ةه]\s+للطلب\s*[:：])', line)
             and re.search(r'\d', line) and not customer_copy.has_instructions(line)]
 
 
@@ -252,7 +252,7 @@ def wholesale_unit(product):
     except (ValueError, TypeError):
         return ''
     for line in wholesale_lines(product):
-        hit = re.match(r'سعر\s+((?:ال)?(?:درزن|سيري[ةه]))\s*[:：]\s*(\d[\d,٬.]*(?:\s*(?:ألف|الف|آلاف|الاف))?)', line)
+        hit = re.search(r'سعر\s+((?:ال)?(?:درزن|سيري[ةه]))\s*(?:[:：]|بـ?)\s*(\d[\d,٬.]*(?:\s*(?:ألف|الف|آلاف|الاف))?)', line)
         if hit:
             try:
                 if money(hit[2]) == price:
@@ -260,6 +260,19 @@ def wholesale_unit(product):
             except (ValueError, TypeError):
                 pass
     return ''
+
+
+def wholesale_unit_reply(product, reply, question=''):
+    """Correct a retail-unit claim using a matching documented wholesale unit."""
+    unit=wholesale_unit(product)
+    if not unit or not re.search(r'سعر\s*(?:ال)?(?:قطعة|قطعه|مفرد)|(?:لل|بال)(?:قطعة|قطعه|مفرد)|سعر\s+جملة\s+للقطعة', normalized(reply)):
+        return ''
+    _,price,_=terms(product)
+    amount=f'{price // 1000} ألف' if price % 1000 == 0 else f'{price:,} دينار'
+    unit_price='لل'+unit.removeprefix('ال')
+    if re.search(r'لا\s*شكرا|ما\s*اريد|غالي|مرتفع',normalized(question)):
+        return f'أفهمج عيني، السعر {amount} {unit_price}، والبيع عدنا جملة. بالخدمة إذا احتجتي أي تفصيل.'
+    return f'السعر {amount} {unit_price}، والبيع عدنا جملة. شكد الكمية المطلوبة للمحل؟'
 
 
 def evidence_text(item):
