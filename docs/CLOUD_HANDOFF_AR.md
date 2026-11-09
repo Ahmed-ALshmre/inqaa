@@ -6,6 +6,8 @@
 
 ## المشروع والنسخة
 
+إضافة جاهزة في [طلب #47](https://github.com/Ahmed-ALshmre/inqaa/pull/47): [إدارة المحادثة بموديل مستقل وصياغة عراقية قابلة للتغيير](updates/2026-11-09-sales-director.md). اقرأ حالة التحقق والتفعيل في تقريرها؛ إعداد الموديلات وحده لا يفعّل المسار، والفرع المرفوع لا يثبت نشره.
+
 - المستودع: [Ahmed-ALshmre/inqaa](https://github.com/Ahmed-ALshmre/inqaa)، وفرع الإنتاج `main`.
 - النظام: <https://inqaa-production.up.railway.app/dashboard>.
 - فحص الصحة: `/health`. البصمة `dbb27f753c6c96e0` تخص تسليم5 نوفمبر بعد#23، وليست مرجع الإصدار الحالي. بصمة تطبيق حزمة8 نوفمبر الموصوفة هنا `70a7bd5c1f30698a`؛ قارنها بالحي وبـGitHub Deployments وقت العمل.

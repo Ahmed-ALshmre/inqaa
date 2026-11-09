@@ -6,14 +6,14 @@ except ImportError:
     from customer_copy import normalized
 
 COLORS = {
-    'أسود': ('اسود', 'اسودا', 'black'), 'أبيض': ('ابيض', 'white'),
+    'أسود': ('اسود', 'اسودا', 'سودة', 'سوده', 'سودا', 'سوداء', 'black'), 'أبيض': ('ابيض', 'بيضاء', 'بيضا', 'بيضة', 'بيضه', 'white'),
     'أحمر': ('احمر', 'red'), 'أزرق ملكي': ('ازرق ملكي', 'ملكي'),
     'أزرق': ('ازرق', 'blue'), 'سماوي': ('سماوي', 'سماي', 'سمائي'),
-    'وردي': ('وردي', 'pink'), 'بيج': ('بيج', 'بيجي', 'beige'),
+    'وردي': ('وردي', 'وردية', 'ورديه', 'pink'), 'بيج': ('بيج', 'بيجي', 'بيجية', 'بيجيه', 'beige'),
     'زيتي': ('زيتي', 'زيتوني'), 'بنفسجي': ('بنفسجي', 'purple'),
-    'أخضر': ('اخضر', 'اخظر', 'green'), 'جوزي': ('جوزي', 'بني', 'brown'),
-    'رصاصي': ('رصاصي', 'رمادي', 'gray', 'grey'), 'نيلي': ('نيلي', 'كحلي', 'navy'),
-    'كريمي': ('كريمي', 'كريم', 'cream'), 'ماروني': ('ماروني', 'maroon'),
+    'أخضر': ('اخضر', 'اخظر', 'خضراء', 'خضرا', 'green'), 'جوزي': ('جوزي', 'جوزية', 'جوزيه', 'بني', 'brown'),
+    'رصاصي': ('رصاصي', 'رصاصية', 'رصاصيه', 'رمادي', 'رمادية', 'رماديه', 'gray', 'grey'), 'نيلي': ('نيلي', 'نيلية', 'نيليه', 'كحلي', 'كحلية', 'كحليه', 'navy'),
+    'كريمي': ('كريمي', 'كريمية', 'كريميه', 'كريم', 'cream'), 'ماروني': ('ماروني', 'مارونية', 'مارونيه', 'maroon'),
     'تركوازي': ('تركوازي', 'تركواز', 'turquoise'), 'أصفر': ('اصفر', 'yellow'),
     'خردلي': ('خردلي', 'mustard'),
     'برتقالي': ('برتقالي', 'orange'), 'ذهبي': ('ذهبي', 'gold'),
@@ -212,11 +212,20 @@ def color_replacement(value):
     text = re.sub(r'^لا لحظة[،, ]+|^لا لحظه[،, ]+', '', text)
     text = re.sub(r'\s+بالقطعة (?:الاولى|الاولي) بس$', '', text)
     hits = list(COLOR_RE.finditer(text))
-    if len(hits) != 2 or not re.fullmatch(r'\s*بدل\s*', text[hits[0].end():hits[1].start()]):
+    if len(hits) < 2 or not re.fullmatch(r'\s*بدل\s*', text[hits[0].end():hits[1].start()]):
         return None
-    if not re.fullmatch(r'(?:تحبين|تحبون|تحب|تريدين|تريدون|تريد|خلي|خليها|خليلي|بدلي|اريد)\s*', text[:hits[0].start()]):
+    if not re.fullmatch(r'(?:لا\s+)?(?:تحبين|تحبون|تحب|تريدين|تريدون|تريد|خلي|خليها|خليلي|بدلي|اريد|اعتمدي)\s*', text[:hits[0].start()]):
         return None
-    if text[hits[1].end():].strip():
+    tail=text[hits[1].end():].strip()
+    # A replacement can carry its old weight and explicitly retain another
+    # line. Do not accept conditional substitutions or a second replacement.
+    retained=(r'(?:(?:نفس\s*)?(?:وزن|قياس)|يبقى|تبقى|يبقي|تبقي)\s*\d{2,3}\s*')
+    if len(hits)==3:
+        before_third=text[hits[1].end():hits[2].start()].strip()
+        after_third=text[hits[2].end():].strip()
+        if not re.fullmatch(retained+r'و?\s*',before_third) or not re.fullmatch(r'(?:(?:يبقى|تبقى|يبقي|تبقي)\s*)?(?:(?:وزن|قياس)\s*)?\d{2,3}',after_third):
+            return None
+    elif len(hits)!=2 or tail and not re.fullmatch(retained,tail):
         return None
     return ALIASES[hits[0][1]], ALIASES[hits[1][1]]
 

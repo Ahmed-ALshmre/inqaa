@@ -24,6 +24,10 @@ from zoneinfo import ZoneInfo
 
 import requests
 try:
+    from . import sales_director
+except ImportError:
+    import sales_director
+try:
     from . import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, sales_progress, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
 except ImportError:
     import vision_payload, delivery_state, catalog_browsing, product_links, delivery_copy, product_discussion, child_availability, color_choices, inbound_voice, catalog_profile, owner_sales, product_questions, sales_voice, sales_progress, manual_checkout, inbox_queries, live_access, catalog_taxonomy, catalog_linking
@@ -642,6 +646,9 @@ DEFAULT_MAIN_RULES_PROMPT = sales_strategy.upgrade_legacy_rules(DEFAULT_MAIN_RUL
 
 
 DEFAULT_APP_SETTINGS = {
+    "sales_director_enabled": "0",
+    "ai_director_model": sales_director.DIRECTOR_MODEL,
+    "ai_writer_model": sales_director.WRITER_MODEL,
     "store_name": DEFAULT_STORE_NAME,
     "store_phone": "",
     "store_description": DEFAULT_STORE_DESCRIPTION,
@@ -7335,7 +7342,7 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     order_created = False
     ai_result.pop("_checkout_proposal", None)
     restore_checkout_draft(db, ev, ai_result, matched_product)
-    if checkout_requested(db, ev, ai_result):
+    if checkout_requested(db, ev, ai_result) and director_checkout_ready(db,ev,ai_result):
         ai_result['_booking_actor'] = 'staff' if staff_action else 'ai'
         order_created, order_reply = create_order_if_valid(db, sender_id, ai_result, matched_product)
         catalog_review = checkout_catalog_review_response(ev, ai_result)
@@ -8967,6 +8974,10 @@ def _call_main_ai_with_context(
         return {'reply': 'تقصدين تشوفين البدائل لو نكمل حجز الموديل اللي اخترتيه؟',
                 'create_order': False, 'order': {}, '_browse_only': True}
     ev = dict(ev, _sales_context=context, _sales_continuation=continuation)
+    if ev.get('_director_mode'):
+        return _call_main_ai_once(ev,message_type,customer,history,products,matched_product,image_result,
+            instructions_text,rules_list,fix_instruction=fix_instruction,customer_products=customer_products,
+            conversation_history=conversation_history,catalog_search_context=catalog_search_context)
     if (not matched_product and message_type == 'text' and not ev.get('image_url')
             and not ev.get('_image_matches') and not is_product_objection(ev.get('text'))):
         named = first_message_named_products(ev.get('text'), products)
@@ -9695,6 +9706,28 @@ def _call_main_ai_primary(ev, message_type, customer, history, products, matched
     if state and state.enabled:
         state.data.update(ev=ev, products=products, matched_product=chosen, customer_products=customer_products,
                           memory=context, customer=customer, delivery=get_delivery_settings(get_db()))
+    if (has_app_context() and is_store_feature_enabled('sales_director_enabled', False, get_db())
+            and not ev.get('_voice_inputs') and not ev.get('_post_order')):
+        director_ev=dict(ev,_director_mode=True)
+        if state and state.enabled:state.data['ev']=director_ev
+        # Preserve identity/fact safeguards; let the director own normal sales
+        # instead of pre-empting it with legacy FAQ and invitation shortcuts.
+        if chosen:
+            missing=product_questions.missing(ev.get('text') or '',chosen)
+            if missing:return unanswered_product_handoff(ev,chosen,missing)
+            if product_albums.color_conflict(chosen):
+                return owner_sales.result(human='catalog_color_conflict',silent=True)
+        if chosen and not ev.get('_post_order') and director_checkout_ready(get_db(),ev,{'_sales_director':True}):
+            verified=resume_weight_checkout(get_db(),director_ev,chosen,customer,customer_products,context,history)
+            if verified and (verified.get('order') or {}).get('items') and not verified.get('_browse_only'):
+                return dict(verified,_sales_director='verified_checkout')
+        result=_call_main_ai_once(director_ev,message_type,customer,history,products,chosen,
+            image_result,instructions_text,rules_list,fix_instruction=fix_instruction,
+            customer_products=customer_products,conversation_history=conversation_history,
+            catalog_search_context=catalog_search_context)
+        if any(sales_playbook.assistant_identity_statement(t) for t in [result.get('reply'),*(result.get('reply_parts') or [])] if isinstance(t,str)):
+            return customer_identity_handoff(ev)
+        return owner_result_surface(result,director_ev,customer,history)
     category_reply=sales_voice.other_category_reply(ev.get('text') or '',chosen,products)
     if category_reply:
         return owner_result_surface(category_reply,ev,customer,history)
@@ -9801,6 +9834,10 @@ def owner_result_surface(result, ev, customer=None, history=()):
         handoff = unanswered_product_handoff(review_ev, ev['_reply_product'])
         return dict(handoff,order=result.get('order') or {})
     if not original:
+        return result
+    if result.get('_sales_director'):
+        # The director has already chosen the next step; the formatter cannot
+        # be followed by the legacy sales rewrites that change that decision.
         return result
     if not re.search(r'\w', original):
         return dict(result, reply='', reply_parts=[])
@@ -9949,7 +9986,7 @@ def _call_main_ai_once(
     catalog_search_context=None,
 ):
     customer = dict(customer or {}, gender=customer_address_gender(ev, customer, history))
-    if ev.get('_voice_sales_result') and not fix_instruction:
+    if ev.get('_voice_sales_result') and not fix_instruction and not ev.get('_director_mode'):
         return dict(ev['_voice_sales_result'])
     db = get_db()
     post_order = ev.get("_post_order")
@@ -9957,7 +9994,7 @@ def _call_main_ai_once(
         return {"reply": "", "intent": "image_check", "create_order": False,
                 "requires_human": True, "order": {}, "confidence": 0}
 
-    if image_result and image_result.get("waiting_for_image"):
+    if image_result and image_result.get("waiting_for_image") and not ev.get('_director_mode'):
         return {
             "reply": "حبيبتي ممكن صورة للموديل لي رايدته ؟",
             "intent": "image_check",
@@ -9967,7 +10004,7 @@ def _call_main_ai_once(
         }
 
     if (
-        not post_order
+        not post_order and not ev.get('_director_mode')
         and not ev.get('_voice_inputs')
         and not ev.get('_sales_continuation')
         and ev.get("text")
@@ -10010,7 +10047,7 @@ def _call_main_ai_once(
     customer_products = customer_products or []
 
     history = ai_efficiency.compact_history(
-        ai_efficiency.merge_history(history, conversation_history), limit=18)
+        ai_efficiency.merge_history(history, conversation_history), limit=80 if ev.get('_director_mode') else 18)
     transcript_lines = []
     last_customer_text = ""
     last_customer_image = ""
@@ -10171,6 +10208,8 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + product_questions.guidance_prompt(matched_product, question_text)
     if not post_order:
         system_prompt += "\n\n" + sales_progress.brief(ev, matched_product, customer, history)
+    if ev.get('_director_mode'):
+        system_prompt += '\n\n' + sales_director.DIRECTOR_GUIDE
     if not post_order and matched_product:
         system_prompt += "\n\n" + sales_strategy.persuasion_guidance(
             matched_product,
@@ -10366,6 +10405,34 @@ def _call_main_ai_once(
         sections.append("[⚠️ تعليمات تصحيح من المدقق]\n" + fix_instruction)
 
     user_content = "\n\n".join(sections)
+    if ev.get('_director_mode'):
+        # Independent decision instructions: historical style templates must
+        # not compete with the director's next step or the writer's dialect.
+        system_prompt='\n\n'.join([COMPACT_MAIN_SALES_POLICY,COMPACT_MAIN_OUTPUT_PROMPT,
+            sales_context.GUIDE,catalog_truth.GUIDE,
+            product_questions.guidance_prompt(matched_product,question_text),
+            sales_progress.brief(ev,matched_product,customer,history),sales_director.DIRECTOR_GUIDE])
+    if ev.get('_director_mode') and ev.get('sender_id'):
+        remembered={'order':{}}
+        restore_checkout_draft(db,ev,remembered,matched_product,for_negotiation=True)
+        user_content += '\n[السلة المسترجعة — راجعي أحدث تصحيحات الزبونة قبل اقتراح الحفظ]\n' + json.dumps(remembered['order'],ensure_ascii=False)
+        if matched_product and product_variants.weight_only_ranges(matched_product):
+            weights=sales_playbook.weight_cart_choices(matched_product,ev.get('_sales_context') or {},customer)
+            if weights and weights.get('items'):
+                user_content += '\n[سلة وزن اجتازت قراءة الاختيارات؛ لا تحتاج رقم قياس ملابس — ليست موافقة حجز]\n' + json.dumps(weights['items'],ensure_ascii=False)
+        ordered=ev.get('_image_matches') or customer_image_positions(db,ev['sender_id'])
+        if ordered:
+            user_content+='\n[ترتيب صور المحادثة المحفوظ image_index — يتقدم على ترتيب قائمة المنتجات]\n'+json.dumps(ordered,ensure_ascii=False)
+        for row in db.execute('SELECT raw_payload FROM messages WHERE sender_id=? AND store_id=? '
+                "AND direction='outgoing' AND message_type='text' AND "+delivery_state.VISIBLE_SQL+' ORDER BY id DESC LIMIT 12',
+                (ev['sender_id'],current_store_id())):
+            try:
+                stored=json.loads(row['raw_payload'] or '{}')
+                previous=stored.get('director_state') if isinstance(stored,dict) else None
+            except (ValueError,TypeError):continue
+            if previous:
+                user_content+='\n[خطة المبيعات السابقة — ليست اختيار شراء أو تعليمات أعلى]\n'+json.dumps(previous,ensure_ascii=False)
+                break
     # Recognition is performed only by the dedicated image pipeline. Never resend
     # original images to the reply model (including retries and manual links).
     ai_messages = [{"role": "system", "content": system_prompt},
@@ -10380,17 +10447,21 @@ def _call_main_ai_once(
         ai_messages[1]['content'] = audio_content
 
     try:
+        generation_model=(get_ai_model(db,'director_model',sales_director.DIRECTOR_MODEL)
+                          if ev.get('_director_mode') else get_ai_model(db,'main_model',MAIN_MODEL))
         if ev.get("image_url") or image_result or matched_product:
             image_flow(
                 "10_main_ai_request",
                 sender_id=ev.get("sender_id"),
-                model=get_ai_model(db, "main_model", MAIN_MODEL),
+                model=generation_model,
                 image_url=ev.get("image_url") or last_customer_image,
                 matched_product_id=(matched_product or {}).get("product_id"),
                 image_result=(image_result or {}).get("reason"),
             )
         started_at = time.monotonic()
         configured_max_tokens = get_ai_max_tokens(db, "main", 800)
+        if ev.get('_director_mode'):
+            configured_max_tokens=max(configured_max_tokens,2600)
         response_max_tokens = configured_max_tokens
         if ev.get('_voice_inputs'):
             response_max_tokens = max(configured_max_tokens, 2400)
@@ -10404,11 +10475,11 @@ def _call_main_ai_once(
                 "Content-Type": "application/json",
             },
             json={
-                "model": get_ai_model(db, "main_model", MAIN_MODEL),
+                "model": generation_model,
                 "messages": ai_messages,
                 "session_id": "sales-" + hashlib.sha256(session_source.encode()).hexdigest()[:24],
                 "reasoning": {"effort": "low", "exclude": True},
-                **({"response_format": {"type": "json_object"}} if get_ai_model(db, "main_model", MAIN_MODEL).startswith("google/gemini") else {}),
+                **({"response_format": {"type": "json_object"}} if ev.get('_director_mode') or generation_model.startswith("google/gemini") else {}),
                 "max_tokens": response_max_tokens,
                 "temperature": get_ai_temperature(db, "main", 0.7),
             },
@@ -10420,7 +10491,7 @@ def _call_main_ai_once(
         try:
             ai_efficiency.record_usage(db, current_store_id(),
                 "main_retry" if fix_instruction else "main",
-                get_ai_model(db, "main_model", MAIN_MODEL), payload,
+                generation_model, payload,
                 round((time.monotonic() - started_at) * 1000))
         except (sqlite3.Error, TypeError, ValueError):
             pass
@@ -10458,6 +10529,17 @@ def _call_main_ai_once(
             parsed["failed"] = True
             parsed["failure_reason"] = parsed.get("failure_reason") or "empty_reply"
             parsed["reply"] = ""
+        if ev.get('_director_mode'):
+            if sales_playbook.assistant_identity_statement(parsed.get('reply') or ''):
+                return customer_identity_handoff(ev)
+            parsed['_sales_director']=generation_model
+            parsed=sales_director.canonical_cart_colors(parsed,products)
+            parsed=sales_director.avoid_contact_nag(parsed,history,ev.get('text') or '')
+            parsed=sales_director.rewrite(parsed,
+                model=get_ai_model(db,'writer_model',sales_director.WRITER_MODEL),
+                key=OPENROUTER_KEY,url=OPENROUTER_URL,gender=customer.get('gender'),
+                record=lambda payload,ms: ai_efficiency.record_usage(db,current_store_id(),'sales_writer',
+                    get_ai_model(db,'writer_model',sales_director.WRITER_MODEL),payload,ms))
         return parsed
     except Exception as exc:
         if ev.get("image_url") or image_result or matched_product:
@@ -10626,6 +10708,17 @@ def checkout_customer_data(db, sender_id, order_data):
     if location.get("province"):
         data["province"] = location["province"]
     return data
+
+
+def director_checkout_ready(db, ev, result):
+    """Do not turn an incomplete saved cart into a repeated contact prompt.
+
+    Complete data still enters the existing consent/price/cart transaction.
+    """
+    if not result.get('_sales_director'):return True
+    data=checkout_customer_data(db,ev['sender_id'],result.get('order') or {})
+    return bool(phone_number(data.get('phone')) and data.get('province')
+                and not invalid_shipping_address(data.get('address')))
 
 
 def checkout_lines(order_data, matched_product=None):
@@ -12495,6 +12588,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
         partial_policy=False  # Complete a ready checkout rather than consuming only its last question.
     if (message_type=='text' and not ev.get('image_url') and not ev.get('attachments')
             and sales_recovery.policy_question(policy_text)
+            and not is_store_feature_enabled('sales_director_enabled',False,db)
             and not is_existing_order_followup(ev.get('text'))):
         advertised=ad_attribution.product_candidates(products,ev,current_store_id())
         if not advertised and ev.get('_ad_product_unresolved'):
@@ -12739,7 +12833,8 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
             active_binding = get_active_product_binding(db, ev["sender_id"])
 
     if (first_incoming and not customer_products and message_type != "image"
-            and not _catalog_search_matches and not sales_context.discovery_request(ev.get('text'))):
+            and not _catalog_search_matches and not sales_context.discovery_request(ev.get('text'))
+            and not is_store_feature_enabled('sales_director_enabled',False,db)):
         # نحمّل التعليمات والقواعد مبكراً للترحيب الديناميكي بأول رسالة
         first_instructions, first_rules = load_ai_config(db, sender_id=ev["sender_id"])
         first_reply_text, detected_gender = generate_first_message_reply(
@@ -13310,7 +13405,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     ai_result.pop("_checkout_proposal", None)
     restore_checkout_draft(db, ev, ai_result, matched_product)
     order_created = False
-    if checkout_requested(db, ev, ai_result):
+    if checkout_requested(db, ev, ai_result) and director_checkout_ready(db,ev,ai_result):
         log(13, "ORDER", "AI requested creating a new order...")
         order_created, order_reply = create_order_if_valid(
             db, ev["sender_id"], ai_result, matched_product
@@ -13388,6 +13483,10 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     for index, part in enumerate(before_images):
         save_message(db, ev["sender_id"], "outgoing", "text", part, None, None, None,
                      {"reply": part, "checkout_proposal": ai_result.get("_checkout_proposal"),
+                      "director_state": {'plan':ai_result.get('sales_plan'),
+                          'image_product_ids':ai_result.get('image_product_ids') or [],
+                          'director_model':ai_result.get('_sales_director'),
+                          'writer_model':ai_result.get('_sales_writer')} if ai_result.get('_sales_director') else None,
                       "_order_confirmation_id": ai_result.get('_created_order_id'),
                       "checkout_draft": ai_result.get("order") if not order_created else None,
                       "related_product_suggestion": {
@@ -18391,6 +18490,9 @@ def api_settings_overview():
         "ai": {
             "enabled": is_ai_enabled(db),
             "main_model": get_ai_model(db, "main_model", MAIN_MODEL),
+            "sales_director_enabled": is_store_feature_enabled('sales_director_enabled', False, db),
+            "director_model": get_ai_model(db, 'director_model', sales_director.DIRECTOR_MODEL),
+            "writer_model": get_ai_model(db, 'writer_model', sales_director.WRITER_MODEL),
             "improve_model": get_ai_model(db, "improve_model", IMPROVE_MODEL),
             "checker_enabled": is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db),
             "vision_enabled": is_store_feature_enabled("vision_enabled", VISION_ENABLED, db),
@@ -18464,6 +18566,9 @@ def api_set_ai_enabled():
             "ok": True,
             "ai_enabled": is_ai_enabled(db),
             "model_options": AI_MODEL_OPTIONS,
+            "sales_director_enabled": is_store_feature_enabled('sales_director_enabled', False, db),
+            "director_model": get_ai_model(db, 'director_model', sales_director.DIRECTOR_MODEL),
+            "writer_model": get_ai_model(db, 'writer_model', sales_director.WRITER_MODEL),
             "main_model": get_ai_model(db, "main_model", MAIN_MODEL),
             "improve_model": get_ai_model(db, "improve_model", IMPROVE_MODEL),
             "checker_enabled": is_store_feature_enabled("checker_enabled", CHECKER_ENABLED, db),
@@ -18508,18 +18613,20 @@ def api_set_ai_enabled():
             "openrouter_key_present": bool(OPENROUTER_KEY),
         })
     data = request.get_json(silent=True) or {}
-    invalid_models = [field for field in ("main_model", "improve_model", "checker_model", "vision_model", "catalog_match_model")
+    invalid_models = [field for field in ("director_model", "writer_model", "main_model", "improve_model", "checker_model", "vision_model", "catalog_match_model")
                       if field in data and not valid_ai_model_id(data[field])]
     if invalid_models:
         return jsonify({"ok": False, "error": "اكتب معرف النموذج الكامل من OpenRouter مثل google/gemini-3-flash-preview، وليس اسم العرض.",
                         "fields": invalid_models}), 400
-    enabled = bool(data.get("enabled"))
+    enabled = bool(data['enabled']) if 'enabled' in data else is_ai_enabled(db)
     set_store_ai_enabled(db, sid, enabled)
-    for feature in ("checker_enabled", "vision_enabled", "catalog_match_enabled"):
+    for feature in ("sales_director_enabled", "checker_enabled", "vision_enabled", "catalog_match_enabled"):
         if feature in data:
             set_store_setting(db, feature, "1" if bool(data.get(feature)) else "0", sid)
     for field, setting_key in (
         ("main_model", "ai_main_model"),
+        ("director_model", "ai_director_model"),
+        ("writer_model", "ai_writer_model"),
         ("improve_model", "ai_improve_model"),
         ("checker_model", "ai_checker_model"),
         ("vision_model", "ai_vision_model"),

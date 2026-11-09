@@ -23,7 +23,19 @@
       <div><small>المدقق</small><strong id="checkerState">-</strong></div>
     </div>
 
-    <label class="form-label">الموديل الرئيسي</label>
+    <div class="border rounded-3 p-3 my-3">
+      <label class="form-check form-switch admin-switch">
+        <input class="form-check-input" type="checkbox" id="salesDirectorEnabled">
+        <span>إدارة البيع بموديل مستقل وصياغة عراقية</span>
+      </label>
+      <p class="form-text">موديل الإدارة يفهم المحادثة ويحدد الرد والسلة والخطوة التالية. موديل الصياغة يحوّل مسودته للهجة العراقية. حفظ الطلب وتأكيده يخضعان لتحقق النظام.</p>
+      <label class="form-label" for="directorModelInput">موديل إدارة المحادثة</label>
+      <input class="form-control mb-3" id="directorModelInput" dir="ltr" type="text" autocomplete="off" spellcheck="false" placeholder="openai/gpt-6.1-terra">
+      <label class="form-label" for="writerModelInput">موديل الصياغة العراقية</label>
+      <input class="form-control" id="writerModelInput" dir="ltr" type="text" autocomplete="off" spellcheck="false" placeholder="google/gemini-3.8-flash">
+      <div class="form-text">يمكن تغيير الموديلين لكل متجر بمعرف OpenRouter يدعم توليد JSON. عند إيقاف المفتاح يرجع الرد للموديل الرئيسي أدناه. الصور تستعمل إعداداتها المستقلة، والصوت وخدمة الطلب المحفوظ يستعملان المسار الحالي.</div>
+    </div>
+    <label class="form-label">الموديل الرئيسي للمسار الحالي والمساعد</label>
     <input
       class="form-control"
       id="mainModelInput"
@@ -62,6 +74,6 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/settings_pages.js?v=8"></script>
+<script src="/static/js/settings_pages.js?v=9"></script>
 <script>initAISettingsPage();</script>
 {% endblock %}
