@@ -19,6 +19,7 @@ WRITER_MODEL = 'google/gemini-3.8-flash'
 DIRECTOR_GUIDE = '''[إدارة البيع على مرحلتين — تتقدم على تعليمات الأسلوب القديمة]
 أنت مسؤولة فهم المحادثة وقرار البيع والسلة. يمكن كتابة مسودة الرد بالفصحى؛ مصيغة عراقية ستحافظ على المعنى.
 راجعي آخر تصحيح لكل منتج ولون وقياس وكمية، وبيانات الاتصال والأسئلة المجابة. ميزي قياس الملابس عن الوزن والعمر؛ «قياس85» ليس «عمر85».
+إذا كانت قياسات المنتج نفسه مجال أوزان فقط (مثل60إلى130كيلو)، فالاختيار95كيلو صالح كوحدة وزن: ضعي size_type=weight وsize=95 وweight=95 ولا تطلبي رقم قياس ملابس غير مسجل لهذا المنتج. السلة الوزنية المتحققة في السياق مرجع لكل لون ووزنه وكميته؛ لا تعيدي سؤال الوزن أو القياس الموجود فيها. هذا ليس تحويل وزن إلى قياس ملابس ولا ضمان ملاءمة.
 أجيبي عن جميع أجزاء السؤال أولاً، ثم اختاري خطوة واحدة تقرب الزبونة من اختيار يناسبها وحجز صحيح. عالجي خوفها بحقيقة موثقة وسياسة الفحص الفعلية، دون ندرة أو ضمان مختلق.
 إذا طلبتِ الرقم والعنوان ولم يصلا ثم سألت عن القماش أو الطول، أجيبي سؤالها دون إعادة طلب البيانات كل مرة. عند وصول الرقم اطلبي العنوان الناقص فقط؛ وعند موافقة شراء جديدة بعد مهلة يمكن دعوة البيانات مجددًا. انتظار بيانات سبق طلبها خطوة wait صحيحة، ولا يحتاج سؤالًا جديدًا.
 كل رد بيع نشط يحتاج خطوة مدروسة ظاهرة في المسودة: إذا اللون والقياس معروفان ومتاحان اطلبي بيانات الحجز الناقصة مرة واحدة مباشرة، ولا تستبدلي ذلك بسؤال «أحجز لك؟». next_contact_step في خلاصة الحالة دعوة تحققت من الاختيارات وليست موافقة حفظ؛ استخدميها إذا لم تطلبي نفس البيانات سابقاً أو وصلت موافقة شراء جديدة، مع احترام التأجيل وحل التردد أولًا.
@@ -36,6 +37,22 @@ WRITER_GUIDE = '''أنت مصيغة ردود موظفة مبيعات عراقي�
 def text_parts(value):
     parts=value.get('reply_parts')
     return parts if isinstance(parts,list) and parts and all(isinstance(p,str) and p.strip() for p in parts) else [str(value.get('reply') or '')]
+
+
+def canonical_cart_colors(draft,products):
+    order=dict(draft.get('order') or {})
+    if not isinstance(order.get('items'),list):return draft
+    lines=[]
+    for item in order['items']:
+        if not isinstance(item,dict):return draft
+        line=dict(item)
+        product=next((p for p in products if p.get('product_id')==line.get('product_id')),None)
+        parsed=product_variants.colors(str(line.get('color') or ''))
+        if product and len(parsed)==1 and parsed[0] in product_variants.colors(product.get('colors')):
+            line['color']=parsed[0]
+        lines.append(line)
+    order['items']=lines
+    return dict(draft,order=order)
 
 
 def avoid_contact_nag(draft,history,current_text):

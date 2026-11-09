@@ -9717,6 +9717,10 @@ def _call_main_ai_primary(ev, message_type, customer, history, products, matched
                 return owner_sales.result(human='catalog_color_conflict',silent=True)
         director_ev=dict(ev,_director_mode=True)
         if state and state.enabled:state.data['ev']=director_ev
+        if chosen and not ev.get('_post_order') and director_checkout_ready(get_db(),ev,{'_sales_director':True}):
+            verified=resume_weight_checkout(get_db(),director_ev,chosen,customer,customer_products,context,history)
+            if verified and (verified.get('order') or {}).get('items') and not verified.get('_browse_only'):
+                return dict(verified,_sales_director='verified_checkout')
         result=_call_main_ai_once(director_ev,message_type,customer,history,products,chosen,
             image_result,instructions_text,rules_list,fix_instruction=fix_instruction,
             customer_products=customer_products,conversation_history=conversation_history,
@@ -10412,6 +10416,10 @@ def _call_main_ai_once(
         remembered={'order':{}}
         restore_checkout_draft(db,ev,remembered,matched_product,for_negotiation=True)
         user_content += '\n[السلة المسترجعة — راجعي أحدث تصحيحات الزبونة قبل اقتراح الحفظ]\n' + json.dumps(remembered['order'],ensure_ascii=False)
+        if matched_product and product_variants.weight_only_ranges(matched_product):
+            weights=sales_playbook.weight_cart_choices(matched_product,ev.get('_sales_context') or {},customer)
+            if weights and weights.get('items'):
+                user_content += '\n[سلة وزن اجتازت قراءة الاختيارات؛ لا تحتاج رقم قياس ملابس — ليست موافقة حجز]\n' + json.dumps(weights['items'],ensure_ascii=False)
     # Recognition is performed only by the dedicated image pipeline. Never resend
     # original images to the reply model (including retries and manual links).
     ai_messages = [{"role": "system", "content": system_prompt},
@@ -10512,6 +10520,7 @@ def _call_main_ai_once(
             if sales_playbook.assistant_identity_statement(parsed.get('reply') or ''):
                 return customer_identity_handoff(ev)
             parsed['_sales_director']=generation_model
+            parsed=sales_director.canonical_cart_colors(parsed,products)
             parsed=sales_director.avoid_contact_nag(parsed,history,ev.get('text') or '')
             parsed=sales_director.rewrite(parsed,
                 model=get_ai_model(db,'writer_model',sales_director.WRITER_MODEL),

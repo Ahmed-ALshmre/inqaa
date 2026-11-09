@@ -13,6 +13,13 @@ def response(value):
 
 
 class WriterTests(unittest.TestCase):
+    def test_iraqi_black_alias_is_the_same_catalog_color_without_changing_quantity(self):
+        for alias in ('سودة','سوده','سودا','سوداء'):
+            self.assertEqual(product_variants.colors(alias),['أسود'])
+            draft=dict(order={'items':[dict(product_id='K',color=alias,size='44',quantity=2)]})
+            normalized=d.canonical_cart_colors(draft,[dict(product_id='K',colors='اسود جوزي')])
+            self.assertEqual(normalized['order']['items'][0],dict(product_id='K',color='أسود',size='44',quantity=2))
+            self.assertEqual(draft['order']['items'][0]['color'],alias)
     def test_side_answer_does_not_repeat_unanswered_contact_request(self):
         history=[dict(direction='outgoing',text='دزيلي رقم الموبايل والعنوان.')]
         draft={'reply':'قماشه فرو ومبطن. بس دزيلي رقم الموبايل والعنوان حتى أثبت الطلب.'}
@@ -127,6 +134,28 @@ class DirectorPipelineTests(unittest.TestCase):
         order=self.db.execute('SELECT * FROM orders WHERE sender_id=?',(self.sender,)).fetchall()
         self.assertEqual(len(order),1)
         self.assertEqual(order[0]['total_amount'],21000)
+
+    def test_weight_only_cart_completes_from_evidence_without_asking_garment_size(self):
+        self.enable()
+        self.product.update(sizes='من وزن 60 إلى 130 كيلو',colors='ازرق ماروني رصاصي',
+            price='15000 او بكج قطعتين ب 25000',offer='قطعتين ب 25 الف')
+        turns=['اريد ازرق لوزن 130 وماروني لوزن 95 قطعة من كل لون',
+            'لا خلي الرصاصي بدل الماروني نفس وزن 95 والازرق يبقى 130','تمام وافقت ثبتي القطعتين بالعرض']
+        for text in turns:self.save('incoming',text)
+        self.save('outgoing','دزيلي رقم الموبايل والعنوان.')
+        text='07700000001 بغداد حي الاختبار قرب مدرسة التجربة'
+        def features(name,default,db=None):return name=='sales_director_enabled'
+        with patch.object(self.m,'extract_facebook_event',return_value=dict(self.ev,text=text)), \
+             patch.object(self.m,'is_ai_enabled',return_value=True), \
+             patch.object(self.m,'is_customer_ai_enabled',return_value=True), \
+             patch.object(self.m,'is_store_feature_enabled',side_effect=features), \
+             patch.object(self.m,'_call_main_ai_once',side_effect=AssertionError('Ready weighted cart must not need a model decision')):
+            result=self.m.process_webhook(self.db,{},use_debounce=False)
+        self.assertEqual(result['reply'],self.m.DEFAULT_ORDER_CONFIRMATION_TEXT,result)
+        order=self.db.execute('SELECT * FROM orders WHERE sender_id=?',(self.sender,)).fetchone()
+        lines=json.loads(order['order_items'])
+        self.assertEqual({(i['color'],i['size'],i.get('size_type')) for i in lines},{('أزرق','130','weight'),('رصاصي','95','weight')})
+        self.assertEqual(order['total_amount'],30000)
 
     def test_director_failure_stays_failed_and_writer_is_not_called(self):
         self.enable()

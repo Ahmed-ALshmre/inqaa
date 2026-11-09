@@ -59,12 +59,13 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--catalog',type=Path,required=True);p.add_argument('--settings-db',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True);p.add_argument('--allow-live',action='store_true')
+    p.add_argument('--case',action='append',help='Run a specific long journey only.')
     a=p.parse_args()
     if not a.allow_live:p.error('Explicit --allow-live and owner authorization are required.')
     h.scenarios=scenarios
     args=argparse.Namespace(mode='live',source_root=Path(__file__).resolve().parents[1],catalog=a.catalog,
         settings_db=a.settings_db,env_file=Path('outputs/absent.env'),api_key_file=None,output=a.output,
-        max_live_requests=120,max_live_cost_usd=2.0,scenario=None,repeat=1,sales_director=True,
+        max_live_requests=120,max_live_cost_usd=2.0,scenario=a.case,repeat=1,sales_director=True,
         director_model='openai/gpt-6.1-terra',writer_model='google/gemini-3.8-flash',
         save_partial_transcripts=True,require_complete_selection=True,turn_evaluator=check_turn,case_evaluator=check_case)
     report=h.run(args)
