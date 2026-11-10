@@ -77,6 +77,17 @@ class Store:
                 part_index INTEGER NOT NULL, state_version INTEGER NOT NULL,
                 payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued',
                 provider_id TEXT, UNIQUE(scope,reply_key,part_index));
+            CREATE TABLE IF NOT EXISTS sales_v2_model_attempts (
+                id INTEGER PRIMARY KEY, scope TEXT NOT NULL, event_id INTEGER NOT NULL,
+                stage TEXT NOT NULL, status TEXT NOT NULL, error_code TEXT,
+                created_at REAL NOT NULL);
+            CREATE INDEX IF NOT EXISTS sales_v2_model_attempts_event
+                ON sales_v2_model_attempts(scope,event_id);
+            CREATE TABLE IF NOT EXISTS sales_v2_incidents (
+                id INTEGER PRIMARY KEY, scope TEXT NOT NULL, event_id INTEGER NOT NULL,
+                category TEXT NOT NULL, error_code TEXT NOT NULL,
+                review_id INTEGER, created_at REAL NOT NULL,
+                UNIQUE(scope,event_id,category));
         ''')
 
     @contextmanager

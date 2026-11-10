@@ -1,6 +1,9 @@
 """Ground the writer in the committed state and authoritative product facts."""
 from .cart import CartService
 from .store import Conflict
+from .contracts import FACT_FIELDS, catalog_fact
+from .contracts import DecisionRejected
+from .copy_guard import validate_copy
 import json
 
 
@@ -35,14 +38,44 @@ class Responses:
                 raise ValueError('invalid_fact_reference')
             product=catalog.get(fact['product_id'])
             field=fact['field']
-            if field not in {'fabric','description','notes','colors','sizes','price','offer','product_type'}:
+            if field not in FACT_FIELDS:
                 raise ValueError('unsupported_fact_field')
-            if not product.get(field):
+            fact_value=catalog_fact(product,field)
+            if fact_value is None:
                 return dict(action='missing_fact',product_id=fact['product_id'],field=field)
-            allowed_facts.append(dict(product_id=fact['product_id'],field=field,value=product[field]))
-        parts = self.writer(dict(state=snap['data'], facts=allowed_facts,
+            allowed_facts.append(dict(product_id=fact['product_id'],**fact_value))
+        recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 15",
+                                     (scope.key,)).fetchall()
+        messages=[dict(actor=row[0],**json.loads(row[1])) for row in reversed(recent)]
+        replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
+                                      (scope.key,)).fetchall()
+        accepted=[json.loads(row[0]) for row in reversed(replies)]
+        # A known product can have a sales next-step without already being in a cart.
+        focus=snap['data'].get('focus_product_id')
+        if question is None and not readiness['conditions']:
+            question=next((f for f in readiness['missing_fields'] if f.startswith('cart.') and f.endswith(('.color','.size','.age_months','.weight_kg'))),None)
+        if question is None and not snap['data']['cart'] and focus:
+            product=catalog.get(focus)
+            if product.get('sizes') and product.get('size_system')!='none':
+                question=f'product.{focus}.size'
+            elif product.get('colors'):
+                question=f'product.{focus}.color'
+        if question and accepted and accepted[-1].get('question_field')==question and question not in outcome.get('invalid_fields',[]):
+            question=None
+        context=dict(state=snap['data'], facts=allowed_facts,
                                   question_field=question, goal=plan.get('goal',''),
-                                  instructions='صوت بنت عراقية ودود ومختصر؛ أجيبي السؤال ثم خطوة مناسبة. لا ترحيب متكرر، لا ادعاء حجز، لا سؤال عن معلوم، ولا اختراع ندرة أو عرض أو حقيقة.'))
+                                  recent_messages=messages,recent_replies=accepted,
+                                  instructions='صوت بنت عراقية ودود ومختصر؛ أجيبي السؤال ثم خطوة مناسبة. لا ترحيب متكرر، لا ادعاء حجز، لا سؤال عن معلوم، ولا اختراع ندرة أو عرض أو حقيقة.')
+        parts=None
+        for attempt in range(2):
+            try:
+                parts=self.writer(context) if attempt==0 else self.writer.repair(context,parts,error)
+                validate_copy(parts,question)
+                break
+            except ValueError as exc:
+                if getattr(type(self.writer),'repair',None) is None:raise
+                if attempt:raise DecisionRejected('writer_copy_invalid_after_repair') from None
+                error=str(exc)
         if not isinstance(parts,list) or not 1<=len(parts)<=5:
             raise ValueError('invalid_reply_parts')
         for part in parts:
@@ -61,6 +94,9 @@ class Responses:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:
                 text_parts[-1]['purpose']='checkout_contacts'
+        if question:
+            text_parts=[p for p in parts if p['type']=='text']
+            if text_parts:text_parts[-1]['question_field']=question
         record=self.store.apply(scope,key,snap['version'],dict(turn_id=turn_id),lambda state:dict(parts=parts))['result']
         self.store.enqueue_reply(scope,f'answer:{turn_id}',record['state_version'],parts)
         return dict(action='queued',parts=len(parts))

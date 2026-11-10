@@ -34,7 +34,12 @@ def main():
         'اريد حقيبة سوداء وحدة',
         'تحتاجين وزني لو قياسي؟',
         'هذا رقمي 07701234567',
-        'البصرة حي الاختبار قرب مدرسة التجربة ثبتيلي'])]
+        'البصرة حي الاختبار قرب مدرسة التجربة ثبتيلي']),
+        ('بيانات الحجز دون تأكيد ثان',[
+        'هلا هذا شنو الوانه؟',
+        'اريد الازرق قياس 44 قطعة وحدة',
+        '07701234567',
+        'بغداد حي الاختبار قرب مدرسة التجربة'])]
     reports=[]
     for index,(name,messages) in enumerate(scenarios):
         fixture=LinkingTests();fixture.setUp()
@@ -42,6 +47,7 @@ def main():
         fixture.products[1].update(description='حقيبة نسائية',ad_ids=['bag-ad'])
         entry=Entrypoint(fixture.db,lambda sid:fixture.products,lambda sid,p:5000,
                          DecisionGateway(model,key),writer=WriterGateway(writer_model,key))
+        entry.migrate()
         scope=Scope('khuyoot','chatwoot','qa-account',f'qa-customer-{index}')
         report=dict(name=name,turns=[],model=model,writer=writer_model)
         try:
@@ -50,7 +56,7 @@ def main():
                 try:
                     result=entry.receive(store_id=scope.store,channel=scope.channel,account_id=scope.account,
                         sender_id=scope.sender,message_id=f'm{number}',text=text,
-                        ad={'ad_id':'120251717777850095' if index==0 else 'bag-ad'})
+                        ad={'ad_id':'bag-ad' if index==1 else '120251717777850095'})
                     turn['result']=result
                     turn['bot']=[]
                     while True:
@@ -73,6 +79,20 @@ def main():
                     print(f'Scenario {index+1}, turn {number+1}: {type(exc).__name__}',flush=True)
                     break
             report['orders']=[dict(zip([d[0] for d in cur.description],row)) for cur in [fixture.db.execute('SELECT * FROM orders')] for row in cur.fetchall()]
+            expected='B1' if index==1 else 'P1'
+            orders=report['orders']
+            checks=dict(completed=len(report['turns'])==len(messages) and not any(t.get('error') for t in report['turns']),
+                        exactly_one_order=len(orders)==1,
+                        product_correct=len(orders)==1 and orders[0]['product_id']==expected)
+            if len(orders)==1:
+                lines=json.loads(orders[0]['order_items'])
+                checks['choice_correct']=(len(lines)==1 and lines[0]['quantity']==1 and
+                    (lines[0]['size']=='' if index==1 else lines[0]['size']=='44' and lines[0]['color']=='أزرق'))
+            report['checks']=checks
+            report['passed']=all(checks.values())
+            report['contract_diagnostics']=entry.runtime.decide.failures
+            report['model_attempts']=[dict(stage=r[0],status=r[1],error_code=r[2]) for r in fixture.db.execute(
+                'SELECT stage,status,error_code FROM sales_v2_model_attempts ORDER BY id')]
         finally:
             fixture.tearDown()
             reports.append(report)
@@ -85,6 +105,7 @@ def main():
             for reply in turn.get('bot',[]):lines.extend(['**البوت:** '+reply,''])
             if turn.get('error'):lines.extend(['**فشل الاختبار:** '+turn['error'],''])
         lines.extend([f'الطلبات المحفوظة: {len(report.get("orders",[]))}',''])
+        lines.extend([f'اجتياز حالة السلة والحجز: {report.get("passed",False)}',''])
     (output/'المحادثات.md').write_text('\n'.join(lines),encoding='utf8')
 
 

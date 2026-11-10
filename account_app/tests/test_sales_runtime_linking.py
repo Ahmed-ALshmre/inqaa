@@ -21,6 +21,8 @@ class LinkingTests(unittest.TestCase):
         source = (Path(__file__).parents[1] / 'app.py').read_text(encoding='utf8')
         ddl = re.search(r'CREATE TABLE IF NOT EXISTS orders \(.*?\);', source, re.S)[0]
         self.db.executescript(ddl)
+        self.db.executescript(re.search(r'CREATE TABLE IF NOT EXISTS human_reviews \(.*?\);',source,re.S)[0])
+        self.db.execute('ALTER TABLE human_reviews ADD COLUMN store_id TEXT')
         for name, typ in [('store_id', 'TEXT'), ('product_total', 'INTEGER'),
                           ('delivery_fee', 'INTEGER'), ('total_amount', 'INTEGER')]:
             self.db.execute(f'ALTER TABLE orders ADD COLUMN {name} {typ}')
@@ -327,7 +329,7 @@ class LinkingTests(unittest.TestCase):
     def test_quantity_limit_is_aggregated_across_cart_lines(self):
         self.products[0]['stock_quantity']=1
         self.select()
-        self.run_turn('واحدة ازرق همين',changes=[dict(line_id='two',values=dict(product_id='P1',color='أزرق',size='44'))])
+        self.run_turn('واحدة ازرق همين',changes=[dict(new_line=True,values=dict(product_id='P1',color='أزرق',size='44'))])
         with self.assertRaisesRegex(Conflict,'checkout_quantity_exceeds_stock'):
             self.run_turn('حجزيلي 07701234567 بغداد حي المنصور قرب المدرسة',
                 contact=dict(phone='07701234567',address='بغداد حي المنصور قرب المدرسة'))
@@ -336,7 +338,7 @@ class LinkingTests(unittest.TestCase):
         from account_app.sales_runtime.entrypoint import Entrypoint
         source=(Path(__file__).parents[1]/'app.py').read_text(encoding='utf8')
         self.db.executescript(re.search(r'CREATE TABLE IF NOT EXISTS human_reviews \(.*?\);',source,re.S)[0])
-        self.db.execute('ALTER TABLE human_reviews ADD COLUMN store_id TEXT');self.db.commit()
+        self.db.commit()
         self.plan=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='fabric')]))
         writer=Mock()
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer)

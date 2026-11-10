@@ -7,6 +7,7 @@ from .cart import Catalog
 from .orders import Orders, migrate_tasks, CONFIRMATION
 from .runtime import Runtime
 from .store import Store, Scope, Conflict
+from .contracts import DecisionRejected, DecisionUnavailable
 
 
 class Entrypoint:
@@ -26,7 +27,51 @@ class Entrypoint:
         product_questions.init(self.store.db)
         self.store.db.commit()
 
-    def receive(self, *, store_id, channel, account_id, sender_id, message_id,
+    def receive(self, **kwargs):
+        try:
+            return self._receive(**kwargs)
+        except (DecisionRejected,DecisionUnavailable) as exc:
+            scope=Scope(kwargs['store_id'],kwargs['channel'],kwargs['account_id'],kwargs['sender_id'])
+            row=self.store.db.execute('SELECT id FROM sales_v2_events WHERE scope=? AND external_id=?',
+                                      (scope.key,kwargs['message_id'])).fetchone()
+            if not row:raise
+            return self.record_failure(scope,row[0],exc)
+
+    def record_failure(self,scope,event_id,error):
+        import time
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        rejected=isinstance(error,DecisionRejected)
+        category='invalid_decision' if rejected else 'provider_unavailable'
+        snap=self.store.snapshot(scope)
+        if not rejected:
+            # An outage must not stale an already committed turn/writer input.
+            with self.store.transaction():
+                self.store.db.execute('''INSERT INTO sales_v2_incidents
+                    (scope,event_id,category,error_code,created_at) VALUES(?,?,?,?,?)
+                    ON CONFLICT(scope,event_id,category) DO UPDATE SET error_code=excluded.error_code''',
+                    (scope.key,event_id,category,str(error),time.time()))
+            return dict(action='service_failure',error_code=str(error),review_id=None,retryable=True,reply='')
+        latest=self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",(scope.key,)).fetchone()[0]
+        if latest!=event_id:return dict(action='superseded',reply='')
+        def handle(state):
+            review_id=None
+            if rejected:
+                review_id=self.store.db.execute('''INSERT INTO human_reviews
+                    (sender_id,store_id,message_text,reason,status,created_at) VALUES(?,?,?,?,'pending',?)''',
+                    (scope.sender,scope.store,self.store.evidence(scope,event_id)['payload'].get('text',''),
+                     'مراجعة تقنية بعد استنفاد تصحيح القرار: '+str(error),
+                     datetime.now(ZoneInfo('Asia/Baghdad')).isoformat())).lastrowid
+                state['control_mode']='human'
+            self.store.db.execute('''INSERT INTO sales_v2_incidents
+                (scope,event_id,category,error_code,review_id,created_at) VALUES(?,?,?,?,?,?)''',
+                (scope.key,event_id,category,str(error),review_id,time.time()))
+            return dict(action='needs_review' if rejected else 'service_failure',error_code=str(error),
+                        review_id=review_id,retryable=not rejected,reply='')
+        return self.store.apply(scope,f'failure:{event_id}:{category}',snap['version'],
+                                dict(category=category),handle)['result']
+
+    def _receive(self, *, store_id, channel, account_id, sender_id, message_id,
                 text='', ad=None, media_kind='text', actor='customer', ai_enabled=True, media_ref=None):
         if channel not in {'chatwoot', 'zernio'}:
             raise ValueError('unsupported_channel')
