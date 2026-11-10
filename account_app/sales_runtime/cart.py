@@ -87,6 +87,8 @@ class CartService:
             raise ValueError('unsupported_cart_fields')
         command = dict(event_id=event_id, line_id=line_id, values=values, remove=remove)
         def handle(state):
+            if state.get('order_id'):
+                raise Conflict('booked_cart_requires_order_change_service')
             self.store.evidence(scope, event_id)
             old = next((i for i in state['cart'] if i['line_id'] == line_id), None)
             if remove:
