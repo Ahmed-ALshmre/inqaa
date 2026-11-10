@@ -253,6 +253,7 @@ class LinkingTests(unittest.TestCase):
 
     def test_missing_fact_does_not_generate_customer_reply(self):
         from account_app.sales_runtime.response import Responses
+        self.select()
         self.plan=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='fabric')]))
         event=self.event('بي ليكرا؟')
         outcome=self.runtime.turn(self.scope,event)

@@ -45,7 +45,7 @@ class RecoveryTests(unittest.TestCase):
         test=self
         class RepairingModel:
             def __call__(self,context):
-                return dict(intent='continue',changes=[dict(values=dict(product_id='P1',size='99'))])
+                return dict(intent='continue',changes=[dict(values=dict(product_id='P9',size='44'))])
             def repair(self,context,previous,error):
                 test.assertFalse(test.db.in_transaction)
                 test.assertEqual([],test.store.snapshot(test.scope)['data']['cart'])
@@ -156,7 +156,7 @@ class RecoveryTests(unittest.TestCase):
     def test_known_ad_has_next_step_and_repeat_question_is_suppressed(self):
         from account_app.sales_runtime.response import Responses
         self.plan=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='fabric')]))
-        self.products[0]['fabric']='قديفة'
+        self.products[0]['fabric']='قديفة ثخين'
         event=self.store.append(self.scope,'ad-message',kind='message',actor='customer',
                                 payload=dict(text='شنو القماش',ad={'ad_id':'120251717777850095'}))['id']
         outcome=self.runtime.turn(self.scope,event)

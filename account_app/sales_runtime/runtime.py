@@ -12,7 +12,10 @@ from .. import checkout
 from .cart import CartService
 from .references import References
 from .store import Conflict, Store, digest
-from .contracts import clean_plan, validate_plan, catalog_fact, DecisionRejected
+from .contracts import clean_plan, validate_plan, DecisionRejected, BusinessChoice,ServiceRequired
+from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
+from .intent import apply_intent
+from .recovery import grounded_plan
 
 
 class TurnTools(Store):
@@ -29,6 +32,10 @@ class TurnTools(Store):
         if scope!=self.scope or expected_version!=self.version or not self.db.in_transaction:
             raise Conflict('invalid_turn_tool_transaction')
         return dict(result=handler(self.state),replayed=False)
+
+    def snapshot(self,scope):
+        if scope!=self.scope:raise Conflict('invalid_turn_tool_scope')
+        return dict(version=self.version,data=deepcopy(self.state))
 
 
 def resolve_changes(plan, state, scope, event_id):
@@ -67,8 +74,9 @@ def resolve_changes(plan, state, scope, event_id):
 
 
 class Runtime:
-    def __init__(self, store, catalog_loader, orders, decide):
+    def __init__(self, store, catalog_loader, orders, decide,policy_loader=None):
         self.store, self.catalog_loader, self.orders, self.decide = store, catalog_loader, orders, decide
+        self.policy_loader=policy_loader or (lambda sid:dict(inspection_policy=orders.confirmation.split('. ',1)[-1]))
 
     def decision_call(self,scope,event_id,context,previous=None,error=None):
         # A duplicate webhook or worker restart cannot reset the model budget.
@@ -102,7 +110,7 @@ class Runtime:
         return self.store.apply(scope, key, version, dict(prompt=outbox_id), handle)
 
     def turn(self, scope, event_id):
-        key = f'turn-v2:{event_id}'
+        key = f'turn-v3:{event_id}'
         done = self.store.db.execute('SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?',
                                     (scope.key, key + ':done')).fetchone()
         if done:
@@ -112,10 +120,18 @@ class Runtime:
         prior = self.store.db.execute('SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?',
                                      (scope.key, key)).fetchone()
         catalog = self.catalog_loader(scope.store)
+        policy=self.policy_loader(scope.store)
         cart = CartService(self.store, catalog)
         evidence = self.store.evidence(scope, event_id)
         if evidence['actor'] != 'customer':
             raise Conflict('customer_turn_required')
+        snap_now=self.store.snapshot(scope)
+        text_now=checkout.normalized(evidence['payload'].get('text',''))
+        if snap_now['data'].get('order_id') and re.search(r'(?:الغي|الغاء|لغي|الغ[يه]لي)\s+(?:الطلب|الحجز|طلبي)',text_now):
+            result=self.orders.cancel(scope,key+':cancel',snap_now['version'],event_id)['result']
+            outcome=dict(result,action='cancelled',state_version=result['state_version']+1)
+            self.store.apply(scope,key+':done',result['state_version'],dict(event_id=event_id),lambda state:dict(outcome=outcome))
+            return outcome
         if prior:
             saved = json.loads(prior[0])
             plan, version = saved['plan'], saved['state_version']
@@ -128,16 +144,27 @@ class Runtime:
             if latest != event_id:
                 raise Conflict('turn_superseded')
             reference = References(self.store, catalog).resolve(scope, ad=evidence['payload'].get('ad'))
-            context = dict(state=snap['data'], event=evidence['payload'], reference=reference,
-                           products=list(catalog.products.values()), readiness=cart.readiness(scope))
+            try:initial_readiness=cart.readiness(scope)
+            except Conflict as exc:
+                if isinstance(exc,BusinessChoice) or str(exc)=='product_not_available_in_store':
+                    raise ServiceRequired('cart_catalog_changed') from None
+                raise
+            active_products=[p for p in catalog.products.values() if p.get('status','active')=='active']
+            context = dict(state=snap['data'], event=evidence['payload'], reference=reference,policies=policy,
+                           products=active_products, readiness=initial_readiness,
+                           available_fact_fields={p['product_id']:[f for f in PRODUCT_FACT_FIELDS if resolve_fact(catalog,p['product_id'],f,policy)] for p in active_products})
             recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 30",
                                          (scope.key,)).fetchall()
             context['recent_messages']=[dict(actor=row[0],**json.loads(row[1])) for row in reversed(recent)]
             replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
-            raw=self.decision_call(scope,event_id,context)
-            for attempt in range(2):
+            recovered=False;business_feedback=None
+            try:raw=self.decision_call(scope,event_id,context)
+            except DecisionRejected:
+                if not getattr(type(self.decide),'fallback_allowed',False):raise
+                raw=grounded_plan(context);recovered=True
+            for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
                     def apply_proposal(state):
@@ -151,56 +178,90 @@ class Runtime:
                             contact_result=session_cart.contact(scope,'contact',snap['version'],event_id,**plan['contact'])
                             invalid_fields=contact_result['result']['invalid_fields']
                         for fact in plan.get('answer',{}).get('facts',[]):
-                            catalog.get(fact['product_id'])
-                        self.apply_intent(state,plan,event_id,evidence)
+                            if fact['product_id']!='@store':catalog.get(fact['product_id'])
+                        price=None
+                        from .negotiation import destination,settle
+                        province_hint=destination(evidence['payload'].get('text',''))
+                        if province_hint:state['quote_province']=province_hint
+                        if state['cart']:
+                            try:
+                                province=state['contact'].get('province') or state.get('quote_province')
+                                price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
+                            except ValueError:pass  # A partial package needs quantity clarification.
+                        apply_intent(state,plan,event_id,evidence,price)
+                        if state['cart']:
+                            try:
+                                province=state['contact'].get('province') or state.get('quote_province')
+                                price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
+                                row=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 1",(scope.key,)).fetchone()
+                                settle(state,price,json.loads(row[0]) if row else {},evidence['payload'].get('text',''))
+                            except ValueError:pass
+                        if business_feedback and state['cart']:
+                            state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice']+[dict(kind='choice',status='pending',event_id=event_id,**business_feedback)]
+                        elif plan.get('changes'):
+                            changed_fields={f for c in plan['changes'] for f in c.get('values',{})}
+                            if changed_fields & {'age_months','weight_kg'}:changed_fields.add('size')
+                            state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice' or c.get('field') not in changed_fields]
                         if reference.get('status')=='known':
                             state['focus_product_id']=reference['product_id']
-                        return dict(plan=plan,invalid_fields=invalid_fields)
+                        return dict(plan=plan,invalid_fields=invalid_fields,business_feedback=business_feedback,quote=price,recovered=recovered)
                     saved=self.store.apply(scope,key,snap['version'],dict(event_id=event_id),apply_proposal)['result']
                     break
+                except BusinessChoice as exc:
+                    business_feedback=exc.feedback
+                    repaired=clean_plan(raw)
+                    for change in repaired.get('changes',[]):
+                        if change['values'].get('product_id') in (None,exc.feedback['product_id']):
+                            field=exc.feedback['field']
+                            change['values'].pop(field,None)
+                            if field=='size':
+                                change['values'].pop('age_months',None);change['values'].pop('weight_kg',None)
+                    raw=repaired
+                    if attempt==44:raise
                 except ValueError as exc:
+                    if isinstance(exc,ServiceRequired):raise
                     if str(exc) in {'state_version_changed','human_control_active'}:
                         raise
                     repair=getattr(type(self.decide),'repair',None)
                     if repair is None:raise
-                    if attempt:raise DecisionRejected('decision_tools_invalid_after_repair') from None
+                    if attempt:
+                        if not getattr(type(self.decide),'fallback_allowed',False) or recovered:
+                            raise DecisionRejected('decision_tools_invalid_after_repair') from None
+                        raw=grounded_plan(context);recovered=True
+                        continue
                     # No SQL transaction is held across a model call.
                     current=self.store.snapshot(scope)
                     if current['version']!=snap['version']:
                         raise Conflict('state_version_changed') from None
-                    raw=self.decision_call(scope,event_id,context,raw,str(exc))
+                    try:raw=self.decision_call(scope,event_id,context,raw,str(exc))
+                    except DecisionRejected:
+                        if not getattr(type(self.decide),'fallback_allowed',False):raise
+                        raw=grounded_plan(context);recovered=True
             version = saved['state_version']
-        ready = cart.readiness(scope)
-        missing_fact = any(catalog_fact(catalog.get(fact['product_id']),fact['field']) is None
+        try:ready = cart.readiness(scope)
+        except BusinessChoice as exc:
+            ready=dict(ready=False,missing_fields=[f'product.{exc.feedback["product_id"]}.{exc.feedback["field"]}'],conditions=[],version=version)
+            saved['business_feedback']=exc.feedback
+        # Only specific requested facts block booking; an optional empty description is not a gap.
+        requested=set(requested_fields(evidence['payload'].get('text','')))
+        missing_fact = any(fact['field'] in requested and resolve_fact(catalog,fact['product_id'],fact['field'],policy) is None
                            for fact in plan.get('answer',{}).get('facts',[]))
-        if ready['ready'] and not missing_fact:
+        state=self.store.snapshot(scope)['data']
+        focus=state.get('focus_product_id') or (state['cart'][0]['product_id'] if len(state['cart'])==1 else None)
+        for field in requested_fields(evidence['payload'].get('text','')):
+            pid='@store' if field in POLICY_FIELDS else focus
+            if pid and resolve_fact(catalog,pid,field,policy) is None:missing_fact=True
+        if ready['ready'] and not missing_fact and not state.get('order_id'):
             booking = self.orders.commit(scope, f'{key}:booking', version)
             outcome = dict(action='booked', **booking['result'])
             version = booking['result']['state_version']
         else:
             outcome = dict(action='continue', readiness=ready, answer_plan=plan.get('answer', {}),
-                           invalid_fields=saved.get('invalid_fields',[]),state_version=version)
+                           invalid_fields=saved.get('invalid_fields',[]),business_feedback=saved.get('business_feedback'),
+                           quote=saved.get('quote'),recovered=saved.get('recovered',False),state_version=version)
         outcome['state_version'] = version + 1
         self.store.apply(scope, key + ':done', version, dict(event_id=event_id), lambda state: dict(outcome=outcome))
         return outcome
 
-    @staticmethod
-    def apply_intent(state,plan,event_id,evidence):
-        if state['control_mode']!='active':raise Conflict('human_control_active')
-        text=checkout.normalized(evidence['payload'].get('text',''))
-        mode=plan['intent']
-        if (re.search(r'(?<!\w)(?:اذا|بشرط)(?!\w)',text) or
-                re.match(r'^\s*لو\s+(?:يوصل|توصل|يصير|تسوين|تخلين|تنطين)',text)):
-            mode='conditional'
-        elif re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',text):mode='withdraw'
-        if mode in {'withdraw','conditional'}:
-            state['purchase_event']=None
-            state.pop('checkout_prompt',None)
-            state['conditions']=[dict(event_id=event_id,text=text)] if mode=='conditional' else []
-        elif not state['conditions']:
-            fields=plan.get('contact') or {}
-            contextual=(state.get('checkout_prompt') and bool(state['cart']) and
-                        any(state['contact'].get(f) and f in fields for f in ('phone','address')))
-            if checkout.explicit_purchase(text) or contextual:state['purchase_event']=event_id
-
+    apply_intent=staticmethod(apply_intent)
     validate_plan = staticmethod(validate_plan)

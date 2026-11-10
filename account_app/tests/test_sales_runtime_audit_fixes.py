@@ -1,0 +1,363 @@
+"""Regressions from the 20 real-customer replay; fixtures contain no private data."""
+import json
+import unittest
+from unittest.mock import Mock
+from account_app.tests import test_sales_runtime_linking as linking
+from account_app.sales_runtime.runtime import Runtime
+from account_app.sales_runtime.entrypoint import Entrypoint
+from account_app.sales_runtime.response import Responses
+from account_app.sales_runtime.copy_guard import validate_copy
+from account_app.sales_runtime.contracts import DecisionRejected,ServiceRequired
+from account_app.sales_runtime.policies import APPROVED_DELIVERY_TIME
+from account_app.sales_runtime import Scope
+
+
+class AuditFixTests(unittest.TestCase):
+    setUp=linking.LinkingTests.setUp
+    tearDown=linking.LinkingTests.tearDown
+    event=linking.LinkingTests.event
+    version=linking.LinkingTests.version
+    run_turn=linking.LinkingTests.run_turn
+    select=linking.LinkingTests.select
+    prompt=linking.LinkingTests.prompt
+
+    def test_courtesy_fit_and_inspection_questions_do_not_become_conditions(self):
+        for text in ('شلون السعر اذا امكن','اذا وزن 60 يا قياس يناسبه','اذا انطيج وزني تعرفين القياس؟','اذا ما رهمت ارجعها؟'):
+            _,out=self.run_turn(text)
+            self.assertEqual([],out['readiness']['conditions'],text)
+
+    def test_complete_checkout_after_inspection_question_books_once(self):
+        self.run_turn('اريد الماروني 44',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44'))])
+        self.run_turn('اذا ما رهمت ارجعه؟')
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        _,out=self.run_turn('بغداد حي المنصور قرب المدرسة',contact={'address':'بغداد حي المنصور قرب المدرسة'})
+        self.assertEqual('booked',out['action'])
+        self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_all_observed_false_confirmation_variants_are_blocked(self):
+        for text in ('ثبتتلج الطلب','طلبج مثبت','تثبت طلبج','تم تثبيت الطلب','حجزتلك الطلب'):
+            with self.subTest(text=text),self.assertRaisesRegex(ValueError,'reply.booking'):
+                validate_copy([dict(type='text',text=text)],None)
+        validate_copy([dict(type='text',text='طلبج مثبت')],None,dict(order_saved=True))
+
+    def test_carrier_promises_require_action_proof(self):
+        for text in ('نبلغ المندوب ينسق وياج','احرص انسق ويا المندوب','نحاول ويا المندوب يوصله باجر'):
+            with self.subTest(text=text),self.assertRaisesRegex(ValueError,'reply.action'):
+                validate_copy([dict(type='text',text=text)],None)
+
+    def test_repeated_invalid_writer_gets_grounded_copy_without_technical_pause(self):
+        class BadWriter:
+            def __call__(self,context):return [dict(type='text',text='ثبتتلج الطلب')]
+            def repair(self,context,previous,error):return self(context)
+        event=self.event('هلا');out=self.runtime.turn(self.scope,event)
+        response=Responses(self.store,self.loader,BadWriter()).prepare(self.scope,event,out)
+        self.assertEqual('queued',response['action'])
+        text=json.loads(self.db.execute('SELECT payload FROM sales_v2_outbox').fetchone()[0])['text']
+        self.assertNotIn('ثبتتلج',text)
+        self.assertEqual('active',self.store.snapshot(self.scope)['data']['control_mode'])
+
+    def test_optional_description_does_not_hide_available_fabric_or_length(self):
+        self.products[0].update(fabric='قديفة ثخين',measurements='الطول 105 سم',description='')
+        self.select()
+        self.plan=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='description')]))
+        event=self.event('شنو قماشه؟');out=self.runtime.turn(self.scope,event)
+        writer=Mock(return_value=[dict(type='text',text='قماشه قديفة ثخين حبيبتي')])
+        self.assertEqual('queued',Responses(self.store,self.loader,writer).prepare(self.scope,event,out)['action'])
+        self.assertTrue(any(f['field']=='fabric' for f in writer.call_args.args[0]['facts']))
+        self.plan=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='length')]))
+        event=self.event('شكد طوله؟');out=self.runtime.turn(self.scope,event)
+        Responses(self.store,self.loader,writer).prepare(self.scope,event,out)
+        self.assertIn('105',str(writer.call_args.args[0]['facts']))
+
+    def test_human_identity_request_is_silent_before_any_model(self):
+        decide=Mock()
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,decide)
+        result=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='id',
+                             message_id='identity',text='اخي مخليلي ذكاء صطناعي يرد')
+        self.assertEqual('human',result['action']);self.assertEqual('',result['reply'])
+        decide.assert_not_called()
+        self.assertEqual('customer_requested_human',result['reason'])
+
+    def test_photo_ai_question_is_not_identity_handoff(self):
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide)
+        result=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='photo',
+                             message_id='m',text='الصورة ذكاء اصطناعي؟')
+        self.assertNotEqual('human',result['action'])
+
+    def test_delivery_time_comes_from_owner_policy(self):
+        for store in ('default','khuyoot','al-fatena','baraah-kids','golden-threads'):
+            entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide)
+            self.assertEqual(APPROVED_DELIVERY_TIME,entry.policy_loader(store)['delivery_time'])
+
+    def test_unavailable_size_is_business_feedback_not_model_repair(self):
+        _,out=self.run_turn('اريد 99',changes=[dict(values=dict(product_id='P1',size='99'))])
+        self.assertEqual('continue',out['action'])
+        self.assertEqual('size',out['business_feedback']['field'])
+        self.assertEqual('',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+        self.assertEqual('active',self.store.snapshot(self.scope)['data']['control_mode'])
+
+    def test_malformed_model_can_fall_back_to_exact_130_weight(self):
+        self.products[0]['sizes']='قياسات من وزن 60 كيلو إلى 130 كيلو'
+        self.products[0]['ad_ids']=['weight-ad']
+        class Model:
+            fallback_allowed=True
+            def __call__(self,context):raise DecisionRejected('decision_invalid_after_retry')
+        runtime=Runtime(self.store,self.loader,self.orders,Model())
+        event=self.store.append(self.scope,'weight',kind='message',actor='customer',
+                                payload=dict(text='يلبس وزن 130',ad={'ad_id':'weight-ad'}))['id']
+        out=runtime.turn(self.scope,event)
+        self.assertEqual('continue',out['action']);self.assertTrue(out['recovered'])
+        self.assertEqual(130,float(self.store.snapshot(self.scope)['data']['cart'][0]['size']))
+
+    def test_contact_echo_does_not_need_new_source_evidence(self):
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        self.run_turn('قياس 44',contact={'phone':'07701234567'})
+        self.assertEqual('07701234567',self.store.snapshot(self.scope)['data']['contact']['phone'])
+
+    def test_cancel_local_unexported_order_is_real_and_does_not_rebook(self):
+        self.select()
+        self.run_turn('حجزيلي 07701234567 بغداد حي المنصور قرب المدرسة',
+                      contact=dict(phone='07701234567',address='بغداد حي المنصور قرب المدرسة'))
+        event,out=self.run_turn('يي حبيبتي الغي الطلب')
+        self.assertEqual('cancelled',out['action'])
+        self.assertEqual('cancelled',self.db.execute('SELECT status FROM orders').fetchone()[0])
+        self.assertEqual(out,self.runtime.turn(self.scope,event))
+        self.assertFalse(self.db.execute("SELECT 1 FROM sales_v2_order_tasks WHERE status='queued'").fetchone())
+
+    def test_tracking_existing_order_does_not_turn_into_new_sale(self):
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide)
+        result=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='tracking',
+                             message_id='m',text='عندي طلب يمكم صار كم يوم')
+        self.assertEqual('order_tracking',result['reason'])
+        self.decide.assert_not_called()
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_quote_requested_discount_matches_persisted_invoice(self):
+        self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])
+        self.run_turn('سويهن ب28 والتوصيل لبغداد')
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        _,out=self.run_turn('بغداد حي المنصور قرب المدرسة',contact={'address':'بغداد حي المنصور قرب المدرسة'})
+        self.assertEqual('booked',out['action'])
+        total,items=self.db.execute('SELECT total_amount,order_items FROM orders').fetchone()
+        self.assertEqual(28000,total)
+        self.assertEqual(23000,sum(i['unit_price']*i['quantity'] for i in json.loads(items)))
+
+    def test_large_discount_does_not_silently_book_unaccepted_price(self):
+        self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])
+        self.run_turn('سويهن ب20 والتوصيل لبغداد')
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        _,out=self.run_turn('بغداد حي المنصور قرب المدرسة',contact={'address':'بغداد حي المنصور قرب المدرسة'})
+        self.assertEqual('continue',out['action'])
+        self.assertEqual(27000,out['quote']['total'])
+        self.assertTrue(out['readiness']['conditions'])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_explicit_counteroffer_acceptance_books_counteroffer_not_requested_price(self):
+        self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])
+        self.run_turn('سويهن ب20 والتوصيل لبغداد')
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        event,out=self.run_turn('بغداد حي المنصور قرب المدرسة',contact={'address':'بغداد حي المنصور قرب المدرسة'})
+        writer=Mock(side_effect=AssertionError('financial counteroffer must be deterministic'))
+        Responses(self.store,self.loader,writer).prepare(self.scope,event,out)
+        part=self.store.claim_reply(self.scope)
+        self.assertEqual(27000,part['payload']['quote_total'])
+        self.store.settle_reply(self.scope,part['id'],'accepted','counteroffer')
+        _,out=self.run_turn('اي تمام')
+        self.assertEqual('booked',out['action'])
+        self.assertEqual(27000,self.db.execute('SELECT total_amount FROM orders').fetchone()[0])
+
+    def test_single_item_never_receives_multi_item_discount(self):
+        self.run_turn('اريد ماروني44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني'))])
+        _,out=self.run_turn('سويها ب16 والتوصيل لبغداد')
+        self.assertEqual(0,out['quote']['discount'])
+        self.assertEqual(17000,out['quote']['total'])
+        self.assertTrue(out['readiness']['conditions'])
+
+    def test_unknown_product_clarification_has_a_limit(self):
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,
+                         writer=Mock(return_value=[dict(type='text',text='دزيلي صورة الموديل حبيبتي')]))
+        kwargs=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='unknown')
+        scope=Scope('khuyoot','chatwoot','a','unknown')
+        for index in range(1):
+            entry.receive(**kwargs,message_id=str(index),text='اريد هذا الموديل')
+            part=entry.store.claim_reply(scope)
+            entry.store.settle_reply(scope,part['id'],'accepted',str(index))
+        out=entry.receive(**kwargs,message_id='last',text='اي نفسه')
+        self.assertEqual('human',out['action'])
+        self.assertEqual('product_unresolved',out['reason'])
+
+    def test_store_inspection_does_not_depend_on_product_description(self):
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,
+                         writer=Mock(return_value=[dict(type='text',text='إي عيوني الج حق الفحص بوجود المندوب قبل الدفع')]))
+        self.plan=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='description')]))
+        out=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='inspection',
+                          message_id='m',text='اذا ما رهمت ارجعها مع المندوب؟')
+        self.assertEqual('continue',out['action'])
+        self.assertEqual([],out['readiness']['conditions'])
+
+    def test_daytime_guarantee_routes_to_service_without_carrier_promise(self):
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide)
+        out=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='deadline',
+                          message_id='m',text='اريده باجر الصبح ضروري')
+        self.assertEqual('human',out['action'])
+        self.assertEqual('delivery_deadline',out['reason'])
+
+    def test_post_booking_question_is_answered_without_new_order(self):
+        self.products[0]['fabric']='قطن'
+        self.select()
+        self.run_turn('حجزيلي 07701234567 بغداد حي المنصور قرب المدرسة',
+                      contact=dict(phone='07701234567',address='بغداد حي المنصور قرب المدرسة'))
+        _,out=self.run_turn('شنو قماشه؟',answer=dict(facts=[dict(product_id='P1',field='fabric')]))
+        self.assertEqual('continue',out['action'])
+        self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_decoder_handles_native_parsed_and_fenced_json(self):
+        from account_app.sales_runtime.gateway import structured_content
+        response=Mock()
+        response.json.return_value={'choices':[{'message':{'content':'```json\n{"intent":"continue"}\n```'}}]}
+        self.assertEqual('continue',structured_content(response)['intent'])
+        response.json.return_value={'choices':[{'message':{'parsed':{'intent':'continue'},'content':None}}]}
+        self.assertEqual('continue',structured_content(response)['intent'])
+
+    def test_hidden_product_does_not_block_context_for_other_products(self):
+        self.products[1]['status']='inactive'
+        _,out=self.run_turn('هلا')
+        self.assertEqual('continue',out['action'])
+        context=self.decide.call_args.args[0]
+        self.assertNotIn(self.products[1]['product_id'],context['available_fact_fields'])
+
+    def test_internal_ids_and_identity_denials_are_not_customer_copy(self):
+        for text in ('موديل P001 قياساته كذا','اني من المحل ارد بنفسي','منشأ الصنع مو محدد يمي بالمعلومات'):
+            with self.subTest(text=text),self.assertRaises(ValueError):validate_copy([dict(type='text',text=text)],None)
+
+    def test_side_questions_do_not_reset_already_asked_color(self):
+        contexts=[]
+        def writer(context):
+            contexts.append(context)
+            return [dict(type='text',text='يا لون عجبج؟' if context['question_field'] else 'التوصيل خمسة آلاف حبيبتي')]
+        responses=Responses(self.store,self.loader,writer,lambda sid:dict(delivery_fee={'بغداد':5000}))
+        for index,text in enumerate(('قياس 44','شكد التوصيل','اريد اعرف هم التوصيل')):
+            event,out=self.run_turn(text,changes=[dict(values=dict(product_id='P1',size='44'))] if index==0 else [])
+            responses.prepare(self.scope,event,out)
+            part=self.store.claim_reply(self.scope)
+            self.store.settle_reply(self.scope,part['id'],'accepted',str(index))
+        self.assertTrue(contexts[0]['question_field'].endswith('.color'))
+        self.assertIsNone(contexts[1]['question_field']);self.assertIsNone(contexts[2]['question_field'])
+
+    def test_unavailable_child_age_offers_compatible_alternative_not_contacts(self):
+        self.products[0].update(sizes='1 إلى 4 سنوات',product_type='sets',audience='boys')
+        self.products[1].update(size_system='legacy',sizes='2 إلى 7 سنوات',product_type='sets',audience='boys')
+        event,out=self.run_turn('اريد عمر 6 سنوات',changes=[dict(values=dict(product_id='P1',age_months=72))],
+                                 answer=dict(question_field='contact.phone'))
+        writer=Mock(return_value=[dict(type='text',text='أكو موديل ثاني متوفر لعمره حبيبتي، تحبين تشوفيه؟')])
+        Responses(self.store,self.loader,writer).prepare(self.scope,event,out)
+        context=writer.call_args.args[0]
+        self.assertTrue(context['question_field'].startswith('alternative.'))
+        self.assertEqual('B1',context['recommendations']['matches'][0]['product_id'])
+        self.assertEqual('',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+
+    def test_latest_age_and_weight_corrections_replace_their_own_values(self):
+        self.products[0]['sizes']='1 إلى 7 سنوات'
+        self.run_turn('عمر 4',changes=[dict(values=dict(product_id='P1',age_months=48))])
+        self.run_turn('لا عمر 6',changes=[dict(values=dict(product_id='P1',age_months=72))])
+        self.assertEqual('6 سنوات',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+        line=self.store.snapshot(self.scope)['data']['cart'][0]['line_id']
+        self.run_turn('احذف هذا الاختيار',changes=[dict(line_ref=line,remove=True,values={})])
+        self.products[0]['sizes']='وزن 60 إلى 130 كيلو'
+        self.run_turn('وزني 80',changes=[dict(values=dict(product_id='P1',weight_kg=80))])
+        self.run_turn('لا وزني130',changes=[dict(values=dict(product_id='P1',weight_kg=130))])
+        self.assertEqual('130',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+        self.run_turn('اريد قياس60',changes=[dict(values=dict(product_id='P1',size='60'))])
+        self.run_turn('وزني130',changes=[dict(values=dict(product_id='P1',weight_kg=130))])
+        self.assertEqual('60',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+
+    def test_changed_catalog_price_requires_new_counteroffer_acceptance(self):
+        self.run_turn('اريد قطعتين ماروني44',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44',quantity=2))])
+        self.run_turn('سويهن ب28 والتوصيل لبغداد')
+        self.products[0]['price']='20000'
+        _,out=self.run_turn('07701234567',contact=dict(phone='07701234567'))
+        self.assertTrue(any(c['kind']=='price' for c in out['readiness']['conditions']))
+        _,out=self.run_turn('بغداد حي المنصور قرب المدرسة',contact=dict(address='بغداد حي المنصور قرب المدرسة'))
+        self.assertEqual('continue',out['action'])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_suspended_or_superseded_cancel_cannot_change_saved_order(self):
+        self.select();self.run_turn('حجزيلي 07701234567 بغداد حي المنصور قرب المدرسة',
+            contact=dict(phone='07701234567',address='بغداد حي المنصور قرب المدرسة'))
+        cancel=self.event('الغي الطلب');newer=self.event('لا خلي الطلب')
+        with self.assertRaisesRegex(ValueError,'turn_superseded'):
+            self.orders.cancel(self.scope,'cancel-old',self.version(),cancel)
+        staff=self.event('متابعة الموظف',actor='staff')
+        self.store.set_control(self.scope,'pause',self.version(),staff,'human')
+        with self.assertRaisesRegex(ValueError,'human_control_active'):
+            self.orders.cancel(self.scope,'cancel-paused',self.version(),cancel)
+        self.assertEqual('new',self.db.execute('SELECT status FROM orders').fetchone()[0])
+
+    def test_writer_internal_product_name_uses_owner_category(self):
+        self.products[0].update(product_name='تراك ولادي تطعيم',reply_category='تراك ولادي')
+        event,out=self.run_turn('هلا',changes=[dict(values=dict(product_id='P1',size='44'))])
+        writer=Mock(return_value=[dict(type='text',text='تراك ولادي تطعيم متوفر حبيبتي')])
+        Responses(self.store,self.loader,writer).prepare(self.scope,event,out)
+        text=json.loads(self.db.execute('SELECT payload FROM sales_v2_outbox').fetchone()[0])['text']
+        self.assertNotIn('تطعيم',text);self.assertIn('تراك ولادي',text)
+
+    def test_teaching_does_not_commit_or_override_prices(self):
+        from account_app import product_questions
+        from account_app.sales_runtime.catalog_answers import enrich
+        product_questions.init(self.db);self.db.commit()
+        self.db.execute("INSERT INTO product_questions(store_id,product_id,topic,question,question_key,answer,guidance,status,created_at,updated_at) VALUES('khuyoot','P1','price','سعر','k','1','وضحي العرض بلطف','answered','now','now')")
+        result=enrich(self.db,'khuyoot',self.products)
+        self.assertTrue(self.db.in_transaction)
+        self.assertEqual('12000',result[0]['price'])
+        self.assertEqual('وضحي العرض بلطف',result[0]['_staff_guidance'][0]['guidance'])
+        self.db.rollback()
+
+    def test_address_building_number_is_not_discount_request(self):
+        from account_app.sales_runtime.negotiation import request
+        self.assertIsNone(request('احجزيلي بغداد حي المنصور بيت ب12'))
+
+    def test_unitless_legacy_range_uses_matching_explicit_catalog_weight(self):
+        self.products[0].update(sizes='من 60 الى 120',description='تناسب أوزان من 60 إلى 120 كيلو')
+        catalog=self.loader('khuyoot')
+        self.assertEqual('weight',catalog.get('P1')['selection_mode'])
+        from account_app.sales_runtime.facts import resolve
+        self.assertIn('120',resolve(catalog,'P1','sizes',{})['value'])
+        _,out=self.run_turn('وزني120',changes=[dict(values=dict(product_id='P1',weight_kg=120))])
+        self.assertEqual('continue',out['action'])
+        self.assertEqual('120',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+        self.products[0]['description']='هذا موديل مريح'
+        self.assertNotEqual('weight',self.loader('khuyoot').get('P1')['selection_mode'])
+
+    def test_stale_catalog_choice_routes_to_service_without_model_or_order(self):
+        self.select();self.products[0]['status']='inactive'
+        with self.assertRaisesRegex(ServiceRequired,'cart_catalog_changed'):
+            self.run_turn('هلا')
+
+    def test_requested_written_discount_is_applied_to_multi_item_invoice(self):
+        self.run_turn('اريد قطعتين ماروني44',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44',quantity=2))])
+        _,out=self.run_turn('نزلي ألفين والتوصيل لبغداد')
+        self.assertEqual(2000,out['quote']['discount'])
+        self.assertEqual(27000,out['quote']['total'])
+        self.assertFalse(out['readiness']['conditions'])
+
+    def test_discount_on_mixed_prices_never_makes_cheap_item_negative(self):
+        self.products[1]['price']='100'
+        _,out=self.run_turn('اريد قطعتين',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44')),
+            dict(new_line=True,values=dict(product_id='B1',color='أسود'))])
+        _,out=self.run_turn('خصم 2000 والتوصيل لبغداد')
+        self.assertEqual(2000,out['quote']['discount'])
+        self.assertTrue(all(i['unit_price']>=0 for i in out['quote']['items']))
+        self.assertEqual(10100,sum(i['unit_price']*i['quantity'] for i in out['quote']['items']))
+
+    def test_copy_does_not_repeat_choices_without_question_marks(self):
+        for text in ('بس تحددين اللون حبيبتي','قوليلي قياسج','شكد عمر الطفل','اذا عندج نونو ثاني تحبين قياس أصغر؟'):
+            with self.subTest(text=text),self.assertRaises(ValueError):
+                validate_copy([dict(type='text',text=text)],'alternative.P1' if 'نونو' in text else None)
+
+    def test_fit_and_shipping_claims_need_their_own_proof(self):
+        for text in ('طلبج طلع','طلبج انشحن','قياس سنة كلش مناسب لعمر 11 شهر ويجي مضبوط عليها'):
+            with self.subTest(text=text),self.assertRaises(ValueError):
+                validate_copy([dict(type='text',text=text)],None,dict(order_saved=True))
+
+
+if __name__=='__main__':unittest.main()

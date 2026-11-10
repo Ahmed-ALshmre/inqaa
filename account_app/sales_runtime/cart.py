@@ -5,6 +5,7 @@ import re
 
 from .. import checkout, pricing, product_variants
 from .store import Conflict, digest, encode
+from .contracts import BusinessChoice,ServiceRequired
 
 
 class Catalog:
@@ -12,6 +13,22 @@ class Catalog:
         self.store = store
         self.products = {str(p['product_id']): deepcopy(p) for p in products
                          if p.get('store_id', 'default') == store}
+        for product in self.products.values():
+            # Some legacy rows store "60 to 120" without a unit, while their
+            # factual description explicitly records the SAME kilogram band.
+            # Normalize this read view only; never infer units from the numbers.
+            from ..customer_copy import fact
+            raw=checkout.normalized(str(product.get('sizes') or ''))
+            numeric=re.fullmatch(r'\s*(?:من\s*)?(\d{1,3})\s*(?:الي|الى|لحد|[-–])\s*(\d{1,3})\s*',raw)
+            declared=product_variants.size_data(fact(product.get('description')))['weights']
+            if (product.get('size_system') in (None,'','legacy') and numeric and len(declared)==1
+                    and tuple(map(int,numeric.groups()))==tuple(declared[0])):
+                product['_raw_sizes']=product['sizes']
+                product['sizes']=f'وزن {numeric[1]} إلى {numeric[2]} كيلو'
+            data=product_variants.size_data(product.get('sizes') or '')
+            product['selection_mode']=(product.get('size_system') if product.get('size_system') not in (None,'','legacy') else
+                'weight' if product_variants.weight_only_ranges(product) else
+                'age' if data['years'] and not data['known'] else 'clothing')
         self.revision = digest(self.products)
 
     def get(self, product_id):
@@ -43,9 +60,13 @@ class Catalog:
                 continue
             # Empty choices are permitted in a draft, but never at checkout.
             if value and (field == 'color' or system in {'legacy', 'clothing', 'shoe'}):
-                error = product_variants.order_choice_error(product, field, value)
+                weight_ranges=product_variants.weight_only_ranges(product) if field=='size' and system=='legacy' else []
+                if weight_ranges and re.fullmatch(r'\d{1,3}(?:\.\d+)?',value):
+                    error='' if any(lo<=float(value)<=hi for lo,hi in weight_ranges) else 'الوزن خارج نطاق هذا المنتج'
+                else:error = product_variants.order_choice_error(product, field, value)
                 if error:
-                    raise Conflict(error)
+                    raise BusinessChoice(error,product_id=product['product_id'],field=field,
+                                         available=product.get('colors' if field=='color' else 'sizes',''),requested=value)
         for field, mode, low, high in (
             ('age_months', 'age', 'age_min_months', 'age_max_months'),
             ('weight_kg', 'weight', 'weight_min_kg', 'weight_max_kg'),
@@ -63,7 +84,8 @@ class Catalog:
             if product.get(low) is None or product.get(high) is None:
                 raise Conflict('measurement_bounds_missing')
             if not float(product[low]) <= value <= float(product[high]):
-                raise Conflict('measurement_out_of_range')
+                raise BusinessChoice('measurement_out_of_range',product_id=product['product_id'],field=field,
+                                     available=dict(min=product[low],max=product[high]),requested=value)
         return product
 
 
@@ -87,10 +109,12 @@ class CartService:
             raise ValueError('unsupported_cart_fields')
         command = dict(event_id=event_id, line_id=line_id, values=values, remove=remove)
         def handle(state):
-            if state.get('order_id'):
-                raise Conflict('booked_cart_requires_order_change_service')
             self.store.evidence(scope, event_id)
             old = next((i for i in state['cart'] if i['line_id'] == line_id), None)
+            if state.get('order_id'):
+                if old and not remove and all(checkout.normalized(str(v))==checkout.normalized(str(old.get(k,''))) for k,v in values.items()):
+                    return dict(cart=deepcopy(state['cart']),unchanged=True)
+                raise ServiceRequired('booked_cart_requires_order_change_service')
             if remove:
                 if not old:
                     raise Conflict('cart_line_not_found')
@@ -101,7 +125,19 @@ class CartService:
                 line = dict(old or dict(line_id=line_id, color='', size='', quantity=1), **values)
                 line['product_id'] = str(line.get('product_id') or '')
                 product = self.catalog.get(line['product_id'])
-                line.setdefault('size_system', product.get('size_system') or 'legacy')
+                # Unit metadata belongs to the catalog, never the language model.
+                line['size_system']=product.get('size_system') or 'legacy'
+                if values.get('size'):line['size_source_kind']='explicit'
+                if line['size_system']=='legacy':
+                    age=line.pop('age_months',None)
+                    weight=line.pop('weight_kg',None)
+                    if age is not None and 'size' not in values:
+                        line['size']=f'{age//12} سنوات' if age%12==0 else f'{age} شهر'
+                        line['size_source_kind']='age'
+                    if (weight is not None and 'size' not in values and product_variants.weight_only_ranges(product)
+                            and (not line.get('size') or line.get('size_source_kind')=='weight')):
+                        line['size']=format(weight,'g')
+                        line['size_source_kind']='weight'
                 self.catalog.validate(line)
                 if old:
                     state['cart'][state['cart'].index(old)] = line
@@ -121,9 +157,12 @@ class CartService:
         if any(value is not None and not isinstance(value, str) for value in (phone, address)):
             raise ValueError('contact_values_must_be_text')
         command = dict(event_id=event_id, phone=phone, address=address)
-        def handle(state):
+        def handle(state, phone=phone, address=address):
             source = self.store.evidence(scope, event_id)['payload'].get('text', '')
             errors = []
+            if phone is not None:
+                if checkout.phone_number(phone) and checkout.phone_number(phone)==state['contact'].get('phone'):
+                    phone=None
             if phone is not None:
                 parsed = checkout.phone_number(phone)
                 if not parsed:
@@ -133,6 +172,9 @@ class CartService:
                     raise Conflict('phone_not_in_source_event')
                 else:
                     state['contact']['phone'] = parsed
+                    state.setdefault('contact_events',{})['phone']=event_id
+            if address is not None:
+                if address.strip()==state['contact'].get('address'):address=None
             if address is not None:
                 if checkout.invalid_shipping_address(address):
                     errors.append('contact.address')
@@ -142,6 +184,7 @@ class CartService:
                     if checkout.normalized(address).strip() not in checkout.normalized(source):
                         raise Conflict('address_not_in_source_event')
                     state['contact']['address'] = address.strip()
+                    state.setdefault('contact_events',{})['address']=event_id
                     parsed = checkout.contact_fields(address)
                     # A corrected address must not retain an old province.
                     state['contact'].pop('province', None)
@@ -186,9 +229,12 @@ class CartService:
             self.catalog.validate(line)
         result = pricing.quote(snap['data']['cart'], list(self.catalog.products.values()), delivery)
         result['total'] = result['product_total'] + result['delivery_fee']
+        free=all(pricing.terms(self.catalog.get(line['product_id']))[2] for line in snap['data']['cart'])
+        if delivery is None and not free:result.update(total=None,delivery_fee=None)
         result['state_version'] = snap['version']
         result['catalog_revision'] = self.catalog.revision
-        return result
+        from .negotiation import adjust
+        return adjust(snap['data'],result)
 
     def purchase(self, scope, key, version, event_id):
         """Only explicit customer purchase wording authorizes this first adapter.

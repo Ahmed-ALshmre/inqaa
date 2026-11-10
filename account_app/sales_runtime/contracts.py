@@ -2,6 +2,7 @@
 from copy import deepcopy
 import math
 from .store import Conflict
+from .facts import PRODUCT_FACT_FIELDS,POLICY_FIELDS,product_fact
 
 
 class DecisionRejected(Conflict):
@@ -11,7 +12,21 @@ class DecisionRejected(Conflict):
 class DecisionUnavailable(RuntimeError):
     """Provider auth, billing, transport or service availability failure."""
 
-FACT_FIELDS = ('fabric','description','notes','colors','sizes','price','offer','product_type','size_system','stock')
+
+class BusinessChoice(Conflict):
+    """Normal unavailable selection; must become a sales response, not an incident."""
+    def __init__(self,message,*,product_id,field,available,requested=None):
+        super().__init__(message)
+        self.feedback=dict(product_id=product_id,field=field,available=available,reason=message)
+        if requested is not None:self.feedback['requested']=requested
+
+
+class ServiceRequired(Conflict):
+    def __init__(self,kind):
+        super().__init__(kind)
+        self.kind=kind
+
+FACT_FIELDS = PRODUCT_FACT_FIELDS+POLICY_FIELDS
 TEXT_FIELDS = ('product_id','color','size','size_system','wearer_ref')
 NUMBER_FIELDS = ('quantity','age_months','weight_kg')
 
@@ -107,7 +122,4 @@ def clean_plan(plan):
 
 
 def catalog_fact(product,field):
-    if field=='sizes' and product.get('size_system')=='none':
-        return dict(field='size_system',value='none')
-    value=product.get(field)
-    return dict(field=field,value=value) if value not in (None,'') else None
+    return product_fact(product,field)

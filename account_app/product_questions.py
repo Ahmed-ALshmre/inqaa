@@ -11,7 +11,9 @@ except ImportError:
 LABELS = {'fabric': 'نوع القماش', 'fabric_feel': 'سمك القماش وملمسه', 'season': 'الموسم',
           'stretch': 'الليكرا والمطاطية', 'cut': 'قصة القطعة', 'lining': 'البطانة',
           'closure': 'الإغلاق', 'care': 'الغسل والعناية', 'length': 'الطول', 'width': 'العرض',
-          'photo_source': 'مصدر الصورة', 'price': 'السعر', 'location':'عنوان المحل', 'details': 'تفصيل المنتج', 'service':'متابعة خاصة بهذه المحادثة — لا تُعمّم'}
+          'photo_source': 'مصدر الصورة', 'price': 'السعر', 'location':'عنوان المحل', 'details': 'تفصيل المنتج', 'service':'متابعة خاصة بهذه المحادثة — لا تُعمّم',
+          'origin':'بلد الصنع','composition':'محتويات القطعة وملحقاتها','delivery_time':'مدة التوصيل',
+          'inspection_policy':'سياسة الفحص','payment':'طريقة الدفع','delivery_fee':'أجور التوصيل'}
 FIELDS = {'fabric': 'fabric', 'fabric_feel': 'fabric_feel', 'season': 'season', 'stretch': 'stretch',
           'cut': 'cut', 'lining': 'lining', 'closure': 'closure', 'care': 'care_instructions',
           'photo_source': 'real_photo_notes', 'price': 'price', 'location':'shop_address'}

@@ -30,6 +30,30 @@ class Orders:
         self.store, self.catalog_loader = store, catalog_loader
         self.delivery_fee, self.confirmation = delivery_fee, confirmation
 
+    def cancel(self,scope,key,version,event_id):
+        from .contracts import ServiceRequired
+        def handle(state):
+            from .intent import explicit_cancellation
+            if state['control_mode']!='active':raise Conflict('human_control_active')
+            latest=self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",(scope.key,)).fetchone()[0]
+            if latest!=event_id:raise Conflict('turn_superseded')
+            source=self.store.evidence(scope,event_id)
+            if source['actor']!='customer' or not explicit_cancellation(source['payload'].get('text','')):
+                raise Conflict('explicit_cancel_required')
+            order_id=state.get('order_id')
+            row=self.store.db.execute('SELECT status FROM orders WHERE id=? AND sender_id=? AND store_id=?',
+                                     (order_id,scope.sender,scope.store)).fetchone()
+            if not row:raise ServiceRequired('order_cancellation_requires_lookup')
+            if row[0]=='cancelled':return dict(order_id=order_id,cancelled=True)
+            pending=self.store.db.execute("SELECT status FROM sales_v2_order_tasks WHERE order_id=? AND kind='fulfillment'",(order_id,)).fetchone()
+            if row[0]!='new' or not pending or pending[0]!='queued':
+                raise ServiceRequired('order_cancellation_requires_fulfillment_review')
+            self.store.db.execute("UPDATE orders SET status='cancelled' WHERE id=?",(order_id,))
+            self.store.db.execute("UPDATE sales_v2_order_tasks SET status='superseded' WHERE order_id=? AND status='queued'",(order_id,))
+            state.update(order_status='cancelled',purchase_event=None,conditions=[])
+            return dict(order_id=order_id,cancelled=True)
+        return self.store.apply(scope,key,version,dict(event_id=event_id,action='cancel_order'),handle)
+
     def commit(self, scope, key, version):
         # All callbacks here must be local reads; no network and no commits.
         def handle(state):
@@ -41,6 +65,9 @@ class Orders:
             if not readiness['ready']:
                 raise Conflict('checkout_not_ready:' + ','.join(readiness['missing_fields']))
             quote = cart.quote(scope, self.delivery_fee(scope.store, state['contact']['province']))
+            if state.get('price_request') and not quote.get('request_satisfied'):
+                from .contracts import ServiceRequired
+                raise ServiceRequired('quoted_price_changed_before_booking')
             # When a numeric piece count is present, respect it across all lines.
             for pid in {line['product_id'] for line in state['cart']}:
                 quantity = catalog.get(pid).get('stock_quantity')

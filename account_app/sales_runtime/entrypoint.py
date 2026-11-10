@@ -7,18 +7,21 @@ from .cart import Catalog
 from .orders import Orders, migrate_tasks, CONFIRMATION
 from .runtime import Runtime
 from .store import Store, Scope, Conflict
-from .contracts import DecisionRejected, DecisionUnavailable
+from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
 
 
 class Entrypoint:
-    def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION, media=None, writer=None):
+    def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION, media=None, writer=None,policy_loader=None):
         self.store = Store(db)
-        self.load_catalog = lambda sid: Catalog(sid, load_products(sid))
+        from .catalog_answers import enrich
+        self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
+        from .policies import view
+        self.policy_loader=lambda sid:view(sid,confirmation,delivery_fee,policy_loader(sid) if policy_loader else None)
         self.runtime = Runtime(self.store, self.load_catalog,
-                               Orders(self.store, self.load_catalog, delivery_fee, confirmation), decide)
+                               Orders(self.store, self.load_catalog, delivery_fee, confirmation), decide,self.policy_loader)
         self.media = media
         from .response import Responses
-        self.responses = Responses(self.store,self.load_catalog,writer) if writer else None
+        self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader) if writer else None
 
     def migrate(self):
         self.store.migrate()
@@ -30,6 +33,10 @@ class Entrypoint:
     def receive(self, **kwargs):
         try:
             return self._receive(**kwargs)
+        except ServiceRequired as exc:
+            scope=Scope(kwargs['store_id'],kwargs['channel'],kwargs['account_id'],kwargs['sender_id'])
+            event=self.store.db.execute('SELECT id FROM sales_v2_events WHERE scope=? AND external_id=?',(scope.key,kwargs['message_id'])).fetchone()
+            return self.handoff_service(scope,event[0],exc.kind)
         except (DecisionRejected,DecisionUnavailable) as exc:
             scope=Scope(kwargs['store_id'],kwargs['channel'],kwargs['account_id'],kwargs['sender_id'])
             row=self.store.db.execute('SELECT id FROM sales_v2_events WHERE scope=? AND external_id=?',
@@ -88,6 +95,15 @@ class Entrypoint:
             return dict(action='skipped', event_id=event['id'])
         if self.store.snapshot(scope)['data']['control_mode'] != 'active':
             return dict(action='human', event_id=event['id'])
+        from .. import sales_playbook,checkout
+        import re
+        clean=checkout.normalized(text)
+        identity_typo=(re.search(r'ذكاء\s*(?:ا?صطناع\w*|صناعي)',clean) and
+                       re.search(r'يرد|مخلي|انت|انتي|بوت',clean) and not re.search(r'صور|اعلان|فيديو',clean))
+        if sales_playbook.human_requested(text) or identity_typo:
+            return self.handoff_service(scope,event['id'],'customer_requested_human')
+        if re.search(r'عندي\s+طلب|وين\s+(?:صار|طلبي)|طلع\s+طلب|متابع[ةه]\s+طلب',clean):
+            return self.handoff_service(scope,event['id'],'order_tracking')
         # A sticker is social context, never a request for product recognition.
         # Image/video interpretation must be supplied by an explicit media adapter.
         if media_kind in {'image', 'video', 'audio'}:
@@ -112,10 +128,14 @@ class Entrypoint:
                     return dict(media=clean)
                 self.store.apply(scope,f"media:{event['id']}",saved['version'],dict(event_id=event['id']),remember)
         outcome = self.runtime.turn(scope, event['id'])
+        if any(c.get('kind')=='delivery_deadline' for c in self.store.snapshot(scope)['data']['conditions']):
+            return self.handoff_service(scope,event['id'],'delivery_deadline')
         if self.responses:
             reply=self.responses.prepare(scope,event['id'],outcome)
             if reply['action']=='missing_fact':
                 return self.handoff_fact(scope,event['id'],outcome['state_version'],reply)
+            if reply['action']=='product_unresolved':
+                return self.handoff_service(scope,event['id'],'product_unresolved')
             return dict(outcome,reply=reply)
         return outcome
 
@@ -125,7 +145,8 @@ class Entrypoint:
         from ..product_questions import question_key
         def handle(state):
             question=self.store.evidence(scope,event_id)['payload'].get('text','')
-            product=self.load_catalog(scope.store).get(missing['product_id'])
+            product=(dict(product_id='@store',product_name='سياسة المتجر') if missing['product_id']=='@store'
+                     else self.load_catalog(scope.store).get(missing['product_id']))
             now=datetime.now(ZoneInfo('Asia/Baghdad')).isoformat()
             review=self.store.db.execute('''INSERT INTO human_reviews
                 (sender_id,store_id,message_text,reason,status,created_at)
@@ -141,6 +162,17 @@ class Entrypoint:
             state['pending_questions'].append(dict(event_id=event_id,review_id=review,**missing))
             return dict(action='human',review_id=review,reply='')
         return self.store.apply(scope,f'handoff:{event_id}',version,dict(missing=missing),handle)['result']
+
+    def handoff_service(self,scope,event_id,kind):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        def handle(state):
+            review=self.store.db.execute('''INSERT INTO human_reviews(sender_id,store_id,message_text,reason,status,created_at)
+                VALUES(?,?,?,?,'pending',?)''',(scope.sender,scope.store,self.store.evidence(scope,event_id)['payload'].get('text',''),
+                'خدمة مطلوبة: '+kind,datetime.now(ZoneInfo('Asia/Baghdad')).isoformat())).lastrowid
+            state.update(control_mode='human',handoff_reason=kind)
+            return dict(action='human',review_id=review,reason=kind,reply='')
+        return self.store.apply(scope,f'service:{event_id}',self.store.snapshot(scope)['version'],dict(kind=kind),handle)['result']
 
     def prepare_fulfillment(self, scope, task_id):
         """Transfer a committed task to the existing Menger queue using LOCAL SQL.
