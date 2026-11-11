@@ -1,6 +1,7 @@
 """Durable confirmation delivery; unknown outcomes require reconciliation."""
 import json
 
+from ..checkout import COLOR_REVIEW_STATUS
 from .store import Conflict
 
 
@@ -57,7 +58,7 @@ def deliver_confirmation(store, scope, task_id, send, can_send):
             return dict(status='paused')
         order = store.db.execute('SELECT status FROM orders WHERE id=? AND store_id=? AND sender_id=?',
                                  (row[0], scope.store, scope.sender)).fetchone()
-        if not order or order[0] != 'new':
+        if not order or order[0] not in {'new', COLOR_REVIEW_STATUS}:
             return dict(status='order_changed')
         store.db.execute("UPDATE sales_v2_order_tasks SET status='sending' WHERE id=?", (task_id,))
     status, provider_id = _send_once(send, json.loads(row[1]), f'order:{scope.key}:{row[0]}:confirmation')

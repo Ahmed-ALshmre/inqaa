@@ -8,6 +8,7 @@ except ImportError:
 
 
 DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+COLOR_REVIEW_STATUS = 'يتطلب مراجعة اللون'
 
 
 def normalized(value):

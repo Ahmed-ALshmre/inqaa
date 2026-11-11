@@ -34,7 +34,7 @@ try:
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from .pricing import quote as price_order, expand_bundles
-    from .checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from .checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media, reply_consultant
     import baraah
@@ -49,7 +49,7 @@ except ImportError:
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from pricing import quote as price_order, expand_bundles
-    from checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 from flask import Flask, g, has_app_context, has_request_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
@@ -10744,9 +10744,6 @@ def reviewable_checkout_color(db, sender_id, items, matched_product):
         return False
     latest = latest_incoming_message(db, sender_id) or {}
     return bool(contact_fields(latest.get('text')) and recent_checkout_contact_action(db, sender_id))
-
-
-COLOR_REVIEW_STATUS = 'يتطلب مراجعة اللون'
 
 
 def restore_held_color_reviews(db):

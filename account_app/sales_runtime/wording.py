@@ -10,6 +10,11 @@ RAW_MONEY = re.compile(
     r'(?<!\w)(?:عشر(?:ين|ون|[هة])|[ثت]لاثين|اربعين|خمسين|ستين|سبعين|ثمانين|تسعين|'
     r'واحد|ثلاث|اربع|خمس|ست|سبع|ثمان|تسع|مي[هة]|مائ[هة])\s+(?:الف|الاف|دينار)(?!\w)'
 )
+FREE_SIZE_WORDS = re.compile(r'فري\s*سايز|free\s*size|(?:ال)?(?:قياس|مقاس)\s+(?:ال)?موحد')
+
+
+def mentions_free_size(text):
+    return bool(FREE_SIZE_WORDS.search(checkout.normalized(text)))
 
 
 def quote_amounts(quote, compact=False):

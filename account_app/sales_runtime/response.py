@@ -9,9 +9,9 @@ from .contracts import DecisionRejected, FACT_FIELDS, message_context
 from .copy_guard import validate_copy
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
 from .intent import purchase_selected
-from .negotiation import destination, offer_signature, pushback, quantity_pushback, request as price_request
+from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
 from .recovery import weight_fit
-from .wording import next_options, quote_amounts, render_amounts, validate_next_step
+from .wording import mentions_free_size, next_options, quote_amounts, render_amounts, validate_next_step
 
 
 class Responses:
@@ -145,6 +145,17 @@ class Responses:
         replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                       (scope.key,)).fetchall()
         accepted=[json.loads(row[0]) for row in reversed(replies)]
+        size_explanation_requested = bool(not purchase_turn and (
+            mentions_free_size(current) or 'sizes' in requested and re.search(
+                r'[؟?]|شكد|شنو|شلون|يرهم|يناسب|قياساته|مقاساته', checkout.normalized(current))))
+        free_size = product_variants.is_free_size_product(product)
+        omit_free_size_explanation = bool(free_size and not size_explanation_requested and (
+            any(part.get('size_explained_for') == focus for part in accepted)
+            or self.store.db.execute(
+                """SELECT 1 FROM sales_v2_outbox WHERE scope=? AND status='accepted'
+                   AND json_extract(payload, '$.size_explained_for')=? LIMIT 1""", (scope.key, focus)
+            ).fetchone()
+        ))
         question_records=[json.loads(row[0]) for row in self.store.db.execute(
             "SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' AND instr(payload,'question_field')>0 ORDER BY id DESC",(scope.key,)).fetchall()]
         # A known product can have a sales next-step without already being in a cart.
@@ -287,14 +298,15 @@ class Responses:
             next_step=dict(field=question, options=next_options(step_product, question)),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
                           contact_turn=contact_turn, recap_selection=recap,
-                          free_size=product_variants.is_free_size_product(product),
+                          free_size=free_size,
                           quantity=sum(row['quantity'] for row in lines), fit=fit,
                           quantity_confirmed=one_piece or quantity_objection,
                           price_unit_quantity=price_units, negotiation=bargaining,
                           keep_selection_open=bool(cart_missing and not price_pending and contact_turn)),
             action_results=dict(order_saved=bool(state.get('order_id')) and state.get('order_status')!='cancelled',
                                 carrier_contacted=False, delivery_time=policy.get('delivery_time'),
-                                omit_color_list=omit_color_list, discount_allowed=bool(quote_turn and quote.get('discount'))),
+                                omit_color_list=omit_color_list, omit_free_size_explanation=omit_free_size_explanation,
+                                discount_allowed=bool(quote_turn and quote.get('discount'))),
             recent_messages=messages, recent_replies=accepted,
         )
         if focus:
@@ -313,6 +325,13 @@ class Responses:
         if quote_turn:
             parts[-1]['quote_key'] = offer_key
         if question=='price.accept':text_parts[-1]['quote_total']=quote['total']
+        disclosure = price_disclosure(quote if quote_turn else None, amounts)
+        if disclosure:
+            parts[-1]['price_disclosure'] = disclosure
+        if free_size:
+            for part in parts:
+                if part['type'] == 'text' and mentions_free_size(part['text']):
+                    part['size_explained_for'] = focus
         return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
 
     def write(self, context, catalog):

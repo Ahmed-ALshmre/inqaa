@@ -14,7 +14,8 @@ from .references import References
 from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
-from .intent import apply_intent
+from .intent import apply_intent, purchase_selected
+from .orders import only_color_missing
 from .recovery import grounded_plan
 
 
@@ -186,8 +187,10 @@ class Runtime:
                         from .negotiation import destination,settle
                         province_hint=destination(evidence['payload'].get('text',''))
                         if province_hint:state['quote_province']=province_hint
-                        row=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 1",(scope.key,)).fetchone()
-                        last_reply=json.loads(row[0]) if row else {}
+                        recent_replies = [json.loads(row[0]) for row in self.store.db.execute(
+                            """SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted'
+                               ORDER BY id DESC LIMIT 24""", (scope.key,))]
+                        last_reply = recent_replies[0] if recent_replies else {}
                         if state['cart']:
                             try:
                                 province=state['contact'].get('province') or state.get('quote_province')
@@ -198,7 +201,7 @@ class Runtime:
                             try:
                                 province=state['contact'].get('province') or state.get('quote_province')
                                 price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
-                                settle(state,price,last_reply,evidence['payload'].get('text',''))
+                                settle(state,price,recent_replies,evidence['payload'].get('text',''),event_id)
                             except ValueError:pass
                         if business_feedback and state['cart']:
                             state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice']+[dict(kind='choice',status='pending',event_id=event_id,**business_feedback)]
@@ -257,8 +260,11 @@ class Runtime:
             pid='@store' if field in POLICY_FIELDS else focus
             if pid and resolve_fact(catalog,pid,field,policy) is None:missing_fact=True
         image_only = evidence['payload'].get('media_kind') == 'image' and not evidence['payload'].get('text', '').strip()
-        if ready['ready'] and not image_only and not missing_fact and not state.get('order_id'):
-            booking = self.orders.commit(scope, f'{key}:booking', version)
+        new_contact = event_id in state.get('contact_events', {}).values()
+        direct_purchase = purchase_selected(evidence['payload'].get('text', ''))
+        hold_color = only_color_missing(ready) and (new_contact or direct_purchase)
+        if (ready['ready'] or hold_color) and not image_only and not missing_fact and not state.get('order_id'):
+            booking = self.orders.commit(scope, f'{key}:booking', version, allow_color_hold=hold_color)
             outcome = dict(action='booked', **booking['result'])
             version = booking['result']['state_version']
         else:

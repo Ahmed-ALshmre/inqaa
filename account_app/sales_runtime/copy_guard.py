@@ -2,6 +2,7 @@
 import re
 
 from ..checkout import normalized
+from .wording import mentions_free_size
 
 
 def validate_copy(parts,question,action_results=None):
@@ -21,6 +22,8 @@ def validate_copy(parts,question,action_results=None):
         from ..product_variants import colors
         if len(colors(text)) > 1:
             raise ValueError('reply.relevance: answer the current topic without listing colors again')
+    if proof.get('omit_free_size_explanation') and mentions_free_size(text):
+        raise ValueError('reply.relevance: the size system was already explained for this item')
     if question is None and re.search(r'[?؟]',text):
         raise ValueError('reply.question: no question is allowed for this turn; answer/acknowledge only')
     asks={

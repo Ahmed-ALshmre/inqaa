@@ -2,6 +2,7 @@
 import json
 import unittest
 from unittest.mock import Mock
+from account_app.checkout import COLOR_REVIEW_STATUS
 from account_app.tests import test_sales_runtime_linking as linking
 from account_app.sales_runtime.runtime import Runtime
 from account_app.sales_runtime.entrypoint import Entrypoint
@@ -181,6 +182,62 @@ class AuditFixTests(unittest.TestCase):
         total,items=self.db.execute('SELECT total_amount,order_items FROM orders').fetchone()
         self.assertEqual(28000,total)
         self.assertEqual(23000,sum(i['unit_price']*i['quantity'] for i in json.loads(items)))
+
+    def test_delivered_checkout_details_hold_the_order_when_only_color_is_missing(self):
+        self.products[0].update(price='17000', sizes='فري سايز من 55 إلى 130 كيلو', colors='نيلي، وردي')
+        self.run_turn('اريد قطعتين لارج',changes=[dict(values=dict(product_id='P1',size='L',quantity=2))])
+        event,out=self.run_turn('وشكد التوصيل')
+        self.reply(event,out,Mock(return_value=[dict(type='text',text='التوصيل {{delivery_fee}}.')]),
+                   policy={'delivery_fee':{'واسط':5000}})
+        event,out=self.run_turn('سويهن ب30')
+        self.reply(event,out,Mock(return_value=[dict(type='text',text=(
+            'القطعتين {{subtotal}}، وبعد خصم {{discount}} يصيرن {{discounted_subtotal}} قبل التوصيل. لأي محافظة؟'))]))
+        self.run_turn('لا فدوة')
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        event,out=self.run_turn('واسط حي التجربة قرب المدرسة',contact={'address':'واسط حي التجربة قرب المدرسة'})
+        self.assertEqual('booked',out['action'])
+        self.assertTrue(out['held_for_color'])
+        total,status,items=self.db.execute('SELECT total_amount,status,order_items FROM orders').fetchone()
+        self.assertEqual((37000,COLOR_REVIEW_STATUS),(total,status))
+        self.assertEqual([('', 'L', 2)],[(item['color'],item['size'],item['quantity']) for item in json.loads(items)])
+        self.assertEqual(1,self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
+        task_id,kind=self.db.execute('SELECT id,kind FROM sales_v2_order_tasks').fetchone()
+        self.assertEqual('confirmation',kind)
+        from account_app.sales_runtime.delivery import deliver_confirmation
+        send=Mock(return_value=dict(accepted=True,provider_id='confirmation'))
+        self.assertEqual('accepted',deliver_confirmation(self.store,self.scope,task_id,send,lambda scope: True)['status'])
+        send.assert_called_once()
+        self.assertEqual(out,self.runtime.turn(self.scope,event))
+        self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_explicit_price_limit_survives_contact_details_after_quote(self):
+        self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])
+        event,out=self.run_turn('ما احجز إلا ب20 والتوصيل لبغداد')
+        self.reply(event,out,Mock(return_value=[dict(type='text',text=(
+            'القطعتين {{subtotal}} والتوصيل {{delivery_fee}}، نخصم {{discount}} فيصير {{total}}. يناسبج المجموع؟'))]))
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        _,out=self.run_turn('بغداد حي التجربة قرب المدرسة',contact={'address':'بغداد حي التجربة قرب المدرسة'})
+        self.assertEqual('continue',out['action'])
+        self.assertTrue(any(c['kind']=='price' for c in out['readiness']['conditions']))
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_known_choices_book_at_the_previously_shown_price_on_delivery_details(self):
+        self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])
+        event,out=self.run_turn('سويهن ب20 والتوصيل لبغداد')
+        self.reply(event,out,Mock(return_value=[dict(type='text',text=(
+            'القطعتين {{subtotal}} والتوصيل {{delivery_fee}}، نخصم {{discount}} فيصير {{total}}. يناسبج المجموع؟'))]))
+        _,out=self.run_turn('07701234567 بغداد حي التجربة قرب المدرسة',
+                            contact={'phone':'07701234567','address':'بغداد حي التجربة قرب المدرسة'})
+        self.assertEqual('booked',out['action'])
+        self.assertFalse(out['held_for_color'])
+        self.assertEqual((27000,'new'),self.db.execute('SELECT total_amount,status FROM orders').fetchone())
+
+    def test_complete_selection_and_contacts_book_on_first_turn(self):
+        text='اريد ماروني قياس 44، 07701234567، بغداد حي التجربة قرب المدرسة'
+        _,out=self.run_turn(text,changes=[dict(values=dict(product_id='P1',size='44',color='ماروني'))],
+                            contact={'phone':'07701234567','address':'بغداد حي التجربة قرب المدرسة'})
+        self.assertEqual('booked',out['action'])
+        self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
     def test_large_discount_does_not_silently_book_unaccepted_price(self):
         self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])
@@ -392,8 +449,8 @@ class AuditFixTests(unittest.TestCase):
         self.assertTrue(all(i['unit_price']>=0 for i in out['quote']['items']))
         self.assertEqual(10100,sum(i['unit_price']*i['quantity'] for i in out['quote']['items']))
 
-    def reply(self, event, outcome, writer):
-        Responses(self.store, self.loader, writer).prepare(self.scope, event, outcome)
+    def reply(self, event, outcome, writer, policy=None):
+        Responses(self.store, self.loader, writer, lambda store: policy or {}).prepare(self.scope, event, outcome)
         replies = []
         while part := self.store.claim_reply(self.scope):
             replies.append(part['payload'])
@@ -401,7 +458,7 @@ class AuditFixTests(unittest.TestCase):
         return replies
 
     def test_contacts_and_acknowledgment_cannot_fall_back_to_old_color_list(self):
-        self.run_turn('اريد قياس 44', changes=[dict(values=dict(product_id='P1',size='44'))])
+        self.run_turn('اريد هذا الموديل', changes=[dict(values=dict(product_id='P1'))])
         drafts = ['وصل العنوان عيني، شنو رقم الموبايل؟', 'وصل الرقم حبيبتي، يا لون تحبين؟', 'من عيوني.']
         writer = Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         stale = dict(facts=[dict(product_id='P1',field='colors')])
@@ -518,6 +575,19 @@ class AuditFixTests(unittest.TestCase):
         size,items = self.db.execute('SELECT size,order_items FROM orders').fetchone()
         self.assertEqual('L',size)
         self.assertEqual('L',json.loads(items)[0]['size'])
+
+    def test_free_size_explanation_is_not_repeated_after_selection(self):
+        self.products[0]['sizes'] = 'فري سايز من 55 كيلو الى 130 كيلو'
+        event,out=self.run_turn('اريد قياس لارج',changes=[dict(values=dict(product_id='P1',size='L'))])
+        first=self.reply(event,out,Mock(return_value=[dict(type='text',text='هو فري سايز عيوني. يا لون عجبج؟')]))
+        self.assertEqual('P1',first[0]['size_explained_for'])
+        event,out=self.run_turn('اريد ماروني',changes=[dict(values=dict(product_id='P1',color='ماروني'))])
+        writer=Mock(return_value=[dict(type='text',text='صار الماروني لارج. شنو رقم الموبايل والعنوان؟')])
+        self.reply(event,out,writer)
+        proof=writer.call_args.args[0]['action_results']
+        self.assertTrue(proof['omit_free_size_explanation'])
+        with self.assertRaisesRegex(ValueError,'already explained'):
+            validate_copy([dict(type='text',text='هو فري سايز')],None,proof)
 
     def test_free_size_does_not_add_an_unapproved_label(self):
         self.products[0]['sizes'] = 'فري سايز من 55 كيلو الى 130 كيلو'
