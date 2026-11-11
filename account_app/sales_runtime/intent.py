@@ -34,7 +34,12 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
     from .negotiation import pushback, request
     text=evidence['payload'].get('text','');value=normalized(text)
     bargaining = bool(state.get('price_request') and pushback(text))
-    if (plan['intent']=='withdraw' and not bargaining) or re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',value):
+    reply = last_reply or {}
+    confirmed_purchase = bool(is_confirmation(text) and state['cart'] and (
+        state.get('purchase_event') or
+        reply.get('question_field') == 'purchase_intent' and reply.get('question_stage') == 'selection'
+        and reply.get('cart_key') == digest(state['cart'])))
+    if (plan['intent']=='withdraw' and not bargaining and not confirmed_purchase) or re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',value):
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
         state.pop('price_request',None)
@@ -60,9 +65,6 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
     # also express checkout; a single price enquiry with contacts does not.
     declared=(bool(state['cart']) and all(state['contact'].get(f) for f in ('phone','address','province'))
               and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address'])
-    reply = last_reply or {}
-    accepted_purchase = (reply.get('question_field') == 'purchase_intent' and reply.get('question_stage') == 'selection'
-                         and bool(state['cart']) and reply.get('cart_key') == digest(state['cart']) and is_confirmation(text))
-    if purchase_selected(text) or contextual or declared or accepted_purchase:
+    if purchase_selected(text) or contextual or declared or confirmed_purchase:
         state['purchase_event']=event_id
     return False

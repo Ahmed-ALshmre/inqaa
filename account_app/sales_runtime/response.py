@@ -225,7 +225,7 @@ class Responses:
             # An acknowledgment alone did not answer a pending color or size question.
             # A new purchase confirmation can move directly to the contact step.
             if state.get('purchase_event') == turn_id and not cart_missing:
-                stage = 'selection'
+                stage = 'checkout-confirmed' if question and question.startswith('contact.') else 'selection'
             elif question and not question.startswith('contact.'):
                 question = None
         if quote_turn and price_pending:
@@ -252,6 +252,8 @@ class Responses:
             previous_reply = accepted[-1]
             if previous_reply.get('question_field') == 'price.accept' and previous_reply.get('quote_key') == offer_key:
                 question = None  # Choosing a color does not require quoting the same total in consecutive replies.
+        if stage == 'checkout-confirmed' and accepted and accepted[-1].get('question_field') == question:
+            question = None
         if question and question != 'product' and question not in outcome.get('invalid_fields',[]):
             previous = [p for p in question_records
                         if (p.get('question_key') or question_key(p.get('question_field'))) == question_key(question)]
@@ -314,6 +316,7 @@ class Responses:
             recommendations=recommendations, value_facts=value_facts,
             next_step=dict(field=question, options=next_options(step_product, question)),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
+                          checkout_confirmed=stage=='checkout-confirmed',
                           contact_turn=contact_turn, recap_selection=recap,
                           product_unresolved=product_unresolved,
                           free_size=free_size,

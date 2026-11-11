@@ -115,6 +115,35 @@ class AuditFixTests(unittest.TestCase):
         self.assertNotIn('question_field',reply)
         self.assertFalse(self.store.snapshot(self.scope)['data']['purchase_event'])
 
+    def test_yalla_tamam_resumes_checkout_after_price_discussion(self):
+        self.products[0].update(price='16000',colors='أسود، رصاصي')
+        event,out=self.run_turn('أريد أسود ورصاصي قياس 44',changes=[
+            dict(values=dict(product_id='P1',color='اسود',size='44')),
+            dict(new_line=True,values=dict(product_id='P1',color='رصاصي',size='44'))])
+        drafts = ('صار عيني، شنو الرقم والعنوان للتوصيل؟',
+                  'القطعتين {{subtotal}}، وبعد خصم {{discount}} يصيرن {{discounted_subtotal}}.',
+                  'على اختيارج حبيبتي، شنو رقم الموبايل والعنوان؟', 'تدللين عيوني.')
+        writer=Mock(side_effect=[[dict(type='text',text=draft)] for draft in drafts])
+        self.assertEqual('contact.details',self.reply(event,out,writer)[-1]['question_field'])
+        event,out=self.run_turn('سويهن الوحده 15 بالعدله')
+        self.reply(event,out,writer)
+        self.plan=dict(intent='withdraw')
+        event=self.event('يله تمام')
+        out=self.runtime.turn(self.scope,event)
+        self.assertEqual(event,self.store.snapshot(self.scope)['data']['purchase_event'])
+        self.assertEqual('contact.details',self.reply(event,out,writer)[-1]['question_field'])
+        self.assertTrue(writer.call_args.args[0]['progress']['checkout_confirmed'])
+        event,out=self.run_turn('يلا،تمام')
+        self.assertNotIn('question_field',self.reply(event,out,writer)[-1])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_yalla_tamam_does_not_start_checkout_after_a_price_inquiry(self):
+        self.select()
+        self.run_turn('شلون السعر اذا امكن')
+        _,out=self.run_turn('يلا تمام')
+        self.assertIn('purchase_intent',out['readiness']['missing_fields'])
+        self.assertFalse(self.store.snapshot(self.scope)['data']['purchase_event'])
+
     def test_optional_description_does_not_hide_available_fabric_or_length(self):
         self.products[0].update(fabric='قديفة ثخين',measurements='الطول 105 سم',description='')
         self.select()
@@ -576,7 +605,9 @@ class AuditFixTests(unittest.TestCase):
                              writer.call_args.args[0]['progress']['fit'])
         event,out = self.run_turn('ماروني',changes=[dict(values=dict(product_id='P1',color='ماروني'))])
         self.assertEqual('purchase_intent',self.reply(event,out,writer)[-1]['question_field'])
-        event,out = self.run_turn('تمام')
+        self.plan = dict(intent='withdraw')
+        event = self.event('يلا تمام')
+        out = self.runtime.turn(self.scope,event)
         self.assertEqual('contact.details',self.reply(event,out,writer)[-1]['question_field'])
 
     def test_counteroffer_explains_subtotal_delivery_discount_and_unchanged_total(self):
