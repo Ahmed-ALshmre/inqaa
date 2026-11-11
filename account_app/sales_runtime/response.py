@@ -3,6 +3,7 @@ import json
 import re
 
 from .. import checkout, pricing, product_variants, sales_playbook, sales_voice
+from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
@@ -15,9 +16,10 @@ from .wording import mentions_free_size, next_options, quote_amounts, render_amo
 
 
 class Responses:
-    def __init__(self, store, catalog_loader, writer,policy_loader=None):
+    def __init__(self, store, catalog_loader, writer,policy_loader=None, *, backup=None):
         self.store, self.catalog_loader, self.writer = store, catalog_loader, writer
         self.policy_loader=policy_loader or (lambda sid:{})
+        self.backup = backup
 
     def prepare(self, scope, turn_id, outcome):
         mode = 'withdrawn' if outcome.get('withdrawn') else outcome['action']
@@ -67,7 +69,7 @@ class Responses:
             context = dict(mode=mode, question_field=question, next_step=dict(field=question, options=[]),
                            recent_messages=messages, amounts={}, greeting=greeting,
                            action_results=dict(order_changed=mode == 'cancelled'))
-            parts = self.write(context, catalog)
+            parts = self.write(context, catalog, scope, turn_id, snap['version'])
             if question:
                 parts[-1].update(question_field=question, question_key=question)
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
@@ -154,7 +156,25 @@ class Responses:
             if fact_value is None:
                 # An empty general-purpose field is not evidence that a specific answer is missing.
                 if field in {'description','notes'} or field not in requested:continue
-                return dict(action='missing_fact',product_id=fact['product_id'],field=field)
+                missing = dict(action='missing_fact',product_id=fact['product_id'],field=field)
+                if self.backup:
+                    relevant_ids = {pid for pid in (focus, fact['product_id']) if pid and pid != '@store'}
+                    review = dict(state=state, event=messages[-1] if messages else {},
+                                  recent_messages=messages, recent_replies=accepted, policies=policy,
+                                  products=[catalog.get(pid) for pid in sorted(relevant_ids)], missing_fact=missing)
+                    try:
+                        alternate = consult(self.store, scope, turn_id, snap['version'], 'fact',
+                                            self.backup.decide, review, 'requested_catalog_fact_missing', plan)
+                    except BackupFailed:
+                        alternate = None  # Preserve the existing factual review and question record.
+                    proposed = (alternate or {}).get('answer', {}).get('facts', [])
+                    # A backup may catch a stale fact reference, but only the committed focus can supply its replacement.
+                    if focus and field not in POLICY_FIELDS and dict(product_id=focus, field=field) in proposed:
+                        fact_value = resolve_fact(catalog, focus, field, policy)
+                        if fact_value is not None:
+                            fact = dict(product_id=focus, field=field)
+                if fact_value is None:
+                    return missing
             if not any(f['field']==fact_value['field'] and f['product_id']==fact['product_id'] for f in allowed_facts):
                 allowed_facts.append(dict(product_id=fact['product_id'],**fact_value))
         size_explanation_requested = bool(not purchase_turn and (
@@ -333,7 +353,7 @@ class Responses:
         if focus:
             from ..product_questions import guidance_for
             context['reply_guidance'] = guidance_for(product,current)
-        parts = self.write(context, catalog)
+        parts = self.write(context, catalog, scope, turn_id, snap['version'])
         if question in {'contact.phone','contact.address','contact.province','contact.details'}:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:
@@ -355,33 +375,48 @@ class Responses:
                     part['size_explained_for'] = focus
         return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
 
-    def write(self, context, catalog):
-        from ..customer_copy import public_product_wording
+    def write(self, context, catalog, scope, turn_id, version):
         question = context['question_field']
         strict = getattr(type(self.writer), 'structured_sales', False)
         parts = None
         for attempt in range(2):
             try:
                 parts = self.writer.repair(context, parts, error) if attempt else self.writer(context)
-                # Validate structure before formatting or reading any model-authored fields.
-                validate_copy(parts, question, context['action_results'])
-                parts = self.remove_stale_greetings(parts, context['greeting'])
-                parts = render_amounts(parts, context['amounts'])
-                for part in parts:
-                    if part['type'] == 'text':
-                        part['text'] = public_product_wording(dict(reply=part['text']), list(catalog.products.values()))['reply']
-                    elif part.get('url') != catalog.get(part.get('product_id')).get('image_url') or not part.get('url'):
-                        raise ValueError('image_not_in_catalog')
-                validate_copy(parts, question, context['action_results'])
-                if strict:
-                    validate_next_step(parts, context['next_step'])
-                return parts
-            except ValueError as exc:
-                if attempt or getattr(type(self.writer), 'repair', None) is None:
-                    if question == 'product' or context.get('progress', {}).get('product_unresolved'):
-                        raise DecisionUnavailable('product_reply_retryable') from exc
-                    raise DecisionRejected('writer_invalid_after_validation') from exc
+                return self.validate_parts(parts, context, catalog, strict)
+            except (ValueError, DecisionUnavailable) as exc:
+                failure = exc
                 error = str(exc)
+                if isinstance(exc, DecisionUnavailable) or getattr(type(self.writer), 'repair', None) is None:
+                    break
+
+        alternate = consult(self.store, scope, turn_id, version, 'writer',
+                            self.backup.write if self.backup else None, context, error, parts)
+        if alternate is not None:
+            try:
+                return self.validate_parts(alternate, context, catalog, True)
+            except ValueError as exc:
+                raise BackupFailed('backup_reply_invalid') from exc
+        if isinstance(failure, DecisionUnavailable):
+            raise failure
+        if question == 'product' or context.get('progress', {}).get('product_unresolved'):
+            raise DecisionUnavailable('product_reply_retryable') from failure
+        raise DecisionRejected('writer_invalid_after_validation') from failure
+
+    def validate_parts(self, parts, context, catalog, strict):
+        from ..customer_copy import public_product_wording
+        question = context['question_field']
+        validate_copy(parts, question, context['action_results'])
+        parts = self.remove_stale_greetings(parts, context['greeting'])
+        parts = render_amounts(parts, context['amounts'])
+        for part in parts:
+            if part['type'] == 'text':
+                part['text'] = public_product_wording(dict(reply=part['text']), list(catalog.products.values()))['reply']
+            elif part.get('url') != catalog.get(part.get('product_id')).get('image_url') or not part.get('url'):
+                raise ValueError('image_not_in_catalog')
+        validate_copy(parts, question, context['action_results'])
+        if strict:
+            validate_next_step(parts, context['next_step'])
+        return parts
 
     @staticmethod
     def remove_stale_greetings(parts, greeting):

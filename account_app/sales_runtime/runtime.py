@@ -9,10 +9,11 @@ import time
 from copy import deepcopy
 
 from .. import checkout
+from .backup import BackupFailed, consult
 from .cart import CartService
 from .references import References
 from .store import Conflict, Store, digest
-from .contracts import clean_plan, validate_plan, DecisionRejected, BusinessChoice,ServiceRequired,message_context
+from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
 from .intent import apply_intent, purchase_selected
 from .orders import only_color_missing
@@ -75,14 +76,16 @@ def resolve_changes(plan, state, scope, event_id):
 
 
 class Runtime:
-    def __init__(self, store, catalog_loader, orders, decide,policy_loader=None):
+    def __init__(self, store, catalog_loader, orders, decide,policy_loader=None, *, backup=None):
         self.store, self.catalog_loader, self.orders, self.decide = store, catalog_loader, orders, decide
         self.policy_loader=policy_loader or (lambda sid:dict(inspection_policy=orders.confirmation.split('. ',1)[-1]))
+        self.backup = backup
 
     def decision_call(self,scope,event_id,context,previous=None,error=None):
         # A duplicate webhook or worker restart cannot reset the model budget.
         with self.store.transaction():
-            count=self.store.db.execute('SELECT COUNT(*) FROM sales_v2_model_attempts WHERE scope=? AND event_id=?',
+            count=self.store.db.execute("""SELECT COUNT(*) FROM sales_v2_model_attempts WHERE scope=? AND event_id=?
+                                           AND stage IN ('decision','repair')""",
                                        (scope.key,event_id)).fetchone()[0]
             if count>=2:raise DecisionRejected('decision_budget_exhausted')
             attempt=self.store.db.execute('''INSERT INTO sales_v2_model_attempts
@@ -98,6 +101,23 @@ class Runtime:
         with self.store.transaction():
             self.store.db.execute("UPDATE sales_v2_model_attempts SET status='returned' WHERE id=?",(attempt,))
         return result
+
+    def recover_decision(self, scope, event_id, version, context, failure, previous=None, reason=None):
+        alternate = consult(self.store, scope, event_id, version, 'decision',
+                            self.backup.decide if self.backup else None, context, reason or str(failure), previous)
+        if isinstance(alternate, dict):
+            # The backup sees which contact fields exist. Exact values come from the scoped customer event.
+            text = context['event'].get('text') or ''
+            local = checkout.contact_fields(text, context['state']['contact'])
+            contacts = {field: value for field, value in local.items()
+                        if field in {'phone', 'address'} and (field == 'phone'
+                            or checkout.normalized(value) in checkout.normalized(text))}
+            return dict(alternate, contact=contacts), True
+        if self.backup:
+            raise BackupFailed('backup_plan_invalid')
+        if isinstance(failure, DecisionRejected) and getattr(type(self.decide), 'fallback_allowed', False):
+            return grounded_plan(context), False
+        raise failure
 
     def accept_checkout_prompt(self, scope, key, version, outbox_id):
         def handle(state):
@@ -164,7 +184,7 @@ class Runtime:
             replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
-            recovered=False;business_feedback=None
+            recovered=False;used_backup=False;business_feedback=None
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
             if (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
                     and not snap['data'].get('focus_product_id') and not snap['data']['cart']):
@@ -172,9 +192,9 @@ class Runtime:
                 raw=grounded_plan(context);recovered=True
             else:
                 try:raw=self.decision_call(scope,event_id,context)
-                except DecisionRejected:
-                    if not getattr(type(self.decide),'fallback_allowed',False):raise
-                    raw=grounded_plan(context);recovered=True
+                except (DecisionRejected, DecisionUnavailable) as exc:
+                    raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,exc)
+                    recovered=True
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
@@ -238,20 +258,25 @@ class Runtime:
                     if str(exc) in {'state_version_changed','human_control_active'}:
                         raise
                     repair=getattr(type(self.decide),'repair',None)
-                    if repair is None:raise
-                    if attempt:
-                        if not getattr(type(self.decide),'fallback_allowed',False) or recovered:
-                            raise DecisionRejected('decision_tools_invalid_after_repair') from None
-                        raw=grounded_plan(context);recovered=True
+                    if recovered:
+                        if used_backup:
+                            raise BackupFailed('backup_plan_invalid') from None
+                        raise DecisionRejected('decision_tools_invalid_after_repair') from None
+                    if repair is None and not self.backup:
+                        raise
+                    if attempt or repair is None:
+                        raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,
+                            DecisionRejected('decision_tools_invalid_after_repair'),raw,str(exc))
+                        recovered=True
                         continue
                     # No SQL transaction is held across a model call.
                     current=self.store.snapshot(scope)
                     if current['version']!=snap['version']:
                         raise Conflict('state_version_changed') from None
                     try:raw=self.decision_call(scope,event_id,context,raw,str(exc))
-                    except DecisionRejected:
-                        if not getattr(type(self.decide),'fallback_allowed',False):raise
-                        raw=grounded_plan(context);recovered=True
+                    except (DecisionRejected, DecisionUnavailable) as failure:
+                        raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,failure,raw,str(exc))
+                        recovered=True
             version = saved['state_version']
         try:ready = cart.readiness(scope)
         except BusinessChoice as exc:

@@ -5,8 +5,9 @@ from unittest.mock import Mock
 
 from account_app.tests import test_sales_runtime_linking as linking
 from account_app.sales_runtime.runtime import Runtime
-from account_app.sales_runtime.contracts import clean_plan, DECISION_SCHEMA
-from account_app.sales_runtime.gateway import DecisionGateway
+from account_app.sales_runtime.contracts import clean_plan, DECISION_SCHEMA, DecisionRejected, DecisionUnavailable
+from account_app.sales_runtime.entrypoint import Entrypoint
+from account_app.sales_runtime.gateway import BACKUP_MODEL, DecisionGateway
 from account_app.sales_runtime import Conflict
 
 
@@ -194,6 +195,70 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual('queued',entry.receive(**kwargs)['reply']['action'])
         self.decide.assert_called_once()
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM sales_v2_incidents').fetchone()[0])
+
+    def test_configured_gateway_uses_argon_once_when_primary_plan_is_invalid(self):
+        bad = Mock(status_code=200,json=lambda: {'choices':[{'message':{'content':'invalid'}}]})
+        plan = dict(intent='continue',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44'))])
+        good = Mock(status_code=200,json=lambda: {'choices':[{'message':{'parsed':plan}}]})
+        post = Mock(side_effect=[bad,bad,good])
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,DecisionGateway('primary', 'test-key', post))
+        result=entry.receive(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
+                             sender_id=self.scope.sender,message_id='fallback',text='ماروني قياس 44 07701234567',
+                             ad={'ad_id':'120251717777850095'})
+        self.assertEqual('continue',result['action'])
+        self.assertEqual(['primary','primary',BACKUP_MODEL],[c.kwargs['json']['model'] for c in post.call_args_list])
+        sent=post.call_args.kwargs['json']['messages'][-1]['content']
+        self.assertIn('decision_invalid_after_retry',sent)
+        self.assertNotIn('07701234567',sent)
+        state=self.store.snapshot(self.scope)['data']
+        self.assertEqual('44',state['cart'][0]['size'])
+        self.assertEqual('07701234567',state['contact']['phone'])
+
+    def test_backup_budget_is_shared_between_planning_and_wording(self):
+        backup=Mock()
+        backup.decide.return_value=dict(intent='continue')
+        decide=Mock(side_effect=DecisionRejected('invalid_plan'))
+        writer=Mock(return_value=[dict(type='text',text='تم تثبيت الطلب')])
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,decide,writer=writer,backup=backup)
+        kwargs=dict(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
+                    sender_id=self.scope.sender,message_id='m',text='متوفر؟',ad={'ad_id':'120251717777850095'})
+        result=entry.receive(**kwargs)
+        self.assertEqual(('needs_review','backup_attempt_already_used',''),
+                         (result['action'],result['error_code'],result['reply']))
+        entry.receive(**kwargs)
+        backup.decide.assert_called_once()
+        backup.write.assert_not_called()
+        self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM sales_v2_outbox').fetchone()[0])
+
+    def test_failed_backup_call_hands_off_silently_and_never_retries(self):
+        backup=Mock()
+        backup.write.side_effect=DecisionUnavailable('writer_provider_http_503')
+        writer=Mock(side_effect=DecisionUnavailable('writer_provider_http_503'))
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer,backup=backup)
+        kwargs=dict(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
+                    sender_id=self.scope.sender,message_id='m',text='متوفر؟',ad={'ad_id':'120251717777850095'})
+        result=entry.receive(**kwargs)
+        self.assertEqual(('needs_review','backup_model_failed',''),(result['action'],result['error_code'],result['reply']))
+        entry.receive(**kwargs)
+        backup.write.assert_called_once()
+        self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+
+    def test_a_new_message_supersedes_an_in_flight_backup(self):
+        backup=Mock()
+        def recover(context):
+            self.assertFalse(self.db.in_transaction)
+            self.event('تغيير من الزبونة')
+            return dict(intent='continue',changes=[dict(values=dict(product_id='P1',size='44'))])
+        backup.decide.side_effect=recover
+        decide=Mock(side_effect=DecisionRejected('invalid_plan'))
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,decide,backup=backup)
+        result=entry.receive(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
+                             sender_id=self.scope.sender,message_id='fallback-old',text='قياس 44',
+                             ad={'ad_id':'120251717777850095'})
+        self.assertEqual('superseded',result['action'])
+        self.assertEqual([],self.store.snapshot(self.scope)['data']['cart'])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
     def test_obsolete_failure_does_not_pause_newer_message(self):
         from account_app.sales_runtime.entrypoint import Entrypoint

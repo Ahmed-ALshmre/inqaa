@@ -4,6 +4,7 @@ Channel adapters determine actor/account/store from trusted routing metadata,
 never from customer text. Existing webhook processing is not enabled by import.
 """
 from .cart import Catalog
+from .backup import BackupSuperseded
 from .orders import Orders, migrate_tasks, CONFIRMATION
 from .runtime import Runtime
 from .store import Store, Scope, Conflict
@@ -11,17 +12,22 @@ from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
 
 
 class Entrypoint:
-    def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION, media=None, writer=None,policy_loader=None):
+    def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION,
+                 media=None, writer=None,policy_loader=None,backup=None):
         self.store = Store(db)
         from .catalog_answers import enrich
         self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
         from .policies import view
         self.policy_loader=lambda sid:view(sid,confirmation,delivery_fee,policy_loader(sid) if policy_loader else None)
+        from .gateway import BACKUP_MODEL, BackupGateway, DecisionGateway
+        if backup is None and isinstance(decide, DecisionGateway) and decide.model != BACKUP_MODEL:
+            backup = BackupGateway(decide.api_key, decide.post)
         self.runtime = Runtime(self.store, self.load_catalog,
-                               Orders(self.store, self.load_catalog, delivery_fee, confirmation), decide,self.policy_loader)
+                               Orders(self.store, self.load_catalog, delivery_fee, confirmation),
+                               decide,self.policy_loader,backup=backup)
         self.media = media
         from .response import Responses
-        self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader) if writer else None
+        self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader,backup=backup) if writer else None
 
     def migrate(self):
         self.store.migrate()
@@ -33,6 +39,8 @@ class Entrypoint:
     def receive(self, **kwargs):
         try:
             return self._receive(**kwargs)
+        except BackupSuperseded:
+            return dict(action='superseded', reply='')
         except ServiceRequired as exc:
             scope=Scope(kwargs['store_id'],kwargs['channel'],kwargs['account_id'],kwargs['sender_id'])
             event=self.store.db.execute('SELECT id FROM sales_v2_events WHERE scope=? AND external_id=?',(scope.key,kwargs['message_id'])).fetchone()

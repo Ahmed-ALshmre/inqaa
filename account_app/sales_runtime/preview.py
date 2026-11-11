@@ -104,7 +104,7 @@ class ChannelPreview:
                                      event['id'], mode)['result']
 
 
-def install(module, *, products, delivery_fee, decide, writer, fetch_image, match_image, post, enabled):
+def install(module, *, products, delivery_fee, decide, writer, fetch_image, match_image, post, enabled, backup=None):
     """Explicitly opt a test application into the preview using an injected transport."""
     if not module.app.testing:
         raise ValueError('sales_preview_requires_testing_app')
@@ -115,7 +115,7 @@ def install(module, *, products, delivery_fee, decide, writer, fetch_image, matc
     observe = ImageObserver(fetch_image, match_image)
 
     def entry():
-        return Entrypoint(module.get_db(), products, delivery_fee, decide, media=observe, writer=writer)
+        return Entrypoint(module.get_db(), products, delivery_fee, decide, media=observe, writer=writer, backup=backup)
 
     def send(scope, part, key):
         if scope.channel == 'chatwoot':

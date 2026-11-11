@@ -354,7 +354,9 @@ class LinkingTests(unittest.TestCase):
         self.db.commit()
         self.plan=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='fabric')]))
         writer=Mock()
-        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer)
+        backup=Mock()
+        backup.decide.return_value=dict(intent='continue',answer=dict(facts=[dict(product_id='P1',field='fabric')]))
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer,backup=backup)
         entry.migrate()
         args=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='missing',
                   ad={'ad_id':'120251717777850095'})
@@ -364,6 +366,7 @@ class LinkingTests(unittest.TestCase):
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM product_questions').fetchone()[0])
         self.assertEqual('human',entry.receive(**args,message_id='m',text='شنو القماش؟')['action'])
+        backup.decide.assert_called_once()
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
 
