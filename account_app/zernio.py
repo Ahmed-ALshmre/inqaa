@@ -325,7 +325,8 @@ def product_event(module, db, event, products):
     return result
 
 
-def send(module, sender_id, messages):
+def send(module, sender_id, messages, *, post=None, operation_key=None):
+    post = post or requests.post
     result = {'ok': False, 'status_code': 0, 'status': 'configuration_error', 'message': '', 'response': None}
     store = sender_store(sender_id)
     if not enabled_for_store(store):
@@ -344,7 +345,7 @@ def send(module, sender_id, messages):
     if not messages:
         return dict(result, status='empty_messages')
     # Per-job retries share keys; deliberate manual sends without a job remain distinct.
-    batch = module.ai_jobs.active_job.get() or uuid.uuid4().hex
+    batch = operation_key or module.ai_jobs.active_job.get() or uuid.uuid4().hex
     for index, message in enumerate(messages):
         if not isinstance(message, dict):
             return dict(result, status='unsupported_message')
@@ -381,7 +382,7 @@ def send(module, sender_id, messages):
             return dict(result, status='unsupported_message')
         key = hashlib.sha256(json.dumps([batch, sender_id, index, payload], sort_keys=True).encode()).hexdigest()
         try:
-            response = requests.post(API_URL + '/inbox/conversations/' + quote(row['conversation_id'], safe='') + '/messages',
+            response = post(API_URL + '/inbox/conversations/' + quote(row['conversation_id'], safe='') + '/messages',
                 json=payload, headers={'Authorization': 'Bearer ' + token, 'Idempotency-Key': key},
                 timeout=30, allow_redirects=False)
             result['status_code'] = response.status_code
@@ -392,6 +393,11 @@ def send(module, sender_id, messages):
             if (not isinstance(body, dict) or body.get('success') is not True or not isinstance(data, dict)
                     or not (data.get('messageId') or data.get('messageIds')) or data.get('partialFailure')):
                 return dict(result, status='unconfirmed', message='Zernio did not confirm the complete message')
+            ids = data.get('messageIds')
+            if data.get('messageId'):
+                result['provider_id'] = str(data['messageId'])
+            elif isinstance(ids, list) and len(ids) == 1 and ids[0]:
+                result['provider_id'] = str(ids[0])
         except (requests.RequestException, ValueError, OSError):
             return dict(result, status='transport_error', message='Zernio delivery could not be confirmed')
     return dict(result, ok=True, status='success')
@@ -463,6 +469,10 @@ def install(module):
             return jsonify(ok=True, ignored=True)
         context = _ad_context(module, data, occurred_at)
         native_id = str(message.get('platformMessageId') or message['id'])
+        preview = module.app.extensions.get('sales_runtime_preview') if module.app.testing else None
+        if preview is not None:
+            return jsonify(preview.receive('zernio', sender_store(sender_id), account_id, sender_id,
+                                           'zernio-' + account_id + '-' + native_id, text, attachments, context))
         body = {'_ad_context': context, 'object': 'page' if platform == 'facebook' else platform,
                 'entry': [{'id': 'zernio-' + account_id, '_store_id': sender_store(sender_id), 'messaging': [{
                     'sender': {'id': sender_id}, 'recipient': {'id': 'zernio-' + account_id},

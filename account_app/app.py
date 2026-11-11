@@ -34,7 +34,7 @@ try:
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from .pricing import quote as price_order, expand_bundles
-    from .checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from .checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media, reply_consultant
     import baraah
@@ -49,7 +49,7 @@ except ImportError:
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from pricing import quote as price_order, expand_bundles
-    from checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 from flask import Flask, g, has_app_context, has_request_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 _ORIGINAL_PRINT = builtins.print
@@ -10746,9 +10746,6 @@ def reviewable_checkout_color(db, sender_id, items, matched_product):
     return bool(contact_fields(latest.get('text')) and recent_checkout_contact_action(db, sender_id))
 
 
-COLOR_REVIEW_STATUS = 'يتطلب مراجعة اللون'
-
-
 def restore_held_color_reviews(db):
     """Keep held orders visible without changing choices, AI switches or exports."""
     now = now_baghdad_iso()
@@ -19238,14 +19235,23 @@ def api_product_questions():
     sql = '''SELECT q.id,q.store_id,COALESCE(s.name,q.store_id) AS store_name,q.product_id,q.product_name,
                     q.topic,q.question,q.answer,q.guidance,q.status,q.occurrences,q.created_at,q.updated_at
              FROM product_questions q LEFT JOIN stores s ON s.store_id=q.store_id WHERE q.status=?''' + scope
-    if before:
-        sql += ' AND q.id<?'; args.append(before)
-    rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC LIMIT ?',args+[limit+1])]
-    for row in rows:
+    if status == 'pending' and request.args.get('needs_attention') == '1':
+        pending_rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC', args)]
+        products = load_products_from_file(all_stores=all_stores) if pending_rows else []
+        rows = product_questions.dashboard_questions(db, pending_rows, products)
+        pending = len(rows)
+        if before:
+            rows = [row for row in rows if row['id'] < before]
+    else:
+        if before:
+            sql += ' AND q.id<?'; args.append(before)
+        rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC LIMIT ?',args+[limit+1])]
+        pending = db.execute("SELECT COUNT(*) FROM product_questions q WHERE q.status='pending'"+scope,
+                             [] if all_stores else [current_store_id()]).fetchone()[0]
+    page = rows[:limit]
+    for row in page:
         row['revision'] = product_questions.revision(row)
-    return jsonify(questions=rows[:limit],has_more=len(rows)>limit,
-                   pending=db.execute("SELECT COUNT(*) FROM product_questions q WHERE q.status='pending'"+scope,
-                                      [] if all_stores else [current_store_id()]).fetchone()[0],
+    return jsonify(questions=page,has_more=len(rows)>limit,pending=pending,
                    topics=product_questions.LABELS)
 
 

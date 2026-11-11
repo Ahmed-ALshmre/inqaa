@@ -13,7 +13,7 @@
     const actions=make('div','pq-actions'),save=make('button','btn btn-primary',row.guidance?'تحديث التوجيه':'حفظ التوجيه للبوت');
     const state=make('span','pq-card-status');state.setAttribute('role','status');state.setAttribute('aria-live','polite');
     save.type='button';actions.append(save,state);
-    el.append(meta,scope,make('h2','',topics[row.topic]||'تفصيل المنتج'),make('p','pq-question',row.question));
+    el.append(meta,scope,make('h2','',row.gap_label||topics[row.topic]||'تفصيل المنتج'),make('p','pq-question',row.question));
     if(row.answer){const old=make('details','pq-previous');old.append(make('summary','','معلومة مؤكدة محفوظة سابقاً'),make('p','',row.answer));el.append(old);}
     if(row.topic==='service')el.append(make('p','pq-note','هذا التوجيه خاص بنفس السؤال في هذه المحادثة؛ لا يُعمّم على بقية الزبائن.'));
     el.append(label,input,help,actions);
