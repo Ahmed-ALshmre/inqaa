@@ -38,7 +38,7 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
         state.pop('price_request',None)
-        return
+        return True
     # Remove legacy arbitrary "if" barriers. Real typed constraints remain.
     state['conditions']=[c for c in state['conditions'] if c.get('kind') and c.get('status')=='pending']
     pending=constraint(text)
@@ -65,3 +65,4 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
                          and bool(state['cart']) and reply.get('cart_key') == digest(state['cart']) and is_confirmation(text))
     if purchase_selected(text) or contextual or declared or accepted_purchase:
         state['purchase_event']=event_id
+    return False

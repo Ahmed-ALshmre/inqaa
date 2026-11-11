@@ -3,7 +3,6 @@ import math
 import re
 from collections import Counter
 from ..checkout import normalized,is_confirmation,PROVINCES
-from ..customer_copy import chat_amount
 from .store import digest
 
 
@@ -106,28 +105,6 @@ def offer_signature(quote):
         quantities[row['product_id']] += row['quantity']
     return digest([sorted(quantities.items()), *(quote.get(field) for field in
                    ('base_product_total', 'product_total', 'discount', 'delivery_fee', 'total'))])
-
-
-def quote_copy(quote, compact=False):
-    """Render the same arithmetic used to save the order."""
-    discount = quote.get('discount', 0)
-    reduction = 'ألفين' if discount == 2000 else chat_amount(discount)
-    if compact and quote.get('total') is not None:
-        body = f'المجموع {chat_amount(quote["total"])} ويا التوصيل'
-        return body + (f' بعد خصم {reduction}.' if discount else '.')
-    subtotal = quote.get('base_product_total', quote['product_total'])
-    quantity = sum(item['quantity'] for item in quote['items'])
-    label = {1:'القطعة', 2:'القطعتين'}.get(quantity, f'{quantity} قطع')
-    lines = [f'حساب {label} {chat_amount(subtotal)}']
-    if quote.get('delivery_fee') is not None:
-        lines.append(f'التوصيل {chat_amount(quote["delivery_fee"])}' if quote['delivery_fee'] else 'التوصيل مجاني')
-    if discount:
-        lines.append(f'نزلتلج {reduction} خصم')
-    if quote.get('total') is not None:
-        lines.append(f'فيصير المجموع {chat_amount(quote["total"])} دينار')
-    elif quote.get('discount'):
-        lines.append(f'فيصير حساب القطع {chat_amount(quote["product_total"])} قبل التوصيل')
-    return '، '.join(lines) + '.'
 
 
 def destination(text):

@@ -8,6 +8,7 @@ from account_app.sales_runtime.entrypoint import Entrypoint
 from account_app.sales_runtime.response import Responses
 from account_app.sales_runtime.copy_guard import validate_copy
 from account_app.sales_runtime.contracts import DecisionRejected,ServiceRequired
+from account_app.sales_runtime.gateway import WriterGateway
 from account_app.sales_runtime.policies import APPROVED_DELIVERY_TIME
 from account_app.sales_runtime import Scope
 
@@ -45,16 +46,41 @@ class AuditFixTests(unittest.TestCase):
             with self.subTest(text=text),self.assertRaisesRegex(ValueError,'reply.action'):
                 validate_copy([dict(type='text',text=text)],None)
 
-    def test_repeated_invalid_writer_gets_grounded_copy_without_technical_pause(self):
+    def test_repeated_invalid_writer_does_not_send_template_or_false_booking(self):
         class BadWriter:
             def __call__(self,context):return [dict(type='text',text='ثبتتلج الطلب')]
             def repair(self,context,previous,error):return self(context)
         event=self.event('هلا');out=self.runtime.turn(self.scope,event)
-        response=Responses(self.store,self.loader,BadWriter()).prepare(self.scope,event,out)
-        self.assertEqual('queued',response['action'])
-        text=json.loads(self.db.execute('SELECT payload FROM sales_v2_outbox').fetchone()[0])['text']
-        self.assertNotIn('ثبتتلج',text)
-        self.assertEqual('active',self.store.snapshot(self.scope)['data']['control_mode'])
+        with self.assertRaisesRegex(DecisionRejected,'writer_invalid_after_validation'):
+            Responses(self.store,self.loader,BadWriter()).prepare(self.scope,event,out)
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM sales_v2_outbox').fetchone()[0])
+
+    def test_gateway_repairs_a_written_price_and_preserves_the_model_wording(self):
+        self.products[0]['price'] = '17000'
+        self.run_turn('أريد قطعتين ماروني 44',changes=[
+            dict(values=dict(product_id='P1',color='ماروني',size='44',quantity=2))])
+        event,out = self.run_turn('سويهن ب36 والتوصيل لبغداد')
+        bad = 'المجموع 36 ألف. يناسبج الحساب؟'
+        good = ('أدري تردين أوفّر لج. القطعتين {{subtotal}} والتوصيل {{delivery_fee}}، '
+                'أگدر أنزل {{discount}} فيصير الحساب {{total}}. يناسبج هالمجموع؟')
+        post = Mock(side_effect=[Mock(status_code=200,json=lambda text=text: {
+            'choices':[{'message':{'content':json.dumps({'parts':[{'type':'text','text':text}]})}}]
+        }) for text in (bad,good)])
+        reply = self.reply(event,out,WriterGateway('test-model','test-key',post))[0]
+        self.assertEqual(good.replace('{{subtotal}}','34 ألف').replace('{{delivery_fee}}','5 آلاف')
+                         .replace('{{discount}}','ألفين').replace('{{total}}','37 ألف'),reply['text'])
+        self.assertEqual(37000,reply['quote_total'])
+        retry = json.loads(post.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertIn('reply.money',retry['validation_feedback'])
+
+    def test_withdrawal_stops_checkout_questions(self):
+        self.run_turn('أريد قياس 44',changes=[dict(values=dict(product_id='P1',size='44'))])
+        event,out = self.run_turn('لا ما أريدها')
+        writer = Mock(return_value=[dict(type='text',text='من عيوني، براحتج حبيبتي 🌷')])
+        reply = self.reply(event,out,writer)[0]
+        self.assertEqual('withdrawn',writer.call_args.args[0]['mode'])
+        self.assertNotIn('question_field',reply)
+        self.assertFalse(self.store.snapshot(self.scope)['data']['purchase_event'])
 
     def test_optional_description_does_not_hide_available_fabric_or_length(self):
         self.products[0].update(fabric='قديفة ثخين',measurements='الطول 105 سم',description='')
@@ -157,7 +183,7 @@ class AuditFixTests(unittest.TestCase):
         self.run_turn('سويهن ب20 والتوصيل لبغداد')
         self.run_turn('07701234567',contact={'phone':'07701234567'})
         event,out=self.run_turn('بغداد حي المنصور قرب المدرسة',contact={'address':'بغداد حي المنصور قرب المدرسة'})
-        writer=Mock(side_effect=AssertionError('financial counteroffer must be deterministic'))
+        writer=Mock(return_value=[dict(type='text',text='حسابهن {{subtotal}} والتوصيل {{delivery_fee}}، نخصم {{discount}} فيصير {{total}}. يناسبج المجموع؟')])
         Responses(self.store,self.loader,writer).prepare(self.scope,event,out)
         part=self.store.claim_reply(self.scope)
         self.assertEqual(27000,part['payload']['quote_total'])
@@ -234,7 +260,7 @@ class AuditFixTests(unittest.TestCase):
         contexts=[]
         def writer(context):
             contexts.append(context)
-            return [dict(type='text',text='يا لون عجبج؟' if context['question_field'] else 'التوصيل خمسة آلاف حبيبتي')]
+            return [dict(type='text',text='يا لون عجبج؟' if context['question_field'] else 'التوصيل {{delivery_fee}} حبيبتي')]
         responses=Responses(self.store,self.loader,writer,lambda sid:dict(delivery_fee={'بغداد':5000}))
         for index,text in enumerate(('قياس 44','شكد التوصيل','اريد اعرف هم التوصيل')):
             event,out=self.run_turn(text,changes=[dict(values=dict(product_id='P1',size='44'))] if index==0 else [])
@@ -245,7 +271,7 @@ class AuditFixTests(unittest.TestCase):
                 self.assertNotIn('question_field',part['payload'])
                 self.assertIn('التوصيل 5 آلاف',part['payload']['text'])
         self.assertTrue(contexts[0]['question_field'].endswith('.color'))
-        self.assertEqual(1,len(contexts))
+        self.assertEqual([None,None],[context['question_field'] for context in contexts[1:]])
 
     def test_unavailable_child_age_offers_compatible_alternative_not_contacts(self):
         self.products[0].update(sizes='1 إلى 4 سنوات',product_type='sets',audience='boys')
@@ -362,24 +388,33 @@ class AuditFixTests(unittest.TestCase):
 
     def test_contacts_and_acknowledgment_cannot_fall_back_to_old_color_list(self):
         self.run_turn('اريد قياس 44', changes=[dict(values=dict(product_id='P1',size='44'))])
-        writer = Mock(side_effect=AssertionError('contact and acknowledgment must use saved progress'))
+        drafts = ['وصل العنوان عيني، شنو رقم الموبايل؟', 'وصل الرقم حبيبتي، يا لون تحبين؟', 'من عيوني.']
+        writer = Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         stale = dict(facts=[dict(product_id='P1',field='colors')])
         event,out = self.run_turn('بغداد حي المنصور قرب المدرسة', answer=stale,
                                   contact={'address':'بغداد حي المنصور قرب المدرسة'})
         reply = self.reply(event,out,writer)
-        self.assertIn('وصل العنوان',reply[0]['text'])
+        self.assertEqual(drafts[0],reply[0]['text'])
+        self.assertIn('address',writer.call_args.args[0]['progress']['received'])
         self.assertEqual('contact.phone',reply[-1]['question_field'])
         event,out = self.run_turn('07701234567',answer=stale,contact={'phone':'07701234567'})
         reply = self.reply(event,out,writer)
-        self.assertIn('وصل الرقم',reply[0]['text'])
+        self.assertEqual(drafts[1],reply[0]['text'])
+        self.assertEqual(['phone'],writer.call_args.args[0]['progress']['received'])
         self.assertTrue(reply[-1]['question_field'].endswith('.color'))
         event,out = self.run_turn('تمام',answer=stale)
         reply = self.reply(event,out,writer)
-        self.assertEqual([{'type':'text','text':'تدللين عيوني.'}],reply)
+        self.assertEqual([{'type':'text','text':drafts[2]}],reply)
+        self.assertTrue(writer.call_args.args[0]['progress']['acknowledgment'])
+        self.assertTrue(writer.call_args.args[0]['action_results']['omit_color_list'])
+        self.assertEqual([],writer.call_args.args[0]['facts'])
 
     def test_checkout_restatement_uses_the_two_selected_lines_and_missing_contacts(self):
         self.products[0]['colors'] = 'أسود، رصاصي'
-        writer = Mock(side_effect=AssertionError('checkout recap must use the committed cart'))
+        drafts = ['على اختيارج، اسود قياس 44 ورصاصي قياس 44.',
+                  'إي عيوني، الرصاصي قياس 44 مثل الأسود.',
+                  'صار حبيبتي، اسود قياس 44 ورصاصي قياس 44. شنو الرقم والعنوان حتى أثبتلج الحجز؟']
+        writer = Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         event,out = self.run_turn('اريد اسود ورصاصي قياس 44',changes=[
             dict(values=dict(product_id='P1',color='اسود',size='44')),
             dict(new_line=True,values=dict(product_id='P1',color='رصاصي',size='44'))])
@@ -391,18 +426,29 @@ class AuditFixTests(unittest.TestCase):
         reply = self.reply(event,out,writer)
         self.assertIn('اسود قياس 44',reply[0]['text'])
         self.assertIn('رصاصي قياس 44',reply[0]['text'])
+        context = writer.call_args.args[0]
+        self.assertTrue(context['progress']['recap_selection'])
+        self.assertEqual([('اسود','44'),('رصاصي','44')],
+                         [(row['color'],row['size']) for row in context['state']['cart']])
         self.assertEqual('contact.details',reply[-1]['question_field'])
         self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
     def test_verified_weight_advances_to_color_once_then_purchase_and_contact(self):
         self.products[0]['sizes'] = 'من وزن 60 إلى 130 كيلو'
-        writer = Mock(side_effect=AssertionError('weight and selection must use verified data'))
+        drafts = ['إي حبيبتي، 130 كيلو ضمن المجال المكتوب. يا لون عجبج؟',
+                  'إي عيني، 130 كيلو الحد الأعلى لهالموديل.',
+                  'الماروني على اختيارج، تحبين أثبتلج؟',
+                  'شنو الرقم والعنوان للحجز؟']
+        writer = Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         for index in range(2):
             event,out = self.run_turn('يلبس وزن 130',changes=[dict(values=dict(product_id='P1',weight_kg=130))])
             reply = self.reply(event,out,writer)
             self.assertIn('130 كيلو',reply[0]['text'])
             self.assertNotIn('أزرق',reply[0]['text'])
-            self.assertEqual(2 if index == 0 else 1,len(reply))
+            self.assertEqual(1,len(reply))
+            self.assertEqual(index == 0,'question_field' in reply[0])
+            self.assertEqual(dict(weight_kg=130,within_catalog_range=True),
+                             writer.call_args.args[0]['progress']['fit'])
         event,out = self.run_turn('ماروني',changes=[dict(values=dict(product_id='P1',color='ماروني'))])
         self.assertEqual('purchase_intent',self.reply(event,out,writer)[-1]['question_field'])
         event,out = self.run_turn('تمام')
@@ -411,7 +457,11 @@ class AuditFixTests(unittest.TestCase):
     def test_counteroffer_explains_subtotal_delivery_discount_and_unchanged_total(self):
         self.products[0]['price'] = '17000'
         self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44',quantity=2))])
-        writer = Mock(side_effect=AssertionError('financial amounts must come from the quote'))
+        drafts = ['أفهمج، حسابهن {{subtotal}} وننزل {{discount}} فيصير {{discounted_subtotal}} قبل التوصيل. لأي محافظة؟',
+                  'أقدّر طلبج حبيبتي.',
+                  'إي عيوني، الحساب على القطعتين. التوصيل لأي محافظة؟',
+                  'القطعتين {{subtotal}} والتوصيل {{delivery_fee}}، ننزل {{discount}} ويصير كلهن {{total}}. يناسبج الحساب؟']
+        writer = Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         event,out = self.run_turn('سويهن ب30')
         self.assertEqual(32000,out['quote']['product_total'])
         self.assertEqual('quote.province',self.reply(event,out,writer)[-1]['question_field'])

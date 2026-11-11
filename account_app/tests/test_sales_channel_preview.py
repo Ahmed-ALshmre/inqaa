@@ -17,7 +17,6 @@ from account_app import checkout
 import account_app.app as app_module
 from account_app.sales_runtime.orders import CONFIRMATION
 from account_app.sales_runtime.preview import install
-from account_app.sales_runtime.recovery import safe_text
 from account_app.sales_runtime.store import Scope
 
 
@@ -75,7 +74,7 @@ class ChannelPreviewTests(unittest.TestCase):
         self.decide = Mock(side_effect=self.decide_fixture)
         self.post = Mock(side_effect=self.send_fixture)
         self.preview = install(app_module, products=self.products, delivery_fee=lambda s, p:5000,
-                               decide=self.decide, writer=safe_text, fetch_image=self.fetch,
+                               decide=self.decide, writer=self.write, fetch_image=self.fetch,
                                match_image=self.match, post=self.post, enabled=self.enabled)
         self.client = app_module.app.test_client()
 
@@ -173,7 +172,19 @@ class ChannelPreviewTests(unittest.TestCase):
             self.assertNotIn(self.photo_url, context)
             self.assertNotIn('data:image/', context)
 
-    def test_unknown_image_clarifies_without_model_and_sticker_skips_vision(self):
+    @staticmethod
+    def write(context):
+        if context['mode'] == 'media_unresolved':
+            return [dict(type='text', text='يا قطعة تقصدين بالصورة حبيبتي؟')]
+        question = context['question_field']
+        prompts = {
+            'contact.phone': 'باقي رقم الموبايل، شنو رقمج؟',
+            'contact.address': 'وين أوصلها لج؟',
+            'contact.details': 'شنو الرقم والعنوان للتوصيل؟',
+        }
+        return [dict(type='text', text=prompts.get(question, 'صار عيوني'))]
+
+    def test_unknown_image_uses_only_writer_and_sticker_skips_vision(self):
         bad = self.incoming('chatwoot', 1, photo='https://127.0.0.1/secret.png')
         self.assertEqual('media_unresolved',bad.get_json()['action'])
         self.incoming('chatwoot', 1, photo='https://127.0.0.1/secret.png')

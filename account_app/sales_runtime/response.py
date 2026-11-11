@@ -2,15 +2,16 @@
 import json
 import re
 
-from .. import checkout, product_variants, sales_playbook
+from .. import checkout, pricing, product_variants, sales_playbook
 from .cart import CartService
 from .store import Conflict, digest
-from .contracts import FACT_FIELDS, message_context
+from .contracts import DecisionRejected, FACT_FIELDS, message_context
 from .copy_guard import validate_copy
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
 from .intent import purchase_selected
-from .negotiation import destination, offer_signature, pushback, quantity_pushback, quote_copy, request as price_request
-from .recovery import next_question, safe_text, selection_reply, weight_reply
+from .negotiation import destination, offer_signature, pushback, quantity_pushback, request as price_request
+from .recovery import weight_fit
+from .wording import next_options, quote_amounts, render_amounts, validate_next_step
 
 
 class Responses:
@@ -19,24 +20,43 @@ class Responses:
         self.policy_loader=policy_loader or (lambda sid:{})
 
     def prepare(self, scope, turn_id, outcome):
-        if outcome['action']=='cancelled':
-            self.store.enqueue_reply(scope,f'cancellation:{turn_id}',outcome['state_version'],[dict(type='text',text='تم إلغاء الطلب.')])
-            return dict(action='queued',parts=1)
-        if outcome['action'] != 'continue':
+        mode = 'withdrawn' if outcome.get('withdrawn') else outcome['action']
+        if mode not in {'continue', 'withdrawn', 'cancelled', 'media_unresolved'}:
             # Order confirmations use durable order tasks, never model rewriting.
             return dict(action=outcome['action'])
-        key = f'writer-v3:{turn_id}'
+        reply_key = {
+            'continue': f'answer:{turn_id}',
+            'withdrawn': f'answer:{turn_id}',
+            'cancelled': f'cancellation:{turn_id}',
+            'media_unresolved': f'clarify-image:{turn_id}',
+        }[mode]
+        key = reply_key if mode == 'media_unresolved' else f'writer-v3:{turn_id}'
         saved = self.store.db.execute('SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?',
                                      (scope.key,key)).fetchone()
         if saved:
             record=json.loads(saved[0])
-            self.store.enqueue_reply(scope,f'answer:{turn_id}',record['state_version'],record['parts'])
+            self.store.enqueue_reply(scope,reply_key,record['state_version'],record['parts'])
             return dict(action='queued',parts=len(record['parts']))
+        if mode == 'cancelled' and self.store.db.execute(
+            'SELECT 1 FROM sales_v2_outbox WHERE scope=? AND reply_key=?', (scope.key, reply_key),
+        ).fetchone():
+            return dict(action='queued',parts=1)
         snap = self.store.snapshot(scope)
         if snap['version'] != outcome['state_version']:
             raise Conflict('response_superseded')
         catalog = self.catalog_loader(scope.store)
         policy=self.policy_loader(scope.store)
+        recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 15",
+                                     (scope.key,)).fetchall()
+        messages=[dict(actor=row[0],**message_context(json.loads(row[1]))) for row in reversed(recent)]
+        if mode != 'continue':
+            question = 'product' if mode == 'media_unresolved' else None
+            context = dict(mode=mode, question_field=question, next_step=dict(field=question, options=[]),
+                           recent_messages=messages, amounts={}, action_results=dict(order_changed=mode == 'cancelled'))
+            parts = self.write(context, catalog)
+            if question:
+                parts[-1].update(question_field=question, question_key=question)
+            return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         readiness = CartService(self.store,catalog).readiness(scope)
         plan = outcome.get('answer_plan', {})
         question = plan.get('question_field')
@@ -47,9 +67,6 @@ class Responses:
                 readiness['conditions'] or any(f.startswith('cart') for f in readiness['missing_fields'])):
             question=None
         if question=='purchase_intent' and readiness['conditions']:question=None
-        recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 15",
-                                     (scope.key,)).fetchall()
-        messages=[dict(actor=row[0],**message_context(json.loads(row[1]))) for row in reversed(recent)]
         current=messages[-1].get('text','') if messages else ''
         state = snap['data']
         lines = state['cart']
@@ -84,7 +101,7 @@ class Responses:
                                 {'حسب قياسي','على قياسي','نفس قياسي','على نفس قياسي'})
         one_piece = (sum(row['quantity'] for row in lines) == 1 and
                      bool(re.fullmatch(r'(?:لا\s+)?(?:(?:عيني|عيوني|عمري|حبيبتي)\s+)?(?:بس|فقط)\s+(?:واحد[هة]?|قطعه|قطعة)', clean)))
-        fit = weight_reply(product, current) if set(requested) <= {'sizes'} and not purchase_turn else None
+        fit = weight_fit(product, current) if set(requested) <= {'sizes'} and not purchase_turn else None
         price_pending = any(condition.get('kind') == 'price' for condition in readiness['conditions'])
         requested_offer = price_request(current)
         quantity_objection = bool(state.get('price_request') and quantity_pushback(current))
@@ -100,6 +117,8 @@ class Responses:
             price_question = False  # A hypothetical quantity is not the current cart price.
         quote_turn = bool(quote and not state.get('order_id') and (bargaining or price_question))
         references=list(plan.get('facts',[]))
+        if contact_turn or acknowledgment:
+            references = []
         if requested:
             relevant = set(requested) | ({'offer'} if 'price' in requested else set())
             references = [fact for fact in references if fact['field'] in relevant]
@@ -170,7 +189,7 @@ class Responses:
                     question = cart_missing[0]
             elif one_piece:
                 question = next((field for field in cart_missing if field.endswith('.color')), question)
-            elif fit and 'خارج' not in fit:
+            elif fit and fit['within_catalog_range']:
                 question = next((field for field in cart_missing if field.endswith('.color')), question)
             elif selected and not cart_missing and not readiness['conditions'] and not state.get('purchase_event'):
                 question = 'purchase_intent'
@@ -193,7 +212,7 @@ class Responses:
                 question = 'quote.province'
                 if quantity_objection:
                     stage = 'price-quantity'
-        if fit and 'خارج' in fit and not feedback:
+        if fit and not fit['within_catalog_range'] and not feedback:
             question = None
         def question_key(field):
             if field and field.startswith('cart.'):
@@ -214,49 +233,21 @@ class Responses:
                 previous = [p for p in previous if p.get('quote_key') == offer_key]
             if previous:
                 question = None
-        available_fields = set(requested) if requested else set(FACT_FIELDS)
-        omit_color_list = bool(requested and 'colors' not in requested and not mentioned and not feedback
+        recap = bool(not feedback and (purchase_turn or selected or repeat_selection)
+                     and set(requested) <= {'colors', 'sizes'})
+        available_fields = set(requested) if requested or contact_turn or acknowledgment else set(FACT_FIELDS)
+        omit_color_list = bool((contact_turn or acknowledgment or requested) and 'colors' not in requested
+                               and not mentioned and not feedback
                                and not repeat_selection and not purchase_turn
                                and not recommendations and not (question or '').endswith('.color'))
-        context=dict(state=snap['data'], facts=allowed_facts,
-                                  question_field=question, goal=plan.get('goal',''),
-                                  policies=policy,quote=outcome.get('quote'),business_feedback=feedback,
-                                  recommendations=recommendations,
-                                  action_results=dict(order_saved=bool(snap['data'].get('order_id')) and snap['data'].get('order_status')!='cancelled',
-                                                      carrier_contacted=False,delivery_time=policy.get('delivery_time'),
-                                                      omit_color_list=omit_color_list),
-                                  product_facts=({f:resolve_fact(catalog,focus,f,policy)['value'] for f in FACT_FIELDS
-                                                 if f in available_fields and f not in POLICY_FIELDS and resolve_fact(catalog,focus,f,policy)} if focus else {}),
-                                  recent_messages=messages,recent_replies=accepted,
-                                  instructions='صوت بنت عراقية ودود ومختصر؛ أجيبي السؤال ثم خطوة مناسبة. لا ترحيب متكرر، لا ادعاء حجز، لا سؤال عن معلوم، ولا اختراع ندرة أو عرض أو حقيقة.')
-        if feedback:context['instructions']+=' الاختيار المطلوب يبقى نفسه: لا تطلبين عمرًا أو قياسًا أصغر ولا تفترضين طفلًا ثانيًا؛ اعرضي فقط البدائل المتوافقة الموثقة في recommendations.'
-        if focus:
-            from ..product_questions import guidance_for
-            context['reply_guidance']=guidance_for(catalog.get(focus),current)
-        body = None
-        if contact_turn:
-            if received == {'address', 'phone'}:
-                body = 'تسلمين عيوني، وصل الرقم والعنوان.'
-            elif 'address' in received:
-                body = 'تسلمين عيوني، وصل العنوان.'
-            elif 'phone' in received:
-                body = 'تسلمين عيوني، وصل الرقم.'
-            else:
-                body = 'تدللين عيوني.'
-        elif not feedback and fit:
-            body = fit
-        elif one_piece and not feedback:
-            body = 'صار عيوني، قطعة وحدة.'
-        elif not feedback and (purchase_turn or selected or repeat_selection) and set(requested) <= {'colors', 'sizes'}:
-            body = selection_reply(lines)
-        elif acknowledgment:
-            body = 'تدللين عيوني.'
-        elif product and clean in {'متوفر', 'متوفره', 'متوفرة', 'موجود', 'موجوده'}:
-            from ..product_albums import stock_state
-            if stock_state(product) == 'available':
-                body = 'إي عيوني، هالموديل متوفر.'
-        elif requested == ['delivery_fee'] and not different_quantity and not quote_turn:
-            from ..customer_copy import chat_amount
+        amounts = {}
+        if quote_turn:
+            shown = any(part.get('quote_key') == offer_key for part in accepted)
+            if not shown or price_question or question == 'price.accept':
+                amounts = quote_amounts(quote, compact=shown and not price_question)
+            elif re.match(r'^(?:مع|ويا)\s+التوصيل', clean) and quote.get('total') is not None:
+                amounts = quote_amounts(quote, compact=True)
+        elif 'delivery_fee' in requested and not different_quantity:
             fee = (quote or {}).get('delivery_fee')
             fees = policy.get('delivery_fee')
             if fee is None and isinstance(fees, dict):
@@ -265,66 +256,50 @@ class Responses:
                 if fee is None and len(set(fees.values())) == 1:
                     fee = next(iter(fees.values()))
             if type(fee) is int:
-                body = f'إي عيوني، التوصيل {chat_amount(fee)} دينار.' if fee else 'إي عيوني، التوصيل مجاني.'
-        if quote_turn:
-            shown = any(part.get('quote_key') == offer_key for part in accepted)
-            if not shown or price_question or question == 'price.accept':
-                amounts = quote_copy(quote, compact=shown and not price_question)
-                body = f'{body} {amounts}' if contact_turn and body else f'عيوني، {amounts}'
-            elif not body:
-                if quantity_objection and sum(line['quantity'] for line in lines) == 2:
-                    body = 'إي عيوني، الحساب على القطعتين.'
-                    if quote.get('discount'):
-                        body += ' والخصم محسوب إلهن.'
-                elif re.match(r'^(?:مع|ويا)\s+التوصيل', clean) and quote.get('total') is not None:
-                    body = f'إي عيوني، {quote_copy(quote, compact=True)}'
-                elif quote.get('discount'):
-                    body = 'أفهمج عيوني، الخصم محسوب على الطلب.'
-                else:
-                    body = 'تدللين عيوني.'
-        if body and not question and contact_turn and cart_missing and not price_pending and all(
-                state['contact'].get(field) for field in ('address', 'phone', 'province')):
-            body += ' نكمّل من تحددين الاختيار.'
-        parts = None
-        if body:
-            prompt = next_question(question)
-            if quote_turn:
-                parts = [dict(type='text', text=' '.join(part for part in (body, prompt) if part))]
-            else:
-                parts = [dict(type='text', text=body)]
-                if prompt:
-                    parts.append(dict(type='text', text=prompt))
-        for attempt in range(2):
+                amounts['delivery_fee'] = fee
+        price_units = None
+        if product and 'price' in requested and not quote_turn and not different_quantity:
             try:
-                if attempt:parts=self.writer.repair(context,parts,error)
-                elif parts is None:parts=self.writer(context)
-                from ..customer_copy import public_product_wording
-                if isinstance(parts,list):
-                    parts=[dict(p,text=public_product_wording(dict(reply=p['text']),list(catalog.products.values()))['reply'])
-                           if isinstance(p,dict) and p.get('type')=='text' and isinstance(p.get('text'),str) else p for p in parts]
-                validate_copy(parts,question,context['action_results'])
-                break
-            except ValueError as exc:
-                if getattr(type(self.writer),'repair',None) is None:raise
-                if attempt:
-                    parts=safe_text(context)
-                    validate_copy(parts,question,context['action_results'])
-                    break
-                error=str(exc)
-        if not isinstance(parts,list) or not 1<=len(parts)<=5:
-            raise ValueError('invalid_reply_parts')
-        for part in parts:
-            if not isinstance(part,dict) or part.get('type') not in {'text','image'}:
-                raise ValueError('invalid_reply_part')
-            if part['type']=='text':
-                if not isinstance(part.get('text'),str) or not part['text'].strip():
-                    raise ValueError('empty_reply_text')
-            else:
-                product = catalog.get(part.get('product_id'))
-                urls = {product.get('image_url')}
-                # More complex album schemas require the existing album adapter.
-                if not part.get('url') or part['url'] not in urls:
-                    raise Conflict('image_not_in_catalog')
+                price_units, price, _ = pricing.terms(product)
+                amounts['unit_price'] = price
+            except ValueError:
+                pass
+        product_facts = {}
+        value_facts = {}
+        if product:
+            for field in FACT_FIELDS:
+                if field in POLICY_FIELDS:
+                    continue
+                if field in available_fields or field in {'fabric', 'fabric_feel', 'season', 'cut'}:
+                    fact = resolve_fact(catalog, focus, field, policy)
+                    if fact and field in available_fields:
+                        product_facts[field] = fact['value']
+                    if fact and field in {'fabric', 'fabric_feel', 'season', 'cut'}:
+                        value_facts[field] = fact['value']
+        step_product = product
+        if question and question.startswith(('cart.', 'product.')):
+            step_product = catalog.get(question_key(question).split('.', 1)[1].rsplit('.', 1)[0])
+        context = dict(
+            mode=mode, state=state, facts=allowed_facts, product_facts=product_facts,
+            question_field=question, goal=plan.get('goal',''), policies=policy,
+            quote=quote if quote_turn else None, amounts=amounts, business_feedback=feedback,
+            recommendations=recommendations, value_facts=value_facts,
+            next_step=dict(field=question, options=next_options(step_product, question)),
+            progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
+                          contact_turn=contact_turn, recap_selection=recap,
+                          quantity=sum(row['quantity'] for row in lines), fit=fit,
+                          quantity_confirmed=one_piece or quantity_objection,
+                          price_unit_quantity=price_units, negotiation=bargaining,
+                          keep_selection_open=bool(cart_missing and not price_pending and contact_turn)),
+            action_results=dict(order_saved=bool(state.get('order_id')) and state.get('order_status')!='cancelled',
+                                carrier_contacted=False, delivery_time=policy.get('delivery_time'),
+                                omit_color_list=omit_color_list, discount_allowed=bool(quote_turn and quote.get('discount'))),
+            recent_messages=messages, recent_replies=accepted,
+        )
+        if focus:
+            from ..product_questions import guidance_for
+            context['reply_guidance'] = guidance_for(product,current)
+        parts = self.write(context, catalog)
         if question in {'contact.phone','contact.address','contact.province','contact.details'}:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:
@@ -332,11 +307,39 @@ class Responses:
         if question:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:text_parts[-1].update(question_field=question,question_key=question_key(question),question_stage=stage)
-        if question == 'purchase_intent' and stage == 'selection' and body:
+        if question == 'purchase_intent' and stage == 'selection' and recap:
             text_parts[-1]['cart_key'] = digest(lines)
         if quote_turn:
             parts[-1]['quote_key'] = offer_key
         if question=='price.accept':text_parts[-1]['quote_total']=quote['total']
-        record=self.store.apply(scope,key,snap['version'],dict(turn_id=turn_id),lambda state:dict(parts=parts))['result']
-        self.store.enqueue_reply(scope,f'answer:{turn_id}',record['state_version'],parts)
+        return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+
+    def write(self, context, catalog):
+        from ..customer_copy import public_product_wording
+        question = context['question_field']
+        strict = getattr(type(self.writer), 'structured_sales', False)
+        parts = None
+        for attempt in range(2):
+            try:
+                parts = self.writer.repair(context, parts, error) if attempt else self.writer(context)
+                # Validate structure before formatting or reading any model-authored fields.
+                validate_copy(parts, question, context['action_results'])
+                parts = render_amounts(parts, context['amounts'])
+                for part in parts:
+                    if part['type'] == 'text':
+                        part['text'] = public_product_wording(dict(reply=part['text']), list(catalog.products.values()))['reply']
+                    elif part.get('url') != catalog.get(part.get('product_id')).get('image_url') or not part.get('url'):
+                        raise ValueError('image_not_in_catalog')
+                validate_copy(parts, question, context['action_results'])
+                if strict:
+                    validate_next_step(parts, context['next_step'])
+                return parts
+            except ValueError as exc:
+                if attempt or getattr(type(self.writer), 'repair', None) is None:
+                    raise DecisionRejected('writer_invalid_after_validation') from exc
+                error = str(exc)
+
+    def save(self, scope, key, reply_key, turn_id, version, parts):
+        record = self.store.apply(scope, key, version, dict(turn_id=turn_id), lambda state: dict(parts=parts))['result']
+        self.store.enqueue_reply(scope, reply_key, record['state_version'], record['parts'])
         return dict(action='queued',parts=len(parts))

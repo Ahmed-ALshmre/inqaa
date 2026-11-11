@@ -193,7 +193,7 @@ class Runtime:
                                 province=state['contact'].get('province') or state.get('quote_province')
                                 price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
                             except ValueError:pass  # A partial package needs quantity clarification.
-                        apply_intent(state,plan,event_id,evidence,price,last_reply)
+                        withdrawn=apply_intent(state,plan,event_id,evidence,price,last_reply)
                         if state['cart']:
                             try:
                                 province=state['contact'].get('province') or state.get('quote_province')
@@ -208,7 +208,8 @@ class Runtime:
                             state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice' or c.get('field') not in changed_fields]
                         if reference.get('status')=='known':
                             state['focus_product_id']=reference['product_id']
-                        return dict(plan=plan,invalid_fields=invalid_fields,business_feedback=business_feedback,quote=price,recovered=recovered)
+                        return dict(plan=plan,invalid_fields=invalid_fields,business_feedback=business_feedback,
+                                    quote=price,recovered=recovered,withdrawn=withdrawn)
                     saved=self.store.apply(scope,key,snap['version'],dict(event_id=event_id),apply_proposal)['result']
                     break
                 except BusinessChoice as exc:
@@ -263,7 +264,8 @@ class Runtime:
         else:
             outcome = dict(action='continue', readiness=ready, answer_plan=plan.get('answer', {}),
                            invalid_fields=saved.get('invalid_fields',[]),business_feedback=saved.get('business_feedback'),
-                           quote=saved.get('quote'),recovered=saved.get('recovered',False),state_version=version)
+                           quote=saved.get('quote'),recovered=saved.get('recovered',False),
+                           withdrawn=saved.get('withdrawn',False),state_version=version)
         outcome['state_version'] = version + 1
         self.store.apply(scope, key + ':done', version, dict(event_id=event_id), lambda state: dict(outcome=outcome))
         return outcome

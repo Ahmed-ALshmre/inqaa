@@ -159,10 +159,8 @@ class Entrypoint:
         """Keep an unresolved picture out of the checkout tools."""
         if not self.responses:
             return dict(action='media_unresolved', event_id=event_id)
-        parts = [dict(type='text', text='تدللين عيوني، أي قطعة تقصدين بالصورة؟ ممكن تذكرين اسمها أو تدزين صورة أوضح؟')]
         version = self.store.snapshot(scope)['version']
-        saved = self.store.apply(scope, f'clarify-image:{event_id}', version, {}, lambda state: dict(parts=parts))['result']
-        self.store.enqueue_reply(scope, f'clarify-image:{event_id}', saved['state_version'], saved['parts'])
+        self.responses.prepare(scope, event_id, dict(action='media_unresolved', state_version=version))
         return dict(action='media_unresolved', event_id=event_id)
 
     def handoff_fact(self, scope, event_id, version, missing):

@@ -56,6 +56,8 @@ def validate_copy(parts,question,action_results=None):
         raise ValueError('reply.action: carrier coordination requires an executed operation')
     if re.search(r'تم\s*(?:الغاء|تعديل)|الغيت|غيرنا\s*الطلب',text) and not proof.get('order_changed'):
         raise ValueError('reply.action: order change requires a committed operation')
+    if re.search(r'خصمتلج|نزلتلج.{0,24}خصم|بعد\s+(?:ال)?خصم', text) and not proof.get('discount_allowed'):
+        raise ValueError('reply.discount: no negotiated discount was applied')
     if re.search(r'(?:انا|اني).{0,45}(?:انسان[هة]?|بشر|بنفسي|من\s*المحل)',text):
         raise ValueError('reply.identity: never deny automation or claim human identity')
     if re.search(r'(?<!\w)p\d{3}(?!\w)',text):
