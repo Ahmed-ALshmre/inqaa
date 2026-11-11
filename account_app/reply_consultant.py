@@ -59,10 +59,9 @@ class Session:
     status: str = 'not_needed'
     reason: str = ''
     advice: dict | None = None
-    model: str = MODEL
 
     def metadata(self):
-        return {'model': self.model, 'attempted': self.attempted, 'status': self.status,
+        return {'model': MODEL, 'attempted': self.attempted, 'status': self.status,
                 **({'reason': self.reason} if self.reason else {})}
 
 
@@ -71,8 +70,8 @@ def enabled():
 
 
 @contextmanager
-def scope(active, *, model=MODEL, **data):
-    state = Session(active, data, attempted=bool(data.get('already_attempted')), model=model)
+def scope(active, **data):
+    state = Session(active, data, attempted=bool(data.get('already_attempted')))
     token = _current.set(state)
     try:
         yield state
@@ -156,14 +155,12 @@ def advise(state, result, problems, *, key, endpoint, post, record=None):
     try:
         context = snapshot(source, result, problems)
         session_id = hashlib.sha256(f"{source.get('store_id')}:{source.get('ev', {}).get('sender_id', '')}".encode()).hexdigest()[:24]
-        options = {'model': state.model, 'messages': [{'role': 'system', 'content': GUIDE},
-                   {'role': 'user', 'content': json.dumps(context, ensure_ascii=False)}],
-                   'response_format': SCHEMA, 'provider': {'require_parameters': True},
-                   'max_tokens': 3200, 'session_id': 'consult-' + session_id}
-        if state.model == MODEL:
-            options['reasoning'] = {'effort': 'medium', 'exclude': True}
         response = post(endpoint, headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
-                        json=options, timeout=30, max_attempts=1, budget_seconds=40)
+            json={'model': MODEL, 'messages': [{'role': 'system', 'content': GUIDE},
+                    {'role': 'user', 'content': json.dumps(context, ensure_ascii=False)}],
+                  'response_format': SCHEMA, 'provider': {'require_parameters': True},
+                  'reasoning': {'effort': 'medium', 'exclude': True}, 'max_tokens': 3200,
+                  'session_id': 'consult-' + session_id}, timeout=30, max_attempts=1, budget_seconds=40)
         response.raise_for_status()
         payload = response.json()
         if record:

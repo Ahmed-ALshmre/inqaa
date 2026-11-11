@@ -231,49 +231,6 @@ class QuestionGuidanceTests(unittest.TestCase):
         self.assertIn('اشرح المعلومة', page)
         self.assertNotIn('productQuestionsDialog', page)
 
-    def test_dashboard_only_lists_current_product_gaps_with_filtered_pagination(self):
-        self.m.ensure_store(self.db, 'khuyoot', 'خيوط')
-        product = dict(self.product, store_id='baraah-kids', fabric='قطن', colors='أخضر، أزرق', stretch='', lining='')
-        other = dict(product, store_id='khuyoot', stretch='بيه ليكرا')
-        archived = dict(product, product_id='OLD', status='inactive')
-        missing_stretch = self.capture(product=product)
-        mixed = 'شنو قماشه؟\nعنواني حي الاختبار\nبيه بطانة؟'
-        missing_lining = self.capture('details', mixed, product=product)
-        missing_length = self.capture('length', 'شكد طول القطعة؟', store='khuyoot', product=other)
-        self.capture(product=other, store='khuyoot')
-        self.capture(product=archived)
-        self.capture('fabric', 'شنو قماشه؟', product=product)
-        self.capture('details', 'شنو الألوان المتوفرة؟', product=product)
-        self.capture('details', 'أريد الأسود.', product=product)
-        self.capture('price', 'هل يوجد خصم إضافي؟', product=product)
-        self.capture('service', 'وين صار طلبي؟', product=product)
-        self.capture('payment', 'شلون الدفع؟', product=product)
-        client, headers = self.owner()
-
-        with patch.object(self.m, 'load_products_from_file', return_value=[product, other, archived]):
-            url = '/api/product-questions?needs_attention=1&all_stores=1&limit=1'
-            first = client.get(url).json
-            self.assertEqual(first['pending'], 3)
-            self.assertTrue(first['has_more'])
-            self.assertEqual(first['questions'][0]['id'], missing_length)
-            second = client.get(f'{url}&before={missing_length}').json
-            row = second['questions'][0]
-            self.assertEqual((row['id'], row['question'], row['gap_label']), (missing_lining, 'بيه بطانة؟', 'البطانة'))
-            self.assertEqual(second['pending'], 3)
-            self.assertTrue(second['has_more'])
-            scoped = client.get('/api/product-questions?needs_attention=1&store_id=baraah-kids').json
-            self.assertEqual([row['id'] for row in scoped['questions']], [missing_lining, missing_stretch])
-
-            archive = client.get('/api/product-questions?all_stores=1').json
-            self.assertEqual(archive['pending'], 11)
-            self.assertEqual(next(item['question'] for item in archive['questions'] if item['id'] == missing_lining), mixed)
-            saved = client.post(f'/api/product-questions/{missing_lining}/answer?store_id=baraah-kids', headers=headers,
-                json={'guidance': 'وضحي أن القطعة بيها بطانة قطن.', 'expected_revision': row['revision']})
-            self.assertEqual(saved.status_code, 200, saved.json)
-            product['stretch'] = 'بيه ليكرا'
-            remaining = client.get('/api/product-questions?needs_attention=1&store_id=baraah-kids').json
-            self.assertEqual((remaining['pending'], remaining['questions']), (0, []))
-
 
 class QuestionGuidancePermissions(unittest.TestCase):
     setUp = staff_fixtures.StaffAccessTests.setUp

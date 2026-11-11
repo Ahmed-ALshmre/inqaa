@@ -10,30 +10,12 @@ except ImportError:
     from pricing import terms, offer_tiers, quote
 
 
-WELCOME = r'[اأ]هلاً?(?:\s+وسهلاً?)?|يا\s+هلا|هلا|مرحباً?|مراحب'
-RETURN_SALAM = (r'(?:و\s*)?عليكم\s+الس[َّ]*لام'
-                r'(?:\s+و\s*(?:ال)?رحم[ةه](?:\s+الله)?(?:\s+و\s*بركاته)?)?')
-GREETING_TRAILING = r'(?:\s+(?:بيج|بيچ|بيك|بيكم|حبيبتي|عمري|عيوني|عيني|روحي|نورتينا|نورتي)(?!\w))*[،,.!🌷🌸\s]*'
-
-
-def trim_opening_greetings(reply, *, omit_welcome, omit_return_salam):
-    unwanted = []
-    if omit_welcome:
-        unwanted.append(WELCOME)
-    if omit_return_salam:
-        unwanted.append(RETURN_SALAM)
-    if not unwanted:
-        return reply
-    prefix = r'(?:(?:' + '|'.join(unwanted) + r')(?!\w)' + GREETING_TRAILING + r')+'
-    return re.sub(r'(?m)^[ \t]*' + prefix, '', reply).strip()
-
-
 def conversation_wording(reply, history):
     """A greeting belongs to the first seller turn, never each factual answer."""
-    return trim_opening_greetings(
-        reply, omit_welcome=any(item.get('direction') == 'outgoing' and item.get('text') for item in history),
-        omit_return_salam=False,
-    )
+    if not any(item.get('direction') == 'outgoing' and item.get('text') for item in history):
+        return reply
+    return re.sub(r'(?m)^\s*(?:(?:أهلا|أهلاً|اهلا|اهلاً)\s+وسهلا[ً]?|أهلاً\s+وسهلاً|اهلا\s+وسهلاً|يا\s+هلا|مرحبا|مرحباً)'
+                  r'(?:\s+(?:بيج|بيك|حبيبتي|عمري|عيوني|عيني|روحي))*[،,.!🌷🌸\s]*', '', reply).strip()
 
 
 def phone_first_step(reply, question):
