@@ -202,6 +202,23 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertEqual('active', live.Store(db).snapshot(live.scope_for(live.route(db, self.sender)))['data']['control_mode'])
             self.assertEqual(1, db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
 
+    def test_new_message_during_identity_handoff_reuses_the_review(self):
+        self.incoming(10, 'أريد موظفة')
+        handoff = live.Entrypoint.handoff_service
+
+        def add_new_input(entry, scope, event_id, reason):
+            result = handoff(entry, scope, event_id, reason)
+            self.incoming(11, 'شكد السعر؟')
+            return result
+
+        with patch.object(live.Entrypoint, 'handoff_service', add_new_input), patch.object(m.ai_transport, 'post') as model:
+            self.assertEqual('conversation_changed', self.work()[1]['reason'])
+            self.assertEqual('customer_requested_human', self.work()[1]['reason'])
+        model.assert_not_called()
+        self.transport.assert_not_called()
+        with m.app.app_context():
+            self.assertEqual(1, m.get_db().execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
+
     def test_preexisting_conversation_keeps_legacy_queue_after_activation(self):
         with patch.dict(os.environ, SALES_RUNTIME_KHUYOOT_PERCENT='0'):
             self.incoming(10, 'هلو')

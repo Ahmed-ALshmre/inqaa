@@ -295,8 +295,18 @@ def process(module, db, row, incoming_id):
         with Store(db).transaction():
             if not allowed(scope):
                 return dict(ok=True, reason='conversation_changed')
-            review_id = result.get('review_id') or module.create_human_review(
-                db, dict(latest, sender_id=scope.sender), reason, notify_telegram=False, commit=False)
+            review_id = result.get('review_id')
+            if not review_id and result.get('action') == 'human':
+                existing = db.execute("""SELECT id,reason FROM human_reviews WHERE sender_id=? AND store_id=?
+                    AND status='pending' AND reason NOT LIKE 'تدقيق لون القطعة للطلب %' ORDER BY id DESC LIMIT 1""",
+                    (scope.sender, scope.store)).fetchone()
+                if existing:
+                    review_id = existing['id']
+                    if 'customer_requested_human' in existing['reason']:
+                        pause = 'customer_requested_human'
+            if not review_id:
+                review_id = module.create_human_review(db, dict(latest, sender_id=scope.sender), reason,
+                                                       notify_telegram=False, commit=False)
             db.execute("UPDATE sales_v2_outbox SET status='unknown' WHERE scope=? AND status='sending'", (scope.key,))
             db.execute("""UPDATE sales_v2_order_tasks SET status='unknown'
                           WHERE scope=? AND kind='confirmation' AND status='sending'""", (scope.key,))
