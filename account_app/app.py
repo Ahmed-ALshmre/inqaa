@@ -19235,14 +19235,23 @@ def api_product_questions():
     sql = '''SELECT q.id,q.store_id,COALESCE(s.name,q.store_id) AS store_name,q.product_id,q.product_name,
                     q.topic,q.question,q.answer,q.guidance,q.status,q.occurrences,q.created_at,q.updated_at
              FROM product_questions q LEFT JOIN stores s ON s.store_id=q.store_id WHERE q.status=?''' + scope
-    if before:
-        sql += ' AND q.id<?'; args.append(before)
-    rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC LIMIT ?',args+[limit+1])]
-    for row in rows:
+    if status == 'pending' and request.args.get('needs_attention') == '1':
+        pending_rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC', args)]
+        products = load_products_from_file(all_stores=all_stores) if pending_rows else []
+        rows = product_questions.dashboard_questions(db, pending_rows, products)
+        pending = len(rows)
+        if before:
+            rows = [row for row in rows if row['id'] < before]
+    else:
+        if before:
+            sql += ' AND q.id<?'; args.append(before)
+        rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC LIMIT ?',args+[limit+1])]
+        pending = db.execute("SELECT COUNT(*) FROM product_questions q WHERE q.status='pending'"+scope,
+                             [] if all_stores else [current_store_id()]).fetchone()[0]
+    page = rows[:limit]
+    for row in page:
         row['revision'] = product_questions.revision(row)
-    return jsonify(questions=rows[:limit],has_more=len(rows)>limit,
-                   pending=db.execute("SELECT COUNT(*) FROM product_questions q WHERE q.status='pending'"+scope,
-                                      [] if all_stores else [current_store_id()]).fetchone()[0],
+    return jsonify(questions=page,has_more=len(rows)>limit,pending=pending,
                    topics=product_questions.LABELS)
 
 

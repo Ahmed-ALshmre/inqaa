@@ -1,6 +1,9 @@
 """Single factual view over product fields, measurements and store policies."""
 import re
-from .. import sales_answers,sales_strategy,customer_copy
+try:
+    from .. import sales_answers,sales_strategy,customer_copy
+except ImportError:
+    import sales_answers,sales_strategy,customer_copy
 
 PRODUCT_FACT_FIELDS=('fabric','description','notes','colors','sizes','price','offer','product_type','size_system','stock',
                      'length','width','stretch','lining','closure','cut','care','season','fabric_feel','origin','composition','faq')
