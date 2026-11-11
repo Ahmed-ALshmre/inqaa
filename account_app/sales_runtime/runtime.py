@@ -109,6 +109,18 @@ class Runtime:
             # The backup sees which contact fields exist. Exact values come from the scoped customer event.
             text = context['event'].get('text') or ''
             local = checkout.contact_fields(text, context['state']['contact'])
+            if not local.get('address'):
+                # The whole turn can also name the chosen size. Look at the
+                # actual delivery line, or the declaration after the phone.
+                address_candidates = list(reversed(text.splitlines()))
+                phone_match = checkout.PHONE.search(text.translate(checkout.DIGITS))
+                if phone_match:
+                    address_candidates.insert(0, text[phone_match.end():].strip(' ,،؛.\n'))
+                for candidate in address_candidates:
+                    address = checkout.contact_fields(candidate).get('address')
+                    if address:
+                        local['address'] = address
+                        break
             contacts = {field: value for field, value in local.items()
                         if field in {'phone', 'address'} and (field == 'phone'
                             or checkout.normalized(value) in checkout.normalized(text))}
@@ -136,6 +148,13 @@ class Runtime:
                                     (scope.key, key + ':done')).fetchone()
         if done:
             return json.loads(done[0])['outcome']
+        booking = self.store.db.execute(
+            'SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?',
+            (scope.key, key + ':booking')).fetchone()
+        if booking:
+            # The order and its pending tasks already committed. A restarted
+            # worker may have lost only the final turn marker.
+            return dict(action='booked', **json.loads(booking[0]))
         # All cart/contact/intent changes and the accepted decision share one
         # transaction. Failed proposals leave no partial state or evidence.
         prior = self.store.db.execute('SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?',
@@ -199,6 +218,8 @@ class Runtime:
                 try:
                     plan=clean_plan(raw)
                     def apply_proposal(state):
+                        if self.orders.allow_write and not self.orders.allow_write(scope):
+                            raise Conflict('turn_superseded')
                         tools=TurnTools(self.store,scope,state,snap['version'])
                         session_cart=CartService(tools,catalog)
                         commands=resolve_changes(plan,state,scope,event_id)
@@ -255,7 +276,7 @@ class Runtime:
                     if attempt==44:raise
                 except ValueError as exc:
                     if isinstance(exc,ServiceRequired):raise
-                    if str(exc) in {'state_version_changed','human_control_active'}:
+                    if str(exc) in {'state_version_changed','human_control_active','turn_superseded'}:
                         raise
                     repair=getattr(type(self.decide),'repair',None)
                     if recovered:

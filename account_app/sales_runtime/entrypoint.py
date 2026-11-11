@@ -13,7 +13,7 @@ from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
 
 class Entrypoint:
     def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION,
-                 media=None, writer=None,policy_loader=None,backup=None):
+                 media=None, writer=None,policy_loader=None,backup=None,allow_write=None,on_booking=None):
         self.store = Store(db)
         from .catalog_answers import enrich
         self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
@@ -23,7 +23,8 @@ class Entrypoint:
         if backup is None and isinstance(decide, DecisionGateway) and decide.model != BACKUP_MODEL:
             backup = BackupGateway(decide.api_key, decide.post)
         self.runtime = Runtime(self.store, self.load_catalog,
-                               Orders(self.store, self.load_catalog, delivery_fee, confirmation),
+                               Orders(self.store, self.load_catalog, delivery_fee, confirmation,
+                                      allow_write=allow_write, on_booking=on_booking),
                                decide,self.policy_loader,backup=backup)
         self.media = media
         from .response import Responses
@@ -70,6 +71,8 @@ class Entrypoint:
         latest=self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",(scope.key,)).fetchone()[0]
         if latest!=event_id:return dict(action='superseded',reply='')
         def handle(state):
+            if self.runtime.orders.allow_write and not self.runtime.orders.allow_write(scope):
+                raise Conflict('turn_superseded')
             review_id=None
             if rejected:
                 review_id=self.store.db.execute('''INSERT INTO human_reviews
@@ -174,6 +177,8 @@ class Entrypoint:
         from zoneinfo import ZoneInfo
         from ..product_questions import question_key
         def handle(state):
+            if self.runtime.orders.allow_write and not self.runtime.orders.allow_write(scope):
+                raise Conflict('turn_superseded')
             question=self.store.evidence(scope,event_id)['payload'].get('text','')
             product=(dict(product_id='@store',product_name='سياسة المتجر') if missing['product_id']=='@store'
                      else self.load_catalog(scope.store).get(missing['product_id']))
@@ -197,6 +202,8 @@ class Entrypoint:
         from datetime import datetime
         from zoneinfo import ZoneInfo
         def handle(state):
+            if self.runtime.orders.allow_write and not self.runtime.orders.allow_write(scope):
+                raise Conflict('turn_superseded')
             review=self.store.db.execute('''INSERT INTO human_reviews(sender_id,store_id,message_text,reason,status,created_at)
                 VALUES(?,?,?,?,'pending',?)''',(scope.sender,scope.store,self.store.evidence(scope,event_id)['payload'].get('text',''),
                 'خدمة مطلوبة: '+kind,datetime.now(ZoneInfo('Asia/Baghdad')).isoformat())).lastrowid
