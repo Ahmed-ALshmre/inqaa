@@ -2,7 +2,7 @@
 import json
 import re
 
-from .. import checkout, pricing, product_variants, sales_playbook
+from .. import checkout, pricing, product_variants, sales_playbook, sales_voice
 from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, FACT_FIELDS, message_context
@@ -49,10 +49,24 @@ class Responses:
         recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 15",
                                      (scope.key,)).fetchall()
         messages=[dict(actor=row[0],**message_context(json.loads(row[1]))) for row in reversed(recent)]
+        replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
+                                      (scope.key,)).fetchall()
+        accepted=[json.loads(row[0]) for row in reversed(replies)]
+        current=messages[-1].get('text','') if messages else ''
+        clean = checkout.normalized(current).strip(' .،!؟?')
+        new_salam = bool(re.match(r'(?:ال)?سلام\s+عليكم(?!\w)|(?:و\s*)?عليكم\s+السلام(?!\w)', clean))
+        new_welcome = bool(re.match(r'(?:هلو|هلا|اهلا|مرحبا|صباح الخير|مساء الخير)(?!\w)', clean))
+        greeting = dict(
+            omit_return_salam=not new_salam,
+            omit_welcome=bool(accepted or snap['data'].get('order_id') or
+                              any(message['actor']=='staff' for message in messages))
+                         and not (new_salam or new_welcome),
+        )
         if mode != 'continue':
             question = 'product' if mode == 'media_unresolved' else None
             context = dict(mode=mode, question_field=question, next_step=dict(field=question, options=[]),
-                           recent_messages=messages, amounts={}, action_results=dict(order_changed=mode == 'cancelled'))
+                           recent_messages=messages, amounts={}, greeting=greeting,
+                           action_results=dict(order_changed=mode == 'cancelled'))
             parts = self.write(context, catalog)
             if question:
                 parts[-1].update(question_field=question, question_key=question)
@@ -67,14 +81,12 @@ class Responses:
                 readiness['conditions'] or any(f.startswith('cart') for f in readiness['missing_fields'])):
             question=None
         if question=='purchase_intent' and readiness['conditions']:question=None
-        current=messages[-1].get('text','') if messages else ''
         state = snap['data']
         lines = state['cart']
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
         requested=requested_fields(current)
-        clean = checkout.normalized(current).strip(' .،!؟?')
         age_words = r'عمر|شهر|سنوات|سنه|سنة'
         previous_text = messages[-2].get('text', '') if len(messages) > 1 else ''
         if product and product.get('selection_mode') == 'age' and not requested and (
@@ -142,9 +154,6 @@ class Responses:
                 return dict(action='missing_fact',product_id=fact['product_id'],field=field)
             if not any(f['field']==fact_value['field'] and f['product_id']==fact['product_id'] for f in allowed_facts):
                 allowed_facts.append(dict(product_id=fact['product_id'],**fact_value))
-        replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
-                                      (scope.key,)).fetchall()
-        accepted=[json.loads(row[0]) for row in reversed(replies)]
         size_explanation_requested = bool(not purchase_turn and (
             mentions_free_size(current) or 'sizes' in requested and re.search(
                 r'[؟?]|شكد|شنو|شلون|يرهم|يناسب|قياساته|مقاساته', checkout.normalized(current))))
@@ -307,7 +316,7 @@ class Responses:
                                 carrier_contacted=False, delivery_time=policy.get('delivery_time'),
                                 omit_color_list=omit_color_list, omit_free_size_explanation=omit_free_size_explanation,
                                 discount_allowed=bool(quote_turn and quote.get('discount'))),
-            recent_messages=messages, recent_replies=accepted,
+            recent_messages=messages, recent_replies=accepted, greeting=greeting,
         )
         if focus:
             from ..product_questions import guidance_for
@@ -344,6 +353,7 @@ class Responses:
                 parts = self.writer.repair(context, parts, error) if attempt else self.writer(context)
                 # Validate structure before formatting or reading any model-authored fields.
                 validate_copy(parts, question, context['action_results'])
+                parts = self.remove_stale_greetings(parts, context['greeting'])
                 parts = render_amounts(parts, context['amounts'])
                 for part in parts:
                     if part['type'] == 'text':
@@ -358,6 +368,20 @@ class Responses:
                 if attempt or getattr(type(self.writer), 'repair', None) is None:
                     raise DecisionRejected('writer_invalid_after_validation') from exc
                 error = str(exc)
+
+    @staticmethod
+    def remove_stale_greetings(parts, greeting):
+        kept = []
+        for part in parts:
+            if part['type'] == 'text':
+                text = sales_voice.trim_opening_greetings(part['text'], **greeting)
+                if not text:
+                    continue
+                part = dict(part, text=text)
+            kept.append(part)
+        if not kept:
+            raise ValueError('reply.relevance: answer the current message beyond repeating the greeting')
+        return kept
 
     def save(self, scope, key, reply_key, turn_id, version, parts):
         record = self.store.apply(scope, key, version, dict(turn_id=turn_id), lambda state: dict(parts=parts))['result']

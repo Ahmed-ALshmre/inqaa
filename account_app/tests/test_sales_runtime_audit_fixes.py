@@ -56,6 +56,23 @@ class AuditFixTests(unittest.TestCase):
             Responses(self.store,self.loader,BadWriter()).prepare(self.scope,event,out)
         self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM sales_v2_outbox').fetchone()[0])
 
+    def test_replayed_opening_is_removed_from_offer_and_price_followups(self):
+        self.select()
+        opening = 'وعليكم السلام والرحمة، يا هلا بيچ عيوني نورتينا.'
+        writer = Mock(side_effect=[
+            [dict(type='text',text=opening)],
+            [dict(type='text',text=opening + ' إي، المقصود بدلتين.')],
+            [dict(type='text',text=opening), dict(type='text',text='السعر {{subtotal}}.')],
+            [dict(type='text',text='وعليكم السلام عيوني.')],
+        ])
+        turns = ('السلام عليكم', 'بلا زحمة المقصود بالاعلان بدلتين',
+                 'شلون السعر اذا امكن', 'السلام عليكم رجعت')
+        replies = []
+        for text in turns:
+            event,out = self.run_turn(text)
+            replies.append([part['text'] for part in self.reply(event,out,writer)])
+        self.assertEqual([[opening],['إي، المقصود بدلتين.'],['السعر 12 ألف.'],['وعليكم السلام عيوني.']],replies)
+
     def test_gateway_repairs_a_written_price_and_preserves_the_model_wording(self):
         self.products[0]['price'] = '17000'
         self.run_turn('أريد قطعتين ماروني 44',changes=[
