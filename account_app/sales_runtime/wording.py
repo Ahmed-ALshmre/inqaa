@@ -99,7 +99,7 @@ def validate_next_step(parts, step):
         'quote.province': (r'محافظ|مدين',),
         'price.accept': (r'سعر|حساب|مجموع|عرض|يناسب|موافق|نكم[لّ]|نمشي|اوك[ي]?',),
         'purchase_intent': (r'ثبت|حجز|نسجل|اكمل|نكمل|طلب|رتب',),
-        'product': (r'قطع|موديل|صور|منتج|اسم|اللي تقصد',),
+        'product': (r'صور|سكرين|لقط',),
     }
     field = question.rsplit('.', 1)[-1]
     if field == 'color' and question not in required:

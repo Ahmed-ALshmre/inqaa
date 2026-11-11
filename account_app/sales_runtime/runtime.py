@@ -145,7 +145,8 @@ class Runtime:
             if latest != event_id:
                 raise Conflict('turn_superseded')
             media = snap['data'].get('media_observations', {}).get(str(event_id))
-            reference = References(self.store, catalog).resolve(scope, ad=evidence['payload'].get('ad'), media=media)
+            reference = References(self.store, catalog).resolve(
+                scope, ad=evidence['payload'].get('ad'), media=media, text=evidence['payload'].get('text',''))
             try:initial_readiness=cart.readiness(scope)
             except Conflict as exc:
                 if isinstance(exc,BusinessChoice) or str(exc)=='product_not_available_in_store':
@@ -164,10 +165,16 @@ class Runtime:
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
             recovered=False;business_feedback=None
-            try:raw=self.decision_call(scope,event_id,context)
-            except DecisionRejected:
-                if not getattr(type(self.decide),'fallback_allowed',False):raise
+            points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
+            if (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
+                    and not snap['data'].get('focus_product_id') and not snap['data']['cart']):
+                # An unresolved referral or "this item" supplies no evidence for a catalog choice.
                 raw=grounded_plan(context);recovered=True
+            else:
+                try:raw=self.decision_call(scope,event_id,context)
+                except DecisionRejected:
+                    if not getattr(type(self.decide),'fallback_allowed',False):raise
+                    raw=grounded_plan(context);recovered=True
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)

@@ -5,7 +5,7 @@ import re
 from .. import checkout, pricing, product_variants, sales_playbook, sales_voice
 from .cart import CartService
 from .store import Conflict, digest
-from .contracts import DecisionRejected, FACT_FIELDS, message_context
+from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
 from .copy_guard import validate_copy
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
 from .intent import purchase_selected
@@ -86,6 +86,7 @@ class Responses:
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
+        product_unresolved = not focus and not lines
         requested=requested_fields(current)
         age_words = r'عمر|شهر|سنوات|سنه|سنة'
         previous_text = messages[-2].get('text', '') if len(messages) > 1 else ''
@@ -129,6 +130,8 @@ class Responses:
             price_question = False  # A hypothetical quantity is not the current cart price.
         quote_turn = bool(quote and not state.get('order_id') and (bargaining or price_question))
         references=list(plan.get('facts',[]))
+        if product_unresolved:
+            references = [fact for fact in references if fact['product_id']=='@store']
         if contact_turn or acknowledgment:
             references = []
         if requested:
@@ -167,11 +170,16 @@ class Responses:
         ))
         question_records=[json.loads(row[0]) for row in self.store.db.execute(
             "SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' AND instr(payload,'question_field')>0 ORDER BY id DESC",(scope.key,)).fetchall()]
-        # A known product can have a sales next-step without already being in a cart.
-        if not focus and not snap['data']['cart']:
-            attempts=sum(p.get('question_field')=='product' for p in accepted)
-            if attempts>=1:return dict(action='product_unresolved')
-            question='product'
+        photo_stage = ''
+        if product_unresolved:
+            # Policy-only follow-ups and acknowledgments can continue while a photo is pending.
+            photo_questions = [p for p in question_records if p.get('question_field')=='product']
+            needs_product = bool(set(requested).difference(POLICY_FIELDS)
+                                 or re.search(r'اريد|اطلب|احجز|اخذ|اشتري|بدله|دشداش|هالموديل|هذا\s+الموديل', clean))
+            already_requested_for_item = any(p.get('question_stage')=='product-detail' for p in photo_questions)
+            question = 'product' if not photo_questions or needs_product and not already_requested_for_item else None
+            if question:
+                photo_stage = 'product-detail' if needs_product else 'product-opening'
         if question is None and not readiness['conditions']:
             question=next((f for f in readiness['missing_fields'] if f.startswith('cart.') and f.endswith(('.color','.size','.age_months','.weight_kg'))),None)
             if product and product.get('selection_mode') == 'weight' and not fit:
@@ -193,7 +201,7 @@ class Responses:
         recommendations=choice_alternatives(catalog,feedback) if feedback else alternatives(catalog,focus,current)
         if feedback:
             question=('alternative.'+feedback['product_id']) if recommendations['matches'] else None
-        stage = ''
+        stage = photo_stage
         if not state.get('order_id') and not feedback and (contact_turn or purchase_turn or selected or fit or one_piece):
             stage = 'contact' if contact_turn else 'selection' if purchase_turn or selected else 'fit'
             if contact_cue and not received:
@@ -244,7 +252,7 @@ class Responses:
             previous_reply = accepted[-1]
             if previous_reply.get('question_field') == 'price.accept' and previous_reply.get('quote_key') == offer_key:
                 question = None  # Choosing a color does not require quoting the same total in consecutive replies.
-        if question and question not in outcome.get('invalid_fields',[]):
+        if question and question != 'product' and question not in outcome.get('invalid_fields',[]):
             previous = [p for p in question_records
                         if (p.get('question_key') or question_key(p.get('question_field'))) == question_key(question)]
             if stage:
@@ -307,6 +315,7 @@ class Responses:
             next_step=dict(field=question, options=next_options(step_product, question)),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
                           contact_turn=contact_turn, recap_selection=recap,
+                          product_unresolved=product_unresolved,
                           free_size=free_size,
                           quantity=sum(row['quantity'] for row in lines), fit=fit,
                           quantity_confirmed=one_piece or quantity_objection,
@@ -366,6 +375,8 @@ class Responses:
                 return parts
             except ValueError as exc:
                 if attempt or getattr(type(self.writer), 'repair', None) is None:
+                    if question == 'product' or context.get('progress', {}).get('product_unresolved'):
+                        raise DecisionUnavailable('product_reply_retryable') from exc
                     raise DecisionRejected('writer_invalid_after_validation') from exc
                 error = str(exc)
 

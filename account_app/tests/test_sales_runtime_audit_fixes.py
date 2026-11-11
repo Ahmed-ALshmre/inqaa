@@ -51,6 +51,7 @@ class AuditFixTests(unittest.TestCase):
         class BadWriter:
             def __call__(self,context):return [dict(type='text',text='ثبتتلج الطلب')]
             def repair(self,context,previous,error):return self(context)
+        self.select()
         event=self.event('هلا');out=self.runtime.turn(self.scope,event)
         with self.assertRaisesRegex(DecisionRejected,'writer_invalid_after_validation'):
             Responses(self.store,self.loader,BadWriter()).prepare(self.scope,event,out)
@@ -287,18 +288,54 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(17000,out['quote']['total'])
         self.assertTrue(out['readiness']['conditions'])
 
-    def test_unknown_product_clarification_has_a_limit(self):
+    def test_unknown_product_answers_store_policy_and_waits_for_a_photo(self):
+        drafts = ('دزيلي صورة الموديل حبيبتي.',
+                  'الدفع عند الاستلام بعد الفحص، والتوصيل {{delivery_fee}}.',
+                  'حتى أحسبلج الدشداشتين، دزيلي صورة الموديل.',
+                  'التوصيل {{delivery_fee}}، وحساب القطعتين يعتمد على الموديل بالصورة.',
+                  'إي هالموديل متوفر، أي لون تحبين؟')
+        writer=Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,
-                         writer=Mock(return_value=[dict(type='text',text='دزيلي صورة الموديل حبيبتي')]))
+                         writer=writer,media=lambda *args: dict(status='matched',product_ids=['P1']))
         kwargs=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='unknown')
         scope=Scope('khuyoot','chatwoot','a','unknown')
-        for index in range(1):
-            entry.receive(**kwargs,message_id=str(index),text='اريد هذا الموديل')
+        turns=('سلام عليكم','كيفية الدفع والتوصيل؟','اذا اطلب دشداشتين من هذا الموديل','شكد سعرهن وي التوصيل')
+        for index,text in enumerate(turns):
+            out=entry.receive(**kwargs,message_id=str(index),text=text,ad={'ad_id':'unmapped'} if index!=2 else {})
+            self.assertEqual('continue',out['action'])
             part=entry.store.claim_reply(scope)
             entry.store.settle_reply(scope,part['id'],'accepted',str(index))
-        out=entry.receive(**kwargs,message_id='last',text='اي نفسه')
-        self.assertEqual('human',out['action'])
-        self.assertEqual('product_unresolved',out['reason'])
+            if index==1:
+                self.assertIn('التوصيل 5 آلاف',part['payload']['text'])
+                self.assertNotIn('question_field',part['payload'])
+                self.assertEqual({'payment','delivery_fee'},{f['field'] for f in writer.call_args.args[0]['facts']})
+            elif index==3:
+                self.assertNotIn('question_field',part['payload'])
+                self.assertIn('التوصيل 5 آلاف',part['payload']['text'])
+            else:
+                self.assertEqual('product',part['payload']['question_field'])
+        self.decide.assert_not_called()
+        self.plan=dict(intent='continue',changes=[dict(values=dict(product_id='P1',quantity=2))])
+        out=entry.receive(**kwargs,message_id='photo',media_kind='image',media_ref='synthetic')
+        self.assertEqual('continue',out['action'])
+        self.assertEqual('image',self.decide.call_args.args[0]['reference']['source'])
+        state=entry.store.snapshot(scope)['data']
+        self.assertEqual('P1',state['focus_product_id'])
+        self.assertEqual(2,state['cart'][0]['quantity'])
+        self.assertEqual('active',state['control_mode'])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+
+    def test_invalid_unknown_product_reply_is_retryable_without_human_handoff(self):
+        writer=Mock(return_value=[dict(type='text',text='تم تثبيت الطلب')])
+        entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer)
+        kwargs=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='retry',message_id='m',
+                    ad={'ad_id':'unmapped'},text='اريد هذا الموديل')
+        out=entry.receive(**kwargs)
+        self.assertEqual('service_failure',out['action'])
+        self.assertTrue(out['retryable'])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+        writer.return_value=[dict(type='text',text='دزيلي صورة القطعة عيوني.')]
+        self.assertEqual('continue',entry.receive(**kwargs)['action'])
 
     def test_store_inspection_does_not_depend_on_product_description(self):
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,
@@ -475,7 +512,7 @@ class AuditFixTests(unittest.TestCase):
         return replies
 
     def test_contacts_and_acknowledgment_cannot_fall_back_to_old_color_list(self):
-        self.run_turn('اريد هذا الموديل', changes=[dict(values=dict(product_id='P1'))])
+        self.run_turn('اريد الدشداشة القديفة', changes=[dict(values=dict(product_id='P1'))])
         drafts = ['وصل العنوان عيني، شنو رقم الموبايل؟', 'وصل الرقم حبيبتي، يا لون تحبين؟', 'من عيوني.']
         writer = Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         stale = dict(facts=[dict(product_id='P1',field='colors')])

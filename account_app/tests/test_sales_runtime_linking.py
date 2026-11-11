@@ -153,6 +153,18 @@ class LinkingTests(unittest.TestCase):
         with self.assertRaises(Conflict):
             refs.resolve(Scope('other','chatwoot','a','s'),ad={'ad_id':'123'})
 
+    def test_registered_product_link_resolves_before_an_unmapped_referral(self):
+        link = 'https://catalog.example.test/robes?item=one'
+        self.products[0]['ref'] = link
+        refs = References(self.store, self.loader('khuyoot'))
+        self.assertEqual(dict(status='known',source='product_link',product_id='P1'),
+                         refs.resolve(self.scope, ad={'ad_id':'unmapped'}, text=f'أريد هذا {link}#photo'))
+        self.assertEqual('P1',refs.resolve(self.scope,ad={'ad_id':'unmapped','source_url':link})['product_id'])
+        self.assertEqual('unknown',refs.resolve(self.scope,text=link.replace('item=one','item=two'))['status'])
+        self.products[1]['ref'] = link
+        self.assertEqual('ambiguous',References(self.store,self.loader('khuyoot')).resolve(
+            self.scope,text=link)['status'])
+
     def test_ordinal_reference_requires_accepted_images(self):
         self.event('صور')
         choices = [dict(product_id='P1', color='ماروني'),dict(product_id='P1',color='أزرق')]
@@ -344,7 +356,8 @@ class LinkingTests(unittest.TestCase):
         writer=Mock()
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer)
         entry.migrate()
-        args=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='missing')
+        args=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='missing',
+                  ad={'ad_id':'120251717777850095'})
         result=entry.receive(**args,message_id='m',text='شنو القماش؟')
         self.assertEqual('human',result['action']);self.assertEqual('',result['reply'])
         writer.assert_not_called()

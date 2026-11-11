@@ -150,8 +150,6 @@ class Entrypoint:
             reply=self.responses.prepare(scope,event['id'],outcome)
             if reply['action']=='missing_fact':
                 return self.handoff_fact(scope,event['id'],outcome['state_version'],reply)
-            if reply['action']=='product_unresolved':
-                return self.handoff_service(scope,event['id'],'product_unresolved')
             return dict(outcome,reply=reply)
         return outcome
 
