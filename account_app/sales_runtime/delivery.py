@@ -9,6 +9,8 @@ def _send_once(send, payload, key):
     try:
         receipt = send(payload, key)
         if isinstance(receipt, dict):
+            if receipt.get('paused') is True:
+                return 'paused', None
             if receipt.get('accepted') is True and receipt.get('provider_id'):
                 return 'accepted', str(receipt['provider_id'])
             if receipt.get('accepted') is False:
@@ -19,7 +21,7 @@ def _send_once(send, payload, key):
     return 'unknown', None
 
 
-def deliver_replies(entry, scope, send, can_send):
+def deliver_replies(entry, scope, send, can_send, *, record=None):
     """Drain ordered reply parts under the caller's channel lease."""
     results = []
     while can_send(scope):
@@ -28,7 +30,9 @@ def deliver_replies(entry, scope, send, can_send):
             break
         payload = part['payload']
         status, provider_id = _send_once(send, payload, f'reply:{scope.key}:{part["id"]}')
-        entry.store.settle_reply(scope, part['id'], status, provider_id)
+        on_accepted = (lambda: record(payload, provider_id)) if record else None
+        entry.store.settle_reply(scope, part['id'], 'superseded' if status == 'paused' else status,
+                                 provider_id, on_accepted)
         results.append(status)
         if status != 'accepted':
             break
@@ -38,7 +42,7 @@ def deliver_replies(entry, scope, send, can_send):
     return results
 
 
-def deliver_confirmation(store, scope, task_id, send, can_send):
+def deliver_confirmation(store, scope, task_id, send, can_send, *, record=None, staff_override=False):
     """send(payload, stable_key) returns a channel receipt; no blind retry.
 
     Caller owns the per-conversation channel lease through the network call.
@@ -54,17 +58,20 @@ def deliver_confirmation(store, scope, task_id, send, can_send):
             raise Conflict('confirmation_not_in_scope')
         if row[2] != 'queued':
             return dict(status=row[2])
-        if store.snapshot(scope)['data']['control_mode'] != 'active':
+        if not staff_override and store.snapshot(scope)['data']['control_mode'] != 'active':
             return dict(status='paused')
         order = store.db.execute('SELECT status FROM orders WHERE id=? AND store_id=? AND sender_id=?',
                                  (row[0], scope.store, scope.sender)).fetchone()
         if not order or order[0] not in {'new', COLOR_REVIEW_STATUS}:
             return dict(status='order_changed')
         store.db.execute("UPDATE sales_v2_order_tasks SET status='sending' WHERE id=?", (task_id,))
-    status, provider_id = _send_once(send, json.loads(row[1]), f'order:{scope.key}:{row[0]}:confirmation')
+    payload = json.loads(row[1])
+    status, provider_id = _send_once(send, payload, f'order:{scope.key}:{row[0]}:confirmation')
     with store.transaction():
         store.db.execute("UPDATE sales_v2_order_tasks SET status=?,provider_id=? WHERE id=? AND scope=? AND status='sending'",
-                         (status, provider_id, task_id, scope.key))
+                         ('queued' if status == 'paused' else status, provider_id, task_id, scope.key))
+        if status == 'accepted' and record:
+            record(payload, provider_id, order_id=row[0])
     return dict(status=status)
 
 

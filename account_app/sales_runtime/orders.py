@@ -33,13 +33,16 @@ def migrate_tasks(db):
 
 
 class Orders:
-    def __init__(self, store, catalog_loader, delivery_fee, confirmation=CONFIRMATION):
+    def __init__(self, store, catalog_loader, delivery_fee, confirmation=CONFIRMATION, *, allow_write=None, on_booking=None):
         self.store, self.catalog_loader = store, catalog_loader
         self.delivery_fee, self.confirmation = delivery_fee, confirmation
+        self.allow_write, self.on_booking = allow_write, on_booking
 
     def cancel(self,scope,key,version,event_id):
         from .contracts import ServiceRequired
         def handle(state):
+            if self.allow_write and not self.allow_write(scope):
+                raise Conflict('turn_superseded')
             from .intent import explicit_cancellation
             if state['control_mode']!='active':raise Conflict('human_control_active')
             latest=self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",(scope.key,)).fetchone()[0]
@@ -71,6 +74,8 @@ class Orders:
         def handle(state):
             if state.get('order_id'):
                 return dict(order_id=state['order_id'], already_booked=True)
+            if self.allow_write and not self.allow_write(scope):
+                raise Conflict('turn_superseded')
             catalog = self.catalog_loader(scope.store)
             cart = CartService(self.store, catalog)
             readiness = cart.readiness(scope)
@@ -138,6 +143,8 @@ class Orders:
             for kind, payload in tasks:
                 self.store.db.execute('''INSERT INTO sales_v2_order_tasks(scope,order_id,kind,payload)
                     VALUES(?,?,?,?)''', (scope.key, order_id, kind, encode(payload)))
+            if self.on_booking:
+                self.on_booking(scope, booking, list(catalog.products.values()), held_for_color)
             state['order_id'] = order_id
             return dict(order_id=order_id, total=quote['total'], catalog_revision=catalog.revision,
                         held_for_color=held_for_color)

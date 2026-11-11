@@ -212,8 +212,8 @@ class Store:
             self.db.execute("UPDATE sales_v2_outbox SET status='sending' WHERE id=?", (row[0],))
             return dict(id=row[0], payload=json.loads(row[1]))
 
-    def settle_reply(self, scope, row_id, status, provider_id=None):
-        if status not in {'accepted', 'rejected', 'unknown'}:
+    def settle_reply(self, scope, row_id, status, provider_id=None, on_accepted=None):
+        if status not in {'accepted', 'rejected', 'unknown', 'superseded'}:
             raise ValueError('invalid_delivery_status')
         with self.transaction():
             updated = self.db.execute('''UPDATE sales_v2_outbox SET status=?,provider_id=?
@@ -221,6 +221,8 @@ class Store:
                 (status, provider_id, scope.key, row_id)).rowcount
             if not updated:
                 raise Conflict('delivery_not_sending_in_scope')
+            if status == 'accepted' and on_accepted:
+                on_accepted()
 
     def set_control(self, scope, key, version, event_id, mode):
         if mode not in {'active', 'human'}:
