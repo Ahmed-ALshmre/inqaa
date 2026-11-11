@@ -31,6 +31,11 @@ TEXT_FIELDS = ('product_id','color','size','size_system','wearer_ref')
 NUMBER_FIELDS = ('quantity','age_months','weight_kg')
 
 
+def message_context(payload):
+    """Expose conversational evidence to the text model without attachment URLs."""
+    return {key: payload[key] for key in ('text', 'media_kind') if key in payload}
+
+
 def obj(properties):
     return dict(type='object',properties=properties,required=list(properties),additionalProperties=False)
 

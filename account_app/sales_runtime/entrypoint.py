@@ -82,11 +82,16 @@ class Entrypoint:
                 text='', ad=None, media_kind='text', actor='customer', ai_enabled=True, media_ref=None):
         if channel not in {'chatwoot', 'zernio'}:
             raise ValueError('unsupported_channel')
-        if media_kind not in {'text', 'image', 'sticker', 'video', 'audio'}:
+        if media_kind not in {'text', 'image', 'sticker', 'video', 'audio', 'file'}:
             raise ValueError('unsupported_media')
         scope = Scope(store_id, channel, account_id, sender_id)
         event = self.store.append(scope, message_id, kind='message', actor=actor,
                                   payload=dict(text=text, ad=ad or {}, media_kind=media_kind, media_ref=media_ref))
+        if event['duplicate']:
+            latest = self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",
+                                           (scope.key,)).fetchone()[0]
+            if event['id'] != latest:
+                return dict(action='superseded', event_id=event['id'])
         if actor == 'staff':
             self.store.set_control(scope, f"staff:{event['id']}", self.store.snapshot(scope)['version'],
                                    event['id'], 'human')
@@ -106,14 +111,15 @@ class Entrypoint:
             return self.handoff_service(scope,event['id'],'order_tracking')
         # A sticker is social context, never a request for product recognition.
         # Image/video interpretation must be supplied by an explicit media adapter.
-        if media_kind in {'image', 'video', 'audio'}:
+        if media_kind in {'image', 'video', 'audio', 'file'}:
             if self.media is None:
                 return dict(action='needs_media_adapter', event_id=event['id'])
             saved = self.store.snapshot(scope)
-            if str(event['id']) not in saved['data'].get('media_observations', {}):
+            observed = saved['data'].get('media_observations', {}).get(str(event['id']))
+            if observed is None:
                 catalog = self.load_catalog(store_id)
                 observed = self.media(scope, media_kind, media_ref, list(catalog.products.values()))
-                if not isinstance(observed, dict) or observed.get('status') not in {'matched','ambiguous','unknown'}:
+                if not isinstance(observed, dict) or observed.get('status') not in {'matched','ambiguous','unknown','sticker','unsupported'}:
                     raise ValueError('invalid_media_result')
                 candidates = observed.get('product_ids', [])
                 if not isinstance(candidates,list) or len(candidates)>10:
@@ -127,6 +133,16 @@ class Entrypoint:
                     state.setdefault('media_observations', {})[str(event['id'])] = clean
                     return dict(media=clean)
                 self.store.apply(scope,f"media:{event['id']}",saved['version'],dict(event_id=event['id']),remember)
+                observed = clean
+            if observed['status'] == 'sticker':
+                return dict(action='skipped', event_id=event['id'])
+            if observed['status'] == 'unsupported':
+                return self.handoff_service(scope, event['id'], 'media_type_requires_staff')
+            if observed['status'] != 'matched':
+                return self.clarify_image(scope, event['id'])
+            products_in_cart = {line['product_id'] for line in saved['data']['cart']}
+            if products_in_cart and observed['product_ids'][0] not in products_in_cart:
+                return self.handoff_service(scope, event['id'], 'image_changes_existing_cart')
         outcome = self.runtime.turn(scope, event['id'])
         if any(c.get('kind')=='delivery_deadline' for c in self.store.snapshot(scope)['data']['conditions']):
             return self.handoff_service(scope,event['id'],'delivery_deadline')
@@ -138,6 +154,16 @@ class Entrypoint:
                 return self.handoff_service(scope,event['id'],'product_unresolved')
             return dict(outcome,reply=reply)
         return outcome
+
+    def clarify_image(self, scope, event_id):
+        """Keep an unresolved picture out of the checkout tools."""
+        if not self.responses:
+            return dict(action='media_unresolved', event_id=event_id)
+        parts = [dict(type='text', text='تدللين عيوني، أي قطعة تقصدين بالصورة؟ ممكن تذكرين اسمها أو تدزين صورة أوضح؟')]
+        version = self.store.snapshot(scope)['version']
+        saved = self.store.apply(scope, f'clarify-image:{event_id}', version, {}, lambda state: dict(parts=parts))['result']
+        self.store.enqueue_reply(scope, f'clarify-image:{event_id}', saved['state_version'], saved['parts'])
+        return dict(action='media_unresolved', event_id=event_id)
 
     def handoff_fact(self, scope, event_id, version, missing):
         from datetime import datetime

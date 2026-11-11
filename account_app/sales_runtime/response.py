@@ -5,7 +5,7 @@ import re
 from .. import checkout, product_variants, sales_playbook
 from .cart import CartService
 from .store import Conflict, digest
-from .contracts import FACT_FIELDS
+from .contracts import FACT_FIELDS, message_context
 from .copy_guard import validate_copy
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
 from .intent import purchase_selected
@@ -49,7 +49,7 @@ class Responses:
         if question=='purchase_intent' and readiness['conditions']:question=None
         recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 15",
                                      (scope.key,)).fetchall()
-        messages=[dict(actor=row[0],**json.loads(row[1])) for row in reversed(recent)]
+        messages=[dict(actor=row[0],**message_context(json.loads(row[1]))) for row in reversed(recent)]
         current=messages[-1].get('text','') if messages else ''
         state = snap['data']
         lines = state['cart']

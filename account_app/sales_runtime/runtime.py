@@ -12,7 +12,7 @@ from .. import checkout
 from .cart import CartService
 from .references import References
 from .store import Conflict, Store, digest
-from .contracts import clean_plan, validate_plan, DecisionRejected, BusinessChoice,ServiceRequired
+from .contracts import clean_plan, validate_plan, DecisionRejected, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
 from .intent import apply_intent
 from .recovery import grounded_plan
@@ -143,19 +143,22 @@ class Runtime:
                                            (scope.key,)).fetchone()[0]
             if latest != event_id:
                 raise Conflict('turn_superseded')
-            reference = References(self.store, catalog).resolve(scope, ad=evidence['payload'].get('ad'))
+            media = snap['data'].get('media_observations', {}).get(str(event_id))
+            reference = References(self.store, catalog).resolve(scope, ad=evidence['payload'].get('ad'), media=media)
             try:initial_readiness=cart.readiness(scope)
             except Conflict as exc:
                 if isinstance(exc,BusinessChoice) or str(exc)=='product_not_available_in_store':
                     raise ServiceRequired('cart_catalog_changed') from None
                 raise
             active_products=[p for p in catalog.products.values() if p.get('status','active')=='active']
-            context = dict(state=snap['data'], event=evidence['payload'], reference=reference,policies=policy,
-                           products=active_products, readiness=initial_readiness,
+            image_fields = {'image_url', 'image_urls', 'images', 'photos', 'attachments'}
+            text_products = [{key: value for key, value in product.items() if key not in image_fields} for product in active_products]
+            context = dict(state=snap['data'], event=message_context(evidence['payload']), reference=reference,policies=policy,
+                           products=text_products, readiness=initial_readiness,
                            available_fact_fields={p['product_id']:[f for f in PRODUCT_FACT_FIELDS if resolve_fact(catalog,p['product_id'],f,policy)] for p in active_products})
             recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 30",
                                          (scope.key,)).fetchall()
-            context['recent_messages']=[dict(actor=row[0],**json.loads(row[1])) for row in reversed(recent)]
+            context['recent_messages']=[dict(actor=row[0],**message_context(json.loads(row[1]))) for row in reversed(recent)]
             replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
@@ -252,7 +255,8 @@ class Runtime:
         for field in requested_fields(evidence['payload'].get('text','')):
             pid='@store' if field in POLICY_FIELDS else focus
             if pid and resolve_fact(catalog,pid,field,policy) is None:missing_fact=True
-        if ready['ready'] and not missing_fact and not state.get('order_id'):
+        image_only = evidence['payload'].get('media_kind') == 'image' and not evidence['payload'].get('text', '').strip()
+        if ready['ready'] and not image_only and not missing_fact and not state.get('order_id'):
             booking = self.orders.commit(scope, f'{key}:booking', version)
             outcome = dict(action='booked', **booking['result'])
             version = booking['result']['state_version']

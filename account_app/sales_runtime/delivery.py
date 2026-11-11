@@ -4,6 +4,39 @@ import json
 from .store import Conflict
 
 
+def _send_once(send, payload, key):
+    try:
+        receipt = send(payload, key)
+        if isinstance(receipt, dict):
+            if receipt.get('accepted') is True and receipt.get('provider_id'):
+                return 'accepted', str(receipt['provider_id'])
+            if receipt.get('accepted') is False:
+                return 'rejected', None
+    except Exception:
+        # A timeout may have happened after the provider accepted the message.
+        pass
+    return 'unknown', None
+
+
+def deliver_replies(entry, scope, send, can_send):
+    """Drain ordered reply parts under the caller's channel lease."""
+    results = []
+    while can_send(scope):
+        part = entry.store.claim_reply(scope)
+        if part is None:
+            break
+        payload = part['payload']
+        status, provider_id = _send_once(send, payload, f'reply:{scope.key}:{part["id"]}')
+        entry.store.settle_reply(scope, part['id'], status, provider_id)
+        results.append(status)
+        if status != 'accepted':
+            break
+        if payload.get('purpose') == 'checkout_contacts':
+            version = entry.store.snapshot(scope)['version']
+            entry.runtime.accept_checkout_prompt(scope, f'prompt:{part["id"]}', version, part['id'])
+    return results
+
+
 def deliver_confirmation(store, scope, task_id, send, can_send):
     """send(payload, stable_key) returns a channel receipt; no blind retry.
 
@@ -27,18 +60,7 @@ def deliver_confirmation(store, scope, task_id, send, can_send):
         if not order or order[0] != 'new':
             return dict(status='order_changed')
         store.db.execute("UPDATE sales_v2_order_tasks SET status='sending' WHERE id=?", (task_id,))
-    status = 'unknown'
-    provider_id = None
-    try:
-        receipt = send(json.loads(row[1]), f'order:{scope.key}:{row[0]}:confirmation')
-        if isinstance(receipt, dict) and receipt.get('accepted') is True and receipt.get('provider_id'):
-            status = 'accepted'
-            provider_id = str(receipt['provider_id'])
-        elif isinstance(receipt, dict) and receipt.get('accepted') is False:
-            status = 'rejected'
-    except Exception:
-        # Persist the uncertain result even on timeout. Do not log customer data.
-        status = 'unknown'
+    status, provider_id = _send_once(send, json.loads(row[1]), f'order:{scope.key}:{row[0]}:confirmation')
     with store.transaction():
         store.db.execute("UPDATE sales_v2_order_tasks SET status=?,provider_id=? WHERE id=? AND scope=? AND status='sending'",
                          (status, provider_id, task_id, scope.key))
