@@ -1,27 +1,53 @@
 """Requested-only discounts within the owner's 2,000 IQD multi-item authority."""
+import math
 import re
+from collections import Counter
 from ..checkout import normalized,is_confirmation,PROVINCES
+from ..customer_copy import chat_amount
+from .store import digest
+
+
+def _amount(token):
+    amount = float(token.replace(',', '.'))
+    if amount < 1000:
+        amount *= 1000
+    return int(amount) if math.isfinite(amount) and amount > 0 and amount.is_integer() else None
 
 
 def request(text):
     value=normalized(text)
-    if not re.search(r'سوي|احسب|خلي|نزل|خصم|تخفيض|بشرط|مايصير|احجز|ثبت',value):return None
+    discount_words = r'خصم|تخفيض|تخيض|تخفض|تخفظ|نزل'
+    if re.search(r'(?:ما\s*اريد|بدون|بلا)\s*(?:خصم|تخفيض)', value):
+        return None
+    if not re.search(r'سوي|احسب|خلي|بشرط|مايصير|احجز|ثبت|' + discount_words,value):return None
     if re.search(r'وزن|كيلو|عمر|سنوات|قياس',value) and not re.search(r'سعر|دينار|الف|خصم|تخفيض',value):return None
     discount=re.search(r'(?:خصم|نزل\w*|تخفيض)\s*(?:لنا|الي|النا|لي)?\s*(الفين|الف|\d+(?:[.,]\d+)?)',value)
     if discount:
         amount={'الفين':2000,'الف':1000}.get(discount[1])
-        if amount is None:
-            amount=float(discount[1].replace(',','.'))
-            if amount<1000:amount*=1000
-        if amount>0 and amount==int(amount):return dict(amount=int(amount),basis='discount',text=text)
+        if amount is None:amount=_amount(discount[1])
+        if amount:return dict(amount=amount,basis='discount',text=text)
+    unit = re.search(r'(?:الوحد[هة]|للقطع[هة])\s*(?:ب\s*)?(\d+(?:[.,]\d+)?)',value)
+    if unit and re.search(r'سوي|احسب|خلي|نزل|خصم|تخفيض',value):
+        amount = _amount(unit[1])
+        if amount:return dict(amount=amount,basis='unit',text=text)
     match=re.search(r'ب\s*(\d+(?:[.,]\d+)?)',value)
-    if not match:return None
+    if not match:
+        if re.search(r'خصم|تخفيض|تخيض|تخفض|تخفظ|(?:نزل|تنزل)\w*\s*(?:السعر|لي)',value):
+            return dict(amount=2000,basis='discount',text=text,discretionary=True)
+        return None
     if not re.search(r'سعر|دينار|الف|خصم|تخفيض|سوي|احسب|نزل',value):
         if not re.search(r'(?:احجز\w*|ثبت\w*|خلي\w*)\s*(?:الطلب|الحجز|هذني|هذوله|هن|ها)?\s*ب\s*\d',value):return None
-    amount=float(match[1].replace(',','.'))
-    if amount<1000:amount*=1000
-    if amount<=0 or amount!=int(amount):return None
-    return dict(amount=int(amount),basis='unit' if re.search(r'الوحد[هة]|للقطع[هة]',value) else 'total',text=text)
+    amount=_amount(match[1])
+    if not amount:return None
+    return dict(amount=amount,basis='unit' if re.search(r'الوحد[هة]|للقطع[هة]',value) else 'total',text=text)
+
+
+def pushback(text):
+    return bool(quantity_pushback(text) or re.match(r'^(?:لا\s+فدو[هة]|(?:مع|ويا)\s+التوصيل)', normalized(text).strip()))
+
+
+def quantity_pushback(text):
+    return bool(re.match(r'^(?:غير\s+)?طلبت\s+(?:\d{1,2}|قطعتين|ثنين|اثنين|واحد)(?!\w)', normalized(text).strip()))
 
 
 def adjust(state,quote):
@@ -30,11 +56,12 @@ def adjust(state,quote):
     count=sum(i['quantity'] for i in quote['items'])
     base=quote['product_total'] if ask['basis'] in {'unit','discount'} else quote.get('total')
     target=(ask['amount']*count if ask['basis']=='unit' else base-ask['amount'] if ask['basis']=='discount' else ask['amount'])
-    if base is None:return dict(quote,request_satisfied=False,requested_total=target)
-    wanted=max(0,base-target)
+    # Without a destination, the subtotal is the lower bound of the final price.
+    # Show the available reduction now, but keep the delivered quote pending.
+    wanted=max(0,(quote['product_total'] if base is None else base)-target)
     discount=min(wanted,2000,quote['product_total']) if count>1 else 0
     quote=dict(quote,base_product_total=quote['product_total'],discount=discount,
-               requested_total=target,request_satisfied=wanted<=discount)
+               requested_total=target,request_satisfied=base is not None and wanted<=discount)
     if discount:
         # Proportional allocation keeps a cheap line nonnegative in a mixed cart.
         pieces=[]
@@ -65,11 +92,42 @@ def settle(state,quote,last_reply,text):
         pending=True
     if not pending:return
     if (not quote.get('request_satisfied') and last_reply.get('question_field')=='price.accept'
-            and last_reply.get('quote_total')==quote.get('total') and is_confirmation(text)):
+            and last_reply.get('quote_total')==quote.get('total')
+            and last_reply.get('quote_key') in (None, offer_signature(quote)) and is_confirmation(text)):
         state['price_request']=dict(amount=quote['total'],basis='total',text=text)
         quote['request_satisfied']=True
     if quote.get('request_satisfied'):
         state['conditions']=[c for c in state['conditions'] if c.get('kind')!='price']
+
+
+def offer_signature(quote):
+    quantities = Counter()
+    for row in quote['items']:
+        quantities[row['product_id']] += row['quantity']
+    return digest([sorted(quantities.items()), *(quote.get(field) for field in
+                   ('base_product_total', 'product_total', 'discount', 'delivery_fee', 'total'))])
+
+
+def quote_copy(quote, compact=False):
+    """Render the same arithmetic used to save the order."""
+    discount = quote.get('discount', 0)
+    reduction = 'ألفين' if discount == 2000 else chat_amount(discount)
+    if compact and quote.get('total') is not None:
+        body = f'المجموع {chat_amount(quote["total"])} ويا التوصيل'
+        return body + (f' بعد خصم {reduction}.' if discount else '.')
+    subtotal = quote.get('base_product_total', quote['product_total'])
+    quantity = sum(item['quantity'] for item in quote['items'])
+    label = {1:'القطعة', 2:'القطعتين'}.get(quantity, f'{quantity} قطع')
+    lines = [f'حساب {label} {chat_amount(subtotal)}']
+    if quote.get('delivery_fee') is not None:
+        lines.append(f'التوصيل {chat_amount(quote["delivery_fee"])}' if quote['delivery_fee'] else 'التوصيل مجاني')
+    if discount:
+        lines.append(f'نزلتلج {reduction} خصم')
+    if quote.get('total') is not None:
+        lines.append(f'فيصير المجموع {chat_amount(quote["total"])} دينار')
+    elif quote.get('discount'):
+        lines.append(f'فيصير حساب القطع {chat_amount(quote["product_total"])} قبل التوصيل')
+    return '، '.join(lines) + '.'
 
 
 def destination(text):

@@ -1,6 +1,7 @@
 """Evidence-backed purchase constraints; questions are not purchase conditions."""
 import re
-from ..checkout import normalized,explicit_purchase
+from ..checkout import normalized,explicit_purchase,is_confirmation
+from .store import digest
 
 
 def explicit_cancellation(text):
@@ -26,26 +27,29 @@ def purchase_selected(text):
     value=normalized(text)
     if re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',value):return False
     return explicit_purchase(text) or bool(re.search(r'(?<!\w)اريد(?:ه|ها|هم|هن)?(?!\w)',value)) and not bool(
-        re.search(r'اريد\s+(?:اعرف|استفسر|اسال|اشوف)|شلون|بشكد|شكد\s*(?:سعر|واص)',value))
+        re.search(r'اريد\s+(?:اعرف|استفسر|اسال|اشوف|خصم|تخفيض|تخيض|سعر)|شلون|بشكد|شكد\s*(?:سعر|واص)',value))
 
 
-def apply_intent(state,plan,event_id,evidence,quote=None):
+def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
+    from .negotiation import pushback, request
     text=evidence['payload'].get('text','');value=normalized(text)
-    if plan['intent']=='withdraw' or re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',value):
+    bargaining = bool(state.get('price_request') and pushback(text))
+    if (plan['intent']=='withdraw' and not bargaining) or re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',value):
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
+        state.pop('price_request',None)
         return
     # Remove legacy arbitrary "if" barriers. Real typed constraints remain.
     state['conditions']=[c for c in state['conditions'] if c.get('kind') and c.get('status')=='pending']
     pending=constraint(text)
-    from .negotiation import request
     price_request=request(text)
     if price_request and (state['cart'] or state.get('purchase_event')):
-        state['price_request']=price_request
-        pending=dict(kind='price',text=text,status='pending')
+        if not price_request.get('discretionary') or not state.get('price_request'):
+            state['price_request']=price_request
+            pending=dict(kind='price',text=text,status='pending')
     if pending:
         pending['event_id']=event_id
-        if pending:state['conditions']=[pending]
+        state['conditions']=[c for c in state['conditions'] if c['kind']!=pending['kind']]+[pending]
     if re.search(r'مو\s*شرط|ما\s*يحتاج|عادي\s+اي\s+وقت',value):
         state['conditions']=[c for c in state['conditions'] if c['kind']!='delivery_deadline']
     fields=plan.get('contact') or {}
@@ -56,5 +60,8 @@ def apply_intent(state,plan,event_id,evidence,quote=None):
     # also express checkout; a single price enquiry with contacts does not.
     declared=(bool(state['cart']) and all(state['contact'].get(f) for f in ('phone','address','province'))
               and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address'])
-    if purchase_selected(text) or contextual or declared:
+    reply = last_reply or {}
+    accepted_purchase = (reply.get('question_field') == 'purchase_intent' and reply.get('question_stage') == 'selection'
+                         and bool(state['cart']) and reply.get('cart_key') == digest(state['cart']) and is_confirmation(text))
+    if purchase_selected(text) or contextual or declared or accepted_purchase:
         state['purchase_event']=event_id

@@ -241,8 +241,11 @@ class AuditFixTests(unittest.TestCase):
             responses.prepare(self.scope,event,out)
             part=self.store.claim_reply(self.scope)
             self.store.settle_reply(self.scope,part['id'],'accepted',str(index))
+            if index:
+                self.assertNotIn('question_field',part['payload'])
+                self.assertIn('التوصيل 5 آلاف',part['payload']['text'])
         self.assertTrue(contexts[0]['question_field'].endswith('.color'))
-        self.assertIsNone(contexts[1]['question_field']);self.assertIsNone(contexts[2]['question_field'])
+        self.assertEqual(1,len(contexts))
 
     def test_unavailable_child_age_offers_compatible_alternative_not_contacts(self):
         self.products[0].update(sizes='1 إلى 4 سنوات',product_type='sets',audience='boys')
@@ -348,6 +351,106 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(2000,out['quote']['discount'])
         self.assertTrue(all(i['unit_price']>=0 for i in out['quote']['items']))
         self.assertEqual(10100,sum(i['unit_price']*i['quantity'] for i in out['quote']['items']))
+
+    def reply(self, event, outcome, writer):
+        Responses(self.store, self.loader, writer).prepare(self.scope, event, outcome)
+        replies = []
+        while part := self.store.claim_reply(self.scope):
+            replies.append(part['payload'])
+            self.store.settle_reply(self.scope, part['id'], 'accepted', str(part['id']))
+        return replies
+
+    def test_contacts_and_acknowledgment_cannot_fall_back_to_old_color_list(self):
+        self.run_turn('اريد قياس 44', changes=[dict(values=dict(product_id='P1',size='44'))])
+        writer = Mock(side_effect=AssertionError('contact and acknowledgment must use saved progress'))
+        stale = dict(facts=[dict(product_id='P1',field='colors')])
+        event,out = self.run_turn('بغداد حي المنصور قرب المدرسة', answer=stale,
+                                  contact={'address':'بغداد حي المنصور قرب المدرسة'})
+        reply = self.reply(event,out,writer)
+        self.assertIn('وصل العنوان',reply[0]['text'])
+        self.assertEqual('contact.phone',reply[-1]['question_field'])
+        event,out = self.run_turn('07701234567',answer=stale,contact={'phone':'07701234567'})
+        reply = self.reply(event,out,writer)
+        self.assertIn('وصل الرقم',reply[0]['text'])
+        self.assertTrue(reply[-1]['question_field'].endswith('.color'))
+        event,out = self.run_turn('تمام',answer=stale)
+        reply = self.reply(event,out,writer)
+        self.assertEqual([{'type':'text','text':'تدللين عيوني.'}],reply)
+
+    def test_checkout_restatement_uses_the_two_selected_lines_and_missing_contacts(self):
+        self.products[0]['colors'] = 'أسود، رصاصي'
+        writer = Mock(side_effect=AssertionError('checkout recap must use the committed cart'))
+        event,out = self.run_turn('اريد اسود ورصاصي قياس 44',changes=[
+            dict(values=dict(product_id='P1',color='اسود',size='44')),
+            dict(new_line=True,values=dict(product_id='P1',color='رصاصي',size='44'))])
+        self.reply(event,out,writer)
+        event,out = self.run_turn('حسب قياسي',answer=dict(facts=[dict(product_id='P1',field='sizes')]))
+        self.assertIn('رصاصي قياس 44',self.reply(event,out,writer)[0]['text'])
+        event,out = self.run_turn('ثبتيلي اسود ورصاصي قياس 44',
+                                  answer=dict(facts=[dict(product_id='P1',field='sizes')]))
+        reply = self.reply(event,out,writer)
+        self.assertIn('اسود قياس 44',reply[0]['text'])
+        self.assertIn('رصاصي قياس 44',reply[0]['text'])
+        self.assertEqual('contact.details',reply[-1]['question_field'])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_verified_weight_advances_to_color_once_then_purchase_and_contact(self):
+        self.products[0]['sizes'] = 'من وزن 60 إلى 130 كيلو'
+        writer = Mock(side_effect=AssertionError('weight and selection must use verified data'))
+        for index in range(2):
+            event,out = self.run_turn('يلبس وزن 130',changes=[dict(values=dict(product_id='P1',weight_kg=130))])
+            reply = self.reply(event,out,writer)
+            self.assertIn('130 كيلو',reply[0]['text'])
+            self.assertNotIn('أزرق',reply[0]['text'])
+            self.assertEqual(2 if index == 0 else 1,len(reply))
+        event,out = self.run_turn('ماروني',changes=[dict(values=dict(product_id='P1',color='ماروني'))])
+        self.assertEqual('purchase_intent',self.reply(event,out,writer)[-1]['question_field'])
+        event,out = self.run_turn('تمام')
+        self.assertEqual('contact.details',self.reply(event,out,writer)[-1]['question_field'])
+
+    def test_counteroffer_explains_subtotal_delivery_discount_and_unchanged_total(self):
+        self.products[0]['price'] = '17000'
+        self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44',quantity=2))])
+        writer = Mock(side_effect=AssertionError('financial amounts must come from the quote'))
+        event,out = self.run_turn('سويهن ب30')
+        self.assertEqual(32000,out['quote']['product_total'])
+        self.assertEqual('quote.province',self.reply(event,out,writer)[-1]['question_field'])
+        self.plan = dict(intent='withdraw')
+        event = self.event('لا فدوة')
+        out = self.runtime.turn(self.scope,event)
+        self.assertEqual(32000,out['quote']['product_total'])
+        objection = self.reply(event,out,writer)[0]['text']
+        event,out = self.run_turn('غير طلبت 2')
+        reply = self.reply(event,out,writer)[0]
+        self.assertNotEqual(objection,reply['text'])
+        self.assertIn('الحساب على القطعتين',reply['text'])
+        self.assertEqual('quote.province',reply['question_field'])
+        self.run_turn('التوصيل لبغداد')
+        # A delivery answer can precede the next revised amount in the same negotiation.
+        event,out = self.run_turn('بس احسبهن ب36 مع التوصيل')
+        reply = self.reply(event,out,writer)[0]
+        for amount in ('34 ألف','5 آلاف','ألفين','37 ألف'):
+            self.assertIn(amount,reply['text'])
+        self.assertEqual(37000,reply['quote_total'])
+        self.assertEqual('price.accept',reply['question_field'])
+
+    def test_unit_offer_and_generic_discount_are_recognized_only_on_eligible_cart(self):
+        self.products[0]['price'] = '16000'
+        self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44',quantity=2))])
+        _,out = self.run_turn('بيها مجال تخفضولي السعر اذا اخذ اكثر من وحده')
+        self.assertEqual(30000,out['quote']['product_total'])
+        _,out = self.run_turn('سويهن الوحده 15 بالعدله')
+        self.assertEqual(30000,out['quote']['product_total'])
+        self.assertTrue(out['quote']['request_satisfied'])
+
+    def test_free_size_chart_does_not_make_an_unlisted_l_size_orderable(self):
+        self.products[0]['sizes'] = 'فري سايز من 55 كيلو الى 130 كيلو'
+        _, out = self.run_turn('اريد قياس لارج',changes=[dict(values=dict(product_id='P1',size='L',color='ماروني'))])
+        self.assertEqual('size',out['business_feedback']['field'])
+        self.assertEqual('',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+        _, out = self.run_turn('اي اريد فري سايز',changes=[dict(values=dict(product_id='P1',size='فري سايز'))])
+        self.assertFalse(out['readiness']['conditions'])
+        self.assertEqual('فري سايز',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
 
     def test_copy_does_not_repeat_choices_without_question_marks(self):
         for text in ('بس تحددين اللون حبيبتي','قوليلي قياسج','شكد عمر الطفل','اذا عندج نونو ثاني تحبين قياس أصغر؟'):

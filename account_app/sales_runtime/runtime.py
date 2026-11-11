@@ -183,18 +183,19 @@ class Runtime:
                         from .negotiation import destination,settle
                         province_hint=destination(evidence['payload'].get('text',''))
                         if province_hint:state['quote_province']=province_hint
+                        row=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 1",(scope.key,)).fetchone()
+                        last_reply=json.loads(row[0]) if row else {}
                         if state['cart']:
                             try:
                                 province=state['contact'].get('province') or state.get('quote_province')
                                 price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
                             except ValueError:pass  # A partial package needs quantity clarification.
-                        apply_intent(state,plan,event_id,evidence,price)
+                        apply_intent(state,plan,event_id,evidence,price,last_reply)
                         if state['cart']:
                             try:
                                 province=state['contact'].get('province') or state.get('quote_province')
                                 price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
-                                row=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 1",(scope.key,)).fetchone()
-                                settle(state,price,json.loads(row[0]) if row else {},evidence['payload'].get('text',''))
+                                settle(state,price,last_reply,evidence['payload'].get('text',''))
                             except ValueError:pass
                         if business_feedback and state['cart']:
                             state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice']+[dict(kind='choice',status='pending',event_id=event_id,**business_feedback)]

@@ -17,6 +17,10 @@ def validate_copy(parts,question,action_results=None):
                 raise ValueError('reply.text: expected nonempty text')
             texts.append(part['text'])
     text=normalized('\n'.join(texts))
+    if proof.get('omit_color_list'):
+        from ..product_variants import colors
+        if len(colors(text)) > 1:
+            raise ValueError('reply.relevance: answer the current topic without listing colors again')
     if question is None and re.search(r'[?؟]',text):
         raise ValueError('reply.question: no question is allowed for this turn; answer/acknowledge only')
     asks={

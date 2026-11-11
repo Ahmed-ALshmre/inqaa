@@ -63,6 +63,10 @@ class Catalog:
                 weight_ranges=product_variants.weight_only_ranges(product) if field=='size' and system=='legacy' else []
                 if weight_ranges and re.fullmatch(r'\d{1,3}(?:\.\d+)?',value):
                     error='' if any(lo<=float(value)<=hi for lo,hi in weight_ranges) else 'الوزن خارج نطاق هذا المنتج'
+                elif (field == 'size' and product_variants.is_free_size_product(product)
+                      and not product_variants.size_data(product['sizes'])['known']
+                      and not product_variants.FREE_SIZE_RE.fullmatch(checkout.normalized(value))):
+                    error = 'الموديل فري سايز وما مسجّل إله هالقياس'
                 else:error = product_variants.order_choice_error(product, field, value)
                 if error:
                     raise BusinessChoice(error,product_id=product['product_id'],field=field,
