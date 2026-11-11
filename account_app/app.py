@@ -2330,8 +2330,7 @@ def set_store_ai_enabled(db, store_id, enabled):
             WHERE status='pending' AND sender_id IN
               (SELECT sender_id FROM customers WHERE COALESCE(NULLIF(store_id,''),'default')=?)""",
             (sid,)).rowcount
-        if sid == sales_runtime_live.PILOT_STORE:
-            sales_runtime_live.pause_store(db, sid)
+        sales_runtime_live.pause_store(db, sid)
     db.commit()
     return cancelled
 
@@ -9620,7 +9619,7 @@ def _consult_difficult_reply(state, result, problems):
     return reply_consultant.advise(state, result, problems, key=OPENROUTER_KEY,
         endpoint=OPENROUTER_URL, post=ai_transport.post,
         record=lambda payload, elapsed: ai_efficiency.record_usage(get_db(), current_store_id(),
-            'reply_consultation', reply_consultant.MODEL, payload, elapsed))
+            'reply_consultation', state.model, payload, elapsed))
 
 
 def _consulted_reply_failed(result):
@@ -9632,12 +9631,13 @@ def _consulted_reply_failed(result):
 def call_main_ai(ev, message_type, customer, history, products, matched_product,
                  image_result, instructions_text, rules_list, fix_instruction=None,
                  customer_products=None, conversation_history=None, catalog_search_context=None):
-    active = bool(has_app_context() and reply_consultant.enabled() and OPENROUTER_KEY
+    active = bool(has_app_context() and (reply_consultant.enabled() or sales_runtime_live.all_stores()) and OPENROUTER_KEY
         and not ev.get('_staff_preview') and not ev.get('_post_order')
         and not sales_playbook.human_requested(ev.get('text'))
         and not (image_result or {}).get('unmatched_customer_image'))
     prepared_ev = dict(ev, _defer_product_handoff=True) if active else ev
-    with reply_consultant.scope(active, original_ev=ev, already_attempted=ev.get('_reply_consultation_used'),
+    consultant_model = sales_runtime_live.BACKUP_MODEL if sales_runtime_live.all_stores() else reply_consultant.MODEL
+    with reply_consultant.scope(active, model=consultant_model, original_ev=ev, already_attempted=ev.get('_reply_consultation_used'),
             ev=prepared_ev, store_id=current_store_id(), message_type=message_type, customer=customer or {},
             history=ai_efficiency.merge_history(history or [], conversation_history), products=products,
             matched_product=matched_product, image_result=image_result, instructions_text=instructions_text,
@@ -13717,7 +13717,7 @@ def manychat_webhook(store_key=""):
 
 
 def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id=None,
-                                    background_after_intake=False, *, signed_chatwoot_account=None):
+                                    background_after_intake=False, *, signed_channel=None):
     """Persist incoming data first; waiting for AI must never delay dashboard messages."""
     with app.app_context():
         db = get_db()
@@ -13736,13 +13736,12 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
             media = extract_media({"attachments": ev.get("attachments", [])})
             if not is_chatwoot and is_recent_duplicate_incoming(db, subscriber_id, ev.get("text"), ev.get("image_url"), media=media):
                 return
-            pilot_intake = (signed_chatwoot_account and background_after_intake
-                            and current_store_id() == sales_runtime_live.PILOT_STORE)
-            if not pilot_intake and sales_runtime_live.route(db, subscriber_id):
+            signed_intake = bool(signed_channel and background_after_intake)
+            if not signed_intake and sales_runtime_live.route(db, subscriber_id):
                 return
             get_or_create_customer(db, subscriber_id, ev.get("page_id"), platform)
             save_options = {}
-            if pilot_intake:
+            if signed_intake:
                 # Resolve uncertain attachment types before taking SQLite's write lock.
                 prepared = extract_media(fake_body, ev.get('text') or '', ev.get('image_url') or '')
                 if any(item['type'] == 'file' for item in prepared):
@@ -13755,13 +13754,13 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
             saved_id = save_message(db, subscriber_id, "incoming", detect_message_type(ev),
                                     ev.get("text"), ev.get("image_url"), ev.get("ad_id"), ev.get("ref"), fake_body,
                                     **save_options)
-            save_conversation_message(db, subscriber_id, "user", ev.get("text"), commit=not pilot_intake)
+            save_conversation_message(db, subscriber_id, "user", ev.get("text"), commit=not signed_intake)
             # Every message is captured before debounce discards older events.
-            capture_customer_contact(db, subscriber_id, ev.get("text"), commit=not pilot_intake)
+            capture_customer_contact(db, subscriber_id, ev.get("text"), commit=not signed_intake)
             if mid:
                 db.execute("INSERT OR IGNORE INTO processed_messages(mid, processed_at) VALUES (?,?)", (mid, now_baghdad_iso()))
-            runtime_assigned = pilot_intake and sales_runtime_live.enroll(
-                sys.modules[__name__], db, current_store_id(), subscriber_id, signed_chatwoot_account, saved_id)
+            runtime_assigned = signed_intake and sales_runtime_live.enroll(
+                sys.modules[__name__], db, current_store_id(), subscriber_id, *signed_channel, saved_id)
             if background_after_intake:
                 delay = (0 if sales_playbook.human_requested(ev.get('text'))
                          or detect_message_type(ev) == 'text' and sales_recovery.policy_question(ev.get('text'))
@@ -14285,12 +14284,7 @@ def health():
     return jsonify({
         "status"        : "ok",
         "code_version"  : code_version,
-        "sales_runtime" : {
-            "store": sales_runtime_live.PILOT_STORE,
-            "percent": sales_runtime_live.percent(),
-            "active": bool(sales_runtime_live.configured(sys.modules[__name__]) and get_app_setting(
-                "ai_enabled", "1", store_id=sales_runtime_live.PILOT_STORE) != "0"),
-        },
+        "sales_runtime" : sales_runtime_live.rollout_status(sys.modules[__name__], get_db()),
         "conversion_plan": "2026-09-28",
         "conversion_target": 30,
         "sales_ready"   : all(readiness.values()),

@@ -199,7 +199,8 @@ class Runtime:
                            available_fact_fields={p['product_id']:[f for f in PRODUCT_FACT_FIELDS if resolve_fact(catalog,p['product_id'],f,policy)] for p in active_products})
             recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 30",
                                          (scope.key,)).fetchall()
-            context['recent_messages']=[dict(actor=row[0],**message_context(json.loads(row[1]))) for row in reversed(recent)]
+            context['recent_messages']=(snap['data'].get('prior_conversation', []) +
+                [dict(actor=row[0], **message_context(json.loads(row[1]))) for row in reversed(recent)])[-30:]
             replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
