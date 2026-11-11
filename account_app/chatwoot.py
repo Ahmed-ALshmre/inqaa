@@ -189,7 +189,7 @@ def install(module):
                                            attachments, ad_context))
         # Use the existing per-sender queue, debounce, order logic and delivery review.
         module._process_manychat_webhook_async(body, sender_id, platform, sender_id, background_after_intake=True,
-                                              signed_chatwoot_account=str(account))
+                                              signed_channel=('chatwoot', str(account)))
         return jsonify(ok=True)
 
     @module.app.route('/api/chatwoot/diag')

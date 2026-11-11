@@ -1,33 +1,49 @@
-"""Bounded production rollout through the existing signed intake and AI worker."""
+"""Production routing through authenticated intake and the existing AI worker."""
 import hashlib
 import json
 import os
+import re
+from datetime import datetime, timedelta
 from functools import partial
 
-from .. import ad_attribution, sales_playbook
+from .. import ad_attribution, checkout, delivery_state, sales_playbook
 from .delivery import deliver_confirmation, deliver_replies
 from .entrypoint import Entrypoint
-from .gateway import BackupGateway, DecisionGateway, WriterGateway
+from .gateway import BACKUP_MODEL, BackupGateway, DecisionGateway, WriterGateway
+from .intent import purchase_selected
 from .orders import migrate_tasks
 from .preview import ImageObserver, media_input
-from .store import Conflict, Scope, Store, encode
+from .store import Conflict, Scope, Store, encode, initial_state
 
 
 PILOT_STORE = 'khuyoot'
 JOB_KIND = 'sales_runtime'
+FINAL_ORDER_STATUSES = ('cancelled', 'canceled', 'ملغي', 'delivered', 'returned', 'تم التوصيل', 'مرتجع')
 
 
 def init_db(db):
     Store(db).migrate()
     migrate_tasks(db)
-    db.execute('''CREATE TABLE IF NOT EXISTS sales_v2_live_routes (
-        sender_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, account_id TEXT NOT NULL,
-        first_incoming_id INTEGER NOT NULL, handled_id INTEGER NOT NULL DEFAULT 0,
-        control_revision INTEGER NOT NULL DEFAULT 0)''')
-    db.commit()
+    with Store(db).transaction():
+        db.execute('''CREATE TABLE IF NOT EXISTS sales_v2_live_routes (
+            sender_id TEXT PRIMARY KEY, store_id TEXT NOT NULL, account_id TEXT NOT NULL,
+            first_incoming_id INTEGER NOT NULL, handled_id INTEGER NOT NULL DEFAULT 0,
+            control_revision INTEGER NOT NULL DEFAULT 0, channel TEXT NOT NULL DEFAULT 'chatwoot')''')
+        if 'channel' not in {row[1] for row in db.execute('PRAGMA table_info(sales_v2_live_routes)')}:
+            db.execute("ALTER TABLE sales_v2_live_routes ADD COLUMN channel TEXT NOT NULL DEFAULT 'chatwoot'")
+        db.execute('CREATE INDEX IF NOT EXISTS sales_v2_routes_store ON sales_v2_live_routes(store_id)')
 
 
-def percent():
+def all_stores():
+    return os.environ.get('SALES_RUNTIME_MODE', '').strip().lower() == 'all'
+
+
+def percent(store_id):
+    mode = os.environ.get('SALES_RUNTIME_MODE', '').strip().lower()
+    if mode == 'all':
+        return 100
+    if mode == 'off' or store_id != PILOT_STORE:
+        return 0
     raw = os.environ.get('SALES_RUNTIME_KHUYOOT_PERCENT', '0')
     try:
         return max(0, min(100, int(raw)))
@@ -36,45 +52,141 @@ def percent():
 
 
 def route(db, sender_id):
-    if not str(sender_id or '').startswith(f'{PILOT_STORE}::cw-'):
+    if not any(marker in str(sender_id or '') for marker in ('::cw-', '::zn-')):
         return None
     return db.execute('SELECT * FROM sales_v2_live_routes WHERE sender_id=?', (sender_id,)).fetchone()
 
 
 def scope_for(row):
-    return Scope(row['store_id'], 'chatwoot', row['account_id'], row['sender_id'])
+    return Scope(row['store_id'], row['channel'], row['account_id'], row['sender_id'])
 
 
-def configured(module):
-    if not percent() or not module.OPENROUTER_KEY or os.environ.get('ENABLE_BACKGROUND_JOBS', '1') != '1':
+def configured(module, store_id, channel):
+    if not percent(store_id) or not module.OPENROUTER_KEY or os.environ.get('ENABLE_BACKGROUND_JOBS', '1') != '1':
         return False
-    channel = module.chatwoot.configuration()
-    return bool(module.chatwoot.enabled() and not module.zernio.enabled_for_store(PILOT_STORE)
-                and channel['chatwoot_api_url'].startswith('https://') and channel['chatwoot_key_present']
-                and channel['chatwoot_webhook_secret_present'])
+    if channel == 'zernio':
+        return module.zernio.configuration(store_id)['ready']
+    settings = module.chatwoot.configuration()
+    return bool(channel == 'chatwoot' and module.chatwoot.enabled() and not module.zernio.enabled_for_store(store_id)
+                and settings['chatwoot_api_url'].startswith('https://') and settings['chatwoot_key_present']
+                and settings['chatwoot_webhook_secret_present'])
 
 
-def enroll(module, db, store_id, sender_id, account_id, incoming_id):
-    """Only signed Chatwoot intake can assign a never-processed conversation."""
-    if store_id != PILOT_STORE or not sender_id.startswith(f'{PILOT_STORE}::cw-{account_id}-'):
+def rollout_status(module, db):
+    stores = []
+    for store in module.list_stores(db):
+        store_id = store['store_id']
+        channel = 'zernio' if module.zernio.enabled_for_store(store_id) else 'chatwoot'
+        enabled = module.get_app_setting('ai_enabled', '1', db, store_id) != '0'
+        stores.append(dict(store=store_id, channel=channel, percent=percent(store_id),
+                           active=bool(store['active'] and enabled and configured(module, store_id, channel))))
+    return dict(mode='all' if all_stores() else 'pilot' if percent(PILOT_STORE) else 'off',
+                active=any(store['active'] for store in stores), stores=stores)
+
+
+def terminal_order(status, remote_status=''):
+    return any(str(value or '').strip().lower() in FINAL_ORDER_STATUSES for value in (status, remote_status))
+
+
+def open_order(db, store_id, sender_id, exclude=0):
+    rows = db.execute('''SELECT o.id,o.status,m.remote_status FROM orders o LEFT JOIN menger_deliveries m ON m.order_id=o.id
+        WHERE o.store_id=? AND o.sender_id=? AND o.id<>? ORDER BY o.id DESC''', (store_id, sender_id, exclude))
+    return next((row for row in rows if not terminal_order(row['status'], row['remote_status'])), None)
+
+
+def start_new_purchase(db, scope, incoming_id, text, allowed):
+    if (not purchase_selected(text) or checkout.is_existing_order_followup(text)
+            or re.search(r'طلبي|حجزي|الطلب\s+(?:السابق|القديم)|استبدال|ارجاع|الغاء|ترجيع|ارجع القطع[ةه]',
+                         checkout.normalized(text))):
+        return
+    store = Store(db)
+    snapshot = store.snapshot(scope)
+    order_id = snapshot['data'].get('order_id')
+    if not order_id or open_order(db, scope.store, scope.sender):
+        return
+
+    def reset(state):
+        if not allowed(scope) or open_order(db, scope.store, scope.sender):
+            raise Conflict('turn_superseded')
+        state.update(initial_state())
+        for key in ('order_id', 'order_status', 'checkout_prompt', 'contact_events', 'price_request', 'quote_province'):
+            state.pop(key, None)
+        return dict(previous_order_id=order_id)
+
+    store.apply(scope, f'new-purchase:{incoming_id}', snapshot['version'], {'order_id': order_id}, reset)
+
+
+def legacy_context(module, db, store_id, sender_id, incoming_id):
+    """Return a settled history for context, or None while the legacy engine owns an active turn."""
+    if (db.execute("""SELECT 1 FROM ai_jobs WHERE store_id=? AND sender_id=? AND kind IN ('webhook','resume','link')
+                    AND status IN ('queued','running') LIMIT 1""", (store_id, sender_id)).fetchone()
+            or open_order(db, store_id, sender_id)
+            or module.pending_product_choice(db, sender_id)):
+        return None
+    rows = db.execute('''SELECT direction,text,raw_payload,created_at FROM messages
+        WHERE store_id=? AND sender_id=? AND id<? AND ''' + delivery_state.VISIBLE_SQL + '''
+        ORDER BY id DESC LIMIT 16''', (store_id, sender_id, incoming_id)).fetchall()
+    # A shipping question can be answered after a checkout prompt. Check older
+    # accepted replies too, until the last completed checkout or expiry.
+    outgoing = db.execute('''SELECT text,raw_payload,created_at FROM messages
+        WHERE store_id=? AND sender_id=? AND direction='outgoing' AND message_type='text' AND id<? AND '''
+        + delivery_state.VISIBLE_SQL + ' ORDER BY id DESC LIMIT 24', (store_id, sender_id, incoming_id))
+    cutoff = datetime.now(module.BAGHDAD_TZ) - timedelta(hours=24)
+    for reply in outgoing:
+        stamp = module.sales_engagement.timestamp(reply['created_at'])
+        meta = delivery_state.metadata(reply['raw_payload'])
+        if not stamp or stamp < cutoff or meta.get('_order_confirmation_id'):
+            break
+        prompt = re.search(r'(?:دزي|ارسلي|انطي|احتاج|باقي|شنو).{0,30}(?:رقم|موبايل|عنوان)',
+                           module.sales_strategy.normalized(reply['text']))
+        if meta.get('checkout_draft') or meta.get('checkout_proposal') or prompt:
+            return None
+    return [dict(actor='customer' if row['direction'] == 'incoming' else 'staff', text=row['text'][:700])
+            for row in reversed(rows) if row['text']]
+
+
+def enroll(module, db, store_id, sender_id, channel, account_id, incoming_id):
+    """Pin a trusted provider and adopt settled threads on their next real message."""
+    if not sender_id.startswith(f'{store_id}::'):
+        return False
+    if channel == 'chatwoot' and not sender_id.startswith(f'{store_id}::cw-{account_id}-'):
+        return False
+    if channel == 'zernio' and not db.execute('''SELECT 1 FROM zernio_conversations
+            WHERE sender_id=? AND store_id=? AND account_id=?''', (sender_id, store_id, account_id)).fetchone():
         return False
     existing = route(db, sender_id)
     if existing:
-        if existing['store_id'] != store_id or existing['account_id'] != account_id:
+        if (existing['store_id'], existing['channel'], existing['account_id']) != (store_id, channel, account_id):
             return False
         db.execute('UPDATE sales_v2_scopes SET version=version+1 WHERE scope=?', (scope_for(existing).key,))
         return True
     bucket = int(hashlib.sha256(sender_id.encode()).hexdigest()[:8], 16) % 100
-    if not configured(module) or bucket >= percent() or not module.is_ai_enabled(db):
+    if not configured(module, store_id, channel) or bucket >= percent(store_id) or not module.is_ai_enabled(db):
         return False
     if not module.is_customer_ai_enabled(db, sender_id):
         return False
+    if db.execute("""SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending' LIMIT 1""",
+                  (sender_id,)).fetchone():
+        return False
+    historical = db.execute('SELECT 1 FROM messages WHERE sender_id=? AND id<? LIMIT 1',
+                            (sender_id, incoming_id)).fetchone()
+    context = []
+    if historical:
+        if not all_stores():
+            return False
+        context = legacy_context(module, db, store_id, sender_id, incoming_id)
+        if context is None:
+            return False
+    elif open_order(db, store_id, sender_id):
+        return False
     cur = db.execute('''INSERT OR IGNORE INTO sales_v2_live_routes
-        (sender_id,store_id,account_id,first_incoming_id)
-        SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM messages WHERE sender_id=? AND id<?)
-        AND NOT EXISTS (SELECT 1 FROM orders WHERE sender_id=?)
-        AND NOT EXISTS (SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending')''',
-        (sender_id, store_id, account_id, incoming_id, sender_id, incoming_id, sender_id, sender_id))
+        (sender_id,store_id,account_id,first_incoming_id,channel) VALUES(?,?,?,?,?)''',
+        (sender_id, store_id, account_id, incoming_id, channel))
+    if cur.rowcount and context:
+        scope = Scope(store_id, channel, account_id, sender_id)
+        Store(db)._ensure(scope)
+        db.execute("""UPDATE sales_v2_scopes SET data=json_set(data,'$.prior_conversation',json(?)) WHERE scope=?""",
+                   (encode(context), scope.key))
     return bool(cur.rowcount)
 
 
@@ -128,29 +240,42 @@ def pending_input(module, db, row, incoming_id, staff_reply_id):
          max(row['handled_id'], staff_reply_id), incoming_id)).fetchall()
     texts, attachments, seen = [], [], set()
     ad = {}
+    audio_pending = False
     for message in rows:
         text = (message['text'] or '').strip()
         if text and text != message['image_url']:
             texts.append(text)
-        ad = ad_attribution.extract(json.loads(message['raw_payload'] or '{}')) or ad
+        ad = ad_attribution.extract(delivery_state.metadata(message['raw_payload'])) or ad
         for item in module.message_media(message):
+            if item['type'] == 'audio':
+                interpreted = db.execute('SELECT 1 FROM voice_interpretations WHERE message_id=? AND store_id=?',
+                                         (message['id'], row['store_id'])).fetchone()
+                audio_pending |= not bool(interpreted)
+                if interpreted:
+                    continue
             key = (item['type'], item['url'])
             if key not in seen:
                 seen.add(key)
                 attachments.append(dict(type=item['type'], payload={'url': item['url']}))
     kind, reference = media_input(attachments)
+    if not ad and row['channel'] == 'zernio' and not row['handled_id']:
+        # A referral-only webhook can arrive before the first message.
+        saved = db.execute('SELECT data FROM conversation_ad_context WHERE sender_id=?',
+                           (row['sender_id'],)).fetchone()
+        context = delivery_state.metadata(saved[0]) if saved else {}
+        stamp = module.sales_engagement.timestamp(context.get('captured_at'))
+        if stamp and timedelta(0) <= datetime.now(module.BAGHDAD_TZ) - stamp < timedelta(hours=24):
+            ad = context
     # A staff request takes priority even when several messages arrive together.
     text = '\n'.join(texts)
     if any(sales_playbook.human_requested(part) for part in texts):
         text = next(part for part in texts if sales_playbook.human_requested(part))
-    return dict(text=text, ad=ad, media_kind=kind, media_ref=reference)
+    return dict(text=text, ad=ad, media_kind=kind, media_ref=reference), audio_pending
 
 
 def finish_order(module, db, scope, order, products, held):
     from .contracts import ServiceRequired
-    if db.execute("""SELECT 1 FROM orders WHERE store_id=? AND sender_id=? AND id<>?
-                    AND status NOT IN ('cancelled','canceled') LIMIT 1""",
-                  (scope.store, scope.sender, order['id'])).fetchone():
+    if open_order(db, scope.store, scope.sender, exclude=order['id']):
         raise ServiceRequired('existing_order_requires_staff')
     customer = db.execute('SELECT name FROM customers WHERE sender_id=? AND store_id=?',
                           (scope.sender, scope.store)).fetchone()
@@ -163,9 +288,12 @@ def finish_order(module, db, scope, order, products, held):
     db.execute("UPDATE followups SET status='cancelled' WHERE sender_id=? AND status='pending'", (scope.sender,))
     if held:
         return
-    module.menger.enqueue(db, order['id'], order, products)
-    db.execute("""UPDATE sales_v2_order_tasks SET status='prepared',payload=?
-                  WHERE order_id=? AND kind='fulfillment'""", (encode(order), order['id']))
+    telegram_only = scope.store in module.menger.TELEGRAM_ONLY_STORES
+    if not telegram_only:
+        module.menger.enqueue(db, order['id'], order, products)
+    db.execute("""UPDATE sales_v2_order_tasks SET status=?,payload=?
+                  WHERE order_id=? AND kind='fulfillment'""",
+               ('superseded' if telegram_only else 'prepared', encode(order), order['id']))
     db.execute('''INSERT INTO sales_v2_order_tasks(scope,order_id,kind,payload)
                   VALUES(?,?,'notification',?)''', (scope.key, order['id'], encode(order)))
 
@@ -219,7 +347,10 @@ def delivery_callbacks(module, db, scope, incoming_id, enabled):
         if not enabled(scope):
             return dict(paused=True)
         part = {'type': 'text', **payload}
-        response = module.chatwoot.send(module, scope.sender, [part])
+        if scope.channel == 'zernio':
+            response = module.zernio.send(module, scope.sender, [part], operation_key=key)
+        else:
+            response = module.chatwoot.send(module, scope.sender, [part])
         if response.get('ok') and response.get('provider_id'):
             return dict(accepted=True, provider_id=response['provider_id'])
         if response.get('status_code') in {400, 401, 403, 404, 422}:
@@ -275,7 +406,7 @@ def process(module, db, row, incoming_id):
     latest = module.latest_incoming_message(db, scope.sender)
     if latest.get('id') != incoming_id:
         return dict(ok=True, reason='conversation_changed')
-    if not configured(module) or not module.is_ai_enabled(db) or not module.is_customer_ai_enabled(db, scope.sender):
+    if not configured(module, scope.store, scope.channel) or not module.is_ai_enabled(db) or not module.is_customer_ai_enabled(db, scope.sender):
         return dict(ok=True, reason='ai_disabled')
 
     def allowed(_scope):
@@ -327,13 +458,34 @@ def process(module, db, row, incoming_id):
     external_id = f'incoming:{incoming_id}'
     prior = db.execute('SELECT payload FROM sales_v2_events WHERE scope=? AND external_id=?',
                        (scope.key, external_id)).fetchone()
-    event = json.loads(prior[0]) if prior else pending_input(module, db, row, incoming_id, staff_reply_id)
+    event, audio_pending = ((json.loads(prior[0]), False) if prior
+                            else pending_input(module, db, row, incoming_id, staff_reply_id))
+    if audio_pending and not sales_playbook.human_requested(event['text']):
+        customer = db.execute('SELECT * FROM customers WHERE sender_id=? AND store_id=?',
+                              (scope.sender, scope.store)).fetchone()
+        voice_input = dict(latest, sender_id=scope.sender, text=event['text'])
+        _, voice_review = module.inbound_voice.prepare(
+            module, db, voice_input, incoming_id, dict(customer) if customer else {},
+            module.get_conversation_history(db, scope.sender),
+            after_id=max(row['first_incoming_id'] - 1, row['handled_id'], staff_reply_id))
+        if voice_review:
+            meta = voice_review.get('meta') or {}
+            if meta.get('human_review_id'):
+                with db:
+                    mark_handled()
+            return dict(ok=True, reason=meta.get('reason'), needs_human=bool(meta.get('human_review_id')),
+                        human_review_id=meta.get('human_review_id'))
+        if not allowed(scope):
+            return dict(ok=True, reason='conversation_changed')
+        event, _ = pending_input(module, db, row, incoming_id, staff_reply_id)
     if event['media_kind'] == 'sticker' and not event['text']:
         with db:
             mark_handled()
         return dict(ok=True, reason='sticker')
     entry = make_entry(module, db, scope, allowed)
     try:
+        if not prior:
+            start_new_purchase(db, scope, incoming_id, event['text'], allowed)
         result = entry.receive(store_id=scope.store, channel=scope.channel, account_id=scope.account,
                                sender_id=scope.sender, message_id=external_id, **event)
         if result['action'] == 'superseded':

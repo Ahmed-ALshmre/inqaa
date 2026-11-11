@@ -69,12 +69,12 @@ def handoff(module, db, event, reason):
                 human_review_id=review, waiting_for_human_action=True, reason='voice_unresolved'))
 
 
-def prepare(module, db, event, incoming_id, customer, conversation_history):
+def prepare(module, db, event, incoming_id, customer, conversation_history, *, after_id=0):
     """Persist understood speech on its original audio row, then resume normal checks."""
     rows = db.execute("""SELECT * FROM messages WHERE sender_id=? AND store_id=? AND direction='incoming'
-        AND id<=? AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'
+        AND id<=? AND id>? AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'
         AND """ + delivery_state.ANSWERED_SQL + "),0) ORDER BY id",
-        (event['sender_id'], module.current_store_id(), incoming_id, event['sender_id'])).fetchall()
+        (event['sender_id'], module.current_store_id(), incoming_id, after_id, event['sender_id'])).fetchall()
     clips, audio_rows, total = [], {}, 0
     try:
         for row in rows:

@@ -480,7 +480,8 @@ def install(module):
                     'message': {'mid': 'zernio-' + account_id + '-' + native_id, 'text': text, 'attachments': attachments},
                     'referral': {'ad_id': context.get('ad_id'), 'ref': context.get('ref')} if context else {},
                 }]}]}
-        module._process_manychat_webhook_async(body, sender_id, platform, sender_id, background_after_intake=True)
+        module._process_manychat_webhook_async(body, sender_id, platform, sender_id, background_after_intake=True,
+                                              signed_channel=('zernio', account_id))
         return jsonify(ok=True)
 
     @module.app.get('/api/zernio/diag')

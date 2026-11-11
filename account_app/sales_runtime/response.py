@@ -50,7 +50,8 @@ class Responses:
         policy=self.policy_loader(scope.store)
         recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 15",
                                      (scope.key,)).fetchall()
-        messages=[dict(actor=row[0],**message_context(json.loads(row[1]))) for row in reversed(recent)]
+        messages=(snap['data'].get('prior_conversation', []) +
+                  [dict(actor=row[0], **message_context(json.loads(row[1]))) for row in reversed(recent)])[-15:]
         replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                       (scope.key,)).fetchall()
         accepted=[json.loads(row[0]) for row in reversed(replies)]

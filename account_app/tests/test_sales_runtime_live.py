@@ -1,4 +1,6 @@
 """Exercise the production queue with signed test events and simulated providers."""
+import hashlib
+import hmac
 import json
 import os
 import unittest
@@ -227,3 +229,104 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             db = m.get_db()
             self.assertIsNone(live.route(db, self.sender))
             self.assertEqual(['webhook', 'webhook'], [row[0] for row in db.execute('SELECT kind FROM ai_jobs ORDER BY created_at')])
+
+    def test_full_rollout_books_in_all_five_stores_through_their_existing_provider(self):
+        account = 'a' * 24
+        chatwoot_stores = ['default', 'khuyoot', 'al-fatena', 'golden-threads']
+        stores = chatwoot_stores + ['baraah-kids']
+        provider_map = {f'1:{index}': store for index, store in enumerate(chatwoot_stores, 2)}
+        self.start_patch(patch.dict(os.environ, SALES_RUNTIME_MODE='all', CHATWOOT_INBOX_STORES=json.dumps(provider_map),
+            ZERNIO_BARAAH_KIDS_ENABLED='1', ZERNIO_API_KEY='synthetic-zernio',
+            ZERNIO_WEBHOOK_SECRET='synthetic-zernio-secret',
+            ZERNIO_ACCOUNTS=json.dumps({account: {'store_id': 'baraah-kids', 'platform': 'facebook'}})))
+        product = m.load_products_from_file()[0]
+        self.start_patch(patch.object(m, 'load_products_from_file', side_effect=lambda store_id=None, **kwargs: [
+            dict(product, store_id=store_id or m.current_store_id())]))
+        zernio = self.start_patch(patch.object(m.zernio, 'send',
+            return_value={'ok': True, 'status_code': 200, 'provider_id': 'synthetic-zn-receipt'}))
+        text = f'أريد أزرق قياس 44، {self.phone}، {self.address}'
+        for index, store in enumerate(chatwoot_stores, 2):
+            conversation = dict(self.payload['conversation'], id=index + 10)
+            response = self.post(dict(self.payload, id=index + 20, inbox={'id': index}, conversation=conversation, content=text))
+            self.assertEqual(200, response.status_code, (store, response.get_json()))
+        stamp = m.now_baghdad_iso()
+        body = json.dumps(dict(event='message.received', id='synthetic-zn-event', timestamp=stamp,
+            account={'id':account,'platform':'facebook'}, conversation={'id':'fixture-zn','participantId':'fixture-parent'},
+            message=dict(id='fixture-message',direction='incoming',platform='facebook',text=text),
+            referral={'ad_id':'1234'})).encode()
+        signature = hmac.new(b'synthetic-zernio-secret', body, hashlib.sha256).hexdigest()
+        response = self.client.post('/zernio/webhook/baraah-kids', data=body, content_type='application/json',
+                                    headers={'X-Zernio-Signature':signature})
+        self.assertEqual(200, response.status_code, response.get_json())
+        with patch.object(m.ai_transport, 'post', return_value=self.model_response(self.model_plan())) as model:
+            for store in stores:
+                kind, result = self.work()
+                self.assertEqual((live.JOB_KIND,'booked'), (kind,result.get('action')), (store,result))
+        self.assertEqual(5, model.call_count)
+        self.assertEqual(4, self.transport.call_count)
+        zernio.assert_called_once()
+        self.assertIn('confirmation', zernio.call_args.kwargs['operation_key'])
+        self.assertEqual(5, self.notify.call_count)
+        with m.app.app_context():
+            db = m.get_db()
+            routes = dict(db.execute('SELECT store_id,channel FROM sales_v2_live_routes'))
+            self.assertEqual({**dict.fromkeys(chatwoot_stores,'chatwoot'),'baraah-kids':'zernio'}, routes)
+            self.assertEqual(set(stores), {row[0] for row in db.execute('SELECT store_id FROM orders')})
+            self.assertEqual(set(stores) - {'golden-threads'},
+                             {row[0] for row in db.execute('SELECT local_store FROM menger_deliveries')})
+        status = self.client.get('/health').get_json()['sales_runtime']
+        self.assertEqual('all', status['mode'])
+        self.assertTrue(all(store['active'] and store['percent'] == 100 for store in status['stores']))
+
+    def seed_legacy_messages(self, last_reply, meta=None, *, later_reply=None):
+        with m.app.app_context():
+            token = m._current_store_id.set('khuyoot')
+            try:
+                db = m.get_db()
+                m.get_or_create_customer(db, self.sender, '1', 'instagram')
+                m.save_message(db, self.sender, 'incoming', 'text', 'هذا القميص شتوي؟')
+                m.save_message(db, self.sender, 'outgoing', 'text', last_reply, raw_payload=meta or {})
+                if later_reply:
+                    m.save_message(db, self.sender, 'incoming', 'text', 'شوكت يوصلني الطلب؟')
+                    m.save_message(db, self.sender, 'outgoing', 'text', later_reply)
+            finally:
+                m._current_store_id.reset(token)
+
+    def test_settled_legacy_thread_is_adopted_with_history_as_context_only(self):
+        self.start_patch(patch.dict(os.environ, SALES_RUNTIME_MODE='all'))
+        self.seed_legacy_messages('إي حبيبتي، قماشه شتوي.')
+        self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')
+        with patch.object(m.ai_transport, 'post', return_value=self.model_response(self.model_plan())) as model:
+            self.assertEqual('booked', self.work()[1]['action'])
+        context = json.loads(model.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertEqual('هذا القميص شتوي؟', context['recent_messages'][0]['text'])
+        with m.app.app_context():
+            db = m.get_db()
+            self.assertEqual(1, db.execute("SELECT COUNT(*) FROM sales_v2_events WHERE kind='message'").fetchone()[0])
+            self.assertEqual(1, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_active_legacy_checkout_retains_its_draft_during_full_rollout(self):
+        self.start_patch(patch.dict(os.environ, SALES_RUNTIME_MODE='all'))
+        self.seed_legacy_messages('باقي العنوان حتى أثبتلج', {'checkout_draft':{'product_id':'P1'}},
+                                  later_reply='يوصلج خلال 24 ساعة إلى يومين.')
+        self.incoming(10, self.address)
+        with m.app.app_context():
+            db = m.get_db()
+            self.assertIsNone(live.route(db, self.sender))
+            self.assertEqual('webhook', db.execute('SELECT kind FROM ai_jobs').fetchone()[0])
+
+    def test_returning_buyer_can_place_new_order_after_a_delivered_one(self):
+        self.start_patch(patch.dict(os.environ, SALES_RUNTIME_MODE='all'))
+        self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')
+        with patch.object(m.ai_transport, 'post', return_value=self.model_response(self.model_plan())):
+            self.assertEqual('booked', self.work()[1]['action'])
+        with m.app.app_context():
+            db = m.get_db()
+            db.execute("UPDATE orders SET status='delivered'")
+            db.commit()
+        self.incoming(11, f'أريد ماروني قياس 44، {self.phone}، {self.address}')
+        with patch.object(m.ai_transport, 'post', return_value=self.model_response(self.model_plan(color='ماروني'))):
+            self.assertEqual('booked', self.work()[1]['action'])
+        with m.app.app_context():
+            self.assertEqual([('أزرق','delivered'),('ماروني','new')],
+                             [tuple(row) for row in m.get_db().execute('SELECT color,status FROM orders ORDER BY id')])
