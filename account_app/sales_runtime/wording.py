@@ -72,18 +72,23 @@ def next_options(product, question):
 
 
 def validate_next_step(parts, step):
-    """A recorded offer or checkout prompt must actually ask its planned question."""
+    """Check the planned request in a question or a natural Iraqi imperative."""
     question = step['field']
     if not question:
         return
     texts = [part['text'] for part in parts if part.get('type') == 'text']
-    marks = sum(len(re.findall(r'[؟?]', text)) for text in texts)
-    if not texts or marks != 1 or not re.search(r'[؟?][^\w؟?]*$', texts[-1]):
-        raise ValueError('reply.next_step: end with exactly one question about the planned field')
-    last = re.split(r'[.!\n]', checkout.normalized(re.split(r'[؟?]', texts[-1])[0]).strip())[-1]
+    marks = sum(len(re.findall(r'[؟?]+', text)) for text in texts)
+    if not texts or marks > 1 or marks and not re.search(r'[؟?]+[^\w؟?]*$', texts[-1]):
+        raise ValueError('reply.next_step: end with one request about the planned field')
+    last = checkout.normalized(re.split(r'[؟?]', texts[-1])[0]).strip().rstrip('.!')
+    last = re.split(r'[.!\n]', last)[-1]
+    if not marks and not re.search(
+            r'دز|ارسل|نط|عط|قولي|[گك]ولي|خبر|باقي|اختار|تختار|حدد|تحدد|شنو|شكد|وين|'
+            r'يا\s*لون|اي\s*(?:لون|قياس|محافظ)|تحب|تريد|يناسب|نمشي|نكمل|موافق', last):
+        raise ValueError('reply.next_step: make the next request clear')
     required = {
         'contact.phone': (r'رقم|موبايل|تلفون|هاتف',),
-        'contact.address': (r'عنوان|منطق',),
+        'contact.address': (r'عنوان|منطق|وين.*(?:اوصل|نوصل|توصيل)',),
         'contact.details': (r'رقم|موبايل|تلفون|هاتف', r'عنوان|منطق'),
         'contact.province': (r'محافظ|مدين',),
         'quote.province': (r'محافظ|مدين',),

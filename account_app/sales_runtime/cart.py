@@ -64,9 +64,10 @@ class Catalog:
                 if weight_ranges and re.fullmatch(r'\d{1,3}(?:\.\d+)?',value):
                     error='' if any(lo<=float(value)<=hi for lo,hi in weight_ranges) else 'الوزن خارج نطاق هذا المنتج'
                 elif (field == 'size' and product_variants.is_free_size_product(product)
-                      and not product_variants.size_data(product['sizes'])['known']
-                      and not product_variants.FREE_SIZE_RE.fullmatch(checkout.normalized(value))):
-                    error = 'الموديل فري سايز وما مسجّل إله هالقياس'
+                      and not product_variants.size_data(product['sizes'])['known']):
+                    label = checkout.normalized(product_variants.normalize_size_words(value)).strip()
+                    allowed = product_variants.FREE_SIZE_RE.fullmatch(label) or (label == 'l' and system in {'legacy', 'clothing'})
+                    error = '' if allowed else 'الموديل فري سايز وما مسجّل إله هالقياس'
                 else:error = product_variants.order_choice_error(product, field, value)
                 if error:
                     raise BusinessChoice(error,product_id=product['product_id'],field=field,
@@ -132,6 +133,9 @@ class CartService:
                 # Unit metadata belongs to the catalog, never the language model.
                 line['size_system']=product.get('size_system') or 'legacy'
                 if values.get('size'):line['size_source_kind']='explicit'
+                if (line['size_system'] in {'legacy', 'clothing'} and product_variants.is_free_size_product(product)
+                        and checkout.normalized(product_variants.normalize_size_words(line.get('size'))).strip() == 'l'):
+                    line['size'] = 'L'
                 if line['size_system']=='legacy':
                     age=line.pop('age_months',None)
                     weight=line.pop('weight_kg',None)

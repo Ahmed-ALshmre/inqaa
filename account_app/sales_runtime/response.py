@@ -287,6 +287,7 @@ class Responses:
             next_step=dict(field=question, options=next_options(step_product, question)),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
                           contact_turn=contact_turn, recap_selection=recap,
+                          free_size=product_variants.is_free_size_product(product),
                           quantity=sum(row['quantity'] for row in lines), fit=fit,
                           quantity_confirmed=one_piece or quantity_objection,
                           price_unit_quantity=price_units, negotiation=bargaining,

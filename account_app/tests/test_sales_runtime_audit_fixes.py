@@ -73,6 +73,20 @@ class AuditFixTests(unittest.TestCase):
         retry = json.loads(post.call_args.kwargs['json']['messages'][-1]['content'])
         self.assertIn('reply.money',retry['validation_feedback'])
 
+    def test_writer_retries_an_incomplete_response_as_validated_plain_text(self):
+        self.products[0]['sizes'] = 'فري سايز من 55 كيلو الى 130 كيلو'
+        event,out = self.run_turn('أريد قياس لرج',changes=[dict(values=dict(product_id='P1',size='لرج'))])
+        draft = 'هالموديل فري سايز عيوني، وسجلت لج لارج. اختاري اللون اللي يعجبج.'
+        post = Mock(side_effect=[
+            Mock(status_code=200,json=lambda: {'choices':[{'finish_reason':'length','message':{'content':draft}}]}),
+            Mock(status_code=200,json=lambda: {'choices':[{'finish_reason':'stop','message':{'content':draft}}]}),
+        ])
+        reply = self.reply(event,out,WriterGateway('test-model','test-key',post))[0]
+        self.assertEqual(draft,reply['text'])
+        self.assertTrue(reply['question_field'].endswith('.color'))
+        self.assertIn('response_format',post.call_args_list[0].kwargs['json'])
+        self.assertNotIn('response_format',post.call_args_list[1].kwargs['json'])
+
     def test_withdrawal_stops_checkout_questions(self):
         self.run_turn('أريد قياس 44',changes=[dict(values=dict(product_id='P1',size='44'))])
         event,out = self.run_turn('لا ما أريدها')
@@ -493,9 +507,21 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(30000,out['quote']['product_total'])
         self.assertTrue(out['quote']['request_satisfied'])
 
-    def test_free_size_chart_does_not_make_an_unlisted_l_size_orderable(self):
+    def test_free_size_keeps_requested_large_through_checkout(self):
         self.products[0]['sizes'] = 'فري سايز من 55 كيلو الى 130 كيلو'
         _, out = self.run_turn('اريد قياس لارج',changes=[dict(values=dict(product_id='P1',size='L',color='ماروني'))])
+        self.assertIsNone(out['business_feedback'])
+        self.assertEqual('L',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+        self.run_turn('07701234567',contact={'phone':'07701234567'})
+        _, out = self.run_turn('بغداد حي المنصور قرب المدرسة',contact={'address':'بغداد حي المنصور قرب المدرسة'})
+        self.assertEqual('booked',out['action'])
+        size,items = self.db.execute('SELECT size,order_items FROM orders').fetchone()
+        self.assertEqual('L',size)
+        self.assertEqual('L',json.loads(items)[0]['size'])
+
+    def test_free_size_does_not_add_an_unapproved_label(self):
+        self.products[0]['sizes'] = 'فري سايز من 55 كيلو الى 130 كيلو'
+        _, out = self.run_turn('اريد قياس XL',changes=[dict(values=dict(product_id='P1',size='XL',color='ماروني'))])
         self.assertEqual('size',out['business_feedback']['field'])
         self.assertEqual('',self.store.snapshot(self.scope)['data']['cart'][0]['size'])
         _, out = self.run_turn('اي اريد فري سايز',changes=[dict(values=dict(product_id='P1',size='فري سايز'))])
