@@ -1,7 +1,20 @@
 """Evidence-backed purchase constraints; questions are not purchase conditions."""
 import re
+from .. import product_variants
 from ..checkout import normalized,explicit_purchase,is_confirmation
 from .store import digest
+
+
+def color_correction(text):
+    value = normalized(text).strip(' .!،')
+    if re.match(r'^(?:لا\s*[,،]?\s*)?(?:اريد|بدلي|خلي\w*)\s+', value):
+        return product_variants.color_replacement(value)
+    match = re.fullmatch(r'(?:لا[،,]\s*)?(?:ما\s*اريد|لا\s*اريد)\s+(.+?)[،,\s]+(?:اريد|خلي\w*|بدلي)\s+(.+)', value)
+    if match:
+        old, new = (product_variants.single_color(part.strip()) for part in match.groups())
+        if old and new and old != new:
+            return new, old
+    return None
 
 
 def explicit_cancellation(text):
@@ -25,9 +38,12 @@ def constraint(text):
 
 def purchase_selected(text):
     value=normalized(text)
-    if re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',value):return False
+    if (re.search(r'لا\s*(?:تحجز|تثبت)|الغ[يى]', value)
+            or re.search(r'ما\s*اريد|لا\s*اريد', value) and not color_correction(value)):
+        return False
     return explicit_purchase(text) or bool(re.search(r'(?<!\w)اريد(?:ه|ها|هم|هن)?(?!\w)',value)) and not bool(
-        re.search(r'اريد\s+(?:اعرف|استفسر|اسال|اشوف|خصم|تخفيض|تخيض|سعر)|شلون|بشكد|شكد\s*(?:سعر|واص)',value))
+        re.search(r'اريد\s+(?:اعرف|استفسر|اسال|اشوف|خصم|تخفيض|تخيض|(?:ال)?(?:سعر|صور|فيديو|تفاصيل|قياسات|الوان))'
+                  r'|شلون|بشكد|شكد\s*(?:سعر|واص)',value))
 
 
 def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
@@ -39,7 +55,10 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
         state.get('purchase_event') or
         reply.get('question_field') == 'purchase_intent' and reply.get('question_stage') == 'selection'
         and reply.get('cart_key') == digest(state['cart'])))
-    if (plan['intent']=='withdraw' and not bargaining and not confirmed_purchase) or re.search(r'ما\s*اريد|ماريد|لا\s*(?:تحجز|تثبت)|الغ[يى]',value):
+    corrected = color_correction(value)
+    if (re.search(r'لا\s*(?:تحجز|تثبت)|الغ[يى]', value)
+            or not corrected and (re.search(r'ما\s*اريد|لا\s*اريد', value)
+                                  or plan['intent']=='withdraw' and not bargaining and not confirmed_purchase)):
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
         state.pop('price_request',None)

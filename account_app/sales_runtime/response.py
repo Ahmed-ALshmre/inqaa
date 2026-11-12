@@ -2,7 +2,7 @@
 import json
 import re
 
-from .. import checkout, pricing, product_variants, sales_playbook, sales_voice
+from .. import checkout, pricing, product_variants, reply_layout, sales_playbook, sales_voice
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
@@ -69,6 +69,7 @@ class Responses:
             question = 'product' if mode == 'media_unresolved' else None
             context = dict(mode=mode, question_field=question, next_step=dict(field=question, options=[]),
                            recent_messages=messages, amounts={}, greeting=greeting,
+                           customer_message=current, copy_budget=230,
                            action_results=dict(order_changed=mode == 'cancelled'))
             parts = self.write(context, catalog, scope, turn_id, snap['version'])
             if question:
@@ -198,7 +199,9 @@ class Responses:
             needs_product = bool(set(requested).difference(POLICY_FIELDS)
                                  or re.search(r'اريد|اطلب|احجز|اخذ|اشتري|بدله|دشداش|هالموديل|هذا\s+الموديل', clean))
             already_requested_for_item = any(p.get('question_stage')=='product-detail' for p in photo_questions)
-            question = 'product' if not photo_questions or needs_product and not already_requested_for_item else None
+            policy_only = bool(requested and not needs_product)
+            question = ('product' if not policy_only and
+                        (not photo_questions or needs_product and not already_requested_for_item) else None)
             if question:
                 photo_stage = 'product-detail' if needs_product else 'product-opening'
         if question is None and not readiness['conditions']:
@@ -333,6 +336,8 @@ class Responses:
         context = dict(
             mode=mode, state=state, facts=allowed_facts, product_facts=product_facts,
             question_field=question, goal=plan.get('goal',''), policies=policy,
+            customer_message=current, requested_fields=requested,
+            copy_budget=520 if len(requested) > 1 or quote_turn or recommendations else 230,
             quote=quote if quote_turn else None, amounts=amounts, business_feedback=feedback,
             recommendations=recommendations, value_facts=value_facts,
             next_step=dict(field=question, options=next_options(step_product, question)),
@@ -414,6 +419,14 @@ class Responses:
                 part['text'] = public_product_wording(dict(reply=part['text']), list(catalog.products.values()))['reply']
             elif part.get('url') != catalog.get(part.get('product_id')).get('image_url') or not part.get('url'):
                 raise ValueError('image_not_in_catalog')
+        if strict and all(part['type'] == 'text' for part in parts):
+            text = '\n\n'.join(part['text'] for part in parts)
+            if len(reply_layout.compact(text)) > context.get('copy_budget', 520):
+                raise ValueError('reply.length: shorten to the current answer and one relevant next step')
+            layout = reply_layout.plan_sales_bubbles({'_human_sales_voice': True}, text)
+            if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > 270 for part in layout['reply_parts']):
+                raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
+            parts = [dict(type='text', text=part) for part in layout['reply_parts']]
         validate_copy(parts, question, context['action_results'])
         if strict:
             validate_next_step(parts, context['next_step'])

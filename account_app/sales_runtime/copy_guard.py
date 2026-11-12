@@ -65,7 +65,8 @@ def validate_copy(parts,question,action_results=None):
         raise ValueError('reply.identity: never deny automation or claim human identity')
     if re.search(r'(?<!\w)p\d{3}(?!\w)',text):
         raise ValueError('reply.product: internal product IDs are not customer-facing names')
-    image_request=r'(?:دز\w*|ارس\w*).{0,35}(?:صور|سكرين|اسم\s*الموديل)'
+    image_request=(r'(?:دز\w*|ارس\w*).{0,35}(?:صور|سكرين|اسم\s*الموديل)'
+                   r'|(?:ممكن|احتاج|ابعثي).{0,8}(?:صور|سكرين)')
     if re.search(image_request,text) and question!='product':
         raise ValueError('reply.question: do not repeat product identification outside the selected step')
     if re.search(r'مو\s*(?:محدد|موضح|متوفر).{0,15}(?:معلومات|بيانات)|البيانات\s*(?:غير|مو)|منشا\s*الصنع\s*مو\s*محدد',text):

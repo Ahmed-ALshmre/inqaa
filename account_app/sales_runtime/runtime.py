@@ -8,14 +8,14 @@ import re
 import time
 from copy import deepcopy
 
-from .. import checkout
+from .. import checkout, product_variants
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .references import References
 from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
-from .intent import apply_intent, purchase_selected
+from .intent import apply_intent, color_correction, purchase_selected
 from .orders import only_color_missing
 from .recovery import grounded_plan
 
@@ -76,10 +76,11 @@ def resolve_changes(plan, state, scope, event_id):
 
 
 class Runtime:
-    def __init__(self, store, catalog_loader, orders, decide,policy_loader=None, *, backup=None):
+    def __init__(self, store, catalog_loader, orders, decide,policy_loader=None, *, backup=None, text_reference=None):
         self.store, self.catalog_loader, self.orders, self.decide = store, catalog_loader, orders, decide
         self.policy_loader=policy_loader or (lambda sid:dict(inspection_policy=orders.confirmation.split('. ',1)[-1]))
         self.backup = backup
+        self.text_reference = text_reference
 
     def decision_call(self,scope,event_id,context,previous=None,error=None):
         # A duplicate webhook or worker restart cannot reset the model budget.
@@ -186,6 +187,15 @@ class Runtime:
             media = snap['data'].get('media_observations', {}).get(str(event_id))
             reference = References(self.store, catalog).resolve(
                 scope, ad=evidence['payload'].get('ad'), media=media, text=evidence['payload'].get('text',''))
+            state = snap['data']
+            if (self.text_reference and evidence['payload'].get('media_kind') == 'text'
+                    and not state['cart'] and not state.get('focus_product_id') and not state.get('order_id')
+                    and not state.get('media_observations')
+                    and (reference['status'] == 'none' or reference == {'status': 'unknown', 'source': 'ad'})):
+                hint = self.text_reference(scope, evidence['payload']['text'], catalog)
+                if hint:
+                    catalog.get(hint['product_id'])
+                    reference = dict(hint, status='known')
             try:initial_readiness=cart.readiness(scope)
             except Conflict as exc:
                 if isinstance(exc,BusinessChoice) or str(exc)=='product_not_available_in_store':
@@ -215,9 +225,14 @@ class Runtime:
                 except (DecisionRejected, DecisionUnavailable) as exc:
                     raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,exc)
                     recovered=True
+            correction = color_correction(text_now)
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
+                    if correction and not business_feedback and not state.get('order_id') and len(state['cart']) == 1:
+                        line = state['cart'][0]
+                        if product_variants.single_color(line.get('color')) == correction[1]:
+                            plan['changes'] = [dict(line_ref=line['line_id'], values=dict(color=correction[0]))]
                     def apply_proposal(state):
                         if self.orders.allow_write and not self.orders.allow_write(scope):
                             raise Conflict('turn_superseded')

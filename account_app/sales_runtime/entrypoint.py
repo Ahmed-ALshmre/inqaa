@@ -13,7 +13,8 @@ from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
 
 class Entrypoint:
     def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION,
-                 media=None, writer=None,policy_loader=None,backup=None,allow_write=None,on_booking=None):
+                 media=None, writer=None,policy_loader=None,backup=None,allow_write=None,on_booking=None,
+                 text_reference=None):
         self.store = Store(db)
         from .catalog_answers import enrich
         self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
@@ -25,7 +26,7 @@ class Entrypoint:
         self.runtime = Runtime(self.store, self.load_catalog,
                                Orders(self.store, self.load_catalog, delivery_fee, confirmation,
                                       allow_write=allow_write, on_booking=on_booking),
-                               decide,self.policy_loader,backup=backup)
+                               decide,self.policy_loader,backup=backup,text_reference=text_reference)
         self.media = media
         from .response import Responses
         self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader,backup=backup) if writer else None

@@ -70,6 +70,26 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         response.json.return_value = {'choices': [{'message': {'parsed': plan}}]}
         return response
 
+    def test_text_campaign_uses_configured_product_without_asking_for_photo(self):
+        with m.app.app_context():
+            db = m.get_db()
+            m.set_store_setting(db, 'auto_product_enabled', '1', 'khuyoot')
+            m.set_store_setting(db, 'auto_product_id', 'P1', 'khuyoot')
+        self.payload['conversation']['additional_attributes'] = {'referral': {'ad_id': 'unmapped-5678'}}
+        self.incoming(10, 'شكد سعر هالموديل؟')
+        decision = self.model_response(dict(intent='continue'))
+        wording = self.model_response({'parts': [
+            dict(type='text', text='سعره {{unit_price}} حبيبتي، شكد قياس تلبسين؟')
+        ]})
+        with patch.object(m.ai_transport, 'post', side_effect=[decision, wording]) as model:
+            self.assertEqual('continue', self.work()[1]['action'])
+        context = json.loads(model.call_args_list[0].kwargs['json']['messages'][-1]['content'])
+        self.assertEqual(dict(status='known', source='auto_product', product_id='P1'), context['reference'])
+        self.transport.assert_called_once()
+        reply = self.transport.call_args.args[2][0]['text']
+        self.assertIn('15 ألف', reply)
+        self.assertNotIn('صور', reply)
+
     def test_signed_burst_books_last_choice_and_records_confirmation_and_fulfillment_once(self):
         for mid, text in enumerate(('أريد ماروني قياس 44', self.phone, 'لا بدلي الماروني أزرق', self.address), 10):
             self.incoming(mid, text)

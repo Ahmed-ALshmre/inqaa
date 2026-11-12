@@ -115,6 +115,53 @@ class AuditFixTests(unittest.TestCase):
         self.assertNotIn('question_field',reply)
         self.assertFalse(self.store.snapshot(self.scope)['data']['purchase_event'])
 
+    def test_negative_color_correction_updates_single_line_even_if_model_withdraws(self):
+        self.run_turn('أريد الماروني 44', changes=[
+            dict(values=dict(product_id='P1', color='ماروني', size='44'))])
+        self.plan = dict(intent='withdraw')
+        event = self.event('ما أريد الماروني، أريد الأزرق')
+        result = self.runtime.turn(self.scope, event)
+        state = self.store.snapshot(self.scope)['data']
+        self.assertFalse(result['withdrawn'])
+        self.assertEqual(event, state['purchase_event'])
+        self.assertEqual([('أزرق', '44')], [(line['color'], line['size']) for line in state['cart']])
+
+    def test_request_for_photos_does_not_activate_checkout(self):
+        self.select()
+        _, result = self.run_turn('أريد الصور')
+        self.assertEqual('continue', result['action'])
+        self.assertIsNone(self.store.snapshot(self.scope)['data']['purchase_event'])
+
+    def test_default_hint_cannot_replace_a_verified_ad_or_unresolved_photo(self):
+        hint = Mock(return_value={'source': 'auto_product', 'product_id': 'P1'})
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, province: 5000,
+                           self.decide, text_reference=hint,
+                           media=lambda *args: dict(status='unknown', product_ids=[]))
+        channel = dict(store_id='khuyoot', channel='chatwoot', account_id='a')
+        entry.receive(**channel, sender_id='ad', message_id='opening', text='شكد السعر؟',
+                      ad={'ad_id': '120251717777850095'})
+        self.assertEqual('ad', self.decide.call_args.args[0]['reference']['source'])
+        entry.receive(**channel, sender_id='photo', message_id='image', media_kind='image', media_ref='test')
+        entry.receive(**channel, sender_id='photo', message_id='followup', text='شكد سعر هذا؟')
+        hint.assert_not_called()
+
+    def test_writer_splits_valid_long_reply_without_losing_approved_content(self):
+        from account_app.reply_layout import compact
+        self.products[0].update(fabric='قديفة شتوي ناعم')
+        self.select()
+        event, outcome = self.run_turn('شنو الألوان المتوفرة وقماشه شنو وشكد التوصيل؟')
+        reply = ('القماش قديفة شتوي وملمسه ناعم، يناسب إذا دا تدورين على شي دافي للبيت. '
+                 'الألوان المتوفرة ماروني وأزرق هالفترة. '
+                 'التوصيل لبغداد {{delivery_fee}} وتدفعين عند الاستلام بعد الفحص.')
+        model = Mock(return_value=Mock(status_code=200, json=lambda: {
+            'choices': [{'message': {'parsed': {'parts': [dict(type='text', text=reply)]}}}]
+        }))
+        parts = self.reply(event, outcome, WriterGateway('test-model', 'test-key', model),
+                           policy={'delivery_fee': {'بغداد': 5000}})
+        self.assertGreater(len(parts), 1)
+        self.assertEqual(compact(reply.replace('{{delivery_fee}}', '5 آلاف')),
+                         compact(' '.join(part['text'] for part in parts)))
+
     def test_yalla_tamam_resumes_checkout_after_price_discussion(self):
         self.products[0].update(price='16000',colors='أسود، رصاصي')
         event,out=self.run_turn('أريد أسود ورصاصي قياس 44',changes=[
