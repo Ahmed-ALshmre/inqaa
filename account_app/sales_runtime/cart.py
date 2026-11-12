@@ -143,7 +143,9 @@ class CartService:
                         line['size']=f'{age//12} سنوات' if age%12==0 else f'{age} شهر'
                         line['size_source_kind']='age'
                     if (weight is not None and 'size' not in values and product_variants.weight_only_ranges(product)
-                            and (not line.get('size') or line.get('size_source_kind')=='weight')):
+                            and (not line.get('size') or line.get('size_source_kind')=='weight'
+                                 or (not product_variants.is_free_size_product(product)
+                                     and product_variants.SIZE_RE.fullmatch(line['size'])))):
                         line['size']=format(weight,'g')
                         line['size_source_kind']='weight'
                 self.catalog.validate(line)
@@ -214,7 +216,11 @@ class CartService:
             system = line['size_system']
             if system == 'legacy' and not product.get('sizes'):
                 missing.append(f"catalog.{line['product_id']}.size_system")
-            if system in {'legacy', 'clothing', 'shoe'} and (product.get('sizes') or system == 'shoe') and not line.get('size'):
+            unsupported_weight_label = (product.get('selection_mode') == 'weight'
+                                        and not product_variants.is_free_size_product(product)
+                                        and product_variants.SIZE_RE.fullmatch(line.get('size') or ''))
+            if (system in {'legacy', 'clothing', 'shoe'} and (product.get('sizes') or system == 'shoe')
+                    and (not line.get('size') or unsupported_weight_label)):
                 missing.append(f"cart.{line['line_id']}.size")
             if system in {'age', 'weight'}:
                 field = 'age_months' if system == 'age' else 'weight_kg'
@@ -236,9 +242,8 @@ class CartService:
         for line in snap['data']['cart']:
             self.catalog.validate(line)
         result = pricing.quote(snap['data']['cart'], list(self.catalog.products.values()), delivery)
-        result['total'] = result['product_total'] + result['delivery_fee']
-        free=all(pricing.terms(self.catalog.get(line['product_id']))[2] for line in snap['data']['cart'])
-        if delivery is None and not free:result.update(total=None,delivery_fee=None)
+        fee = result['delivery_fee']
+        result['total'] = None if fee is None else result['product_total'] + fee
         result['state_version'] = snap['version']
         result['catalog_revision'] = self.catalog.revision
         from .negotiation import adjust

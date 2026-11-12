@@ -67,6 +67,37 @@ def _retail_price(raw):
     return prices.pop()
 
 
+def delivery_terms(product):
+    """Return the minimum free quantity and any documented nationwide fee."""
+    shipping = clean(product.get('delivery')).strip()
+    fixed = re.fullmatch(r'(?:ال)?توصيل\s+(?:بـ?\s*)?(' + _PRICE_AMOUNT +
+                         r')\s*(?:د\.?ع\.?|دينار)?\s*(?:ل(?:كل|جميع)\s+(?:ال)?محافظات)?[.!]?', shipping)
+    if fixed:
+        fee = money(fixed[1])
+        return (None, fee) if fee else (1, None)
+    for source in (shipping, clean(product.get('offer'))):
+        free = re.search(r'(?:ال)?توصيل\s+مجاني', source)
+        if not free:
+            continue
+        if re.search(r'(?:مو|ماكو|ليس|غير)\s*$', source[:free.start()]):
+            continue
+        tail = source[free.end():]
+        condition = re.match(r'\s*(?:ل(?:ي)?\s*|عند\s+(?:شراء\s+)?|للـ?\s*|مع\s+|على\s+)'
+                             r'(?:(?:ال)?قطعت(?:ين|ان)|(\d+)\s*قطع[ةه]?)', tail)
+        if condition:
+            return (int(condition[1]) if condition[1] else 2), None
+        # Offer text can put the quantity before the delivery clause.
+        if source != shipping:
+            offers = {int(m[1]) if m[1] else 2 for m in _OFFER_QUANTITY.finditer(source[:free.start()])}
+            if len(offers) == 1:
+                return offers.pop(), None
+        if not re.match(r'\s*(?:فقط|اذا|بشرط|عند|مع|على|ل(?:ي\s|\w))', tail):
+            return 1, None
+        if re.fullmatch(r'\s*ل(?:كل|جميع)\s+(?:ال)?محافظات[.!]?', tail):
+            return 1, None
+    return None, None
+
+
 def terms(product):
     raw = clean(product.get("price"))
     # The price field defines the sale unit. Notes and offers may describe the
@@ -86,9 +117,8 @@ def terms(product):
         price = money(re.sub(r"\d+\s*قطع", "", raw))
     if price <= 0 or size <= 0:
         raise ValueError("سعر المنتج أو عدد قطع البكج غير صحيح")
-    shipping = clean(product.get("delivery"))
-    free = bool(re.search(r"توصيل\s+مجاني", shipping + " " + clean(product.get("offer"))))
-    return size, price, free
+    free_quantity, _ = delivery_terms(product)
+    return size, price, bool(free_quantity and size >= free_quantity)
 
 
 def offer_tiers(product):
@@ -171,10 +201,13 @@ def quote(items, catalog, default_delivery):
     groups = {}
     for item in items:
         groups.setdefault(str(item["product_id"]), []).append(item)
-    priced, summaries, total, all_free = [], [], 0, True
+    priced, summaries, total, fees = [], [], 0, []
     for pid, rows in groups.items():
-        size, price, free = terms(products[pid])
+        size, price, _ = terms(products[pid])
         count = sum(int(i.get("quantity") or 1) for i in rows)
+        free_quantity, fixed_fee = delivery_terms(products[pid])
+        fees.append(0 if free_quantity and count >= free_quantity
+                    else fixed_fee if fixed_fee is not None else default_delivery)
         if count % size:
             raise ValueError(f"{products[pid].get('product_name', '')} يباع بكج من {size} قطع؛ اختاري عدد قطع من مضاعفات {size} قبل التثبيت")
         if size == 1:
@@ -182,7 +215,6 @@ def quote(items, catalog, default_delivery):
         else:
             amount, promotions, regular_count = count // size * price, [], 0
         total += amount
-        all_free = all_free and free
         summaries.append(dict(product_id=pid, bundle_size=size, bundles=count // size,
                               amount=amount, items=rows, promotions=promotions,
                               regular_count=regular_count, regular_price=price))
@@ -196,5 +228,5 @@ def quote(items, catalog, default_delivery):
                     basis = "offer_allocation" if promotions else "package_allocation" if size > 1 else "unit"
                     priced.append(dict(row, quantity=n, unit_price=unit, price_basis=basis))
             remainder -= high
-    return dict(items=priced, groups=summaries, product_total=total,
-                delivery_fee=0 if all_free and items else int(default_delivery or 0))
+    delivery = None if None in fees else max((int(fee) for fee in fees), default=int(default_delivery or 0))
+    return dict(items=priced, groups=summaries, product_total=total, delivery_fee=delivery)

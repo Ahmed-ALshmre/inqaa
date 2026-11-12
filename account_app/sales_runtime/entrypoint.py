@@ -16,7 +16,7 @@ from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
 class Entrypoint:
     def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION,
                  media=None, writer=None,policy_loader=None,backup=None,allow_write=None,on_booking=None,
-                 text_reference=None, product_photos=None):
+                 text_reference=None, product_photos=None, on_photo_focus=None):
         self.store = Store(db)
         from .catalog_answers import enrich
         self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
@@ -28,7 +28,8 @@ class Entrypoint:
         self.runtime = Runtime(self.store, self.load_catalog,
                                Orders(self.store, self.load_catalog, delivery_fee, confirmation,
                                       allow_write=allow_write, on_booking=on_booking),
-                               decide,self.policy_loader,backup=backup,text_reference=text_reference)
+                               decide,self.policy_loader,backup=backup,text_reference=text_reference,
+                               on_photo_focus=on_photo_focus)
         self.media = media
         from .response import Responses
         self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader,backup=backup,
@@ -94,14 +95,17 @@ class Entrypoint:
                                 dict(category=category),handle)['result']
 
     def _receive(self, *, store_id, channel, account_id, sender_id, message_id,
-                text='', ad=None, media_kind='text', actor='customer', ai_enabled=True, media_ref=None):
+                text='', ad=None, media_kind='text', actor='customer', ai_enabled=True, media_ref=None,
+                staff_sold_out_product=None):
         if channel not in {'chatwoot', 'zernio'}:
             raise ValueError('unsupported_channel')
         if media_kind not in {'text', 'image', 'sticker', 'video', 'audio', 'file'}:
             raise ValueError('unsupported_media')
         scope = Scope(store_id, channel, account_id, sender_id)
-        event = self.store.append(scope, message_id, kind='message', actor=actor,
-                                  payload=dict(text=text, ad=ad or {}, media_kind=media_kind, media_ref=media_ref))
+        payload = dict(text=text, ad=ad or {}, media_kind=media_kind, media_ref=media_ref)
+        if staff_sold_out_product:
+            payload['staff_sold_out_product'] = staff_sold_out_product
+        event = self.store.append(scope, message_id, kind='message', actor=actor, payload=payload)
         if event['duplicate']:
             latest = self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",
                                            (scope.key,)).fetchone()[0]
@@ -194,9 +198,6 @@ class Entrypoint:
                 if asked:
                     return self.handoff_service(scope, event['id'], 'product_image_unresolved_after_retry')
                 return self.clarify_image(scope, event['id'], multiple=isinstance(media_ref, list) and len(media_ref)>1)
-            products_in_cart = {line['product_id'] for line in saved['data']['cart']}
-            if products_in_cart and observed['product_ids'][0] not in products_in_cart:
-                return self.handoff_service(scope, event['id'], 'image_changes_existing_cart')
         return self.finish_turn(scope, event['id'])
 
     def finish_turn(self, scope, event_id):

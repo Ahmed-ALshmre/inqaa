@@ -33,7 +33,7 @@ try:
     from .reply_layout import approved_parts, plan_sales_bubbles, polish_surface_punctuation
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
-    from .pricing import quote as price_order, expand_bundles
+    from .pricing import quote as price_order, expand_bundles, delivery_terms
     from .checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media, reply_consultant
@@ -48,7 +48,7 @@ except ImportError:
     from reply_layout import approved_parts, plan_sales_bubbles, polish_surface_punctuation
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
-    from pricing import quote as price_order, expand_bundles
+    from pricing import quote as price_order, expand_bundles, delivery_terms
     from checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 from flask import Flask, g, has_app_context, has_request_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
@@ -2533,7 +2533,7 @@ def get_or_create_customer(db, sender_id, page_id, platform=None):
 
 def remember_customer_product(
     db, sender_id, product, match_method, confidence=0,
-    source=None, status="active", notes=None,
+    source=None, status="active", notes=None, *, commit=True,
 ):
     """حفظ كل موديل تعرّف عليه النظام لهذا الزبون كقائمة اهتمامات."""
     if not product:
@@ -2565,11 +2565,12 @@ def remember_customer_product(
             notes,
         ),
     )
-    db.commit()
-    print(
-        f"[CustomerProduct] Remembered {product.get('product_id')} for {sender_id}",
-        flush=True,
-    )
+    if commit:
+        db.commit()
+        print(
+            f"[CustomerProduct] Remembered {product.get('product_id')} for {sender_id}",
+            flush=True,
+        )
 
 
 def complete_customer_product_link(db, sender_id, product, match_method, confidence=100, source="", resume_ai=True, preserve_existing=False, close_reviews=True):
@@ -8406,9 +8407,16 @@ def store_policy_parts(topics, text='', matched_product=None):
             delivery = f"التوصيل لبغداد {customer_copy.chat_amount(settings['baghdad_fee'])}، وبقية المحافظات {customer_copy.chat_amount(settings['other_fee'])}."
         if matched_product:
             try:
-                if conversation_quality.terms(matched_product)[2]:
-                    delivery = 'التوصيل مجاني حسب عرض المنتج.'
+                unit, _, _ = conversation_quality.terms(matched_product)
+                free_quantity, fixed_fee = delivery_terms(matched_product)
+                count = sales_playbook.requested_quantity(text) or unit
+                if free_quantity and count >= free_quantity:
+                    delivery = ('التوصيل مجاني حسب عرض المنتج.' if free_quantity == 1
+                                else f'التوصيل مجاني عند طلب {free_quantity} قطع من هالموديل.')
                     charged_delivery = False
+                elif fixed_fee is not None:
+                    delivery = f'التوصيل {customer_copy.chat_amount(fixed_fee)} لكل المحافظات.'
+                    charged_delivery = fixed_fee > 0
             except (ValueError, TypeError, KeyError):
                 pass
         if current_store_id() == baraah.STORE_ID and charged_delivery and owner_sales.delivery_objection(text):
@@ -8504,6 +8512,20 @@ def offered_product_photo_reply(ev, products, matched, continuation=None):
     context = ev.get('_sales_context') or {}
     explicit = sales_recovery.simple_photo_request(text)
     consent = continuation and continuation.get('intent') == 'browse' and re.search(r'صور', continuation.get('question') or '')
+    offer = '\n'.join(row.get('text') or '' for row in context.get('last_staff_turn') or [])
+    wants_alternatives = sales_recovery.alternative_photo_request(
+        text, not context.get('offer_interrupted') and sales_recovery.offers_alternative_photos(offer))
+    if wants_alternatives and matched and not (ev.get('_post_order') or ev.get('image_url') or ev.get('_image_matches')):
+        available = product_links.catalog_alternatives(matched, products, request=text, limit=4)
+        if available:
+            result = dict(reply='اختاري اللي يعجبج من الصور.', image_product_ids=[p['product_id'] for p in available],
+                          _photo_preview_per_product=True, _catalog_fallback=True, _browse_only=True,
+                          _local_reply=True, create_order=False, order={}, requires_human=False)
+            images = requested_reply_images(result, products, matched, text, result['reply'])
+            if len(images) == len(available):
+                return result
+        return dict(reply='هسه ما عدنا صور لبدائل مناسبة حتى أدزها.', create_order=False, order={},
+                    requires_human=False, _browse_only=True, _local_reply=True, _suppress_product_images=True)
     selected_related = []
     if (ev.get('sender_id') and has_app_context()
             and re.search(r'(?:اشوف|أشوف|شوفيني|دزي).{0,20}(?:الثاني|الثانية)', text)):
@@ -8514,7 +8536,6 @@ def offered_product_photo_reply(ev, products, matched, continuation=None):
     if requests_alternative_photo(text) or is_product_objection(text):
         return None
     named, named_ambiguous = photo_products_named(text, products)
-    offer = '\n'.join(row.get('text') or '' for row in context.get('last_staff_turn') or [])
     offered, offered_ambiguous = (photo_products_named(offer, products)
                                  if not context.get('offer_interrupted') else ([], False))
     requested_colors = product_variants.requested(text)['colors']
@@ -8593,11 +8614,12 @@ def factual_customer_request(ev, products, matched_product=None, *, customer=Non
         fee = delivery["other_fee"]
         if matched_product:
             try:
-                if price_order([dict(product_id=matched_product["product_id"], quantity=1)], [matched_product], fee)["delivery_fee"] == 0:
-                    fee = 0
+                unit, _, _ = conversation_quality.terms(matched_product)
+                count = sales_playbook.requested_quantity(text) or unit
+                fee = price_order([dict(product_id=matched_product["product_id"], quantity=count)],
+                                  [matched_product], fee)["delivery_fee"]
             except ValueError:
-                if "مجاني" in str(matched_product.get("delivery")):
-                    fee = 0
+                pass
         price_text = "التوصيل مجاني حسب عرض المنتج." if not fee else (f"التوصيل {fee:,} د.ع لكل المحافظات." if delivery["baghdad_fee"] == delivery["other_fee"] else f"التوصيل لبغداد {delivery['baghdad_fee']:,} د.ع وبقية المحافظات {delivery['other_fee']:,} د.ع.")
         if re.search(r"متى|يمتى", clean):
             return dict(result, reply="موعد الوصول الدقيق يحتاج تأكيد المتجر؛ ما عندي موعد مؤكد حالياً.")

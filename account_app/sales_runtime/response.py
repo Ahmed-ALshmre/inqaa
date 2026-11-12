@@ -2,12 +2,12 @@
 import json
 import re
 
-from .. import checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_playbook, sales_voice
+from .. import checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_playbook, sales_strategy, sales_voice
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
-from .copy_guard import validate_copy
+from .copy_guard import ROOMY_FIT, validate_copy, validate_material
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
 from .intent import constraint, purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
@@ -102,6 +102,13 @@ class Responses:
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
+        if outcome.get('alternatives_requested') and product and self.product_photos:
+            matches = alternatives(catalog, focus, current, requested=True)['matches']
+            photos = []
+            for match in matches:
+                photos.extend(self.product_photos(catalog.get(match['product_id']), [])[:1])
+            parts = photos[:5] or [self.no_photo([], 'الموديلات البديلة المتوفرة')]
+            return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         photo_choice = outcome.get('photo_choice')
         if photo_choice and photo_choice['product_id'] != focus:
             photo_choice = None
@@ -150,8 +157,14 @@ class Responses:
                                 {'حسب قياسي','على قياسي','نفس قياسي','على نفس قياسي'})
         one_piece = (sum(row['quantity'] for row in lines) == 1 and
                      bool(re.fullmatch(r'(?:لا\s+)?(?:(?:عيني|عيوني|عمري|حبيبتي)\s+)?(?:بس|فقط)\s+(?:واحد[هة]?|قطعه|قطعة)', clean)))
-        fit = weight_fit(product, current) if set(requested) <= {'sizes'} and not purchase_turn else None
-        needs_weight = bool(product and product.get('selection_mode') == 'weight' and clothing_size_label(current)
+        previous_reply = accepted[-1] if accepted else {}
+        weight_question = (previous_reply.get('text', '')
+                           if previous_reply.get('question_key') == f'product.{focus}.weight_kg' else '')
+        fit = weight_fit(product, current, weight_question) if not purchase_turn else None
+        fit_stock = product_albums.stock_state(product) if fit else None
+        needs_weight = bool(product and product.get('selection_mode') == 'weight'
+                            and not product_variants.is_free_size_product(product) and clothing_size_label(current)
+                            and state.get('stated_clothing_size', {}).get('product_id') == focus
                             and not any(line.get('product_id') == focus and (
                                 line.get('weight_kg') or line.get('size_source_kind') == 'weight') for line in lines))
         price_pending = any(condition.get('kind') == 'price' for condition in readiness['conditions'])
@@ -161,6 +174,8 @@ class Responses:
                           price_pending and (contact_turn or purchase_turn or confirmation or selected or
                                              'price' in requested or destination(current)))
         quantity = sales_playbook.requested_quantity(current)
+        if not quantity and 'delivery_fee' in requested and re.search(r'قطعه?\s+وحد[هة]|القطع[ةه]\b', clean):
+            quantity = 1
         price_question = 'price' in requested and set(requested) <= {'price', 'delivery_fee'}
         different_quantity = bool(quote and quantity and quantity != sum(line['quantity'] for line in lines))
         per_piece = bool(quote and sum(line['quantity'] for line in lines) > 1 and
@@ -171,18 +186,21 @@ class Responses:
         price_units = retail_price = None
         promotion = None
         product_free_delivery = False
-        if product and (price_question or 'delivery_fee' in requested) and not state.get('order_id'):
+        product_fee = None
+        free_quantity = None
+        if product and all(line['product_id'] == focus for line in lines) and not state.get('order_id'):
+            free_quantity, product_fee = pricing.delivery_terms(product)
+        if product and ('price' in requested or 'delivery_fee' in requested) and not state.get('order_id'):
             try:
-                price_units, retail_price, product_free_delivery = pricing.terms(product)
+                price_units, retail_price, _ = pricing.terms(product)
+                shipping_count = quantity or sum(line['quantity'] for line in lines) or price_units
+                product_free_delivery = bool(free_quantity and shipping_count >= free_quantity)
                 if price_question and not bargaining and not state.get('purchase_event') and not (quantity and quantity > 1) and (
                         not quote_turn or sum(line['quantity'] for line in lines) == 1):
                     promotion = next(iter(pricing.offer_tiers(product)), None)
             except ValueError:
                 pass
-        product_free_delivery = product_free_delivery and all(line['product_id'] == focus for line in lines)
-        references=list(plan.get('facts',[]))
-        if product_unresolved:
-            references = [fact for fact in references if fact['product_id']=='@store']
+        references = [fact for fact in plan.get('facts', []) if fact['product_id'] in (focus, '@store')]
         if contact_turn or acknowledgment:
             references = []
         if requested:
@@ -289,7 +307,11 @@ class Responses:
             elif one_piece:
                 question = next((field for field in cart_missing if field.endswith('.color')), question)
             elif fit and fit['within_catalog_range']:
-                question = next((field for field in cart_missing if field.endswith('.color')), question)
+                question = (None if fit_stock == 'out' else
+                            next((field for field in cart_missing if field.endswith('.color')), question))
+                if (fit_stock == 'available' and question is None and lines and not cart_missing and not readiness['conditions']
+                        and not state.get('purchase_event')):
+                    question = 'purchase_intent'
             elif selected and not cart_missing and not readiness['conditions'] and not state.get('purchase_event'):
                 question = 'purchase_intent'
         if acknowledgment and not quote_turn:
@@ -313,6 +335,10 @@ class Responses:
                     stage = 'price-quantity'
         if fit and not fit['within_catalog_range'] and not feedback:
             question = None
+        if (product and product.get('selection_mode') == 'weight' and question
+                and (question == f'product.{focus}.size'
+                     or any(question == f"cart.{line['line_id']}.size" for line in lines if line['product_id'] == focus))):
+            question = f'product.{focus}.weight_kg'
         if needs_weight and not feedback and not readiness['conditions']:
             question = f'product.{focus}.weight_kg'
         if promotion and not feedback and not readiness['conditions']:
@@ -325,6 +351,13 @@ class Responses:
         if seeking_other_colors and not state.get('order_id') and not feedback and not readiness['conditions']:
             question = 'alternative.color'
             stage = 'other-colors'
+        stock_conflict = bool(outcome.get('staff_stock_conflict'))
+        if product and not state.get('order_id') and (stock_conflict or product_albums.stock_state(product) == 'out'):
+            recommendations = alternatives(catalog, focus, current, requested=True)
+            can_send = self.product_photos and any(
+                self.product_photos(catalog.get(match['product_id']), []) for match in recommendations['matches'])
+            question = 'alternatives.photos' if can_send else None
+            stage = 'stock-alternatives'
         def question_key(field):
             if field and field.startswith('cart.'):
                 row=next((r for r in snap['data']['cart'] if r['line_id']==field.split('.')[1]),None)
@@ -365,10 +398,12 @@ class Responses:
                 amounts = quote_amounts(quote, compact=shown and not price_question)
             elif re.match(r'^(?:مع|ويا)\s+التوصيل', clean) and quote.get('total') is not None:
                 amounts = quote_amounts(quote, compact=True)
-        elif 'delivery_fee' in requested and not different_quantity:
-            fee = (quote or {}).get('delivery_fee')
+        elif 'delivery_fee' in requested:
+            fee = (quote or {}).get('delivery_fee') if not different_quantity else None
             if fee is None and product_free_delivery:
                 fee = 0
+            if fee is None:
+                fee = product_fee
             fees = policy.get('delivery_fee')
             if fee is None and isinstance(fees, dict):
                 province = destination(current) or state['contact'].get('province') or state.get('quote_province')
@@ -377,10 +412,15 @@ class Responses:
                     fee = next(iter(fees.values()))
             if type(fee) is int:
                 amounts['delivery_fee'] = fee
-        if product and 'price' in requested and not quote_turn and not different_quantity:
+        if product and 'price' in requested and not quote_turn:
             try:
                 price_units, price, _ = pricing.terms(product)
-                amounts['unit_price'] = price
+                if quantity and quantity != price_units:
+                    requested_quote = pricing.quote([dict(product_id=focus, quantity=quantity)], [product],
+                                                    amounts.get('delivery_fee'))
+                    amounts['subtotal'] = requested_quote['product_total']
+                else:
+                    amounts['unit_price'] = price
             except ValueError:
                 pass
         if promotion:
@@ -405,6 +445,18 @@ class Responses:
                         product_facts[field] = fact['value']
                     if fact and field in {'fabric', 'fabric_feel', 'season', 'cut'}:
                         value_facts[field] = fact['value']
+            if stock_conflict:
+                product_facts.pop('stock', None)
+                allowed_facts = [fact for fact in allowed_facts if fact['field'] != 'stock']
+        if fit and fit['within_catalog_range']:
+            cue = sales_strategy.persuasion_cue(product)
+            cut_notes = ' '.join((value_facts.get('cut', ''), customer_copy.fact(product.get('fit_notes'))))
+            roomy = re.search(r'(?<!\w)(?:راهي|واسع[هة]?|فضفاض[هة]?)(?!\w)', checkout.normalized(cut_notes))
+            negated = re.search(r'(?:مو|غير|ليس|ما يجي|ما تجي)\s+(?:راهي|واسع|فضفاض)', checkout.normalized(cut_notes))
+            value_facts['fit_availability'] = dict(
+                stock='unknown' if stock_conflict else fit_stock,
+                limited_stock=bool(not stock_conflict and cue and cue['kind']=='limited_stock'),
+                roomy_cut=bool(roomy and not negated))
         step_product = product
         if question and question.startswith(('cart.', 'product.')):
             step_product = catalog.get(question_key(question).split('.', 1)[1].rsplit('.', 1)[0])
@@ -416,6 +468,10 @@ class Responses:
             quote=quote if quote_turn else None, amounts=amounts, business_feedback=feedback,
             recommendations=recommendations, value_facts=value_facts,
             promotion_quantity=promotion[0] if promotion else None,
+            free_delivery_min_quantity=free_quantity if free_quantity and free_quantity > 1 else None,
+            stock_conflict=stock_conflict,
+            weight_only=bool(product and product.get('selection_mode') == 'weight' and not free_size),
+            documented_size_labels=product_variants.size_data(product.get('sizes'))['labels'] if product else [],
             next_step=dict(field=question, options=[] if question=='alternative.color' else next_options(step_product, question)),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
                           checkout_confirmed=stage=='checkout-confirmed',
@@ -459,6 +515,8 @@ class Responses:
         if question:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:text_parts[-1].update(question_field=question,question_key=question_key(question),question_stage=stage)
+            if question == 'alternatives.photos':
+                text_parts[-1]['photo_offer_product'] = focus
         if question == 'purchase_intent':
             text_parts[-1]['cart_key'] = digest(lines)
         if quote_turn:
@@ -577,8 +635,59 @@ class Responses:
                 part['text'] = public_product_wording(dict(reply=part['text']), list(catalog.products.values()))['reply']
             elif part.get('url') != catalog.get(part.get('product_id')).get('image_url') or not part.get('url'):
                 raise ValueError('image_not_in_catalog')
+        if strict:
+            text = '\n\n'.join(part['text'] for part in parts if part['type'] == 'text')
+            value_facts = context.get('value_facts', {})
+            fabric = value_facts.get('fabric') or context.get('product_facts', {}).get('fabric')
+            validate_material(text, fabric, 'fabric' in context.get('requested_fields', ()))
+            clean_copy = checkout.normalized(text)
+            if context.get('weight_only'):
+                reported_size = clothing_size_label(context['customer_message'])
+                if reported_size and reported_size.isdigit() and not context['progress'].get('fit'):
+                    # A catalog range can be quoted, but a size numeral from this turn
+                    # cannot be attributed to the customer as a second body weight.
+                    range_text = r'(?<!\d)\d{1,3}\s*(?:كيلو\s*)?(?:الى|الي|لحد|[-–])\s*\d{1,3}(?:\s*كيلو)?'
+                    for clause in re.split(r'[.!،؛\n]', clean_copy):
+                        if re.search(r'تقصد|اذا\s+قصد', clause):
+                            continue
+                        without_range = re.sub(range_text, '', clause)
+                        if re.search(rf'(?:وزن\w*.{{0,24}}(?<!\d){reported_size}(?!\d)|'
+                                     rf'(?<!\d){reported_size}\s*(?:كيلو|كغم))', without_range):
+                            raise ValueError('reply.fit: the customer stated a size, not a second body weight')
+                for clause in re.split(r'[.!،؛\n]', clean_copy):
+                    labels = {match[0].upper() for match in product_variants.SIZE_RE.finditer(clause)}
+                    positive = re.sub(r'(?:مو|غير|ليس|ما)\s+(?:متوفر|موجود|مناسب|يناسب)', '', clause)
+                    if labels.difference(context['documented_size_labels']) and re.search(
+                            r'متوفر|موجود|يناسب|مناسب|اعتمد|اختاري|خيار|يرهم', positive):
+                        raise ValueError('reply.fit: a weight range cannot verify XL or XXL garment inventory')
+                cut_notes = checkout.normalized(value_facts.get('cut', ''))
+                if re.search(ROOMY_FIT, clean_copy) and not re.search(r'راهي|واسع|فضفاض', cut_notes):
+                    raise ValueError('reply.fit: a roomy cut needs an explicit catalog fact')
+            if context.get('stock_conflict') and re.search(
+                    r'(?:هالموديل|هاللون|قياسج|نفس القطعه).{0,16}(?:متوفر|موجود)|خلصت\s+(?:كل|ال)?كمي',
+                    clean_copy):
+                raise ValueError('reply.stock: conflicting staff and catalog stock require checking')
+            for sentence in re.split(r'[.!\n،؛]', checkout.normalized(text)):
+                if re.search(r'توصيل.{0,12}(?:مو|ماكو|ليس)\s*(?:بلاش|مجاني)', sentence):
+                    continue
+                free_claim = re.search(r'توصيل.{0,12}(?:بلاش|مجاني|(?<!\d)0(?!\d))|(?:مجاني|بلاش)\s+(?:ال)?توصيل', sentence)
+                if free_claim and context['amounts'].get('delivery_fee') != 0:
+                    minimum = context.get('free_delivery_min_quantity')
+                    quantity_word = r'قطعتين|قطعتان' if minimum == 2 else rf'{minimum}\s*قطع'
+                    if not minimum or not re.search(quantity_word, sentence):
+                        raise ValueError('reply.delivery_fee: free delivery must use the quoted fee or state the exact eligible quantity')
+            availability = value_facts.get('fit_availability')
+            if availability:
+                clean = checkout.normalized(text)
+                if not availability['roomy_cut'] and re.search(ROOMY_FIT, clean):
+                    raise ValueError('reply.fit: a roomy cut needs an explicit catalog fact')
+                if not availability['limited_stock'] and 'limited_stock' in sales_strategy._claim_kinds(text):
+                    raise ValueError('reply.stock: a low-stock claim needs confirmed catalog evidence')
+                positive = re.sub(r'(?<!\w)(?:مو|ما|غير)\s+(?:متوفر\w*|موجود\w*)', '', clean)
+                if availability['stock'] != 'available' and re.search(
+                        r'(?:قياس(?:ج|چ|ك)|مقاس(?:ج|چ|ك)).{0,12}(?:متوفر|موجود)', positive):
+                    raise ValueError('reply.stock: distinguish a compatible weight from confirmed availability')
         if strict and all(part['type'] == 'text' for part in parts):
-            text = '\n\n'.join(part['text'] for part in parts)
             clean = checkout.normalized(text)
             contact = context.get('state', {}).get('contact', {})
             echoes_contact = (contact.get('phone') and checkout.phone_number(text) == contact['phone']

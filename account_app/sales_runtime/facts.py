@@ -45,22 +45,27 @@ def requested_fields(text):
              'delivery_time':'delivery_time','delivery':'delivery_fee','location':'shop_address'}
     fields=[mapping[t] for t in sales_answers.topics(text) if t in mapping]
     clean=customer_copy.normalized(text)
+    if re.search(r'(?:ال)?توصيل\s+(?:بلاش|مجاني)|(?:بلاش|مجاني)\s+(?:ال)?توصيل', clean):
+        fields.append('delivery_fee')
     if re.search(r'صناعته|صناعتها|منشا|صيني\s*لو\s*تركي|تركي\s*لو\s*صيني',clean):fields.append('origin')
     if re.search(r'بس\s*هو.{0,20}(?:جوار|جنط)|تجي.{0,20}(?:وياه|هديه)',clean):fields.append('composition')
     return list(dict.fromkeys(fields))
 
 
-def alternatives(catalog,focus,text):
+def alternatives(catalog,focus,text, *, requested=False):
     clean=customer_copy.normalized(text)
-    if not re.search(r'بديل|موديل\s*ثاني|موديلات\s*اخر|غير\s*موديل',clean):return None
+    if not requested and not re.search(r'بديل|موديل\s*ثاني|موديلات\s*اخر|غير\s*موديل',clean):return None
     from ..product_albums import stock_state
+    from ..product_links import _category
     source=catalog.get(focus) if focus else {}
+    category = _category(source) if source else None
     wanted='صيف' if 'صيف' in clean else 'شتو' if 'شتو' in clean else None
     length=product_fact(source,'length') if 'الطول' in clean else None
     matches=[]
     for product in catalog.products.values():
         if product['product_id']==focus or product.get('status','active')!='active' or stock_state(product)!='available':continue
-        if source.get('product_type') and product.get('product_type')!=source['product_type']:continue
+        if category and _category(product) != category:continue
+        if source.get('audience') and product.get('audience') not in (None, '', source['audience'], 'all', 'unisex'):continue
         season=product_fact(product,'season')
         if wanted and (not season or wanted not in season['value']):continue
         candidate_length=product_fact(product,'length')

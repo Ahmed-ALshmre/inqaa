@@ -36,20 +36,22 @@ def grounded_plan(context):
 
 
 def clothing_size_label(text):
-    clean = checkout.normalized(text)
-    match = re.search(r'(?<!\w)(?:قياسي|مقاسي|سايزي|البس\s+قياس)\s*[:=]?\s*(\d{2,3})(?!\d|\s*(?:كيلو|كغم))', clean)
-    return match[1] if match and not product_variants.weight_answer(clean) else None
+    clean = checkout.normalized(product_variants.normalize_size_words(text))
+    if product_variants.weight_answer(clean):
+        return None
+    match = re.search(r'(?<!\w)(?:قياس(?:ي)?|مقاس(?:ي)?|سايز(?:ي)?)\s*[:=]?\s*(\d{2,3})(?!\d|\s*(?:كيلو|كغم))', clean)
+    labels = list(dict.fromkeys(m[0] for m in product_variants.SIZE_RE.finditer(clean)))
+    if len(labels) == 1:
+        return labels[0].upper()
+    return match[1] if match else None
 
 
-def weight_fit(product, text):
+def weight_fit(product, text, question=''):
     if not product or product.get('selection_mode') != 'weight':
         return None
     ranges = product_variants.weight_only_ranges(product)
-    weight = product_variants.weight_answer(text)
+    weight = product_variants.weight_answer(text, question)
     value = weight and weight.get('value')
-    if not weight and not clothing_size_label(text):
-        match = re.search(r'(?:قياس|مقاس)\s*(\d{1,3}(?:\.\d+)?)(?![\d.])', checkout.normalized(text))
-        value = match[1] if match else None
     if not value or not ranges:
         return None
     fits = any(low <= float(value) <= high for low, high in ranges)

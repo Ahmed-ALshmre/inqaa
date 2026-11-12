@@ -117,12 +117,35 @@ def simple_photo_request(text):
     return bool(re.fullmatch(r'(?:(?:ممكن|اريد)\s+)?(?:اشوف|دزيلي|دزي|دزلي|ارسلي|شوفيني|وريني)\s+(?:الصور|صور|صوره|صورة|صورته|صورتها|صورهم|صورهن)(?:\s+(?:كلهن|كلهم|ثنينهن|ثنينهم|الاثنين))?', clean))
 
 
+def offers_alternative_photos(text):
+    clean = normalized(text)
+    return bool(re.search(r'(?:ادز|ارسل|اشوف|تشوف)\w*.{0,30}(?:بديل|بدائل|موديلات|خيارات|سوتات|اطقم)', clean))
+
+
+def alternative_photo_request(text, offered=False):
+    clean = normalized(text).strip(' .!؟?،')
+    if re.search(r'(?:ما|لا)\s*(?:اريد|تدز|ترسل)', clean):
+        return False
+    if re.search(r'صور|وريني|اشوف|(?:دز|رسل)\w*', clean) and re.search(
+            r'بدائل|بديل|موديلات\s+(?:ثاني[هة]|غير|اخر)|باقي\s+(?:ال)?موديلات', clean):
+        return True
+    return offered and bool(re.fullmatch(
+        r'(?:(?:اي|نعم|تمام|زين|يلا)\s+)?(?:دزي(?:لي|هن|هم|ها)?|ارسلي(?:لي|هن|هم|ها)?|'
+        r'(?:اريد\s+)?اشوف(?:هن|هم|ها)|اي|نعم)(?:\s+(?:الصور|الباقي|حبيبتي))?', clean))
+
+
 def claims_sent_models(text):
     clean = normalized(text)
     if re.search(r'(?:ما|لم|مو)\s+(?:دزيت|ارسلت|رسلت|بعثت)', clean):
         return False
-    return bool(re.search(r'(?:دزيت\w*|ارسلت\w*|رسلت\w*|بعثت\w*)\s+(?:الموديلات|البدائل|الخيارات|الصور)|شوفي\s+الخاص\s+(?:دزيت|ارسلت)|'
-                          r'(?:هسه\s+|راح\s+|رح\s+)?(?:ادز\w*|ارسل\w*)\s+(?:الموديلات|البدائل|الخيارات)', clean))
+    if re.search(r'(?:دزيت\w*|ارسلت\w*|رسلت\w*|بعثت\w*)\s+(?:الموديلات|البدائل|الخيارات|الصور)|'
+                 r'شوفي\s+الخاص\s+(?:دزيت|ارسلت)|(?:هاي|هذي|هذني|تلكين)\s+(?:ال)?(?:موديلات|بدائل)(?!\w)', clean):
+        return True
+    for clause in re.split(r'[.!؟?،\n]', clean):
+        offer = re.search(r'(?:تحبين|تريدين|تحب|تريد).{0,25}(?:ادز|ارسل)\w*', clause)
+        if not offer and re.search(r'(?:ادز\w*|ارسل\w*)\s+(?:الموديلات|البدائل|الخيارات)', clause):
+            return True
+    return False
 
 
 def promises_photo_attachment(text):

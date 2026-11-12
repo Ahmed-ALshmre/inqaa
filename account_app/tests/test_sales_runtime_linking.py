@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import re
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from account_app.tests import test_sales_runtime_foundation as foundation
 from account_app.sales_runtime import Conflict, Scope
@@ -286,6 +286,21 @@ class LinkingTests(unittest.TestCase):
         self.assertEqual([],context['state']['cart'])
         entry.receive(**args)
         media.assert_called_once()
+
+    def test_observer_uses_scoped_archive_when_the_attachment_link_expires(self):
+        from account_app.sales_runtime.preview import ImageObserver
+        image = 'data:image/png;base64,dGVzdA=='
+        url = 'https://cdn.example/expired.png'
+        fetch = Mock(return_value=None)
+        match = Mock(return_value=dict(product_found=True, product_id='P1'))
+        archived = Mock(return_value=image)
+        observer = ImageObserver(fetch, match, archived)
+        with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
+            result = observer(self.scope, 'image', [url], self.products)
+        self.assertEqual(dict(status='matched', product_ids=['P1']), result)
+        archived.assert_called_once_with(self.scope, url)
+        match.assert_called_once_with(image, self.products)
+        fetch.assert_not_called()
 
     def test_red_caption_on_verified_maroon_photo_preserves_size_and_books_once(self):
         from account_app.sales_runtime.entrypoint import Entrypoint

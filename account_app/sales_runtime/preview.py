@@ -19,9 +19,10 @@ def media_input(attachments):
 
 
 class ImageObserver:
-    def __init__(self, fetch, match):
+    def __init__(self, fetch, match, archived=None):
         self.fetch = fetch
         self.match = match
+        self.archived = archived
 
     def __call__(self, scope, kind, references, products):
         if kind != 'image':
@@ -34,16 +35,21 @@ class ImageObserver:
         for url in references:
             if not inbound_media.trusted_source(url, base):
                 return dict(status='unknown')
-            attachment = self.fetch(url, 'image', base)
-            if not attachment or attachment[1] != 'image' or len(attachment[0]) > inbound_media.MAX_BYTES:
-                return dict(status='unknown')
-            data, _, _, mime = attachment
+            image = self.archived(scope, url) if self.archived else ''
+            if image:
+                _, encoded = image.split(',', 1)
+                data = base64.b64decode(encoded, validate=True)
+            else:
+                attachment = self.fetch(url, 'image', base)
+                if not attachment or attachment[1] != 'image' or len(attachment[0]) > inbound_media.MAX_BYTES:
+                    return dict(status='unknown')
+                data, _, _, mime = attachment
+                image = f'data:{mime};base64,{base64.b64encode(data).decode("ascii")}'
             if media.known_sticker(data):
                 if len(references) == 1:
                     return dict(status='sticker')
                 return dict(status='ambiguous')
-            encoded = base64.b64encode(data).decode('ascii')
-            result = self.match(f'data:{mime};base64,{encoded}', products)
+            result = self.match(image, products)
             if not isinstance(result, dict) or result.get('service_error') or result.get('pending'):
                 raise DecisionUnavailable('vision_service_unavailable')
             if not result.get('product_found') or not result.get('product_id'):
