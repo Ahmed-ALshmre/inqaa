@@ -132,6 +132,31 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual('continue', result['action'])
         self.assertIsNone(self.store.snapshot(self.scope)['data']['purchase_event'])
 
+    def test_same_cart_does_not_repeat_purchase_question_after_topic_changes(self):
+        self.products[0]['fabric'] = 'قديفة'
+        self.select()
+        writer = Mock(side_effect=[
+            [dict(type='text', text='قماشه قديفة، تحبين أثبتلج الحجز؟')],
+            [dict(type='text', text='إي عيني، الماروني اختيارچ.')],
+        ])
+        event, out = self.run_turn('شنو خامته؟', answer=dict(question_field='purchase_intent'))
+        first = self.reply(event, out, writer)[-1]
+        self.assertEqual('purchase_intent', first['question_field'])
+        event, out = self.run_turn('ماروني', answer=dict(question_field='purchase_intent'))
+        followup = self.reply(event, out, writer)[-1]
+        self.assertNotIn('question_field', followup)
+        self.assertIsNone(self.store.snapshot(self.scope)['data']['purchase_event'])
+
+    def test_yes_after_a_purchase_question_with_a_product_answer_starts_checkout(self):
+        self.products[0]['fabric'] = 'قديفة'
+        self.select()
+        event, out = self.run_turn('شنو خامته؟', answer=dict(question_field='purchase_intent'))
+        self.reply(event, out, Mock(return_value=[dict(type='text', text='قماشه قديفة، تحبين أثبتلج الحجز؟')]))
+        event, out = self.run_turn('يله تمام')
+        self.assertEqual(event, self.store.snapshot(self.scope)['data']['purchase_event'])
+        self.assertNotIn('purchase_intent', out['readiness']['missing_fields'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
     def test_default_hint_cannot_replace_a_verified_ad_or_unresolved_photo(self):
         hint = Mock(return_value={'source': 'auto_product', 'product_id': 'P1'})
         entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, province: 5000,
@@ -261,11 +286,66 @@ class AuditFixTests(unittest.TestCase):
 
     def test_tracking_existing_order_does_not_turn_into_new_sale(self):
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide)
-        result=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='tracking',
-                             message_id='m',text='عندي طلب يمكم صار كم يوم')
-        self.assertEqual('order_tracking',result['reason'])
+        for index, text in enumerate(('عندي طلب يمكم صار كم يوم', 'شوكت يوصل طلب',
+                                      'حبيبتي طلب قبل يومين من طلبته')):
+            result=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id=f'tracking-{index}',
+                                 message_id='m',text=text)
+            self.assertEqual('order_tracking',result['reason'])
         self.decide.assert_not_called()
         self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_eta_during_new_checkout_keeps_the_cart_active(self):
+        self.select()
+        self.prompt()
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, self.decide)
+        self.plan = dict(intent='continue')
+        result = entry.receive(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                               sender_id=self.scope.sender, message_id='eta', text='شوكت يوصل الطلب؟')
+        self.assertEqual('continue', result['action'])
+        self.assertEqual('active', self.store.snapshot(self.scope)['data']['control_mode'])
+
+    def test_unrelated_model_output_cannot_erase_a_declared_phone(self):
+        self.select()
+        self.run_turn('رقمي 07701234567')
+        self.run_turn('عندج صورة من ورا؟', contact=dict(phone='ناقص'))
+        self.assertEqual('07701234567', self.store.snapshot(self.scope)['data']['contact']['phone'])
+        _, result = self.run_turn('بغداد حي المنصور قرب المدرسة')
+        self.assertEqual('booked', result['action'])
+
+    def test_second_unresolved_photo_stops_the_loop_and_keeps_declared_contact(self):
+        writer = Mock(return_value=[dict(type='text', text='حبيبتي، دزيلي صورة أوضح للموديل.')])
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, self.decide,
+                           writer=writer, media=lambda *args: dict(status='unknown', product_ids=[]))
+        target = dict(store_id='khuyoot', channel='chatwoot', account_id='a', sender_id='unresolved')
+        scope = Scope('khuyoot', 'chatwoot', 'a', 'unresolved')
+        first = entry.receive(**target, message_id='image-1', media_kind='image', media_ref='image-1')
+        self.assertEqual('media_unresolved', first['action'])
+        part = entry.store.claim_reply(scope)
+        entry.store.settle_reply(scope, part['id'], 'accepted', 'receipt')
+        second = entry.receive(**target, message_id='image-2', media_kind='image', media_ref='image-2',
+                               text='رقمي 07701234567')
+        self.assertEqual('product_image_unresolved_after_retry', second['reason'])
+        self.assertEqual('07701234567', entry.store.snapshot(scope)['data']['contact']['phone'])
+        writer.assert_called_once()
+        self.decide.assert_not_called()
+
+    def test_clothing_size_is_not_a_weight_and_a_later_weight_is_remembered(self):
+        self.products[0].update(sizes='وزن من 60 إلى 130 كيلو')
+        self.plan = dict(intent='continue', changes=[dict(values=dict(product_id='P1', weight_kg=54))])
+        event = self.store.append(self.scope, 'clothing-label', kind='message', actor='customer',
+                                  payload=dict(text='آني قياسي ٥٤', ad={'ad_id':'120251717777850095'}))['id']
+        outcome = self.runtime.turn(self.scope, event)
+        state = self.store.snapshot(self.scope)['data']
+        self.assertEqual('54', state['stated_clothing_size']['label'])
+        self.assertFalse(state['cart'][0].get('size'))
+        writer = Mock()
+        part, = self.reply(event, outcome, writer)
+        self.assertEqual('product.P1.weight_kg', part['question_field'])
+        self.assertNotIn('54 كيلو', part['text'])
+        writer.assert_not_called()
+        self.run_turn('وزني ١٠٥')
+        line, = self.store.snapshot(self.scope)['data']['cart']
+        self.assertEqual(('105', 'weight'), (line['size'], line['size_source_kind']))
 
     def test_quote_requested_discount_matches_persisted_invoice(self):
         self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])

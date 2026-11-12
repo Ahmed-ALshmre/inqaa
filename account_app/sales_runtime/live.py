@@ -5,6 +5,7 @@ import os
 import re
 from datetime import datetime, timedelta
 from functools import partial
+from urllib.parse import urlsplit
 
 from .. import ad_attribution, checkout, delivery_state, sales_playbook
 from .delivery import deliver_confirmation, deliver_replies
@@ -109,7 +110,8 @@ def start_new_purchase(db, scope, incoming_id, text, allowed):
         if not allowed(scope) or open_order(db, scope.store, scope.sender):
             raise Conflict('turn_superseded')
         state.update(initial_state())
-        for key in ('order_id', 'order_status', 'checkout_prompt', 'contact_events', 'price_request', 'quote_province'):
+        for key in ('order_id', 'order_status', 'checkout_prompt', 'contact_events', 'price_request', 'quote_province',
+                    'stated_clothing_size'):
             state.pop(key, None)
         return dict(previous_order_id=order_id)
 
@@ -352,13 +354,28 @@ def make_entry(module, db, scope, allow_write):
                 return dict(source='auto_product', product_id=product_id)
         return None
 
+    def product_photos(product, colors):
+        origin = urlsplit(module.PUBLIC_URL).netloc
+        color_by_url = {url: color for color in colors for url in module.select_product_image_urls(product, color)}
+        photos = []
+        for variant in module.product_image_variants(product):
+            url = urlsplit(variant['url'])
+            if not origin or url.scheme != 'https' or url.netloc != origin or not url.path.startswith('/product_image/'):
+                continue
+            if colors and variant['url'] not in color_by_url:
+                continue
+            photos.append(dict(type='image', url=variant['url'], product_id=product['product_id'],
+                               color=color_by_url.get(variant['url'], variant['color'])))
+        return photos
+
     return Entrypoint(db, lambda store: module.load_products_from_file(store_id=store),
         lambda store, province: module.delivery_fee_for_province(province, db),
         DecisionGateway(model, module.OPENROUTER_KEY, post), module.get_order_confirmation_text(db),
         media=media, writer=WriterGateway(model, module.OPENROUTER_KEY, post),
         backup=BackupGateway(module.OPENROUTER_KEY, post),
         policy_loader=lambda store: {'delivery_time': module.get_delivery_settings(db)['delivery_time']},
-        allow_write=allow_write, on_booking=partial(finish_order, module, db), text_reference=text_reference)
+        allow_write=allow_write, on_booking=partial(finish_order, module, db), text_reference=text_reference,
+        product_photos=product_photos)
 
 
 def delivery_callbacks(module, db, scope, incoming_id, enabled):
@@ -477,6 +494,10 @@ def process(module, db, row, incoming_id):
     external_id = f'incoming:{incoming_id}'
     prior = db.execute('SELECT payload FROM sales_v2_events WHERE scope=? AND external_id=?',
                        (scope.key, external_id)).fetchone()
+    if not prior and delivery_state.answered_turn(db, scope.store, scope.sender, incoming_id):
+        with db:
+            mark_handled()
+        return dict(ok=True, reason='already_answered')
     event, audio_pending = ((json.loads(prior[0]), False) if prior
                             else pending_input(module, db, row, incoming_id, staff_reply_id))
     if audio_pending and not sales_playbook.human_requested(event['text']):

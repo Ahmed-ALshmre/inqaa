@@ -11,13 +11,14 @@ from copy import deepcopy
 from .. import checkout, product_variants
 from .backup import BackupFailed, consult
 from .cart import CartService
+from .contact import capture as capture_contact, contact_only, declined_phone
 from .references import References
 from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
-from .intent import apply_intent, color_correction, purchase_selected
+from .intent import apply_intent, color_correction, explicit_cancellation, purchase_selected
 from .orders import only_color_missing
-from .recovery import grounded_plan
+from .recovery import catalog_photo_request, clothing_size_label, grounded_plan
 
 
 class TurnTools(Store):
@@ -168,7 +169,8 @@ class Runtime:
             raise Conflict('customer_turn_required')
         snap_now=self.store.snapshot(scope)
         text_now=checkout.normalized(evidence['payload'].get('text',''))
-        if snap_now['data'].get('order_id') and re.search(r'(?:الغي|الغاء|لغي|الغ[يه]لي)\s+(?:الطلب|الحجز|طلبي)',text_now):
+        photo_request = catalog_photo_request(text_now)
+        if snap_now['data'].get('order_id') and explicit_cancellation(text_now):
             result=self.orders.cancel(scope,key+':cancel',snap_now['version'],event_id)['result']
             outcome=dict(result,action='cancelled',state_version=result['state_version']+1)
             self.store.apply(scope,key+':done',result['state_version'],dict(event_id=event_id),lambda state:dict(outcome=outcome))
@@ -177,6 +179,7 @@ class Runtime:
             saved = json.loads(prior[0])
             plan, version = saved['plan'], saved['state_version']
         else:
+            captured = capture_contact(self.store, scope, event_id, self.orders.allow_write)
             snap = self.store.snapshot(scope)
             if snap['data']['control_mode'] != 'active':
                 raise Conflict('human_control_active')
@@ -206,6 +209,7 @@ class Runtime:
             text_products = [{key: value for key, value in product.items() if key not in image_fields} for product in active_products]
             context = dict(state=snap['data'], event=message_context(evidence['payload']), reference=reference,policies=policy,
                            products=text_products, readiness=initial_readiness,
+                           contact_received=captured.get('fields', []),
                            available_fact_fields={p['product_id']:[f for f in PRODUCT_FACT_FIELDS if resolve_fact(catalog,p['product_id'],f,policy)] for p in active_products})
             recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 30",
                                          (scope.key,)).fetchall()
@@ -215,8 +219,13 @@ class Runtime:
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
             recovered=False;used_backup=False;business_feedback=None
+            contact_turn = bool(captured.get('fields') and state['cart'] and not state.get('order_id')
+                                and (state.get('purchase_event') or state.get('checkout_prompt'))
+                                and contact_only(evidence['payload'].get('text', '')))
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
-            if (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
+            if contact_turn or photo_request and (reference.get('product_id') or state.get('focus_product_id') or state['cart']):
+                raw = dict(intent='continue')
+            elif (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
                     and not snap['data'].get('focus_product_id') and not snap['data']['cart']):
                 # An unresolved referral or "this item" supplies no evidence for a catalog choice.
                 raw=grounded_plan(context);recovered=True
@@ -226,9 +235,31 @@ class Runtime:
                     raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,exc)
                     recovered=True
             correction = color_correction(text_now)
+            label = clothing_size_label(text_now)
+            focus = reference.get('product_id') or state.get('focus_product_id') or (
+                state['cart'][0]['product_id'] if len(state['cart']) == 1 else None)
+            uses_weight = (catalog.products.get(focus) or {}).get('selection_mode') == 'weight'
+            size_label_for = focus if label and uses_weight else None
+            measured = product_variants.weight_answer(text_now) if uses_weight else None
+            weight = (measured or {}).get('value')
+            same_product = not state['cart'] or (len(state['cart']) == 1 and state['cart'][0]['product_id'] == focus)
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
+                    if size_label_for and same_product:
+                        for change in plan.get('changes', []):
+                            values = change['values']
+                            if values.get('product_id') in (None, size_label_for):
+                                values.pop('weight_kg', None)
+                                values.pop('size', None)
+                    if weight and same_product and not business_feedback and not state.get('order_id'):
+                        changes = plan.setdefault('changes', [])
+                        if not changes:
+                            changes.append(dict(values=dict(product_id=focus, weight_kg=float(weight))))
+                        elif (len(changes) == 1 and not changes[0].get('remove')
+                              and changes[0]['values'].get('product_id') in (None, focus)):
+                            changes[0]['values'].pop('size', None)
+                            changes[0]['values']['weight_kg'] = float(weight)
                     if correction and not business_feedback and not state.get('order_id') and len(state['cart']) == 1:
                         line = state['cart'][0]
                         if product_variants.single_color(line.get('color')) == correction[1]:
@@ -242,8 +273,11 @@ class Runtime:
                         invalid_fields=[]
                         for index,command in enumerate(commands):
                             session_cart.change(scope,str(index),snap['version'],event_id,**command)
-                        if plan.get('contact'):
-                            contact_result=session_cart.contact(scope,'contact',snap['version'],event_id,**plan['contact'])
+                        hinted_contacts = {field: value for field, value in plan.get('contact', {}).items()
+                                           if field not in captured.get('fields', ()) and not state['contact'].get(field)
+                                           and not (field == 'phone' and declined_phone(text_now))}
+                        if hinted_contacts:
+                            contact_result=session_cart.contact(scope,'contact',snap['version'],event_id,**hinted_contacts)
                             invalid_fields=contact_result['result']['invalid_fields']
                         for fact in plan.get('answer',{}).get('facts',[]):
                             if fact['product_id']!='@store':catalog.get(fact['product_id'])
@@ -275,8 +309,10 @@ class Runtime:
                             state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice' or c.get('field') not in changed_fields]
                         if reference.get('status')=='known':
                             state['focus_product_id']=reference['product_id']
+                        if size_label_for:
+                            state['stated_clothing_size'] = dict(product_id=size_label_for, label=label)
                         return dict(plan=plan,invalid_fields=invalid_fields,business_feedback=business_feedback,
-                                    quote=price,recovered=recovered,withdrawn=withdrawn)
+                                    quote=price,recovered=recovered,withdrawn=withdrawn,contact_turn=contact_turn)
                     saved=self.store.apply(scope,key,snap['version'],dict(event_id=event_id),apply_proposal)['result']
                     break
                 except BusinessChoice as exc:
@@ -332,7 +368,8 @@ class Runtime:
         new_contact = event_id in state.get('contact_events', {}).values()
         direct_purchase = purchase_selected(evidence['payload'].get('text', ''))
         hold_color = only_color_missing(ready) and (new_contact or direct_purchase)
-        if (ready['ready'] or hold_color) and not image_only and not missing_fact and not state.get('order_id'):
+        if ((ready['ready'] or hold_color) and not image_only and not photo_request
+                and not missing_fact and not state.get('order_id')):
             booking = self.orders.commit(scope, f'{key}:booking', version, allow_color_hold=hold_color)
             outcome = dict(action='booked', **booking['result'])
             version = booking['result']['state_version']
@@ -340,7 +377,8 @@ class Runtime:
             outcome = dict(action='continue', readiness=ready, answer_plan=plan.get('answer', {}),
                            invalid_fields=saved.get('invalid_fields',[]),business_feedback=saved.get('business_feedback'),
                            quote=saved.get('quote'),recovered=saved.get('recovered',False),
-                           withdrawn=saved.get('withdrawn',False),state_version=version)
+                           withdrawn=saved.get('withdrawn',False),contact_turn=saved.get('contact_turn',False),
+                           state_version=version)
         outcome['state_version'] = version + 1
         self.store.apply(scope, key + ':done', version, dict(event_id=event_id), lambda state: dict(outcome=outcome))
         return outcome

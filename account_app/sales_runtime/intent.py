@@ -18,7 +18,9 @@ def color_correction(text):
 
 
 def explicit_cancellation(text):
-    return bool(re.search(r'(?:الغي|الغاء|لغي|الغ[يه]لي)\s+(?:الطلب|الحجز|طلبي)',normalized(text)))
+    value = normalized(text)
+    return bool(not re.search(r'(?:لا|ما|مو)\s+(?:الغي|تلغي|تلغين)|(?:اذا|لو).{0,45}(?:الغي|الغاء)', value)
+                and re.search(r'(?:الغي|الغاء|لغي|الغ[يه]لي)\s+(?:الطلب|الحجز|طلبي|طلب)(?!\w)', value))
 
 
 def constraint(text):
@@ -53,7 +55,7 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
     reply = last_reply or {}
     confirmed_purchase = bool(is_confirmation(text) and state['cart'] and (
         state.get('purchase_event') or
-        reply.get('question_field') == 'purchase_intent' and reply.get('question_stage') == 'selection'
+        reply.get('question_field') == 'purchase_intent'
         and reply.get('cart_key') == digest(state['cart'])))
     corrected = color_correction(value)
     if (re.search(r'لا\s*(?:تحجز|تثبت)|الغ[يى]', value)
@@ -76,14 +78,14 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
         state['conditions']=[c for c in state['conditions'] if c['kind']!=pending['kind']]+[pending]
     if re.search(r'مو\s*شرط|ما\s*يحتاج|عادي\s+اي\s+وقت',value):
         state['conditions']=[c for c in state['conditions'] if c['kind']!='delivery_deadline']
-    fields=plan.get('contact') or {}
-    contextual=state.get('checkout_prompt') and bool(state['cart']) and any(
-        state['contact'].get(f) and f in fields for f in ('phone','address'))
     contacts=state.get('contact_events',{})
+    contextual=state.get('checkout_prompt') and bool(state['cart']) and any(
+        state['contact'].get(f) and contacts.get(f) == event_id for f in ('phone','address'))
     # Two independent delivery declarations in the current product conversation
     # also express checkout; a single price enquiry with contacts does not.
     declared=(bool(state['cart']) and all(state['contact'].get(f) for f in ('phone','address','province'))
-              and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address'])
+              and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address']
+              and event_id in (contacts['phone'],contacts['address'],contacts.get('province')))
     if purchase_selected(text) or contextual or declared or confirmed_purchase:
         state['purchase_event']=event_id
     return False

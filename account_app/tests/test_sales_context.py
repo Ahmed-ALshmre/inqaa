@@ -185,5 +185,5 @@ class SalesContextTests(unittest.TestCase):
             result = m.call_main_ai({'text': 'اريد احجز'}, 'text', {'phone': '07700000000', 'province': 'بغداد'}, [], [], None, None, '', [])
         self.assertEqual(model.call_count, 2)
         self.assertIn('سعره 15 ألف', result['reply'])
-        self.assertIn('ناقص بس العنوان', result['reply'])
+        self.assertIn('باقي بس العنوان', result['reply'])
         self.assertNotIn('دزيلي رقم', result['reply'])

@@ -5,6 +5,8 @@ never from customer text. Existing webhook processing is not enabled by import.
 """
 from .cart import Catalog
 from .backup import BackupSuperseded
+from .contact import capture as capture_contact, declarations
+from .intent import explicit_cancellation
 from .orders import Orders, migrate_tasks, CONFIRMATION
 from .runtime import Runtime
 from .store import Store, Scope, Conflict
@@ -14,7 +16,7 @@ from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
 class Entrypoint:
     def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION,
                  media=None, writer=None,policy_loader=None,backup=None,allow_write=None,on_booking=None,
-                 text_reference=None):
+                 text_reference=None, product_photos=None):
         self.store = Store(db)
         from .catalog_answers import enrich
         self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
@@ -29,7 +31,8 @@ class Entrypoint:
                                decide,self.policy_loader,backup=backup,text_reference=text_reference)
         self.media = media
         from .response import Responses
-        self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader,backup=backup) if writer else None
+        self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader,backup=backup,
+                                   product_photos=product_photos) if writer else None
 
     def migrate(self):
         self.store.migrate()
@@ -110,7 +113,8 @@ class Entrypoint:
             return dict(action='human', event_id=event['id'])
         if actor != 'customer' or not ai_enabled:
             return dict(action='skipped', event_id=event['id'])
-        if self.store.snapshot(scope)['data']['control_mode'] != 'active':
+        state = self.store.snapshot(scope)['data']
+        if state['control_mode'] != 'active':
             return dict(action='human', event_id=event['id'])
         from .. import sales_playbook,checkout
         import re
@@ -119,7 +123,17 @@ class Entrypoint:
                        re.search(r'يرد|مخلي|انت|انتي|بوت',clean) and not re.search(r'صور|اعلان|فيديو',clean))
         if sales_playbook.human_requested(text) or identity_typo:
             return self.handoff_service(scope,event['id'],'customer_requested_human')
-        if re.search(r'عندي\s+طلب|وين\s+(?:صار|طلبي)|طلع\s+طلب|متابع[ةه]\s+طلب',clean):
+        prior_order = bool(re.search(
+            r'عندي\s+طلب|وين\s+(?:صار|طلبي)|طلع\s+طلب|متابع[ةه]\s+طلب|ما\s*وصل\s+(?:ال)?طلب|تاخر\s+(?:ال)?طلب|'
+            r'(?:طلبت|وصيت|حجزت|طلب\s+قبل).{0,35}(?:قبل|يومين|ايام|البارحه|البارحة|بعده)', clean))
+        tracking = checkout.is_existing_order_followup(text) or bool(re.search(
+            r'(?:شوكت|يمتى|متى)\s+(?:راح\s+)?(?:يوصل|توصل)\s+(?:ال)?طلب(?!\w)', clean))
+        sending_checkout = (state['cart'] and not state.get('order_id') and not prior_order
+                             and (state.get('purchase_event') or state.get('checkout_prompt')
+                                  or declarations(text, state['contact'])))
+        if explicit_cancellation(text) and not state.get('order_id'):
+            return self.handoff_service(scope, event['id'], 'order_cancellation')
+        if prior_order or tracking and not sending_checkout and not explicit_cancellation(text):
             return self.handoff_service(scope,event['id'],'order_tracking')
         # A sticker is social context, never a request for product recognition.
         # Image/video interpretation must be supplied by an explicit media adapter.
@@ -151,6 +165,17 @@ class Entrypoint:
             if observed['status'] == 'unsupported':
                 return self.handoff_service(scope, event['id'], 'media_type_requires_staff')
             if observed['status'] != 'matched':
+                capture_contact(self.store, scope, event['id'], self.runtime.orders.allow_write)
+                previous_image = max((int(key) for key in saved['data'].get('media_observations', {})
+                                      if int(key) < event['id']), default=0)
+                asked = self.store.db.execute("""SELECT 1 FROM sales_v2_outbox AS reply
+                    JOIN sales_v2_events AS prior ON prior.scope=reply.scope AND prior.id=?
+                    JOIN sales_v2_events AS current ON current.scope=reply.scope AND current.id=?
+                    WHERE reply.scope=? AND reply.status='accepted' AND reply.reply_key=?
+                    AND current.received_at-prior.received_at<=1800 LIMIT 1""",
+                    (previous_image, event['id'], scope.key, f'clarify-image:{previous_image}')).fetchone()
+                if asked:
+                    return self.handoff_service(scope, event['id'], 'product_image_unresolved_after_retry')
                 return self.clarify_image(scope, event['id'])
             products_in_cart = {line['product_id'] for line in saved['data']['cart']}
             if products_in_cart and observed['product_ids'][0] not in products_in_cart:

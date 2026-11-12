@@ -13798,6 +13798,8 @@ def _finish_customer_webhook_async(fake_body, subscriber_id, platform, outbound_
             latest = db.execute("SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='incoming'", (subscriber_id,)).fetchone()[0]
             if latest != saved_id:
                 return
+            if delivery_state.answered_turn(db, current_store_id(), subscriber_id, saved_id):
+                return {'ok': True, 'reason': 'already_answered'}
             return _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform,
                                                           outbound_subscriber_id or subscriber_id, incoming_message_id=saved_id)
         finally:

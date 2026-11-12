@@ -90,6 +90,63 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.assertIn('15 ألف', reply)
         self.assertNotIn('صور', reply)
 
+    def test_checkout_captures_split_address_and_asks_only_for_phone_without_a_model(self):
+        self.incoming(10, 'أريد ماروني قياس 44')
+        decision = self.model_response(dict(intent='buy', changes=[
+            dict(values=dict(product_id='P1', size='44', color='ماروني'))]))
+        wording = self.model_response({'parts': [
+            dict(type='text', text='حبيبتي، دزيلي رقم الموبايل والعنوان حتى أثبت الحجز.')
+        ]})
+        with patch.object(m.ai_transport, 'post', side_effect=[decision, wording]):
+            self.assertEqual('continue', self.work()[1]['action'])
+        self.transport.reset_mock()
+        self.incoming(11, 'حي التجربة')
+        self.incoming(12, 'الموصل')
+        with patch.object(m.ai_transport, 'post') as model:
+            self.assertEqual('conversation_changed', self.work()[1]['reason'])
+            self.assertEqual('continue', self.work()[1]['action'])
+            self.transport.assert_called_once()
+            self.assertEqual('حبيبتي، باقي بس رقم الموبايل حتى أثبت الحجز.',
+                             self.transport.call_args.args[2][0]['text'])
+            self.incoming(13, self.phone)
+            self.assertEqual('booked', self.work()[1]['action'])
+            model.assert_not_called()
+        with m.app.app_context():
+            orders = m.get_db().execute('SELECT phone,province,address FROM orders').fetchall()
+            self.assertEqual([(self.phone, 'نينوى', 'حي التجربة')], [tuple(row) for row in orders])
+
+    def test_catalog_photo_request_sends_attachments_before_the_color_question(self):
+        self.incoming(10, 'دزيلي صور الألوان')
+        variants = [{'url': f'https://catalog.test/product_image/{name}.jpg', 'color': color}
+                    for name, color in [('red', 'ماروني'), ('blue', 'أزرق')]]
+        with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
+             patch.object(m, 'product_image_variants', return_value=variants), \
+             patch.object(m.ai_transport, 'post') as model:
+            self.assertEqual('continue', self.work()[1]['action'])
+        model.assert_not_called()
+        sent = [call.args[2][0] for call in self.transport.call_args_list]
+        self.assertEqual(['image', 'image', 'text'], [part['type'] for part in sent])
+        self.assertEqual([variant['url'] for variant in variants], [part['url'] for part in sent[:2]])
+        self.assertIn('لون', sent[-1]['text'])
+
+    def test_previously_accepted_reply_prevents_generation_for_the_same_incoming(self):
+        self.incoming(10, 'أثبتلج؟')
+        with m.app.app_context():
+            db = m.get_db()
+            incoming = db.execute("SELECT id FROM messages WHERE sender_id=? AND direction='incoming'",
+                                  (self.sender,)).fetchone()[0]
+            token = m._current_store_id.set('khuyoot')
+            try:
+                m.save_message(db, self.sender, 'outgoing', 'text', 'دزيلي رقم الموبايل حبيبتي.',
+                               raw_payload=dict(sender_type='ai', _reply_to_message_id=incoming,
+                                                _delivery_status='accepted'))
+            finally:
+                m._current_store_id.reset(token)
+        with patch.object(m.ai_transport, 'post') as model:
+            self.assertEqual('already_answered', self.work()[1]['reason'])
+        model.assert_not_called()
+        self.transport.assert_not_called()
+
     def test_signed_burst_books_last_choice_and_records_confirmation_and_fulfillment_once(self):
         for mid, text in enumerate(('أريد ماروني قياس 44', self.phone, 'لا بدلي الماروني أزرق', self.address), 10):
             self.incoming(mid, text)

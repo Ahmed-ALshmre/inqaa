@@ -2,7 +2,7 @@
 import json
 import re
 
-from .. import checkout, pricing, product_variants, reply_layout, sales_playbook, sales_voice
+from .. import checkout, owner_sales, pricing, product_variants, reply_layout, sales_playbook, sales_voice
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
@@ -11,15 +11,16 @@ from .copy_guard import validate_copy
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
 from .intent import purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
-from .recovery import weight_fit
-from .wording import mentions_free_size, next_options, quote_amounts, render_amounts, validate_next_step
+from .recovery import catalog_photo_request, clothing_size_label, weight_fit
+from .wording import checkout_question, mentions_free_size, next_options, quote_amounts, render_amounts, validate_next_step
 
 
 class Responses:
-    def __init__(self, store, catalog_loader, writer,policy_loader=None, *, backup=None):
+    def __init__(self, store, catalog_loader, writer,policy_loader=None, *, backup=None, product_photos=None):
         self.store, self.catalog_loader, self.writer = store, catalog_loader, writer
         self.policy_loader=policy_loader or (lambda sid:{})
         self.backup = backup
+        self.product_photos = product_photos
 
     def prepare(self, scope, turn_id, outcome):
         mode = 'withdrawn' if outcome.get('withdrawn') else outcome['action']
@@ -73,7 +74,7 @@ class Responses:
                            action_results=dict(order_changed=mode == 'cancelled'))
             parts = self.write(context, catalog, scope, turn_id, snap['version'])
             if question:
-                parts[-1].update(question_field=question, question_key=question)
+                parts[-1].update(question_field=question, question_key=question, question_stage='product-detail')
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         readiness = CartService(self.store,catalog).readiness(scope)
         plan = outcome.get('answer_plan', {})
@@ -91,6 +92,21 @@ class Responses:
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
         product_unresolved = not focus and not lines
+        if self.product_photos and product and catalog_photo_request(current):
+            colors = product_variants.requested(current)['colors']
+            photos = self.product_photos(product, colors)
+            color_key = f'product.{focus}.color'
+            if not photos:
+                what = 'لهاللون' if colors else 'لهالموديل'
+                photos = [dict(type='text', text=f'هسه ما عدنا صور {what} حتى أدزها.')]
+            elif not colors and product.get('colors') and not any(line.get('color') for line in lines) and not any(
+                    part.get('question_key') == color_key for part in accepted):
+                history = [dict(role='user', text=m.get('text')) for m in messages if m['actor'] == 'customer']
+                gender = owner_sales.address_gender('', text=current, history=history, store_id=scope.store)
+                prompt = 'أي لون عجبج؟' if gender == 'female' else 'يا لون نختار؟'
+                photos = photos[:4] + [dict(type='text', text=prompt, question_field=color_key,
+                                             question_key=color_key, question_stage='photos')]
+            return self.save(scope, key, reply_key, turn_id, snap['version'], photos[:5])
         requested=requested_fields(current)
         age_words = r'عمر|شهر|سنوات|سنه|سنة'
         previous_text = messages[-2].get('text', '') if len(messages) > 1 else ''
@@ -119,6 +135,9 @@ class Responses:
         one_piece = (sum(row['quantity'] for row in lines) == 1 and
                      bool(re.fullmatch(r'(?:لا\s+)?(?:(?:عيني|عيوني|عمري|حبيبتي)\s+)?(?:بس|فقط)\s+(?:واحد[هة]?|قطعه|قطعة)', clean)))
         fit = weight_fit(product, current) if set(requested) <= {'sizes'} and not purchase_turn else None
+        needs_weight = bool(product and product.get('selection_mode') == 'weight' and clothing_size_label(current)
+                            and not any(line.get('product_id') == focus and (
+                                line.get('weight_kg') or line.get('size_source_kind') == 'weight') for line in lines))
         price_pending = any(condition.get('kind') == 'price' for condition in readiness['conditions'])
         requested_offer = price_request(current)
         quantity_objection = bool(state.get('price_request') and quantity_pushback(current))
@@ -266,6 +285,8 @@ class Responses:
                     stage = 'price-quantity'
         if fit and not fit['within_catalog_range'] and not feedback:
             question = None
+        if needs_weight and not feedback and not readiness['conditions']:
+            question = f'product.{focus}.weight_kg'
         def question_key(field):
             if field and field.startswith('cart.'):
                 row=next((r for r in snap['data']['cart'] if r['line_id']==field.split('.')[1]),None)
@@ -281,7 +302,10 @@ class Responses:
         if question and question != 'product' and question not in outcome.get('invalid_fields',[]):
             previous = [p for p in question_records
                         if (p.get('question_key') or question_key(p.get('question_field'))) == question_key(question)]
-            if stage:
+            if question == 'purchase_intent':
+                cart_key = digest(lines)
+                previous = [p for p in previous if p.get('cart_key') == cart_key]
+            elif stage:
                 previous = [p for p in previous if p.get('question_stage') == stage]
             if question == 'price.accept':
                 previous = [p for p in previous if p.get('quote_key') == offer_key]
@@ -359,7 +383,21 @@ class Responses:
         if focus:
             from ..product_questions import guidance_for
             context['reply_guidance'] = guidance_for(product,current)
-        parts = self.write(context, catalog, scope, turn_id, snap['version'])
+        if needs_weight and question == f'product.{focus}.weight_kg' and set(requested) <= {'sizes'}:
+            parts = [dict(type='text', text='هالموديل قياساته حسب الوزن عيني، شكد الوزن تقريباً؟')]
+        elif outcome.get('contact_turn') and not requested and not quote_turn and not feedback and (
+                getattr(type(self.writer), 'structured_sales', False)):
+            if not question:
+                return dict(action='skipped')
+            if question.startswith('contact.'):
+                history = [dict(role='user', text=m.get('text')) for m in messages if m['actor'] == 'customer']
+                gender = owner_sales.address_gender('', text=current, history=history, store_id=scope.store)
+                final_detail = set(missing) == {question} or question == 'contact.details'
+                parts = [dict(type='text', text=checkout_question(question, gender, final_detail=final_detail))]
+            else:
+                parts = self.write(context, catalog, scope, turn_id, snap['version'])
+        else:
+            parts = self.write(context, catalog, scope, turn_id, snap['version'])
         if question in {'contact.phone','contact.address','contact.province','contact.details'}:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:
@@ -367,7 +405,7 @@ class Responses:
         if question:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:text_parts[-1].update(question_field=question,question_key=question_key(question),question_stage=stage)
-        if question == 'purchase_intent' and stage == 'selection' and recap:
+        if question == 'purchase_intent':
             text_parts[-1]['cart_key'] = digest(lines)
         if quote_turn:
             parts[-1]['quote_key'] = offer_key
@@ -421,6 +459,14 @@ class Responses:
                 raise ValueError('image_not_in_catalog')
         if strict and all(part['type'] == 'text' for part in parts):
             text = '\n\n'.join(part['text'] for part in parts)
+            clean = checkout.normalized(text)
+            contact = context.get('state', {}).get('contact', {})
+            echoes_contact = (contact.get('phone') and checkout.phone_number(text) == contact['phone']
+                               or contact.get('address') and checkout.normalized(contact['address']) in clean)
+            if echoes_contact or re.search(
+                    r'(?<!\w)(?:وصلن\w*|استلم\w*|سجلت\s+يمي|حفظت\s+يمي).{0,24}(?:ال)?(?:رقم|عنوان|بيانات)|'
+                    r'(?:بياناتج|بياناتچ|بياناتك)\s+(?:كامل\w*|موجود\w*|محفوظ\w*)', clean):
+                raise ValueError('reply.style: go directly to the answer or the one missing detail')
             if len(reply_layout.compact(text)) > context.get('copy_budget', 520):
                 raise ValueError('reply.length: shorten to the current answer and one relevant next step')
             layout = reply_layout.plan_sales_bubbles({'_human_sales_voice': True}, text)

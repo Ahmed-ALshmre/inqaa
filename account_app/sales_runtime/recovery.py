@@ -1,6 +1,6 @@
 """Deterministic grounded recovery when a model proposal cannot be executed."""
 import re
-from .. import checkout,product_variants,sales_playbook
+from .. import checkout,product_variants,sales_playbook,sales_recovery
 from .facts import requested_fields,POLICY_FIELDS
 from .intent import purchase_selected
 
@@ -34,13 +34,26 @@ def grounded_plan(context):
                 answer=dict(facts=facts,question_field=None,goal='answer_and_advance'))
 
 
+def catalog_photo_request(text):
+    clean = checkout.normalized(text).strip(' .،!؟?')
+    return sales_recovery.simple_photo_request(text) or bool(re.fullmatch(
+        r'(?:اريد|وين|ممكن|دزيلي|ادزي|ارسلي|ما\s*وصل(?:ت|ني)?)\s+'
+        r'(?:ال)?صور(?:ه|ها|هن|هم)?(?:\s+(?:الالوان|الموديل))?', clean))
+
+
+def clothing_size_label(text):
+    clean = checkout.normalized(text)
+    match = re.search(r'(?<!\w)(?:قياسي|مقاسي|سايزي|البس\s+قياس)\s*[:=]?\s*(\d{2,3})(?!\d|\s*(?:كيلو|كغم))', clean)
+    return match[1] if match and not product_variants.weight_answer(clean) else None
+
+
 def weight_fit(product, text):
     if not product or product.get('selection_mode') != 'weight':
         return None
     ranges = product_variants.weight_only_ranges(product)
     weight = product_variants.weight_answer(text)
     value = weight and weight.get('value')
-    if not weight:
+    if not weight and not clothing_size_label(text):
         match = re.search(r'(?:قياس|مقاس)\s*(\d{1,3}(?:\.\d+)?)(?![\d.])', checkout.normalized(text))
         value = match[1] if match else None
     if not value or not ranges:
