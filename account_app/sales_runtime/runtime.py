@@ -323,10 +323,13 @@ class Runtime:
             contact_turn = bool(captured.get('fields') and state['cart'] and not state.get('order_id')
                                 and (state.get('purchase_event') or state.get('checkout_prompt'))
                                 and contact_only(evidence['payload'].get('text', '')))
+            focus = reference.get('product_id') or state.get('focus_product_id') or (
+                state['cart'][0]['product_id'] if len({line['product_id'] for line in state['cart']}) == 1 else None)
+            explicit_photo = photo_request and bool(focus)
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
             if decline:
                 raw = dict(intent='withdraw')
-            elif contact_turn or photo_request and (reference.get('product_id') or state.get('focus_product_id') or state['cart']):
+            elif contact_turn:
                 raw = dict(intent='continue')
             elif (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
                     and not snap['data'].get('focus_product_id') and not snap['data']['cart']):
@@ -335,12 +338,14 @@ class Runtime:
             else:
                 try:raw=self.decision_call(scope,event_id,context)
                 except (DecisionRejected, DecisionUnavailable) as exc:
-                    raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,exc)
+                    if explicit_photo:
+                        # A clear request for a known product can still be served during an outage.
+                        raw = dict(intent='continue')
+                    else:
+                        raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,exc)
                     recovered=True
             correction = color_correction(text_now)
             label = clothing_size_label(text_now)
-            focus = reference.get('product_id') or state.get('focus_product_id') or (
-                state['cart'][0]['product_id'] if len(state['cart']) == 1 else None)
             size_mode = (catalog.products.get(focus) or {}).get('selection_mode')
             uses_weight = size_mode == 'weight'
             size_label_for = focus if label and uses_weight else None
@@ -355,6 +360,20 @@ class Runtime:
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
+                    if explicit_photo:
+                        # A photo-only turn cannot change the basket or the checkout fields.
+                        quote = plan.get('answer', {}).get('catalog_photos')
+                        plan = dict(intent='continue', contact={}, answer=dict(catalog_photos=quote))
+                    answer = plan.get('answer', {})
+                    photo_evidence = checkout.normalized(answer.get('catalog_photos'))
+                    if photo_evidence and not (
+                            focus and not decline and plan['intent']=='continue'
+                            and evidence['payload'].get('media_kind','text')=='text'
+                            and photo_evidence in text_now and not plan.get('changes') and not plan['contact']
+                            and not checkout.is_confirmation(text_now)
+                            and not requested_fields(text_now)
+                            and not re.search(r'(?:ما|لا)\s*(?:اريد|تدز|ترسل)|\bمو\s+(?:ال)?صور', text_now)):
+                        answer.pop('catalog_photos', None)
                     if photo_choice and same_product and not state.get('order_id'):
                         if plan['intent'] == 'withdraw':
                             plan['intent'] = 'continue'
@@ -492,6 +511,7 @@ class Runtime:
         except BusinessChoice as exc:
             ready=dict(ready=False,missing_fields=[f'product.{exc.feedback["product_id"]}.{exc.feedback["field"]}'],conditions=[],version=version)
             saved['business_feedback']=exc.feedback
+        photo_request = photo_request or bool(plan.get('answer', {}).get('catalog_photos'))
         # Only specific requested facts block booking; an optional empty description is not a gap.
         requested=set(requested_fields(evidence['payload'].get('text','')))
         missing_fact = any(fact['field'] in requested and resolve_fact(catalog,fact['product_id'],fact['field'],policy) is None

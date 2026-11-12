@@ -120,8 +120,9 @@ class LiveSalesRuntimeTests(unittest.TestCase):
                     for name, color in [('red', 'ماروني'), ('blue', 'أزرق')]]
         with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
              patch.object(m, 'product_image_variants', return_value=variants), \
-             patch.object(m.ai_transport, 'post') as model:
-            for mid, phrase in enumerate(('دزيلي صور الألوان', 'حبي وين اصور', 'حبي شوكت. تنزليهم هيه صوره'), 10):
+             patch.object(m.ai_transport, 'post', return_value=self.model_response(dict(intent='continue'))) as model:
+            for mid, phrase in enumerate(('اي اريد صوره', 'دزيلي صور الألوان', 'حبي وين اصور',
+                                          'حبي شوكت. تنزليهم هيه صوره'), 10):
                 with self.subTest(phrase=phrase):
                     self.transport.reset_mock()
                     self.incoming(mid, phrase)
@@ -132,7 +133,58 @@ class LiveSalesRuntimeTests(unittest.TestCase):
                     self.assertEqual([variant['url'] for variant in variants], [part['url'] for part in sent[:2]])
                     if mid == 10:
                         self.assertIn('لون', sent[-1]['text'])
-            model.assert_not_called()
+            self.assertEqual(4, model.call_count)
+
+    def test_photo_followup_waits_for_the_attachment_to_be_accepted(self):
+        self.incoming(10, 'إي، أريد صورة')
+        self.transport.return_value = {'ok': False, 'status_code': 422}
+        variants = [dict(url='https://catalog.test/product_image/navy.jpg', color='أزرق')]
+        with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
+             patch.object(m, 'product_image_variants', return_value=variants), \
+             patch.object(m.ai_transport, 'post', return_value=self.model_response({}, status=503)) as model:
+            self.work()
+            model.assert_called_once()
+        self.transport.assert_called_once()
+        self.assertEqual('image', self.transport.call_args.args[2][0]['type'])
+
+    def test_model_resolves_a_contextual_photo_request_and_ignores_a_stale_quote(self):
+        greeting = self.model_response(dict(intent='continue'))
+        opening = self.model_response({'parts': [
+            dict(type='text', text='سعره {{unit_price}} حبيبتي، شكد قياس تلبسين؟')]})
+        self.incoming(10, 'شكد سعر هالموديل؟')
+        with patch.object(m.ai_transport, 'post', side_effect=[greeting, opening]):
+            self.assertEqual('continue', self.work()[1]['action'])
+
+        self.payload['conversation']['additional_attributes'] = {}
+        phrase = 'إي ورّيني إياه هنانا'
+        decision = self.model_response(dict(intent='continue', answer=dict(catalog_photos=phrase)))
+        variants = [dict(url='https://catalog.test/product_image/navy.jpg', color='أزرق')]
+        self.transport.reset_mock()
+        with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
+             patch.object(m, 'product_image_variants', return_value=variants), \
+             patch.object(m.ai_transport, 'post', return_value=decision) as model:
+            self.incoming(11, phrase)
+            self.assertEqual('continue', self.work()[1]['action'])
+        model.assert_called_once()
+        request = model.call_args.kwargs['json']
+        context = json.loads(request['messages'][-1]['content'])
+        self.assertEqual('P1', context['state']['focus_product_id'])
+        self.assertEqual(phrase, context['event']['text'])
+        self.assertTrue(context['recent_replies'])
+        self.assertIn('catalog_photos', request['response_format']['json_schema']['schema']
+                      ['properties']['answer']['properties'])
+        parts = [call.args[2][0] for call in self.transport.call_args_list]
+        self.assertEqual(['image', 'text'], [part['type'] for part in parts])
+        self.assertEqual(variants[0]['url'], parts[0]['url'])
+        self.assertIn('لون', parts[1]['text'])
+
+        self.transport.reset_mock()
+        sizes = self.model_response({'parts': [dict(type='text', text='قياساته من 40 إلى 48.')]})
+        with patch.object(m.ai_transport, 'post', side_effect=[decision, sizes]):
+            self.incoming(12, 'اكو قياسات؟')
+            self.assertEqual('continue', self.work()[1]['action'])
+        self.assertEqual(['text'], [call.args[2][0]['type'] for call in self.transport.call_args_list])
+        self.assertIn('40 إلى 48', self.transport.call_args.args[2][0]['text'])
 
     def test_unresolved_photo_continues_with_configured_campaign_facts(self):
         with m.app.app_context():
@@ -172,9 +224,9 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         variants = [dict(url='https://catalog.test/product_image/red.jpg', color='ماروني')]
         with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
              patch.object(m, 'product_image_variants', return_value=variants), \
-             patch.object(m.ai_transport, 'post') as model:
+             patch.object(m.ai_transport, 'post', return_value=self.model_response(dict(intent='continue'))) as model:
             self.assertEqual('continue', self.work()[1]['action'])
-            model.assert_not_called()
+            model.assert_called_once()
         self.transport.assert_called_once()
         part, = self.transport.call_args.args[2]
         self.assertEqual('text', part['type'])

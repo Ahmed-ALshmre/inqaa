@@ -55,7 +55,8 @@ DECISION_SCHEMA = obj({
     'contact':obj({'phone':nullable('string'),'address':nullable('string')}),
     'answer':obj({'facts':dict(type='array',items=obj({'product_id':dict(type='string'),
                   'field':dict(type='string',enum=list(FACT_FIELDS))})),
-                  'question_field':nullable('string'),'goal':dict(type='string')})})
+                  'question_field':nullable('string'),'goal':dict(type='string'),
+                  'catalog_photos':nullable('string')})})
 WRITER_SCHEMA=obj({'parts':dict(type='array',items=obj({'type':dict(type='string',enum=['text']),
                                                        'text':dict(type='string')}))})
 
@@ -102,12 +103,15 @@ def validate_plan(plan):
     if any(value is not None and not isinstance(value,str) for value in contact.values()):
         raise ValueError('contact: phone and address must be source text')
     answer=plan.get('answer',{})
-    if not isinstance(answer,dict) or set(answer)-{'facts','question_field','goal'}:
-        raise ValueError('answer: expected facts,question_field,goal only')
+    if not isinstance(answer,dict) or set(answer)-{'facts','question_field','goal','catalog_photos'}:
+        raise ValueError('answer: unexpected answer field')
     if answer.get('question_field') is not None and not isinstance(answer['question_field'],str):
         raise ValueError('answer.question_field: expected text or null')
     if 'goal' in answer and not isinstance(answer['goal'],str):
         raise ValueError('answer.goal: expected text')
+    photo_evidence = answer.get('catalog_photos')
+    if photo_evidence is not None and (not isinstance(photo_evidence,str) or not 1<=len(photo_evidence.strip())<=240):
+        raise ValueError('answer.catalog_photos: use a short exact quote from the current message or null')
     facts=answer.get('facts',[])
     if not isinstance(facts,list) or len(facts)>20:
         raise ValueError('answer.facts: expected at most 20 field references')
