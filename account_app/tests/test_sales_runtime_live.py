@@ -44,8 +44,8 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return result
 
-    def incoming(self, mid, text):
-        response = self.post(dict(self.payload, id=mid, content=text))
+    def incoming(self, mid, text, **message):
+        response = self.post(dict(self.payload, id=mid, content=text, **message))
         self.assertEqual(200, response.status_code, response.get_json())
 
     def work(self):
@@ -116,18 +116,89 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertEqual([(self.phone, 'نينوى', 'حي التجربة')], [tuple(row) for row in orders])
 
     def test_catalog_photo_request_sends_attachments_before_the_color_question(self):
-        self.incoming(10, 'دزيلي صور الألوان')
         variants = [{'url': f'https://catalog.test/product_image/{name}.jpg', 'color': color}
                     for name, color in [('red', 'ماروني'), ('blue', 'أزرق')]]
         with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
              patch.object(m, 'product_image_variants', return_value=variants), \
              patch.object(m.ai_transport, 'post') as model:
+            for mid, phrase in enumerate(('دزيلي صور الألوان', 'حبي وين اصور', 'حبي شوكت. تنزليهم هيه صوره'), 10):
+                with self.subTest(phrase=phrase):
+                    self.transport.reset_mock()
+                    self.incoming(mid, phrase)
+                    self.assertEqual('continue', self.work()[1]['action'])
+                    sent = [call.args[2][0] for call in self.transport.call_args_list]
+                    self.assertEqual(['image', 'image', 'text'] if mid == 10 else ['image', 'image'],
+                                     [part['type'] for part in sent])
+                    self.assertEqual([variant['url'] for variant in variants], [part['url'] for part in sent[:2]])
+                    if mid == 10:
+                        self.assertIn('لون', sent[-1]['text'])
+            model.assert_not_called()
+
+    def test_unresolved_photo_continues_with_configured_campaign_facts(self):
+        with m.app.app_context():
+            db = m.get_db()
+            m.set_store_setting(db, 'auto_product_enabled', '1', 'khuyoot')
+            m.set_store_setting(db, 'auto_product_id', 'P1', 'khuyoot')
+        self.payload['conversation']['additional_attributes'] = {}
+        image = dict(attachments=[{'file_type': 'image', 'data_url': 'https://cdn.example/fixture.jpg'}])
+        price = self.model_response({'parts': [dict(type='text', text='سعره {{unit_price}} حبيبتي.')]})
+        sizes = self.model_response({'parts': [dict(type='text', text='إي حبيبتي، من 40 إلى 48.')]})
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='unknown')), \
+             patch.object(m.ai_transport, 'post', side_effect=[price, sizes]) as model:
+            self.incoming(10, '', **image)
             self.assertEqual('continue', self.work()[1]['action'])
-        model.assert_not_called()
-        sent = [call.args[2][0] for call in self.transport.call_args_list]
-        self.assertEqual(['image', 'image', 'text'], [part['type'] for part in sent])
-        self.assertEqual([variant['url'] for variant in variants], [part['url'] for part in sent[:2]])
-        self.assertIn('لون', sent[-1]['text'])
+            self.incoming(11, 'اكو قياسات')
+            self.assertEqual('continue', self.work()[1]['action'])
+            self.incoming(12, f'{self.phone}\n{self.address}')
+            self.assertEqual('continue', self.work()[1]['action'])
+            self.assertEqual(2, model.call_count)
+        sent = [call.args[2][0]['text'] for call in self.transport.call_args_list]
+        self.assertEqual(2, len(sent))
+        self.assertIn('15 ألف', sent[0])
+        self.assertIn('40 إلى 48', sent[1])
+        self.assertFalse(any('؟' in reply or 'دزي' in reply for reply in sent))
+        with m.app.app_context():
+            db = m.get_db()
+            state = json.loads(db.execute('SELECT data FROM sales_v2_scopes').fetchone()[0])
+            self.assertIsNone(state.get('focus_product_id'))
+            self.assertFalse(state['cart'])
+            self.assertEqual(self.phone, state['contact']['phone'])
+            self.assertIn('حي التجربة', state['contact']['address'])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+
+    def test_missing_photo_for_requested_color_returns_an_honest_answer(self):
+        self.incoming(10, 'دزيلي صور الأزرق')
+        variants = [dict(url='https://catalog.test/product_image/red.jpg', color='ماروني')]
+        with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
+             patch.object(m, 'product_image_variants', return_value=variants), \
+             patch.object(m.ai_transport, 'post') as model:
+            self.assertEqual('continue', self.work()[1]['action'])
+            model.assert_not_called()
+        self.transport.assert_called_once()
+        part, = self.transport.call_args.args[2]
+        self.assertEqual('text', part['type'])
+        self.assertIn('ما عدنا صور لهاللون', part['text'])
+
+    def test_verified_image_beats_configured_default(self):
+        products = m.load_products_from_file()
+        products.append(dict(product_id='P2', store_id='khuyoot', product_name='جاكيت اختبار',
+                             fabric='قطن', colors='أسود', price='25000', status='active', stock='متوفر'))
+        with m.app.app_context():
+            db = m.get_db()
+            m.set_store_setting(db, 'auto_product_enabled', '1', 'khuyoot')
+            m.set_store_setting(db, 'auto_product_id', 'P1', 'khuyoot')
+        image = dict(attachments=[{'file_type': 'image', 'data_url': 'https://cdn.example/other.jpg'}])
+        decision = self.model_response(dict(intent='continue'))
+        wording = self.model_response({'parts': [dict(type='text', text='قماشه قطن حبيبتي، تحبين الأسود؟')]})
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='matched', product_ids=['P2'])), \
+             patch.object(m.ai_transport, 'post', side_effect=[decision, wording]) as model:
+            self.incoming(10, 'شنو قماشه؟', **image)
+            self.assertEqual('continue', self.work()[1]['action'])
+        context = json.loads(model.call_args_list[0].kwargs['json']['messages'][-1]['content'])
+        self.assertEqual(dict(status='known', source='image', product_id='P2'), context['reference'])
+        self.transport.assert_called_once()
+        self.assertIn('قطن', self.transport.call_args.args[2][0]['text'])
 
     def test_previously_accepted_reply_prevents_generation_for_the_same_incoming(self):
         self.incoming(10, 'أثبتلج؟')

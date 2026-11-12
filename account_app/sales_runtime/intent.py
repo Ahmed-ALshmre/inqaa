@@ -88,6 +88,12 @@ def purchase_selected(text):
                   r'|شلون|بشكد|شكد\s*(?:سعر|واص)',value))
 
 
+def purchase_declined(text):
+    value = normalized(text)
+    return bool(re.search(r'لا\s*(?:تحجز|تثبت)|الغ[يى]', value) or
+                re.search(r'ما\s*اريد|لا\s*اريد', value) and not color_correction(value))
+
+
 def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
     from .negotiation import pushback, request
     text=evidence['payload'].get('text','');value=normalized(text)
@@ -98,9 +104,7 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
         reply.get('question_field') == 'purchase_intent'
         and reply.get('cart_key') == digest(state['cart'])))
     corrected = color_correction(value)
-    if (re.search(r'لا\s*(?:تحجز|تثبت)|الغ[يى]', value)
-            or not corrected and (re.search(r'ما\s*اريد|لا\s*اريد', value)
-                                  or plan['intent']=='withdraw' and not bargaining and not confirmed_purchase)):
+    if purchase_declined(value) or not corrected and plan['intent']=='withdraw' and not bargaining and not confirmed_purchase:
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
         state.pop('price_request',None)

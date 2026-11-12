@@ -157,7 +157,7 @@ class AuditFixTests(unittest.TestCase):
         self.assertNotIn('purchase_intent', out['readiness']['missing_fields'])
         self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
-    def test_default_hint_cannot_replace_a_verified_ad_or_unresolved_photo(self):
+    def test_default_hint_is_provisional_after_an_unresolved_photo(self):
         hint = Mock(return_value={'source': 'auto_product', 'product_id': 'P1'})
         entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, province: 5000,
                            self.decide, text_reference=hint,
@@ -166,9 +166,37 @@ class AuditFixTests(unittest.TestCase):
         entry.receive(**channel, sender_id='ad', message_id='opening', text='شكد السعر؟',
                       ad={'ad_id': '120251717777850095'})
         self.assertEqual('ad', self.decide.call_args.args[0]['reference']['source'])
-        entry.receive(**channel, sender_id='photo', message_id='image', media_kind='image', media_ref='test')
-        entry.receive(**channel, sender_id='photo', message_id='followup', text='شكد سعر هذا؟')
         hint.assert_not_called()
+        entry.receive(**channel, sender_id='photo', message_id='image', media_kind='image', media_ref='test')
+        result = entry.receive(**channel, sender_id='photo', message_id='followup', text='شكد سعر هذا؟')
+        self.assertEqual('P1', result['provisional_product'])
+        state = self.store.snapshot(Scope('khuyoot', 'chatwoot', 'a', 'photo'))['data']
+        self.assertIsNone(state.get('focus_product_id'))
+        self.assertFalse(state['cart'])
+        self.decide.assert_called_once()
+
+    def test_photo_promises_need_an_attachment(self):
+        from account_app.sales_runtime.copy_guard import validate_copy
+        from account_app.sales_runtime.recovery import catalog_photo_request
+        for reply in ('هسة أنزلهن الچ هنا بالدردشة', 'حبيبتي ثواني وتوصلچ الصور، دقايق وتكون يمج.',
+                      'هسه أرفق صور الألوان'):
+            with self.subTest(reply=reply), self.assertRaisesRegex(ValueError, 'reply.media'):
+                validate_copy([dict(type='text', text=reply)], None)
+        for message in ('ما أريد الصور', 'وين أصور إقامتي؟', 'وين الصور وشكد سعره؟'):
+            with self.subTest(message=message):
+                self.assertFalse(catalog_photo_request(message))
+
+    def test_known_ad_stays_available_as_photo_context_after_referral_turn(self):
+        hint = Mock(return_value={'source': 'auto_product', 'product_id': 'P2'})
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, province: 5000,
+                           self.decide, text_reference=hint,
+                           media=lambda *args: dict(status='unknown'))
+        target = dict(store_id='khuyoot', channel='zernio', account_id='a', sender_id='ad-photo')
+        first = entry.receive(**target, message_id='image', media_kind='image', media_ref='fixture',
+                              ad={'ad_id': '120251717777850095'})
+        followup = entry.receive(**target, message_id='sizes', text='اكو قياسات')
+        self.assertEqual(('P1', 'P1'), (first['provisional_product'], followup['provisional_product']))
+        self.decide.assert_not_called()
 
     def test_writer_splits_valid_long_reply_without_losing_approved_content(self):
         from account_app.reply_layout import compact
@@ -332,12 +360,13 @@ class AuditFixTests(unittest.TestCase):
         first = entry.receive(**target, message_id='image-1', media_kind='image', media_ref='image-1')
         self.assertEqual('media_unresolved', first['action'])
         part = entry.store.claim_reply(scope)
+        self.assertIn('الصورة وصلتني', part['payload']['text'])
         entry.store.settle_reply(scope, part['id'], 'accepted', 'receipt')
         second = entry.receive(**target, message_id='image-2', media_kind='image', media_ref='image-2',
                                text='رقمي 07701234567')
         self.assertEqual('product_image_unresolved_after_retry', second['reason'])
         self.assertEqual('07701234567', entry.store.snapshot(scope)['data']['contact']['phone'])
-        writer.assert_called_once()
+        writer.assert_not_called()
         self.decide.assert_not_called()
 
     def test_clothing_size_is_not_a_weight_and_a_later_weight_is_remembered(self):
