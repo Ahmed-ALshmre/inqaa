@@ -333,15 +333,20 @@ def make_entry(module, db, scope, allow_write):
         try:
             return observe(current, kind, references, products)
         except DecisionUnavailable:
-            return dict(status='unknown')
+            return dict(status='unavailable')
 
-    def text_reference(current, text, catalog):
-        if not text.strip() or module.is_product_objection(text) or checkout.is_existing_order_followup(text):
+    def text_reference(current, text, catalog, *, preferred=None):
+        if module.is_product_objection(text) or checkout.is_existing_order_followup(text):
             return None
         active = [product for product in catalog.products.values() if product.get('status', 'active') == 'active']
         named = module.first_message_named_products(text, active)
         if named:
             return dict(source='text', product_id=named[0]['product_id']) if len(named) == 1 else None
+        if preferred:
+            product = next((item for item in active if item['product_id'] == preferred), None)
+            if product and module.select_customer_context_product(text, [product]):
+                return dict(source='conversation', product_id=preferred)
+            return None
         binding = module.get_active_product_binding(db, current.sender)
         if binding:
             product = next((item for item in active if item['product_id'] == binding['product_id']), None)

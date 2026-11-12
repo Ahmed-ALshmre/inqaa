@@ -2,14 +2,14 @@
 import json
 import re
 
-from .. import checkout, owner_sales, pricing, product_variants, reply_layout, sales_playbook, sales_voice
+from .. import checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_playbook, sales_voice
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
 from .copy_guard import validate_copy
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
-from .intent import purchase_selected
+from .intent import constraint, purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
 from .recovery import catalog_photo_request, clothing_size_label, weight_fit
 from .wording import checkout_question, mentions_free_size, next_options, quote_amounts, render_amounts, validate_next_step
@@ -66,15 +66,26 @@ class Responses:
                               any(message['actor']=='staff' for message in messages))
                          and not (new_salam or new_welcome),
         )
+        if mode == 'media_unresolved':
+            prompt = ('الصور وصلن. تگدرين تحددين القطعة اللي تقصدينها باللون أو وصفها؟'
+                      if outcome.get('multiple_images') else
+                      'الصورة وصلتني. تگدرين تكتبين لون القطعة أو وصفها حتى أتأكد منها؟')
+            part = dict(type='text', text=prompt, question_field='product',
+                        question_key='product', question_stage='product-detail')
+            return self.save(scope, key, reply_key, turn_id, snap['version'], [part])
+        if outcome.get('photo_pending'):
+            result = self.answer_pending_photo(scope, turn_id, outcome, catalog, policy, current, messages,
+                                               accepted, greeting, snap['data']['contact'])
+            if isinstance(result, dict):
+                return result
+            return self.save(scope, key, reply_key, turn_id, snap['version'], result)
         if mode != 'continue':
-            question = 'product' if mode == 'media_unresolved' else None
+            question = None
             context = dict(mode=mode, question_field=question, next_step=dict(field=question, options=[]),
                            recent_messages=messages, amounts={}, greeting=greeting,
                            customer_message=current, copy_budget=230,
                            action_results=dict(order_changed=mode == 'cancelled'))
             parts = self.write(context, catalog, scope, turn_id, snap['version'])
-            if question:
-                parts[-1].update(question_field=question, question_key=question, question_stage='product-detail')
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         readiness = CartService(self.store,catalog).readiness(scope)
         plan = outcome.get('answer_plan', {})
@@ -100,8 +111,7 @@ class Responses:
             photos = self.product_photos(product, colors)
             color_key = f'product.{focus}.color'
             if not photos:
-                what = 'لهاللون' if colors else 'لهالموديل'
-                photos = [dict(type='text', text=f'هسه ما عدنا صور {what} حتى أدزها.')]
+                photos = [self.no_photo(colors)]
             elif not colors and product.get('colors') and not any(line.get('color') for line in lines) and not any(
                     part.get('question_key') == color_key for part in accepted):
                 history = [dict(role='user', text=m.get('text')) for m in messages if m['actor'] == 'customer']
@@ -423,6 +433,72 @@ class Responses:
                 if part['type'] == 'text' and mentions_free_size(part['text']):
                     part['size_explained_for'] = focus
         return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+
+    @staticmethod
+    def no_photo(colors, label=''):
+        what = f'لـ{label}' if label else 'لهاللون' if colors else 'لهالموديل'
+        return dict(type='text', text=f'هسه ما عدنا صور {what} حتى أدزها.')
+
+    def answer_pending_photo(self, scope, turn_id, outcome, catalog, policy, current, messages, accepted, greeting, contact):
+        """Discuss a possible campaign product without applying it to the cart."""
+        requested = requested_fields(current)
+        wants_photos = catalog_photo_request(current)
+        wants_purchase = not wants_photos and purchase_selected(current)
+        product_id = outcome.get('provisional_product')
+        product = catalog.get(product_id) if product_id else {}
+        label = customer_copy.reply_category(product) or customer_copy.fact(product.get('product_name'))[:70].strip() or 'منتج الإعلان'
+        if 'availability' in sales_answers.topics(current):
+            requested.append('stock')
+            if 'colors' not in requested and product_variants.requested(current)['colors']:
+                requested.append('colors')
+        if not product_id and (wants_photos or wants_purchase or any(field not in POLICY_FIELDS for field in requested)):
+            return dict(action='photo_review')
+        if wants_photos and product and self.product_photos:
+            colors = product_variants.requested(current)['colors']
+            photos = self.product_photos(product, colors)
+            return [*photos[:4], dict(type='text', text=f'هاي صور {label} من الكتالوج.')] if photos else [
+                self.no_photo(colors, f'{label} بهاللون' if colors else label)]
+        if wants_purchase:
+            if outcome.get('active_cart') or constraint(current):
+                return dict(action='photo_review')
+            target = {'event': outcome['photo_pending'], 'product_id': product_id}
+            if accepted and accepted[-1].get('confirm_photo_product') == target:
+                return dict(action='skipped')
+            return [dict(type='text', text=f'تقصدين {label} للحجز؟', confirm_photo_product=target)]
+        if product and not current.strip() and turn_id == outcome['photo_pending']:
+            requested = ['price']
+        if not requested:
+            return dict(action='skipped')
+
+        facts = []
+        for field in requested:
+            pid = '@store' if field in POLICY_FIELDS else product_id
+            fact = resolve_fact(catalog, pid, field, policy)
+            if field == 'stock':
+                stock = product_albums.stock_state(product)
+                fact = dict(field='stock', value=stock) if stock != 'unknown' else None
+            if fact is None:
+                return dict(action='photo_review')
+            facts.append(dict(product_id=pid, **fact))
+        amounts = {}
+        if 'price' in requested:
+            try:
+                _, amounts['unit_price'], _ = pricing.terms(product)
+            except ValueError:
+                return dict(action='photo_review')
+        version = outcome['state_version']
+        context = dict(mode='continue', state={'contact': contact}, facts=facts, policies=policy, amounts=amounts,
+                       product_facts={fact['field']: fact['value'] for fact in facts if fact['product_id']==product_id},
+                       question_field=None, next_step=dict(field=None, options=[]), copy_budget=220,
+                       customer_message=current, requested_fields=requested, recent_messages=messages,
+                       recent_replies=accepted, greeting=greeting, action_results={},
+                       provisional_photo=True)
+        parts = self.write(context, catalog, scope, turn_id, version)
+        if any(part['type'] != 'text' for part in parts):
+            return dict(action='photo_review')
+        if any(fact['product_id'] != '@store' for fact in facts):
+            parts[0] = dict(parts[0], text=f'إذا تقصدين {label}، {parts[0]["text"]}')
+        return parts
 
     def write(self, context, catalog, scope, turn_id, version):
         question = context['question_field']

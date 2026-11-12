@@ -17,7 +17,7 @@ from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
 from .intent import (apply_intent, color_availability, color_correction, direct_clothing_size, direct_color,
-                     explicit_cancellation, purchase_selected, referred_photo_color)
+                     explicit_cancellation, purchase_declined, purchase_selected, referred_photo_color)
 from .orders import only_color_missing
 from .recovery import catalog_photo_request, clothing_size_label, grounded_plan
 
@@ -178,6 +178,69 @@ class Runtime:
             return dict(checkout_prompt=outbox_id)
         return self.store.apply(scope, key, version, dict(prompt=outbox_id), handle)
 
+    @staticmethod
+    def pending_photo(state):
+        observations = state.get('media_observations', {})
+        last = max((int(key) for key, observation in observations.items()
+                    if observation['status'] not in {'sticker', 'unsupported'}), default=0)
+        if last > state.get('resolved_photo_event', 0) and observations[str(last)]['status'] != 'matched':
+            return last, observations[str(last)]
+        return None, None
+
+    def reference_for(self, scope, catalog, state, payload):
+        text = payload.get('text', '')
+        pending_id, pending = self.pending_photo(state)
+        refs = References(self.store, catalog)
+        ad = payload.get('ad')
+        if not pending:
+            reference = refs.resolve(scope, ad=ad, media=payload.get('observation'), text=text)
+        else:
+            reference = refs.resolve(scope, media=payload.get('observation'), text=text)
+        if reference['status'] == 'known':
+            return reference
+        if pending and reference['status'] == 'none':
+            ad = ad or self.store.evidence(scope, pending_id)['payload'].get('ad')
+            if ad:
+                reference = refs.resolve(scope, ad=ad)
+
+        old_context = state.get('focus_product_id')
+        if not old_context and len({line['product_id'] for line in state['cart']}) == 1:
+            old_context = state['cart'][0]['product_id']
+        if state.get('order_id'):
+            return dict(status='none') if pending else reference
+        if not pending and (old_context or state['cart'] or payload.get('media_kind') != 'text'):
+            return reference
+        if (reference.get('source') == 'product_link' and reference['status'] != 'known'
+                or pending and state['cart'] and not old_context):
+            return reference
+
+        hint = (self.text_reference(scope, text, catalog, preferred=old_context if pending else None)
+                if self.text_reference else None)
+        if hint and hint['source'] == 'text':
+            catalog.get(hint['product_id'])
+            return dict(hint, status='known')
+        if not pending:
+            if hint and (reference['status'] == 'none' or reference == {'status': 'unknown', 'source': 'ad'}):
+                catalog.get(hint['product_id'])
+                return dict(hint, status='known')
+            return reference
+        candidate = reference if reference['status'] == 'known' else hint
+        if not candidate or pending['status'] == 'ambiguous' or reference.get('status') == 'ambiguous':
+            return dict(status='none')
+
+        product_id = candidate['product_id']
+        catalog.get(product_id)
+        if checkout.is_confirmation(text):
+            last_reply = self.store.db.execute(
+                "SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 1",
+                (scope.key,)).fetchone()
+            confirmation = json.loads(last_reply[0]).get('confirm_photo_product') if last_reply else None
+            if confirmation == {'event': pending_id, 'product_id': product_id}:
+                return dict(status='known', source='confirmed_photo_context', product_id=product_id)
+        # An unresolved photo is never evidence for a cart change. The candidate
+        # can still answer questions about the campaign in the meantime.
+        return dict(candidate, status='provisional', photo_event=pending_id)
+
     def turn(self, scope, event_id):
         key = f'turn-v3:{event_id}'
         done = self.store.db.execute('SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?',
@@ -221,18 +284,18 @@ class Runtime:
                                            (scope.key,)).fetchone()[0]
             if latest != event_id:
                 raise Conflict('turn_superseded')
-            media = snap['data'].get('media_observations', {}).get(str(event_id))
-            reference = References(self.store, catalog).resolve(
-                scope, ad=evidence['payload'].get('ad'), media=media, text=evidence['payload'].get('text',''))
             state = snap['data']
-            if (self.text_reference and evidence['payload'].get('media_kind') == 'text'
-                    and not state['cart'] and not state.get('focus_product_id') and not state.get('order_id')
-                    and not state.get('media_observations')
-                    and (reference['status'] == 'none' or reference == {'status': 'unknown', 'source': 'ad'})):
-                hint = self.text_reference(scope, evidence['payload']['text'], catalog)
-                if hint:
-                    catalog.get(hint['product_id'])
-                    reference = dict(hint, status='known')
+            media = state.get('media_observations', {}).get(str(event_id))
+            pending_id, pending = self.pending_photo(state)
+            reference = self.reference_for(scope, catalog, state, dict(evidence['payload'], observation=media))
+            decline = bool(pending and purchase_declined(text_now))
+            if pending and reference['status'] != 'known' and not decline:
+                return dict(action='continue', state_version=snap['version'], photo_pending=pending_id,
+                            provisional_product=reference.get('product_id') if reference['status']=='provisional' else None,
+                            active_cart=bool(state['cart']))
+            if pending and reference['status']=='known' and state['cart'] and reference['product_id'] not in {
+                    line['product_id'] for line in state['cart']}:
+                raise ServiceRequired('image_changes_existing_cart')
             photo_choice = self.photo_choice(scope, event_id, text_now, media, reference, state, catalog)
             if photo_choice:
                 reference = dict(status='known', source='image', product_id=photo_choice['product_id'],
@@ -261,7 +324,9 @@ class Runtime:
                                 and (state.get('purchase_event') or state.get('checkout_prompt'))
                                 and contact_only(evidence['payload'].get('text', '')))
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
-            if contact_turn or photo_request and (reference.get('product_id') or state.get('focus_product_id') or state['cart']):
+            if decline:
+                raw = dict(intent='withdraw')
+            elif contact_turn or photo_request and (reference.get('product_id') or state.get('focus_product_id') or state['cart']):
                 raw = dict(intent='continue')
             elif (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
                     and not snap['data'].get('focus_product_id') and not snap['data']['cart']):
@@ -378,6 +443,8 @@ class Runtime:
                             state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice' or c.get('field') not in changed_fields]
                         if reference.get('status')=='known':
                             state['focus_product_id']=reference['product_id']
+                            if pending_id:
+                                state['resolved_photo_event'] = pending_id
                         if size_label_for:
                             state['stated_clothing_size'] = dict(product_id=size_label_for, label=label)
                         return dict(plan=plan,invalid_fields=invalid_fields,business_feedback=business_feedback,

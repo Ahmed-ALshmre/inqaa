@@ -97,6 +97,13 @@ def simple_photo_request(text):
     clean = re.sub(r'(?:\s+(?:حبيبتي|عيني|حبي|حياتي|بلا زحمة|لو سمحتي))+$', '', clean)
     if explicit_photo_followup(clean):
         return True
+    words = re.sub(r'[؟?!.،,\s]+', ' ', clean).strip()
+    photo = r'(?:ال)?صور(?:[هة]|ها|هن|هم)?'
+    send = r'ت(?:دز|رسل|نزل|رفق)\w*'
+    if re.fullmatch(rf'(?:وين|ما\s*وصل\w*)\s+{photo}|وين\s+اصور|'
+                    rf'(?:شوكت|اشوكت|يمتى|متى)\s+(?:راح\s+)?{send}\s+(?:(?:هي|هيه|هاي)\s+)?{photo}',
+                    words):
+        return True
     # Color alternatives describe which pictures to inspect, not purchase
     # quantities. Mixed factual/booking requests still need the full answer.
     try:
@@ -116,6 +123,16 @@ def claims_sent_models(text):
         return False
     return bool(re.search(r'(?:دزيت\w*|ارسلت\w*|رسلت\w*|بعثت\w*)\s+(?:الموديلات|البدائل|الخيارات|الصور)|شوفي\s+الخاص\s+(?:دزيت|ارسلت)|'
                           r'(?:هسه\s+|راح\s+|رح\s+)?(?:ادز\w*|ارسل\w*)\s+(?:الموديلات|البدائل|الخيارات)', clean))
+
+
+def promises_photo_attachment(text):
+    clean = normalized(text)
+    photo = r'(?:ال)?صور(?:[هة]|ها|هن|هم)?(?!\w)'
+    return bool(re.search(
+        rf'(?:راح|رح|هس[هةا])\s+(?:ادز|ارسل|ارفق|انزل)\w*\s+{photo}|'
+        rf'(?:ثواني|دقايق|دقائق|شوي[هة]?)\s+و?توصل\w*\s+{photo}|'
+        r'(?:راح|رح|هس[هةا])\s+(?:انزل|ارفق)(?:ل[جچك])?(?:هن|هم)\s+(?:(?:ال[جچك]|هنا)\s+){0,2}(?:بالدردشة|بالخاص)',
+        clean))
 
 
 def checkout_reply(answer, notice, question):

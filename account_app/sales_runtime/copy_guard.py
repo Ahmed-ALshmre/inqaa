@@ -2,7 +2,7 @@
 import re
 
 from ..checkout import normalized
-from ..sales_recovery import claims_sent_models
+from ..sales_recovery import claims_sent_models, promises_photo_attachment
 from .wording import mentions_free_size
 
 
@@ -71,8 +71,8 @@ def validate_copy(parts,question,action_results=None):
     if re.search(image_request,text) and question!='product':
         raise ValueError('reply.question: do not repeat product identification outside the selected step')
     if not any(part['type'] == 'image' for part in parts) and (
-            claims_sent_models(text) or re.search(r'(?:هاي|هذني|تلكين|هسه توصل\w*|راح توصل\w*)\s+(?:ال)?صور|'
-                                                r'(?:راح|هسه)\s+(?:ادز|ارسل)\w*\s+(?:ال)?صور', text)):
+            claims_sent_models(text) or promises_photo_attachment(text) or
+            re.search(r'(?:هاي|هذني|تلكين|هسه توصل\w*|راح توصل\w*)\s+(?:ال)?صور', text)):
         raise ValueError('reply.media: do not announce photos without an attachment')
     if re.search(r'مو\s*(?:محدد|موضح|متوفر).{0,15}(?:معلومات|بيانات)|البيانات\s*(?:غير|مو)|منشا\s*الصنع\s*مو\s*محدد',text):
         raise ValueError('reply.missing_fact: genuine missing facts require silent handoff')

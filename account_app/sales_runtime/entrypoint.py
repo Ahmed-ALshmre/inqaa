@@ -148,7 +148,8 @@ class Entrypoint:
             if observed is None:
                 catalog = self.load_catalog(store_id)
                 observed = self.media(scope, media_kind, media_ref, list(catalog.products.values()))
-                if not isinstance(observed, dict) or observed.get('status') not in {'matched','ambiguous','unknown','sticker','unsupported'}:
+                if not isinstance(observed, dict) or observed.get('status') not in {
+                        'matched','ambiguous','unknown','unavailable','sticker','unsupported'}:
                     raise ValueError('invalid_media_result')
                 candidates = observed.get('product_ids', [])
                 if not isinstance(candidates,list) or len(candidates)>10:
@@ -172,6 +173,16 @@ class Entrypoint:
                 return self.handoff_service(scope, event['id'], 'media_type_requires_staff')
             if observed['status'] != 'matched':
                 capture_contact(self.store, scope, event['id'], self.runtime.orders.allow_write)
+                current = self.store.snapshot(scope)['data']
+                reference = self.runtime.reference_for(scope, self.load_catalog(store_id), current,
+                                                       dict(text=text, ad=ad, media_kind=media_kind, observation=observed))
+                if reference['status'] in {'known', 'provisional'}:
+                    products_in_cart = {line['product_id'] for line in current['cart']}
+                    if products_in_cart and reference['product_id'] not in products_in_cart:
+                        return self.handoff_service(scope, event['id'], 'image_changes_existing_cart')
+                    return self.finish_turn(scope, event['id'])
+                if observed['status'] == 'unavailable':
+                    return self.handoff_service(scope, event['id'], 'product_image_service_unavailable')
                 previous_image = max((int(key) for key in saved['data'].get('media_observations', {})
                                       if int(key) < event['id']), default=0)
                 asked = self.store.db.execute("""SELECT 1 FROM sales_v2_outbox AS reply
@@ -182,26 +193,32 @@ class Entrypoint:
                     (previous_image, event['id'], scope.key, f'clarify-image:{previous_image}')).fetchone()
                 if asked:
                     return self.handoff_service(scope, event['id'], 'product_image_unresolved_after_retry')
-                return self.clarify_image(scope, event['id'])
+                return self.clarify_image(scope, event['id'], multiple=isinstance(media_ref, list) and len(media_ref)>1)
             products_in_cart = {line['product_id'] for line in saved['data']['cart']}
             if products_in_cart and observed['product_ids'][0] not in products_in_cart:
                 return self.handoff_service(scope, event['id'], 'image_changes_existing_cart')
-        outcome = self.runtime.turn(scope, event['id'])
+        return self.finish_turn(scope, event['id'])
+
+    def finish_turn(self, scope, event_id):
+        outcome = self.runtime.turn(scope, event_id)
         if any(c.get('kind')=='delivery_deadline' for c in self.store.snapshot(scope)['data']['conditions']):
-            return self.handoff_service(scope,event['id'],'delivery_deadline')
+            return self.handoff_service(scope,event_id,'delivery_deadline')
         if self.responses:
-            reply=self.responses.prepare(scope,event['id'],outcome)
+            reply=self.responses.prepare(scope,event_id,outcome)
             if reply['action']=='missing_fact':
-                return self.handoff_fact(scope,event['id'],outcome['state_version'],reply)
+                return self.handoff_fact(scope,event_id,outcome['state_version'],reply)
+            if reply['action'] == 'photo_review':
+                return self.handoff_service(scope, event_id, 'product_image_unresolved')
             return dict(outcome,reply=reply)
         return outcome
 
-    def clarify_image(self, scope, event_id):
+    def clarify_image(self, scope, event_id, *, multiple=False):
         """Keep an unresolved picture out of the checkout tools."""
         if not self.responses:
             return dict(action='media_unresolved', event_id=event_id)
         version = self.store.snapshot(scope)['version']
-        self.responses.prepare(scope, event_id, dict(action='media_unresolved', state_version=version))
+        self.responses.prepare(scope, event_id, dict(action='media_unresolved', state_version=version,
+                                                     multiple_images=multiple))
         return dict(action='media_unresolved', event_id=event_id)
 
     def handoff_fact(self, scope, event_id, version, missing):

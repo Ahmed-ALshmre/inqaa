@@ -4285,7 +4285,7 @@ def _requests_product_photo(text):
 def _promises_product_photo(text):
     if re.search(r"بس هاي الصور[ةه] متوفر[ةه]|ما عندي تصوير إضافي|ما عدنا صور إضافية", str(text or "")):
         return False
-    if sales_recovery.claims_sent_models(text):
+    if sales_recovery.claims_sent_models(text) or sales_recovery.promises_photo_attachment(text):
         return True
     if re.search(r"(?:دزيلي|ارسلي|أرسلي|ابعثي|ابعثلي).{0,30}(?:صور|صوره|صورة)", str(text or "")):
         return False
