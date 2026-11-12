@@ -2,7 +2,7 @@
 import base64
 import threading
 
-from .. import chatwoot, inbound_media, media, zernio
+from .. import chatwoot, inbound_media, media, product_variants, zernio
 from .contracts import DecisionUnavailable
 from .delivery import deliver_confirmation, deliver_replies, recover_confirmations
 from .entrypoint import Entrypoint
@@ -30,6 +30,7 @@ class ImageObserver:
             return dict(status='ambiguous')
         base = chatwoot.configuration()['chatwoot_api_url'] if scope.channel == 'chatwoot' else ''
         matches = set()
+        colors = set()
         for url in references:
             if not inbound_media.trusted_source(url, base):
                 return dict(status='unknown')
@@ -48,7 +49,11 @@ class ImageObserver:
             if not result.get('product_found') or not result.get('product_id'):
                 return dict(status='unknown')
             matches.add(result['product_id'])
-        return dict(status='matched' if len(matches) == 1 else 'ambiguous', product_ids=sorted(matches))
+            colors.add(product_variants.single_color(result.get('observed_color')))
+        observation = dict(status='matched' if len(matches) == 1 else 'ambiguous', product_ids=sorted(matches))
+        if len(matches) == 1 and len(colors) == 1 and '' not in colors:
+            observation['observed_color'] = next(iter(colors))
+        return observation
 
 
 class ChannelPreview:

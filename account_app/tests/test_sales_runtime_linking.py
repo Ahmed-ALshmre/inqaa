@@ -287,6 +287,64 @@ class LinkingTests(unittest.TestCase):
         entry.receive(**args)
         media.assert_called_once()
 
+    def test_red_caption_on_verified_maroon_photo_preserves_size_and_books_once(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        writer = Mock(side_effect=[
+            [dict(type='text', text='إي عيني متوفر، دزيلي رقم الموبايل والعنوان حتى أثبتلج.')],
+            [dict(type='text', text='حبيبتي، باقي بس رقم الموبايل حتى أثبتلج.')],
+        ])
+        media = Mock(return_value=dict(status='matched', product_ids=['P1'], observed_color='ماروني'))
+        entry = Entrypoint(self.db, lambda store: self.products, lambda store, province: 5000,
+                           self.decide, media=media, writer=writer)
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        self.plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', color='أحمر', size='38'))])
+        entry.receive(**target, message_id='caption', text='أريد الأحمر قياس ٤٤', media_kind='image', media_ref='fixture')
+        self.assertEqual('ماروني', self.decide.call_args.args[0]['reference']['available_photo_color'])
+        self.assertEqual('ماروني', writer.call_args.args[0]['verified_photo_choice']['color'])
+        self.assertEqual('contact.details', writer.call_args.args[0]['question_field'])
+        self.plan = dict(intent='continue')
+        address = entry.receive(**target, message_id='district', text='بغداد حي الاختبار قرب المدرسة')
+        self.assertEqual('queued', address['reply']['action'])
+        self.assertEqual('contact.phone', writer.call_args.args[0]['question_field'])
+        number = dict(message_id='phone', text='+٩٦٤ ٧٧٠\u200f١٢٣ ٤٥٦٧')
+        self.assertEqual('booked', entry.receive(**target, **number)['action'])
+        self.assertEqual('booked', entry.receive(**target, **number)['action'])
+        self.assertEqual([('ماروني', '44', '07701234567')], [tuple(row) for row in self.db.execute(
+            'SELECT color,size,phone FROM orders')])
+
+    def test_adjacent_photo_availability_uses_maroon_without_replacing_confirmed_blue(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        self.run_turn('أريد أزرق قياس 44', changes=[dict(values=dict(product_id='P1', color='أزرق', size='44'))])
+        media = Mock(return_value=dict(status='matched', product_ids=['P1'], observed_color='ماروني'))
+        entry = Entrypoint(self.db, lambda store: self.products, lambda store, province: 5000, self.decide, media=media)
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        self.plan = dict(intent='continue')
+        entry.receive(**target, message_id='image', media_kind='image', media_ref='fixture')
+        self.plan = dict(intent='continue', changes=[dict(values=dict(product_id='P1', color='أحمر'))])
+        result = entry.receive(**target, message_id='availability', text='الأحمر متوفر؟')
+        self.assertEqual('ماروني', result['photo_choice']['color'])
+        self.assertEqual('أزرق', self.store.snapshot(self.scope)['data']['cart'][0]['color'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_photo_reference_does_not_override_an_unrelated_color(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        self.plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', color='أزرق', size='44'))])
+        media = Mock(return_value=dict(status='matched', product_ids=['P1'], observed_color='ماروني'))
+        entry = Entrypoint(self.db, lambda store: self.products, lambda store, province: 5000, self.decide, media=media)
+        result = entry.receive(store_id='khuyoot', channel='zernio', account_id='a', sender_id='different-color',
+                               message_id='caption', text='أريد الأزرق قياس 44', media_kind='image', media_ref='fixture')
+        self.assertIsNone(result['photo_choice'])
+        state = self.store.snapshot(Scope('khuyoot', 'zernio', 'a', 'different-color'))['data']
+        self.assertEqual('أزرق', state['cart'][0]['color'])
+
+    def test_customer_size_correction_wins_even_if_old_size_is_in_stock(self):
+        self.select()
+        self.run_turn('لا قياسي ٤٠', changes=[dict(values=dict(product_id='P1', size='44'))])
+        self.assertEqual('40', self.store.snapshot(self.scope)['data']['cart'][0]['size'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
     def test_wrong_store_media_match_rejected_and_sticker_skips_recognizer(self):
         from account_app.sales_runtime.entrypoint import Entrypoint
         media=Mock(return_value=dict(status='matched',product_ids=['P9']))

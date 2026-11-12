@@ -8,16 +8,18 @@ import re
 import time
 from copy import deepcopy
 
-from .. import checkout
+from .. import checkout, product_variants
 from .backup import BackupFailed, consult
 from .cart import CartService
+from .contact import capture as capture_contact, contact_only, declined_phone
 from .references import References
 from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
-from .intent import apply_intent, purchase_selected
+from .intent import (apply_intent, color_availability, color_correction, direct_clothing_size, direct_color,
+                     explicit_cancellation, purchase_selected, referred_photo_color)
 from .orders import only_color_missing
-from .recovery import grounded_plan
+from .recovery import catalog_photo_request, clothing_size_label, grounded_plan
 
 
 class TurnTools(Store):
@@ -76,10 +78,44 @@ def resolve_changes(plan, state, scope, event_id):
 
 
 class Runtime:
-    def __init__(self, store, catalog_loader, orders, decide,policy_loader=None, *, backup=None):
+    def __init__(self, store, catalog_loader, orders, decide,policy_loader=None, *, backup=None, text_reference=None):
         self.store, self.catalog_loader, self.orders, self.decide = store, catalog_loader, orders, decide
         self.policy_loader=policy_loader or (lambda sid:dict(inspection_policy=orders.confirmation.split('. ',1)[-1]))
         self.backup = backup
+        self.text_reference = text_reference
+
+    def photo_choice(self, scope, event_id, text, media, reference, state, catalog):
+        # Only the current photo or the immediately adjacent customer turn can
+        # explain a different name. An old picture cannot override a new choice.
+        preceding = self.store.db.execute('''SELECT e.id,e.payload FROM sales_v2_events AS e
+            JOIN sales_v2_events AS current ON current.scope=e.scope AND current.id=?
+            WHERE e.scope=? AND e.id<? AND e.kind='message' AND e.actor='customer'
+            AND current.received_at-e.received_at<=1800 ORDER BY e.id DESC LIMIT 1''',
+            (event_id, scope.key, event_id)).fetchone()
+        image_ref = reference if media else None
+        referring_text = text
+        image_event = event_id
+        if media and not text.strip() and preceding:
+            referring_text = json.loads(preceding[1]).get('text', '')
+        elif not media and preceding:
+            previous_media = state.get('media_observations', {}).get(str(preceding[0]))
+            if previous_media and previous_media['status'] == 'matched':
+                image_ref = References(self.store, catalog).resolve(scope, media=previous_media)
+                image_event = preceding[0]
+                if reference.get('product_id') not in (None, image_ref['product_id']):
+                    return None
+                named = direct_color(text) or color_availability(text)
+                stock = product_variants.colors(catalog.get(image_ref['product_id']).get('colors'))
+                if (named in stock and named != image_ref.get('available_photo_color')
+                        and not re.search(r'صور[ةه]|^(?:هذا|هاي|هذي|نفس)\s+', text)):
+                    return None
+        if not image_ref:
+            return None
+        color = referred_photo_color(referring_text, image_ref.get('available_photo_color'))
+        if color:
+            return dict(product_id=image_ref['product_id'], color=color, image_event=image_event,
+                        availability_question=bool(color_availability(referring_text)))
+        return None
 
     def decision_call(self,scope,event_id,context,previous=None,error=None):
         # A duplicate webhook or worker restart cannot reset the model budget.
@@ -167,7 +203,8 @@ class Runtime:
             raise Conflict('customer_turn_required')
         snap_now=self.store.snapshot(scope)
         text_now=checkout.normalized(evidence['payload'].get('text',''))
-        if snap_now['data'].get('order_id') and re.search(r'(?:الغي|الغاء|لغي|الغ[يه]لي)\s+(?:الطلب|الحجز|طلبي)',text_now):
+        photo_request = catalog_photo_request(text_now)
+        if snap_now['data'].get('order_id') and explicit_cancellation(text_now):
             result=self.orders.cancel(scope,key+':cancel',snap_now['version'],event_id)['result']
             outcome=dict(result,action='cancelled',state_version=result['state_version']+1)
             self.store.apply(scope,key+':done',result['state_version'],dict(event_id=event_id),lambda state:dict(outcome=outcome))
@@ -176,6 +213,7 @@ class Runtime:
             saved = json.loads(prior[0])
             plan, version = saved['plan'], saved['state_version']
         else:
+            captured = capture_contact(self.store, scope, event_id, self.orders.allow_write)
             snap = self.store.snapshot(scope)
             if snap['data']['control_mode'] != 'active':
                 raise Conflict('human_control_active')
@@ -186,6 +224,19 @@ class Runtime:
             media = snap['data'].get('media_observations', {}).get(str(event_id))
             reference = References(self.store, catalog).resolve(
                 scope, ad=evidence['payload'].get('ad'), media=media, text=evidence['payload'].get('text',''))
+            state = snap['data']
+            if (self.text_reference and evidence['payload'].get('media_kind') == 'text'
+                    and not state['cart'] and not state.get('focus_product_id') and not state.get('order_id')
+                    and not state.get('media_observations')
+                    and (reference['status'] == 'none' or reference == {'status': 'unknown', 'source': 'ad'})):
+                hint = self.text_reference(scope, evidence['payload']['text'], catalog)
+                if hint:
+                    catalog.get(hint['product_id'])
+                    reference = dict(hint, status='known')
+            photo_choice = self.photo_choice(scope, event_id, text_now, media, reference, state, catalog)
+            if photo_choice:
+                reference = dict(status='known', source='image', product_id=photo_choice['product_id'],
+                                 available_photo_color=photo_choice['color'], photo_event=photo_choice['image_event'])
             try:initial_readiness=cart.readiness(scope)
             except Conflict as exc:
                 if isinstance(exc,BusinessChoice) or str(exc)=='product_not_available_in_store':
@@ -196,6 +247,7 @@ class Runtime:
             text_products = [{key: value for key, value in product.items() if key not in image_fields} for product in active_products]
             context = dict(state=snap['data'], event=message_context(evidence['payload']), reference=reference,policies=policy,
                            products=text_products, readiness=initial_readiness,
+                           contact_received=captured.get('fields', []),
                            available_fact_fields={p['product_id']:[f for f in PRODUCT_FACT_FIELDS if resolve_fact(catalog,p['product_id'],f,policy)] for p in active_products})
             recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 30",
                                          (scope.key,)).fetchall()
@@ -205,8 +257,13 @@ class Runtime:
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
             recovered=False;used_backup=False;business_feedback=None
+            contact_turn = bool(captured.get('fields') and state['cart'] and not state.get('order_id')
+                                and (state.get('purchase_event') or state.get('checkout_prompt'))
+                                and contact_only(evidence['payload'].get('text', '')))
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
-            if (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
+            if contact_turn or photo_request and (reference.get('product_id') or state.get('focus_product_id') or state['cart']):
+                raw = dict(intent='continue')
+            elif (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
                     and not snap['data'].get('focus_product_id') and not snap['data']['cart']):
                 # An unresolved referral or "this item" supplies no evidence for a catalog choice.
                 raw=grounded_plan(context);recovered=True
@@ -215,9 +272,67 @@ class Runtime:
                 except (DecisionRejected, DecisionUnavailable) as exc:
                     raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,exc)
                     recovered=True
+            correction = color_correction(text_now)
+            label = clothing_size_label(text_now)
+            focus = reference.get('product_id') or state.get('focus_product_id') or (
+                state['cart'][0]['product_id'] if len(state['cart']) == 1 else None)
+            size_mode = (catalog.products.get(focus) or {}).get('selection_mode')
+            uses_weight = size_mode == 'weight'
+            size_label_for = focus if label and uses_weight else None
+            measured = product_variants.weight_answer(text_now) if uses_weight else None
+            weight = (measured or {}).get('value')
+            same_product = not state['cart'] or (len(state['cart']) == 1 and state['cart'][0]['product_id'] == focus)
+            explicit_size = direct_clothing_size(text_now) if size_mode in {'clothing', 'shoe'} else ''
+            if not explicit_size and size_mode in {'clothing', 'shoe'} and photo_choice and direct_color(text_now):
+                sizes = product_variants.requested(text_now)['sizes']
+                if len(sizes) == 1:
+                    explicit_size = sizes[0]
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
+                    if photo_choice and same_product and not state.get('order_id'):
+                        if plan['intent'] == 'withdraw':
+                            plan['intent'] = 'continue'
+                        changes = plan.setdefault('changes', [])
+                        kept_color = next((row.get('color') for row in state['cart'] if row.get('color')), None)
+                        # Asking whether another photographed color is in stock
+                        # doesn't replace a color the customer already chose.
+                        choice_color = kept_color if photo_choice['availability_question'] and kept_color else photo_choice['color']
+                        if not changes and not business_feedback and choice_color != kept_color:
+                            changes.append(dict(values=dict(product_id=focus, color=choice_color)))
+                        elif (len(changes) == 1 and not changes[0].get('remove')
+                              and changes[0]['values'].get('product_id') in (None, focus)
+                              and not (business_feedback or {}).get('field') == 'color'):
+                            changes[0]['values']['color'] = choice_color
+                    if explicit_size and same_product and not state.get('order_id') and (business_feedback or {}).get('field') != 'size':
+                        changes = plan.setdefault('changes', [])
+                        if not changes:
+                            changes.append(dict(values=dict(product_id=focus, size=explicit_size)))
+                        elif (len(changes) == 1 and not changes[0].get('remove')
+                              and changes[0]['values'].get('product_id') in (None, focus)):
+                            values = changes[0]['values']
+                            values.pop('weight_kg', None)
+                            values.pop('age_months', None)
+                            values['size'] = explicit_size
+                    if size_label_for and same_product:
+                        for change in plan.get('changes', []):
+                            values = change['values']
+                            if values.get('product_id') in (None, size_label_for):
+                                values.pop('weight_kg', None)
+                                values.pop('size', None)
+                    if weight and same_product and not business_feedback and not state.get('order_id'):
+                        changes = plan.setdefault('changes', [])
+                        if not changes:
+                            changes.append(dict(values=dict(product_id=focus, weight_kg=float(weight))))
+                        elif (len(changes) == 1 and not changes[0].get('remove')
+                              and changes[0]['values'].get('product_id') in (None, focus)):
+                            changes[0]['values'].pop('size', None)
+                            changes[0]['values']['weight_kg'] = float(weight)
+                    if correction and not business_feedback and not state.get('order_id') and len(state['cart']) == 1:
+                        line = state['cart'][0]
+                        if product_variants.single_color(line.get('color')) == correction[1]:
+                            color = photo_choice['color'] if photo_choice and same_product else correction[0]
+                            plan['changes'] = [dict(line_ref=line['line_id'], values=dict(color=color))]
                     def apply_proposal(state):
                         if self.orders.allow_write and not self.orders.allow_write(scope):
                             raise Conflict('turn_superseded')
@@ -227,8 +342,11 @@ class Runtime:
                         invalid_fields=[]
                         for index,command in enumerate(commands):
                             session_cart.change(scope,str(index),snap['version'],event_id,**command)
-                        if plan.get('contact'):
-                            contact_result=session_cart.contact(scope,'contact',snap['version'],event_id,**plan['contact'])
+                        hinted_contacts = {field: value for field, value in plan.get('contact', {}).items()
+                                           if field not in captured.get('fields', ()) and not state['contact'].get(field)
+                                           and not (field == 'phone' and declined_phone(text_now))}
+                        if hinted_contacts:
+                            contact_result=session_cart.contact(scope,'contact',snap['version'],event_id,**hinted_contacts)
                             invalid_fields=contact_result['result']['invalid_fields']
                         for fact in plan.get('answer',{}).get('facts',[]):
                             if fact['product_id']!='@store':catalog.get(fact['product_id'])
@@ -260,8 +378,11 @@ class Runtime:
                             state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice' or c.get('field') not in changed_fields]
                         if reference.get('status')=='known':
                             state['focus_product_id']=reference['product_id']
+                        if size_label_for:
+                            state['stated_clothing_size'] = dict(product_id=size_label_for, label=label)
                         return dict(plan=plan,invalid_fields=invalid_fields,business_feedback=business_feedback,
-                                    quote=price,recovered=recovered,withdrawn=withdrawn)
+                                    quote=price,recovered=recovered,withdrawn=withdrawn,contact_turn=contact_turn,
+                                    photo_choice=photo_choice)
                     saved=self.store.apply(scope,key,snap['version'],dict(event_id=event_id),apply_proposal)['result']
                     break
                 except BusinessChoice as exc:
@@ -317,7 +438,9 @@ class Runtime:
         new_contact = event_id in state.get('contact_events', {}).values()
         direct_purchase = purchase_selected(evidence['payload'].get('text', ''))
         hold_color = only_color_missing(ready) and (new_contact or direct_purchase)
-        if (ready['ready'] or hold_color) and not image_only and not missing_fact and not state.get('order_id'):
+        if ((ready['ready'] or hold_color) and not image_only and not photo_request
+                and not (saved.get('photo_choice') or {}).get('availability_question')
+                and not missing_fact and not state.get('order_id')):
             booking = self.orders.commit(scope, f'{key}:booking', version, allow_color_hold=hold_color)
             outcome = dict(action='booked', **booking['result'])
             version = booking['result']['state_version']
@@ -325,7 +448,8 @@ class Runtime:
             outcome = dict(action='continue', readiness=ready, answer_plan=plan.get('answer', {}),
                            invalid_fields=saved.get('invalid_fields',[]),business_feedback=saved.get('business_feedback'),
                            quote=saved.get('quote'),recovered=saved.get('recovered',False),
-                           withdrawn=saved.get('withdrawn',False),state_version=version)
+                           withdrawn=saved.get('withdrawn',False),contact_turn=saved.get('contact_turn',False),
+                           photo_choice=saved.get('photo_choice'),state_version=version)
         outcome['state_version'] = version + 1
         self.store.apply(scope, key + ':done', version, dict(event_id=event_id), lambda state: dict(outcome=outcome))
         return outcome

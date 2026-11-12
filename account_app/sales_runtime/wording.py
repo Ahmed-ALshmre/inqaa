@@ -111,3 +111,11 @@ def validate_next_step(parts, step):
             raise ValueError('reply.next_step: ask about the size or its verified options')
     if not all(re.search(pattern, last) for pattern in required.get(question, ())):
         raise ValueError('reply.next_step: ask for ' + question + ' in the final question')
+
+
+def checkout_question(field, gender, *, final_detail):
+    welcome = 'حبيبتي' if gender == 'female' else 'عيني'
+    labels = {'contact.phone': 'رقم الموبايل', 'contact.address': 'العنوان',
+              'contact.province': 'المحافظة', 'contact.details': 'رقم الموبايل والعنوان'}
+    request = 'باقي بس' if final_detail else 'دزّيلي' if gender == 'female' else 'دزلي'
+    return f'{welcome}، {request} {labels[field]} حتى أثبت الحجز.'

@@ -3,7 +3,7 @@ from copy import deepcopy
 import re
 from urllib.parse import urlsplit
 
-from .. import ad_attribution
+from .. import ad_attribution, product_albums, product_variants
 from .store import Conflict
 
 
@@ -36,8 +36,16 @@ class References:
             return dict(status='known', source='presentation', **choice)
         if media and media.get('status') == 'matched':
             product_id, = media['product_ids']
-            self.catalog.get(product_id)
-            return dict(status='known', source='image', product_id=product_id)
+            product = self.catalog.get(product_id)
+            reference = dict(status='known', source='image', product_id=product_id)
+            observed = product_variants.single_color(media.get('observed_color'))
+            if observed:
+                reference['observed_color'] = observed
+                if (product_albums.stock_state(product) == 'available'
+                        and observed in product_variants.colors(product.get('colors'))
+                        and not product_variants.order_choice_error(product, 'color', observed)):
+                    reference['available_photo_color'] = observed
+            return reference
         direct_links = [match[0].rstrip('.,،؛!?؟') for match in WEB_LINK.finditer(text or '')]
         match = self.match_links(direct_links)
         if match:

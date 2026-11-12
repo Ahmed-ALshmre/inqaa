@@ -26,6 +26,15 @@ def compact(value):
     return re.sub(r'\s+', ' ', str(value or '')).strip()
 
 
+def answered_turn(db, store, sender, incoming_id):
+    rows = db.execute('''SELECT raw_payload FROM messages WHERE store_id=? AND sender_id=?
+        AND direction='outgoing' AND id>? ORDER BY id''', (store, sender, incoming_id))
+    return any(info.get('_reply_to_message_id') == incoming_id
+               and info.get('_delivery_status') == 'accepted'
+               and not info.get('_partial_delivery_reply')
+               for info in (metadata(row['raw_payload']) for row in rows))
+
+
 def prepare(db, sender, parts, images, message_ids=None):
     """Identify this answer's saved rows, scoped to sender and generated output.
 
