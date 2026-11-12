@@ -91,8 +91,8 @@ def explicit_photo_followup(text):
 
 
 def simple_photo_request(text):
-    clean = normalized(text).strip(' ؟?!.،\n')
-    clean = re.sub(r'^(?:(?:تمام|اوكي|اوك|ماشي|زين|طيب|اي|نعم|عيني|حبيبتي|حبي|عمري)\s+)*(?:بس\s+)?', '', clean).strip(' ،')
+    clean = normalized(text).strip(' ؟?!.،,\n')
+    clean = re.sub(r'^(?:(?:تمام|اوكي|اوك|ماشي|زين|طيب|اي|نعم|عيني|حبيبتي|حبي|عمري)[\s،,]+)*(?:بس[\s،,]+)?', '', clean)
     clean = re.sub(r'\s+(?:بدون\s+(?:اي\s*)?حجز|بس\s+للمشاهد[هة]|(?:بس\s+)?ما\s*اريد\s*احجز)$', '', clean).strip(' ،')
     clean = re.sub(r'(?:\s+(?:حبيبتي|عيني|حبي|حياتي|بلا زحمة|لو سمحتي))+$', '', clean)
     if explicit_photo_followup(clean):
@@ -100,7 +100,7 @@ def simple_photo_request(text):
     words = re.sub(r'[؟?!.،,\s]+', ' ', clean).strip()
     photo = r'(?:ال)?صور(?:[هة]|ها|هن|هم)?'
     send = r'ت(?:دز|رسل|نزل|رفق)\w*'
-    if re.fullmatch(rf'(?:وين|ما\s*وصل\w*)\s+{photo}|وين\s+اصور|'
+    if re.fullmatch(rf'(?:اريد|ممكن|ادزي|دزيلي|ارسلي|وين|ما\s*وصل\w*)\s+{photo}(?:\s+(?:الالوان|الموديل))?|وين\s+اصور|'
                     rf'(?:شوكت|اشوكت|يمتى|متى)\s+(?:راح\s+)?{send}\s+(?:(?:هي|هيه|هاي)\s+)?{photo}',
                     words):
         return True

@@ -106,7 +106,7 @@ class Responses:
         if photo_choice and photo_choice['product_id'] != focus:
             photo_choice = None
         product_unresolved = not focus and not lines
-        if self.product_photos and product and catalog_photo_request(current):
+        if self.product_photos and product and (plan.get('catalog_photos') or catalog_photo_request(current)):
             colors = product_variants.requested(current)['colors']
             photos = self.product_photos(product, colors)
             color_key = f'product.{focus}.color'

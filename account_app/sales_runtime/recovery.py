@@ -1,6 +1,7 @@
 """Deterministic grounded recovery when a model proposal cannot be executed."""
 import re
-from .. import checkout,product_variants,sales_playbook,sales_recovery
+from .. import checkout,product_variants,sales_playbook
+from ..sales_recovery import simple_photo_request as catalog_photo_request
 from .facts import requested_fields,POLICY_FIELDS
 from .intent import purchase_selected
 
@@ -32,13 +33,6 @@ def grounded_plan(context):
     contact={k:v for k,v in fields.items() if k in {'phone','address'}}
     return dict(intent='buy' if purchase_selected(text) else 'continue',changes=changes,contact=contact,
                 answer=dict(facts=facts,question_field=None,goal='answer_and_advance'))
-
-
-def catalog_photo_request(text):
-    clean = checkout.normalized(text).strip(' .،!؟?')
-    return sales_recovery.simple_photo_request(text) or bool(re.fullmatch(
-        r'(?:اريد|وين|ممكن|دزيلي|ادزي|ارسلي|ما\s*وصل(?:ت|ني)?)\s+'
-        r'(?:ال)?صور(?:ه|ها|هن|هم)?(?:\s+(?:الالوان|الموديل))?', clean))
 
 
 def clothing_size_label(text):
