@@ -104,6 +104,7 @@ def validate_next_step(parts, step):
         'price.accept': (r'سعر|حساب|مجموع|عرض|يناسب|موافق|نكم[لّ]|نمشي|اوك[ي]?',),
         'offer.quantity': (r'عرض|بكج|باكج|قطعت|ثنين|اثنين|تنوع|قطع',),
         'purchase_intent': (r'ثبت|حجز|نسجل|اكمل|نكمل|طلب|رتب',),
+        'alternatives.photos': (r'صور|اشوف|تشوف|ادز|ارسل', r'بديل|بدائل|موديل|خيارات|سوتات|اطقم'),
         'product': (r'صور|سكرين|لقط',),
     }
     field = question.rsplit('.', 1)[-1]
@@ -114,6 +115,8 @@ def validate_next_step(parts, step):
         if not any(re.search(r'(?<!\w)' + re.escape(checkout.normalized(option)) + r'(?!\w)', last)
                    for option in step['options']):
             raise ValueError('reply.next_step: ask about the size or its verified options')
+    if field == 'weight_kg' and not re.search(r'وزن|كيلو|كغم', last):
+        raise ValueError('reply.next_step: ask about the weight for this model')
     if not all(re.search(pattern, last) for pattern in required.get(question, ())):
         raise ValueError('reply.next_step: ask for ' + question + ' in the final question')
 

@@ -255,6 +255,109 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.assertIn('قطن', sent[0]['text'])
         self.assertTrue(sent[1]['question_field'].endswith('.color'))
 
+    def test_agreement_to_see_alternatives_sends_available_product_images(self):
+        products = m.load_products_from_file()
+        products[0].update(stock='غير متوفر', product_type='tops')
+        products.extend([
+            dict(product_id='P2', store_id='khuyoot', product_name='قميص بديل', product_type='tops',
+                 price='15000', stock='متوفر', status='active'),
+            dict(product_id='P3', store_id='khuyoot', product_name='قميص نافد', product_type='tops',
+                 price='15000', stock='غير متوفر', status='active'),
+        ])
+        def variants(product):
+            return [{'url': f"https://catalog.test/product_image/{product['product_id']}.jpg", 'color': ''}]
+
+        decision = self.model_response(dict(intent='continue'))
+        offer = self.model_response(dict(parts=[dict(type='text', text='تحبين أدزلج صور موديلات ثانية؟')]))
+        with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
+             patch.object(m, 'product_image_variants', side_effect=variants), \
+             patch.object(m.ai_transport, 'post', side_effect=[decision, offer]) as model:
+            self.incoming(10, 'السوت موجود؟')
+            self.assertEqual('continue', self.work()[1]['action'])
+            self.transport.reset_mock()
+            self.incoming(11, 'دزي')
+            self.assertEqual('continue', self.work()[1]['action'])
+        self.assertEqual(2, model.call_count)
+        self.assertEqual(['https://catalog.test/product_image/P2.jpg'],
+                         [call.args[2][0]['url'] for call in self.transport.call_args_list])
+
+    def test_recent_staff_sold_out_reply_prevents_booking_against_conflicting_catalog(self):
+        decision = self.model_response(dict(intent='continue'))
+        reply = self.model_response(dict(parts=[dict(type='text', text='يا قياس تحبين؟')]))
+        self.incoming(10, 'هلا')
+        with patch.object(m.ai_transport, 'post', side_effect=[decision, reply]):
+            self.assertEqual('continue', self.work()[1]['action'])
+        with m.app.app_context():
+            db = m.get_db()
+            token = m._current_store_id.set('khuyoot')
+            try:
+                m.save_message(db, self.sender, 'outgoing', 'text', 'ولا قطعة بقت خلصت الكمية',
+                               raw_payload=dict(sender_type='staff', _delivery_status='accepted'))
+            finally:
+                m._current_store_id.reset(token)
+        self.incoming(11, f'أريد ماروني قياس 44\n{self.phone}\n{self.address}')
+        buy = self.model_response(self.model_plan(color='ماروني'))
+        clarification = self.model_response(dict(parts=[
+            dict(type='text', text='حبيبتي، أحتاج أتأكد من توفر هالموديل حتى أثبتلج الطلب.')]))
+        with patch.object(m.ai_transport, 'post', side_effect=[buy, clarification]) as model:
+            self.assertEqual('continue', self.work()[1]['action'])
+        context = json.loads(model.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertTrue(context['stock_conflict'])
+        self.assertIsNone(context['next_step']['field'])
+        with m.app.app_context():
+            self.assertEqual(0, m.get_db().execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_new_photo_replaces_rejected_model_and_keeps_phone_for_fit_and_checkout(self):
+        products = m.load_products_from_file()
+        products[0].update(product_name='سوت فرو اختبار', fabric='فرو')
+        products.append(dict(product_id='P2', store_id='khuyoot', product_name='دشداشة اختبار',
+                             fabric='قديفة ثقيل', colors='ماروني، أخضر', price='25000',
+                             sizes='من وزن 55 إلى 95 كيلو', fit_notes='قصتها واسعة',
+                             status='active', stock='متوفر', stock_quantity=3))
+        image = dict(attachments=[{'file_type': 'image', 'data_url': 'https://cdn.example/new-dress.jpg'}])
+        drafts = [
+            self.model_response(dict(intent='buy', changes=[
+                dict(values=dict(product_id='P1', size='44', color='ماروني'))])),
+            self.model_response(dict(parts=[dict(type='text', text='باقي بس عنوانج حبيبتي حتى أثبتلج.')])),
+            self.model_response(dict(intent='continue', answer=dict(facts=[dict(product_id='P1', field='fabric')]))),
+            self.model_response(dict(parts=[dict(type='text', text='خامة الفرو عيني. شكد وزنج؟')])),
+            self.model_response(dict(parts=[dict(type='text', text='إي حبيبتي، قماشها قديفة ثقيل. شكد وزنج؟')])),
+            self.model_response(dict(intent='continue')),
+            self.model_response(dict(parts=[
+                dict(type='text', text='إي حبيبتي قياسج متوفر، وقصتها واسعة.'),
+                dict(type='text', text='تحبين أحجزلج هاللون؟')
+            ])),
+        ]
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(
+                status='matched', product_ids=['P2'], observed_color='ماروني')), \
+             patch.object(m.ai_transport, 'post', side_effect=drafts) as model:
+            self.incoming(10, f'أريد ماروني قياس 44\nرقمي {self.phone}')
+            self.assertEqual('continue', self.work()[1]['action'])
+            self.incoming(11, 'لا مو تراك\nهذا الموديل والون، شنو قماشه؟', **image)
+            self.assertEqual('continue', self.work()[1]['action'])
+            self.incoming(12, 'وزني 80')
+            self.assertEqual('continue', self.work()[1]['action'])
+        photo_context = json.loads(model.call_args_list[2].kwargs['json']['messages'][-1]['content'])
+        self.assertEqual('P2', photo_context['reference']['product_id'])
+        self.assertEqual([], photo_context['state']['cart'])
+        self.assertEqual(self.phone, photo_context['state']['contact']['phone'])
+        retry = json.loads(model.call_args_list[4].kwargs['json']['messages'][-1]['content'])
+        self.assertIn('reply.fabric', retry['validation_feedback'])
+        fit_context = json.loads(model.call_args_list[-1].kwargs['json']['messages'][-1]['content'])
+        self.assertEqual({'stock': 'available', 'limited_stock': True, 'roomy_cut': True},
+                         fit_context['value_facts']['fit_availability'])
+        self.assertEqual('purchase_intent', fit_context['next_step']['field'])
+        sent = [call.args[2][0]['text'] for call in self.transport.call_args_list]
+        self.assertFalse(any('فرو' in part for part in sent))
+        self.assertTrue(any('قديفة' in part for part in sent))
+        with m.app.app_context():
+            db = m.get_db()
+            state = live.Store(db).snapshot(live.scope_for(live.route(db, self.sender)))['data']
+            self.assertEqual(('P2', 'ماروني', '80'), tuple(state['cart'][0][key] for key in ('product_id', 'color', 'size')))
+            self.assertEqual(self.phone, state['contact']['phone'])
+            self.assertEqual('P2', m.get_active_product_binding(db, self.sender)['product_id'])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
     def test_previously_accepted_reply_prevents_generation_for_the_same_incoming(self):
         self.incoming(10, 'أثبتلج؟')
         with m.app.app_context():

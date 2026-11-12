@@ -14,6 +14,18 @@ FUR = dict(product_id='P013',product_name='سوت فرو',store_id='default',
 
 
 class PostdeployCheckoutTests(unittest.TestCase):
+    def test_shipping_uses_each_models_quantity_and_documented_override(self):
+        fur = dict(FUR, delivery='توصيل مجاني لي القطعتين')
+        dress = dict(FUR, product_id='P011', delivery='التوصيل 5,000 لكل محافظات')
+        one = [dict(product_id='P013', color='ماروني', quantity=1)]
+        pair = one + [dict(product_id='P013', color='رصاصي', quantity=1)]
+        dress_line = dict(product_id='P011', quantity=1)
+        self.assertIsNone(pricing.quote(one, [fur], None)['delivery_fee'])
+        self.assertEqual(5000, pricing.quote(one, [fur], 5000)['delivery_fee'])
+        self.assertEqual(0, pricing.quote(pair, [fur], None)['delivery_fee'])
+        self.assertEqual(5000, pricing.quote([dress_line], [dress], 0)['delivery_fee'])
+        self.assertEqual(5000, pricing.quote([*pair, dress_line], [fur, dress], None)['delivery_fee'])
+
     def test_retail_price_with_named_pair_package_can_book(self):
         self.assertEqual(pricing.terms(FUR)[:2],(1,15000))
         self.assertEqual(pricing.offer_tiers(FUR),[(2,25000)])

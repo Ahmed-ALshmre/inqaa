@@ -33,9 +33,19 @@ def referred_photo_color(text, available_color):
     if name and (name == available_color or product_variants.nearby_color(name, [available_color])):
         return available_color
     value = normalized(text).strip(' .،!')
-    if re.fullmatch(r'(?:(?:اريد|اخذ|خلي|اقصد|ثبتيلي|احجزيلي)\s+)?(?:هذا|هاذا|هاي|هذي)(?:\s+(?:بالصور[ةه]|اللون))?', value):
+    value = re.split(r'[,،؛]\s*(?=(?:شنو|شكد|شلون|ممكن)\b)', value, maxsplit=1)[0]
+    if re.fullmatch(r'(?:(?:اريد|اخذ|خلي|اقصد|ثبتيلي|احجزيلي)\s+)?(?:هذا|هاذا|هاي|هذي)'
+                    r'(?:\s+(?:بالصور[ةه]|ال?لون|الموديل(?:\s+و\s*(?:ال)?ل?ون)?|القطع[ةه]))?', value):
         return available_color
     return ''
+
+
+def photo_replaces_selection(text):
+    """Only explicit corrections may replace a basket already in checkout."""
+    return bool(re.search(
+        r'(?<!\w)(?:مو\s+(?:هذا|هاي|هذي|(?:ال)?(?:تراك|سوت|طقم|موديل|فستان|دشداش[ةه]))'
+        r'|(?:اقصد|بدلي|غيري)\s+(?:هذا|هاي|هذي|الموديل|القطع[ةه]))(?!\w)',
+        normalized(text)))
 
 
 def direct_clothing_size(text):
@@ -43,6 +53,45 @@ def direct_clothing_size(text):
     match = re.fullmatch(r'(?:(?:لا|اقصد|اني|انا|اريد|البس|خلي)\s+)?'
                          r'(?:قياس(?:ي)?|مقاس(?:ي)?|سايز)\s*[:=]?\s*(\d{2,3}(?:\.5)?|[2-6]xl|xl|xs|s|m|l|xxl)', value)
     return match[1].upper() if match else ''
+
+
+def explicit_color_order(text, *, accept_pair=False):
+    """Return allocations backed by a stated total or individual quantities."""
+    clean = normalized(product_variants.normalize_size_words(text))
+    if re.search(r'(?<!\w)(?:لو|او|اذا|بشرط)(?!\w)|[؟?]|ما\s*اريد', clean):
+        return []
+    colors = product_variants.requested(clean)['colors']
+    if len(colors) < 2:
+        return []
+    matches = list(product_variants.COLOR_RE.finditer(clean))
+    quantities = product_variants.color_quantities(clean)
+    prefix = clean[:matches[0].start()].strip()
+    if product_variants.quantity_number(prefix):
+        starts = [0] + [match.end() for match in matches[:-1]]
+        counts = [product_variants.quantity_number(clean[start:match.start()].strip())
+                  for start, match in zip(starts, matches)]
+        if all(counts) and len(matches) == len(colors):
+            quantities = dict(zip(colors, counts))
+    total = re.search(r'قطعتين|قطعتان|(?:اريد|ارسلي|ترسلي|دزي|اخذ|ثبتي)\s+(?:اثنين|ثنين|ثنتين)|'
+                      r'(\d+)\s*قطع', clean)
+    declared = (int(total[1]) if total[1] else 2) if total else None
+    if (accept_pair and len(colors) == len(matches) == 2
+            and not clean[:matches[0].start()].strip()
+            and re.fullmatch(r'\s*و?\s*', clean[matches[0].end():matches[1].start()])
+            and not clean[matches[1].end():].strip()):
+        declared = 2
+    if declared == len(colors) and all(quantities.get(color) in (None, 1, declared) for color in colors):
+        quantities = dict.fromkeys(colors, 1)
+    if not all(quantities.get(color) for color in colors) or (declared and sum(quantities.values()) != declared):
+        return []
+    sizes = {}
+    for index, match in enumerate(matches):
+        tail = clean[match.end():matches[index + 1].start() if index + 1 < len(matches) else None]
+        size = re.match(r'\s+(?:(?:قياس|سايز)\s+)?([2-6]xl|xxl|xl|xx|x|[sml])\b', tail)
+        if size:
+            sizes[product_variants.ALIASES[match[1]]] = size[1].upper()
+    return [dict(color=color, quantity=quantities[color], **({'size': sizes[color]} if color in sizes else {}))
+            for color in colors]
 
 
 def color_correction(text):
@@ -83,7 +132,9 @@ def purchase_selected(text):
     if (re.search(r'لا\s*(?:تحجز|تثبت)|الغ[يى]', value)
             or re.search(r'ما\s*اريد|لا\s*اريد', value) and not color_correction(value)):
         return False
-    return explicit_purchase(text) or bool(re.search(r'(?<!\w)اريد(?:ه|ها|هم|هن)?(?!\w)',value)) and not bool(
+    return explicit_purchase(text) or bool(explicit_color_order(text) and
+        re.search(r'(?<!\w)(?:ممكن\s+)?(?:ترسلي|ارسلي|دزي|اخذ)(?!\w)', value)) or bool(
+        re.search(r'(?<!\w)اريد(?:ه|ها|هم|هن)?(?!\w)',value)) and not bool(
         re.search(r'اريد\s+(?:اعرف|استفسر|اسال|اشوف|خصم|تخفيض|تخيض|(?:ال)?(?:سعر|صور|فيديو|تفاصيل|قياسات|الوان))'
                   r'|شلون|بشكد|شكد\s*(?:سعر|واص)',value))
 
@@ -94,7 +145,7 @@ def purchase_declined(text):
                 re.search(r'ما\s*اريد|لا\s*اريد', value) and not color_correction(value))
 
 
-def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
+def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, confirmed_color_correction=False):
     from .negotiation import pushback, request
     text=evidence['payload'].get('text','');value=normalized(text)
     bargaining = bool(state.get('price_request') and pushback(text))
@@ -104,7 +155,13 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
         reply.get('question_field') == 'purchase_intent'
         and reply.get('cart_key') == digest(state['cart'])))
     corrected = color_correction(value)
-    if purchase_declined(value) or not corrected and plan['intent']=='withdraw' and not bargaining and not confirmed_purchase:
+    fit_preference = re.search(r'(?<!\w)(?:خلي|اريد(?:ه|ها)?)\s+(?:(?:ال)?قياس\s+)?(?:كبير|اكبر|راهي|واسع)', value)
+    weight_question = reply.get('text', '') if reply.get('question_field', '').endswith('.weight_kg') else ''
+    selection = bool(confirmed_color_correction or purchase_selected(text) or direct_color(text) or direct_clothing_size(text)
+                     or explicit_color_order(text, accept_pair=bool(state.get('purchase_event')))
+                     or product_variants.weight_answer(text, weight_question) or fit_preference)
+    if (purchase_declined(value) and not confirmed_color_correction) or (not corrected and plan['intent']=='withdraw' and not bargaining
+                                    and not confirmed_purchase and not selection):
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
         state.pop('price_request',None)
@@ -130,6 +187,6 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None):
     declared=(bool(state['cart']) and all(state['contact'].get(f) for f in ('phone','address','province'))
               and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address']
               and event_id in (contacts['phone'],contacts['address'],contacts.get('province')))
-    if purchase_selected(text) or contextual or declared or confirmed_purchase:
+    if confirmed_color_correction or purchase_selected(text) or contextual or declared or confirmed_purchase:
         state['purchase_event']=event_id
     return False

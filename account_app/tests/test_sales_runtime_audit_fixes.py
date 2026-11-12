@@ -1,7 +1,7 @@
 """Regressions from the 20 real-customer replay; fixtures contain no private data."""
 import json
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from account_app.checkout import COLOR_REVIEW_STATUS
 from account_app.tests import test_sales_runtime_linking as linking
 from account_app.sales_runtime.runtime import Runtime
@@ -22,6 +22,72 @@ class AuditFixTests(unittest.TestCase):
     run_turn=linking.LinkingTests.run_turn
     select=linking.LinkingTests.select
     prompt=linking.LinkingTests.prompt
+
+    def test_latest_colour_and_explicit_purchase_cannot_be_closed_by_writer_plan(self):
+        self.products[0]['sizes'] = 'من وزن 60 إلى 130 كيلو'
+        self.run_turn('اريد الماروني وزني 77', changes=[dict(values=dict(
+            product_id='P1', color='ماروني', weight_kg=77))])
+        self.run_turn('قياس 120', changes=[dict(values=dict(product_id='P1', weight_kg=120))])
+        self.plan = dict(intent='withdraw')
+        event = self.event('هذا اكبر قياس اريد')
+        outcome = self.runtime.turn(self.scope, event)
+        self.assertFalse(outcome['withdrawn'])
+        reply = self.reply(event, outcome, Mock(return_value=[
+            dict(type='text', text='حبيبتي دزيلي رقم الموبايل والعنوان حتى أثبتلج.')]))
+        self.assertEqual('contact.details', reply[-1]['question_field'])
+        self.assertEqual(('ماروني', '77'), tuple(self.store.snapshot(self.scope)['data']['cart'][0][key]
+                                                 for key in ('color', 'size')))
+
+    def test_writer_repairs_a_size_rephrased_as_a_second_weight(self):
+        self.products[0]['sizes'] = 'من وزن 60 إلى 130 كيلو'
+        self.run_turn('اريد الماروني وزني 77', changes=[dict(values=dict(
+            product_id='P1', color='ماروني', weight_kg=77))])
+        event, outcome = self.run_turn('قياس 120', changes=[dict(values=dict(product_id='P1', weight_kg=120))])
+        drafts = ('الوزنين 77 و120 كيلو يرهمن. دزيلي رقم الموبايل والعنوان؟',
+                  'القياس مسجّل حسب الوزن عيني. دزيلي رقم الموبايل والعنوان حتى أثبتلج؟')
+        post = Mock(side_effect=[Mock(status_code=200, json=lambda text=text: {
+            'choices': [{'message': {'parsed': {'parts': [dict(type='text', text=text)]}}}]
+        }) for text in drafts])
+        parts = self.reply(event, outcome, WriterGateway('test-model', 'test-key', post))
+        feedback = json.loads(post.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertIn('second body weight', feedback['validation_feedback'])
+        self.assertNotIn('120', ' '.join(part['text'] for part in parts))
+
+    def test_two_colors_keep_one_each_without_inventing_xl_inventory(self):
+        self.products[0].update(sizes='من وزن 55 إلى 95 كيلو', colors='خردلي، جوزي')
+        self.run_turn('اريد الجوزي وزني 70', changes=[dict(values=dict(
+            product_id='P1', color='جوزي', weight_kg=70))])
+        self.run_turn('ممكن ترسلي اثنين الخردلي x والجوزي xx', changes=[dict(
+            values=dict(product_id='P1', color='جوزي', quantity=2, size='XXL'))])
+        self.run_turn('وحدة جوزي وحدة خردلي')
+        state = self.store.snapshot(self.scope)['data']
+        self.assertEqual({('خردلي', 1, ''), ('جوزي', 1, '')},
+                         {(line['color'], line['quantity'], line['size']) for line in state['cart']})
+        self.assertEqual({'خردلي': 'X', 'جوزي': 'XX'}, state['stated_clothing_size']['by_color'])
+        self.run_turn('07701234567')
+        _, outcome = self.run_turn('بغداد حي المنصور قرب المدرسة')
+        self.assertEqual('continue', outcome['action'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.assertFalse(any(field.endswith('.quantity') for field in outcome['readiness']['missing_fields']))
+
+    def test_pair_and_room_preference_keep_existing_checkout_open(self):
+        self.products[0].update(sizes='من وزن 60 إلى 130 كيلو', colors='ماروني، رصاصي',
+                                price='15000 او بكج قطعتين ب 25000', delivery='توصيل مجاني لي القطعتين')
+        self.run_turn('ثبتي الماروني وزني 70', changes=[dict(values=dict(
+            product_id='P1', color='ماروني', weight_kg=70))])
+        self.run_turn('ماروني ورصاصي')
+        self.plan = dict(intent='withdraw')
+        event = self.event('خلي كبير')
+        outcome = self.runtime.turn(self.scope, event)
+        self.assertFalse(outcome['withdrawn'])
+        self.assertEqual(0, outcome['quote']['delivery_fee'])
+        self.run_turn('07701234567')
+        _, outcome = self.run_turn('بغداد حي المنصور قرب المدرسة')
+        self.assertEqual('booked', outcome['action'])
+        order = self.db.execute('SELECT order_items,delivery_fee,total_amount FROM orders').fetchone()
+        self.assertEqual({('ماروني', '70', 1), ('رصاصي', '70', 1)},
+                         {(item['color'], item['size'], item['quantity']) for item in json.loads(order[0])})
+        self.assertEqual((0, 25000), tuple(order[1:]))
 
     def test_courtesy_fit_and_inspection_questions_do_not_become_conditions(self):
         for text in ('شلون السعر اذا امكن','اذا وزن 60 يا قياس يناسبه','اذا انطيج وزني تعرفين القياس؟','اذا ما رهمت ارجعها؟'):
@@ -806,6 +872,26 @@ class AuditFixTests(unittest.TestCase):
         event = self.event('يلا تمام')
         out = self.runtime.turn(self.scope,event)
         self.assertEqual('contact.details',self.reply(event,out,writer)[-1]['question_field'])
+
+    def test_fit_writer_repairs_unsupported_stock_and_roomy_claims(self):
+        self.products[0].update(sizes='من وزن 55 إلى 95 كيلو', stock='')
+        event, outcome = self.run_turn('وزني 80', changes=[dict(values=dict(product_id='P1', weight_kg=80))])
+        good = 'إي عيني يناسب هالموديل. يا لون عجبج؟'
+        for draft, error in (
+            ('إي حبيبتي يجي راهي عليج. يا لون عجبج؟', 'reply.fit'),
+            ('باقي منه قطع قليل. يا لون عجبج؟', 'reply.stock'),
+            ('قياسج متوفر حبيبتي. يا لون عجبج؟', 'reply.stock'),
+        ):
+            with self.subTest(draft=draft):
+                post = Mock(side_effect=[Mock(status_code=200, json=lambda text=text: {
+                    'choices': [{'message': {'parsed': {'parts': [dict(type='text', text=text)]}}}]
+                }) for text in (draft, good)])
+                response = Responses(self.store, self.loader, WriterGateway('test-model', 'test-key', post))
+                with patch.object(response, 'save') as save:
+                    response.prepare(self.scope, event, outcome)
+                feedback = json.loads(post.call_args.kwargs['json']['messages'][-1]['content'])
+                self.assertIn(error, feedback['validation_feedback'])
+                self.assertEqual(good, ' '.join(part['text'] for part in save.call_args.args[-1]))
 
     def test_counteroffer_explains_subtotal_delivery_discount_and_unchanged_total(self):
         self.products[0]['price'] = '17000'

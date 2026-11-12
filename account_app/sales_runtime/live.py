@@ -131,7 +131,7 @@ def start_new_purchase(db, scope, incoming_id, text, allowed):
             raise Conflict('turn_superseded')
         state.update(initial_state())
         for key in ('order_id', 'order_status', 'checkout_prompt', 'contact_events', 'price_request', 'quote_province',
-                    'stated_clothing_size'):
+                    'stated_clothing_size', 'focus_source'):
             state.pop(key, None)
         return dict(previous_order_id=order_id)
 
@@ -250,7 +250,7 @@ def staff_product(db, sender_id, product_id):
     scope = scope_for(row)
     Store(db)._ensure(scope)
     invalidate(db, row)
-    db.execute('''UPDATE sales_v2_scopes SET data=json_set(data,'$.focus_product_id',?)
+    db.execute('''UPDATE sales_v2_scopes SET data=json_set(data,'$.focus_product_id',?,'$.focus_source','staff')
                   WHERE scope=?''', (product_id, scope.key))
     db.commit()
 
@@ -293,6 +293,33 @@ def pending_input(module, db, row, incoming_id, staff_reply_id):
     if any(sales_playbook.human_requested(part) for part in texts):
         text = next(part for part in texts if sales_playbook.human_requested(part))
     return dict(text=text, ad=ad, media_kind=kind, media_ref=reference), audio_pending
+
+
+def recent_staff_stock_conflict(module, db, scope, incoming_id, staff_reply_id):
+    if not staff_reply_id:
+        return None
+    focus = Store(db).snapshot(scope)['data'].get('focus_product_id')
+    if not focus:
+        binding = module.get_active_product_binding(db, scope.sender)
+        focus = binding['product_id'] if binding else None
+    if not focus:
+        return None
+    rows = db.execute("""SELECT text,created_at FROM messages
+        WHERE sender_id=? AND store_id=? AND id<? AND direction='outgoing' AND message_type='text'
+        AND json_extract(CASE WHEN json_valid(raw_payload) THEN raw_payload ELSE '{}' END,
+                         '$.sender_type')='staff' AND """ + delivery_state.VISIBLE_SQL + " ORDER BY id DESC LIMIT 12",
+        (scope.sender, scope.store, incoming_id))
+    cutoff = datetime.now(module.BAGHDAD_TZ) - timedelta(hours=24)
+    for row in rows:
+        stamp = module.sales_engagement.timestamp(row['created_at'])
+        if not stamp or stamp < cutoff:
+            break
+        clean = checkout.normalized(row['text'])
+        if re.search(r'خلصت\s+(?:كل\s+)?الكمي[هة]|ولا\s+قطع[هة]\s+بقت|نفدت\s+(?:كل\s+)?الكمي[هة]', clean):
+            return focus
+        if re.search(r'(?:رجع|وصل|صار|هسه)\s+متوفر|وصلت\s+كمي[هة]\s+جديد[هة]', clean):
+            break
+    return None
 
 
 def finish_order(module, db, scope, order, products, held):
@@ -346,7 +373,8 @@ def make_entry(module, db, scope, allow_write):
     model = module.get_ai_model(db, 'main_model', module.MAIN_MODEL)
     # The runtime owns its attempt budget, including exactly one Argon request.
     post = partial(module.ai_transport.post, max_attempts=1, budget_seconds=48)
-    observe = ImageObserver(module.inbound_media.fetch, module.match_customer_image_with_catalog)
+    observe = ImageObserver(module.inbound_media.fetch, module.match_customer_image_with_catalog,
+                            lambda current, url: module._archived_incoming_image_data(db, current.sender, url))
 
     def media(current, kind, references, products):
         from .contracts import DecisionUnavailable
@@ -393,6 +421,10 @@ def make_entry(module, db, scope, allow_write):
                                color=color_by_url.get(variant['url'], variant['color'])))
         return photos
 
+    def remember_photo_focus(current, product):
+        module.remember_customer_product(db, current.sender, product, 'image_recognition',
+                                         confidence=100, commit=False)
+
     return Entrypoint(db, lambda store: module.load_products_from_file(store_id=store),
         lambda store, province: module.delivery_fee_for_province(province, db),
         DecisionGateway(model, module.OPENROUTER_KEY, post), module.get_order_confirmation_text(db),
@@ -400,7 +432,7 @@ def make_entry(module, db, scope, allow_write):
         backup=BackupGateway(module.OPENROUTER_KEY, post),
         policy_loader=lambda store: {'delivery_time': module.get_delivery_settings(db)['delivery_time']},
         allow_write=allow_write, on_booking=partial(finish_order, module, db), text_reference=text_reference,
-        product_photos=product_photos)
+        product_photos=product_photos, on_photo_focus=remember_photo_focus)
 
 
 def delivery_callbacks(module, db, scope, incoming_id, enabled):
@@ -547,6 +579,10 @@ def process(module, db, row, incoming_id):
         with db:
             mark_handled()
         return dict(ok=True, reason='sticker')
+    if not prior:
+        staff_product_id = recent_staff_stock_conflict(module, db, scope, incoming_id, staff_reply_id)
+        if staff_product_id:
+            event['staff_sold_out_product'] = staff_product_id
     entry = make_entry(module, db, scope, allowed)
     try:
         if not prior:

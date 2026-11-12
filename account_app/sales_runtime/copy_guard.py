@@ -6,6 +6,32 @@ from ..sales_recovery import claims_sent_models, promises_photo_attachment
 from .wording import mentions_free_size
 
 
+MATERIALS = (
+    r'(?:قديف[هة]|قطيف[هة]|مخمل)', r'فرو', r'قطن(?:ي[هة]?)?', r'باربي',
+    r'(?:جينز|جنز|دنيم)', r'(?:ساتان|ستان|ستن)', r'(?:لينن|كتان)',
+    r'صوف', r'شيفون', r'دانتيل', r'حرير', r'بوليستر',
+)
+ROOMY_FIT = r'راه[ييةه]+|(?:قص[هةت]|كص[هةت]).{0,12}واسع|(?:يجي|تجي|يجيلج|تجيلج).{0,10}واسع|واسع[هة]?\s+علي'
+
+
+def material_kinds(text):
+    clean = normalized(text)
+    return {material for material in MATERIALS
+            if re.search(r'(?<!\w)(?:ال)?(?:' + material + r')(?!\w)', clean)}
+
+
+def validate_material(text, recorded, requested=False):
+    if not recorded:
+        return
+    expected = material_kinds(recorded)
+    for clause in re.split(r'[\n.،؟!?؛]+', normalized(text)):
+        if not requested and not re.search(r'قماش|خامة|خامه|خامت|مصنوع', clause):
+            continue
+        positive = re.sub(r'(?<!\w)(?:مو|مش|ليس)\s+(?:ال)?(?:' + '|'.join(MATERIALS) + r')(?!\w)', '', clause)
+        if material_kinds(positive) - expected:
+            raise ValueError('reply.fabric: use only the verified material for the current product')
+
+
 def validate_copy(parts,question,action_results=None):
     proof=action_results or {}
     if not isinstance(parts,list) or not 1<=len(parts)<=5:
@@ -68,11 +94,11 @@ def validate_copy(parts,question,action_results=None):
         raise ValueError('reply.product: internal product IDs are not customer-facing names')
     image_request=(r'(?:دز\w*|ارس\w*).{0,35}(?:صور|سكرين|اسم\s*الموديل)'
                    r'|(?:ممكن|احتاج|ابعثي).{0,8}(?:صور|سكرين)')
-    if re.search(image_request,text) and question!='product':
+    if re.search(image_request,text) and question not in {'product', 'alternatives.photos'}:
         raise ValueError('reply.question: do not repeat product identification outside the selected step')
     if not any(part['type'] == 'image' for part in parts) and (
             claims_sent_models(text) or promises_photo_attachment(text) or
-            re.search(r'(?:هاي|هذني|تلكين|هسه توصل\w*|راح توصل\w*)\s+(?:ال)?صور', text)):
+            re.search(r'(?:هاي|هذني|تلكين|هسه توصل\w*|راح توصل\w*)\s+(?:ال)?(?:صور|موديلات|بدائل)', text)):
         raise ValueError('reply.media: do not announce photos without an attachment')
     if re.search(r'مو\s*(?:محدد|موضح|متوفر).{0,15}(?:معلومات|بيانات)|البيانات\s*(?:غير|مو)|منشا\s*الصنع\s*مو\s*محدد',text):
         raise ValueError('reply.missing_fact: genuine missing facts require silent handoff')
