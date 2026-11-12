@@ -5,6 +5,46 @@ from ..checkout import normalized,explicit_purchase,is_confirmation
 from .store import digest
 
 
+def direct_color(text):
+    """A single unambiguous choice, possibly with an explicit clothing size."""
+    value = normalized(text).strip(' .،!')
+    value = re.sub(r'^(?:اريد(?:ها|ه)?|خلي(?:ها|ه|لي)?|اخذ|ثبتي(?:لي)?|احجزي(?:لي)?)\s+', '', value)
+    value = re.sub(r'^(?:هذا|هاذا|هاي|هذي|نفس|(?:ال)?لون)\s+', '', value)
+    value = re.sub(r'\s+(?:(?:اللي\s+)?بالصور[ةه]|اللي\s+دزيت(?:ها|ه))$', '', value)
+    value = re.sub(r'\s+(?:قياس|مقاس|سايز)\s+[^؟?،,\n]+$', '', value)
+    return product_variants.single_color(value)
+
+
+def color_availability(text):
+    """Keep a named-color stock question out of cart changes."""
+    value = normalized(text).strip(' .،!؟?')
+    match = re.fullmatch(r'(?:اكو|عندكم|متوفر|موجود)\s+(.+?)|(.+?)\s+(?:متوفر[هة]?|موجود[هة]?)', value)
+    if match:
+        return direct_color(next(part for part in match.groups() if part is not None))
+    return product_variants.single_color(value) if text.rstrip().endswith(('؟', '?')) else ''
+
+
+def referred_photo_color(text, available_color):
+    """Treat a nearby name as a reference only when this turn has photo evidence."""
+    if not available_color:
+        return ''
+    correction = color_correction(text)
+    name = direct_color(text) or color_availability(text) or (correction and correction[0])
+    if name and (name == available_color or product_variants.nearby_color(name, [available_color])):
+        return available_color
+    value = normalized(text).strip(' .،!')
+    if re.fullmatch(r'(?:(?:اريد|اخذ|خلي|اقصد|ثبتيلي|احجزيلي)\s+)?(?:هذا|هاذا|هاي|هذي)(?:\s+(?:بالصور[ةه]|اللون))?', value):
+        return available_color
+    return ''
+
+
+def direct_clothing_size(text):
+    value = normalized(product_variants.normalize_size_words(text)).strip(' .،!')
+    match = re.fullmatch(r'(?:(?:لا|اقصد|اني|انا|اريد|البس|خلي)\s+)?'
+                         r'(?:قياس(?:ي)?|مقاس(?:ي)?|سايز)\s*[:=]?\s*(\d{2,3}(?:\.5)?|[2-6]xl|xl|xs|s|m|l|xxl)', value)
+    return match[1].upper() if match else ''
+
+
 def color_correction(text):
     value = normalized(text).strip(' .!،')
     if re.match(r'^(?:لا\s*[,،]?\s*)?(?:اريد|بدلي|خلي\w*)\s+', value):

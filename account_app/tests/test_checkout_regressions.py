@@ -30,11 +30,23 @@ class ContactRegressionTests(unittest.TestCase):
         self.assertIn("H611", contact["address"])
         self.assertEqual(contact["province"], "السليمانية")
 
+    def test_multiline_zone_address_keeps_the_house_code_in_runtime(self):
+        from account_app.sales_runtime.contact import contact_only, declarations
+        text = 'السليمانية\nمرتفعات السليمانية زون 3\nH611'
+        fields = declarations(text, {})
+        self.assertTrue(contact_only(text))
+        self.assertEqual('السليمانية', fields['province'])
+        self.assertIn('H611', fields['address'])
+        self.assertEqual({}, declarations('P019', fields))
+
     def test_iraqi_phone_formats_and_short_number(self):
-        for text in ["+964 770 123 4567", "009647701234567", "٠٧٧٠١٢٣٤٥٦٧", "0770-123-4567"]:
-            self.assertEqual(phone_number(text), "07701234567")
-        self.assertFalse(phone_number("0770123456"))
-        self.assertFalse(phone_number("1077012345679"))
+        for text in ["+964 770 123 4567", "009647701234567", "٠٧٧٠١٢٣٤٥٦٧", "۰۷۷۰۱۲۳۴۵۶۷",
+                     "0770-123-4567", "0 770 (123) 4567", "+٩٦٤ ٧٧٠\u200f١٢٣ ٤٥٦٧"]:
+            with self.subTest(text=text):
+                self.assertEqual(phone_number(text), "07701234567")
+        for text in ("0770123456", "1077012345679", "0770123456\n5 شارع التجربة"):
+            with self.subTest(text=text):
+                self.assertFalse(phone_number(text))
 
     def test_customer_address_without_address_label(self):
         for text, province in [("كوت الموفقيه", "واسط"), ("الانبار قضاء حديثه بروانه", "الأنبار"), ("بغداد حي اور", "بغداد")]:

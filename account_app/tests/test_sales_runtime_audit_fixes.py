@@ -286,13 +286,24 @@ class AuditFixTests(unittest.TestCase):
 
     def test_tracking_existing_order_does_not_turn_into_new_sale(self):
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide)
-        for index, text in enumerate(('عندي طلب يمكم صار كم يوم', 'شوكت يوصل طلب',
+        for index, text in enumerate(('عندي طلب يمكم صار كم يوم', 'شوكت يوصل طلبي',
                                       'حبيبتي طلب قبل يومين من طلبته')):
             result=entry.receive(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id=f'tracking-{index}',
                                  message_id='m',text=text)
             self.assertEqual('order_tracking',result['reason'])
         self.decide.assert_not_called()
         self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_generic_delivery_questions_do_not_stop_a_new_sale(self):
+        from account_app.sales_runtime.recovery import grounded_plan
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, grounded_plan)
+        for i, text in enumerate(('متى يتم توصيل الطلبات؟', 'شوكت يوصل الطلب إذا طلبت؟',
+                                  'شوكت يوصل الطلب؟')):
+            result = entry.receive(store_id='khuyoot', channel='chatwoot', account_id='a',
+                                   sender_id=f'new-delivery-{i}', message_id='m', text=text)
+            self.assertEqual('continue', result['action'], text)
+            self.assertIn('delivery_time', [f['field'] for f in result['answer_plan']['facts']])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
     def test_eta_during_new_checkout_keeps_the_cart_active(self):
         self.select()

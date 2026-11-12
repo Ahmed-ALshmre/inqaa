@@ -91,6 +91,9 @@ class Responses:
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
+        photo_choice = outcome.get('photo_choice')
+        if photo_choice and photo_choice['product_id'] != focus:
+            photo_choice = None
         product_unresolved = not focus and not lines
         if self.product_photos and product and catalog_photo_request(current):
             colors = product_variants.requested(current)['colors']
@@ -383,6 +386,8 @@ class Responses:
         if focus:
             from ..product_questions import guidance_for
             context['reply_guidance'] = guidance_for(product,current)
+        if photo_choice:
+            context['verified_photo_choice'] = photo_choice
         if needs_weight and question == f'product.{focus}.weight_kg' and set(requested) <= {'sizes'}:
             parts = [dict(type='text', text='هالموديل قياساته حسب الوزن عيني، شكد الوزن تقريباً؟')]
         elif outcome.get('contact_turn') and not requested and not quote_turn and not feedback and (
@@ -467,6 +472,11 @@ class Responses:
                     r'(?<!\w)(?:وصلن\w*|استلم\w*|سجلت\s+يمي|حفظت\s+يمي).{0,24}(?:ال)?(?:رقم|عنوان|بيانات)|'
                     r'(?:بياناتج|بياناتچ|بياناتك)\s+(?:كامل\w*|موجود\w*|محفوظ\w*)', clean):
                 raise ValueError('reply.style: go directly to the answer or the one missing detail')
+            photo = context.get('verified_photo_choice')
+            color_only = photo and not re.search(r'قياس|مقاس|سايز|عمر|وزن|كيلو|كمية', context['customer_message'])
+            if color_only and re.search(r'(?<!\w)(?:مو|ما|غير)\s*(?:متوفر\w*|موجود\w*)', clean
+                                       ) and not context.get('business_feedback'):
+                raise ValueError('reply.photo_color: this photographed catalog color is available')
             if len(reply_layout.compact(text)) > context.get('copy_budget', 520):
                 raise ValueError('reply.length: shorten to the current answer and one relevant next step')
             layout = reply_layout.plan_sales_bubbles({'_human_sales_voice': True}, text)

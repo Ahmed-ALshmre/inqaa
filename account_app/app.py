@@ -7648,7 +7648,7 @@ def post_order_acknowledgement_reply(text):
         return "تدللين عيني، بالخدمة دائماً 🌸"
     courtesy=re.sub(r'[^\w\s]',' ',customer_copy.normalized(text))
     courtesy=re.sub(r'\s+',' ',courtesy).strip()
-    phrase=r'(?:تمام|عيني|حبيبتي|عمري|تسلمين|مشكوره|ممنونه|مقصرتي|ما\s*قصرتي|تعبتج|وياي|مع\s+السلامه|ان\s+شاء\s+الله|بانتظار\s+المندوب)'
+    phrase=r'(?:تمام|شكرا|عيني|حبيبتي|عمري|تسلمين|مشكوره|ممنونه|مقصرتي|ما\s*قصرتي|تعبتج|وياي|مع\s+السلامه|ان\s+شاء\s+الله|بانتظار\s+المندوب)'
     if re.fullmatch(r'(?:و?'+phrase+r'\s*)+',courtesy):
         return 'تدللين، بالخدمة بأي وقت 🌷'
     return ""
@@ -7912,7 +7912,7 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
         unanswered = [ev.get("text") or ""]
     acknowledgement = post_order_acknowledgement_reply(ev.get("text"))
     if not acknowledgement and is_confirmation(ev.get('text')):
-        acknowledgement = 'طلبج مسجل عندنا عيني، وما راح نكرر الحجز 🌸'
+        acknowledgement = 'إي عيني، طلبج مسجل عدنا 🌸'
     courtesy_only = bool(not (image_result or {}).get('unmatched_customer_image')
         and not ev.get('image_url') and not ev.get('attachments') and acknowledgement
         and all(post_order_acknowledgement_reply(t) or is_confirmation(t) for t in unanswered))

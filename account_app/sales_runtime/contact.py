@@ -9,11 +9,19 @@ def declined_phone(text):
     return bool(re.search(r'رقم(?:كم| المندوب| المتجر)|مو رقمي|ما اريد استخدم هالرقم', checkout.normalized(text)))
 
 
+def _zone_unit(line, address):
+    # Some mapped developments use a zone plus a separate house code, e.g. H611.
+    return bool(re.search(r'(?<!\w)زون\s*\d+', checkout.normalized(address))
+                and re.fullmatch(r'[a-z]\d{2,5}', checkout.normalized(line).strip()))
+
+
 def declarations(text, previous):
     fields = {}
     for line in text.splitlines():
         current = {**previous, **fields}
         parsed = checkout.contact_fields(line, current)
+        if _zone_unit(line, fields.get('address')):
+            parsed['address'] = f"{fields['address']}، {line.strip()}"
         if declined_phone(line):
             parsed.pop('phone', None)
         if parsed.get('phone') and not parsed.get('address'):
@@ -31,6 +39,7 @@ def declarations(text, previous):
 
 def contact_only(text):
     """Allow local checkout for plain phone and address declarations."""
+    address = ''
     for line in text.splitlines():
         clean = checkout.normalized(line).strip(' .،,:')
         if not clean:
@@ -40,11 +49,14 @@ def contact_only(text):
                            '', remainder).strip(' .،,:')
         if not remainder and checkout.phone_number(clean):
             continue
+        if _zone_unit(remainder, address):
+            continue
         if re.search(r'[؟?]|اريد|احجز|ثبتي|لون|قياس|وزن|سعر|خلاص|بشرط|توصيل|اخر|غير|تاخر|اذا', remainder):
             return False
         parsed = checkout.contact_fields(remainder)
         if not parsed.get('address') and not parsed.get('province'):
             return False
+        address = parsed.get('address') or address
     return bool(text.strip())
 
 

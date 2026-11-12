@@ -30,7 +30,9 @@ def explicit_purchase(value):
     return bool(re.search(direct + '|' + requested + r'|(?<!\w)ثبت\s+(?:الطلب|الحجز)(?!\w)', text))
 
 
-PHONE = re.compile(r"(?<!\d)(?:(?:\+?964|00964)[\s()-]*7|07)(?:[\s()-]*\d){9}(?!\d)")
+_PHONE_SEPARATOR = r"[ \t\u00a0\u200e\u200f\u202f\u2066-\u2069()\-]"
+PHONE = re.compile(rf"(?<!\d)(?:(?:\+?964|00964){_PHONE_SEPARATOR}*7|0{_PHONE_SEPARATOR}*7)"
+                   rf"(?:{_PHONE_SEPARATOR}*\d){{9}}(?!\d)")
 PROVINCES = {
     "بغداد": ("بغداد",), "البصرة": ("البصرة", "البصره", "بصره", "بصرة"),
     "نينوى": ("نينوى", "الموصل", "موصل"), "أربيل": ("اربيل", "هولير"),

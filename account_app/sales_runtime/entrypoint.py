@@ -116,7 +116,7 @@ class Entrypoint:
         state = self.store.snapshot(scope)['data']
         if state['control_mode'] != 'active':
             return dict(action='human', event_id=event['id'])
-        from .. import sales_playbook,checkout
+        from .. import sales_playbook,checkout,product_variants
         import re
         clean=checkout.normalized(text)
         identity_typo=(re.search(r'ذكاء\s*(?:ا?صطناع\w*|صناعي)',clean) and
@@ -125,7 +125,9 @@ class Entrypoint:
             return self.handoff_service(scope,event['id'],'customer_requested_human')
         prior_order = bool(re.search(
             r'عندي\s+طلب|وين\s+(?:صار|طلبي)|طلع\s+طلب|متابع[ةه]\s+طلب|ما\s*وصل\s+(?:ال)?طلب|تاخر\s+(?:ال)?طلب|'
-            r'(?:طلبت|وصيت|حجزت|طلب\s+قبل).{0,35}(?:قبل|يومين|ايام|البارحه|البارحة|بعده)', clean))
+            r'(?:طلبت|وصيت|حجزت|طلب\s+قبل).{0,35}(?:قبل|يومين|ايام|البارحه|البارحة|بعده)|'
+            r'صار.{0,15}(?:يوم|اسبوع).{0,30}(?:ال)?طلب|من\s+(?:طلبن[ا]ها|طلبته|طلبتها)|'
+            r'(?:الطلب|الطلبيه|الطلبية)\s+القديم[هة]?|(?:من\s+)?نستونه\s+كل\s+يوم', clean))
         tracking = checkout.is_existing_order_followup(text) or bool(re.search(
             r'(?:شوكت|يمتى|متى)\s+(?:راح\s+)?(?:يوصل|توصل)\s+(?:ال)?طلب(?!\w)', clean))
         sending_checkout = (state['cart'] and not state.get('order_id') and not prior_order
@@ -133,7 +135,8 @@ class Entrypoint:
                                   or declarations(text, state['contact'])))
         if explicit_cancellation(text) and not state.get('order_id'):
             return self.handoff_service(scope, event['id'], 'order_cancellation')
-        if prior_order or tracking and not sending_checkout and not explicit_cancellation(text):
+        looking_for_order = bool(state.get('order_id') or re.search(r'(?<!\w)(?:طلبي|حجزي)(?!\w)', clean))
+        if prior_order or (tracking and looking_for_order and not sending_checkout and not explicit_cancellation(text)):
             return self.handoff_service(scope,event['id'],'order_tracking')
         # A sticker is social context, never a request for product recognition.
         # Image/video interpretation must be supplied by an explicit media adapter.
@@ -155,6 +158,9 @@ class Entrypoint:
                 if observed['status']=='matched' and len(candidates)!=1:
                     raise ValueError('media_match_requires_one_product')
                 clean = dict(status=observed['status'], product_ids=candidates)
+                color = product_variants.single_color(observed.get('observed_color'))
+                if clean['status'] == 'matched' and color:
+                    clean['observed_color'] = color
                 def remember(state):
                     state.setdefault('media_observations', {})[str(event['id'])] = clean
                     return dict(media=clean)
