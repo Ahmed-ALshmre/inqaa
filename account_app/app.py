@@ -1320,10 +1320,13 @@ def init_db():
     db.execute("CREATE INDEX IF NOT EXISTS idx_orders_stats ON orders(store_id,created_at,sender_id)")
     inbox_queries.init_db(db)
     product_questions.init(db)
+    order_actions.init(db)
     product_questions.seed_owner_facts(db, load_products_from_file(all_stores=True), now_baghdad_iso())
     restore_held_color_reviews(db)
     db.commit()
     sales_runtime_live.init_db(db)
+    storage_maintenance.init_incoming_deletions(db)
+    db.commit()
 
     now = now_baghdad_iso()
     baraah.seed(db, now)
@@ -15235,7 +15238,7 @@ def api_conversations():
 
 
 _incoming_media_lock = threading.Lock()
-_incoming_media_filename = re.compile(r'^[a-f0-9]{32}\.(?:jpg|png|gif|webp|avif|mp3|m4a|ogg|aac|wav|amr|mp4|mov|3gp)$')
+_incoming_media_filename = storage_maintenance.INCOMING_FILE_RE
 
 
 def _incoming_media_entries(row):
@@ -15433,13 +15436,53 @@ def api_delete_conversation(sender_id):
         return jsonify({"ok": False, "error": "sender_id required"}), 400
 
     db = get_db()
-    # Reserve the write lock so a queued worker cannot claim this sender midway
-    # through deletion. Running jobs must finish before their state is removed.
-    db.execute('BEGIN IMMEDIATE')
-    if db.execute("SELECT 1 FROM ai_jobs WHERE sender_id=? AND status='running' LIMIT 1", (sender_id,)).fetchone():
-        db.rollback()
-        return jsonify(ok=False, error="المحادثة قيد المعالجة حالياً؛ أعد الحذف بعد اكتمال الرد"), 409
-    deleted = {}
+    busy = "المحادثة قيد المعالجة حالياً؛ أعد الحذف بعد اكتمال الرد"
+    if not acquire_sender_lock(db, sender_id, wait_seconds=0):
+        return jsonify(ok=False, error=busy), 409
+    try:
+        with _incoming_media_lock:
+            with db:
+                # Reserve the write lock before checking the durable worker queue.
+                db.execute('BEGIN IMMEDIATE')
+                if db.execute("SELECT 1 FROM ai_jobs WHERE sender_id=? AND status='running' LIMIT 1",
+                              (sender_id,)).fetchone():
+                    return jsonify(ok=False, error=busy), 409
+                files = {name for row in db.execute("SELECT * FROM messages WHERE sender_id=? AND direction='incoming'",
+                                                    (sender_id,))
+                         for item in _incoming_media_entries(row) if (name := str(item.get('local_file') or ''))
+                         and _incoming_media_filename.fullmatch(name)}
+                storage_maintenance.queue_incoming_deletions(db, files)
+                deleted = _delete_conversation_records(db, sender_id)
+            media_pending = storage_maintenance.finish_incoming_deletions(db, INCOMING_MEDIA_DIR, files)
+    finally:
+        release_sender_lock(db, sender_id)
+    return jsonify(ok=True, sender_id=sender_id, deleted=deleted, orders_preserved=True,
+                   media_cleanup_pending=media_pending)
+
+
+def _delete_conversation_records(db, sender_id):
+    """Delete dependent records first so no personal data is orphaned."""
+    deleted = sales_runtime_live.delete_conversation(db, sender_id)
+    for table in ('ai_deliveries', 'ai_request_events'):
+        deleted[table] = db.execute(f'DELETE FROM {table} WHERE job_id IN '
+                                    '(SELECT id FROM ai_jobs WHERE sender_id=?)', (sender_id,)).rowcount
+    deleted['ai_deliveries'] += db.execute("""DELETE FROM ai_deliveries
+        WHERE job_id LIKE 'manual:%' AND job_id IN (
+            SELECT json_extract(CASE WHEN json_valid(raw_payload) THEN raw_payload END, '$.delivery_id')
+            FROM messages WHERE sender_id=? AND direction='outgoing')""", (sender_id,)).rowcount
+    for table, column in (('voice_interpretations', 'message_id'), ('verified_image_memory', 'source_message_id')):
+        deleted[table] = db.execute(f'DELETE FROM {table} WHERE {column} IN '
+                                    '(SELECT id FROM messages WHERE sender_id=?)', (sender_id,)).rowcount
+    db.execute('UPDATE product_questions SET review_id=NULL WHERE review_id IN '
+               '(SELECT id FROM human_reviews WHERE sender_id=?)', (sender_id,))
+    deleted['order_action_requests'] = db.execute("""DELETE FROM order_action_requests
+        WHERE sender_id=? AND NOT EXISTS (SELECT 1 FROM orders WHERE orders.id=order_action_requests.order_id)
+        """, (sender_id,)).rowcount
+    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='staff_audit'").fetchone():
+        path = f'/api/conversations/{sender_id}'
+        deleted['staff_audit_redacted'] = db.execute("""UPDATE staff_audit
+            SET path='/api/conversations/<deleted>' || substr(path, ?)
+            WHERE path=? OR instr(path, ?)=1""", (len(path) + 1, path, path + '/')).rowcount
     for table in (
         "sales_conversation_context",
         "conversation_ad_context",
@@ -15452,8 +15495,15 @@ def api_delete_conversation(sender_id):
         "ai_jobs",
         "followups",
         "customer_followup_messages",
+        "customer_tags",
+        "conversation_pause_state",
+        "image_recognition_attempts",
+        "manual_image_links",
+        "catalog_browse_state",
+        "catalog_browse_requests",
         "customer_image_positions",
         "customer_product_choices",
+        "product_questions",
         "ai_reply_drafts",
         "customer_product_interests",
         "customer_instructions",
@@ -15466,13 +15516,7 @@ def api_delete_conversation(sender_id):
         deleted[table] = cur.rowcount
     cur = db.execute("DELETE FROM customers WHERE sender_id=?", (sender_id,))
     deleted["customers"] = cur.rowcount
-    db.commit()
-    return jsonify({
-        "ok": True,
-        "sender_id": sender_id,
-        "deleted": deleted,
-        "orders_preserved": True,
-    })
+    return deleted
 
 
 @app.route("/api/improve_message", methods=["POST"])
@@ -18321,6 +18365,8 @@ def start_smart_reviewer_thread():
                 db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
                 db.row_factory = sqlite3.Row
                 try:
+                    with _incoming_media_lock:
+                        storage_maintenance.finish_incoming_deletions(db, INCOMING_MEDIA_DIR)
                     with _products_file_lock:
                         storage_maintenance.cleanup(db, UPLOADS_DIR, storage_maintenance.catalog_snapshot(PRODUCTS_FILE), product_root=PRODUCT_IMAGE_DIR)
                 except Exception as cleanup_error:

@@ -673,6 +673,7 @@ async function loadMessages(senderId, scroll = true, older = false) {
     const res = await apiFetch(`/api/conversations/${encodeURIComponent(senderId)}/messages?${params}`, {signal: controller.signal});
     if (!res.ok) throw new Error('messages');
     const data = await res.json();
+    if (controller.signal.aborted) return;
     const merged = new Map(cached.messages.map(m => [m.id, m]));
     (data.messages || []).forEach(m => merged.set(m.id, m));
     const messages = [...merged.values()].sort((a,b) => a.id-b.id);
@@ -2250,19 +2251,23 @@ async function deleteConversation() {
     if (!res.ok || !data.ok) throw new Error(data.error || 'فشل حذف المحادثة');
     inboxMutationRevision++;
     allConversations = allConversations.filter(c => c.sender_id !== senderId);
+    if (messageRequest?.sender === senderId) messageRequest.controller.abort();
     messageCache.delete(senderId);
     delete pendingReviewsBySender[senderId];
     delete openProblemsBySender[senderId];
     const wasSelected = currentSenderId === senderId;
     if (wasSelected) resetConversationView(); else renderConversations();
-    if (wasSelected && window.innerWidth <= 768 && history.state?.dashboardConversation) {
+    composerDrafts.delete(senderId);
+    if (wasSelected) {
+      document.getElementById('messageInput').value = '';
       const cleanUrl = new URL(location.href);
       cleanUrl.searchParams.delete('sender_id');
       const cleanState = {...(history.state || {})};
       delete cleanState.dashboardConversation;
       history.replaceState(cleanState, '', cleanUrl);
     }
-    showToast('تم حذف المحادثة', 'success');
+    showToast(data.media_cleanup_pending ? 'تم حذف المحادثة. سيعاد تنظيف المرفقات المتبقية.' : 'تم حذف المحادثة',
+      data.media_cleanup_pending ? 'warning' : 'success');
     await loadStats();
   } catch (e) {
     showToast(e.message || 'فشل حذف المحادثة', 'danger');
