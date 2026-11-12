@@ -33,7 +33,8 @@ def configuration():
     }
 
 
-def send(module, sender_id, messages):
+def send(module, sender_id, messages, *, post=None):
+    post = post or requests.post
     result = {'ok': False, 'status_code': 0, 'status': 'configuration_error', 'message': '', 'response': None}
     config = configuration()
     base = config['chatwoot_api_url']
@@ -54,7 +55,7 @@ def send(module, sender_id, messages):
         try:
             kwargs = {'headers': {'api_access_token': token}, 'timeout': 30, 'allow_redirects': False}
             if message.get('type') == 'text':
-                response = requests.post(url, json=payload, **kwargs)
+                response = post(url, json=payload, **kwargs)
             elif message.get('type') in {'image', 'audio'}:
                 if message.get('type') == 'audio':
                     path = Path(message.get('local_path') or '').resolve()
@@ -62,7 +63,7 @@ def send(module, sender_id, messages):
                     if not path.is_relative_to(root) or not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
                         return dict(result, status='invalid_audio', message='Audio is missing or exceeds 8 MB')
                     with path.open('rb') as attachment:
-                        response = requests.post(url, data={'message_type': 'outgoing', 'private': 'false'},
+                        response = post(url, data={'message_type': 'outgoing', 'private': 'false'},
                             files={'attachments[]': (path.name, attachment, message.get('mime_type') or 'audio/webm')}, **kwargs)
                     result['status_code'] = response.status_code
                     if not 200 <= response.status_code < 300:
@@ -70,6 +71,7 @@ def send(module, sender_id, messages):
                     body = response.json()
                     if not isinstance(body, dict) or not body.get('id') or body.get('status') == 'failed':
                         return dict(result, status='unconfirmed', message='Chatwoot did not confirm audio')
+                    result['provider_id'] = str(body['id'])
                     continue
                 reference = message.get('url', '')
                 # Upload catalog files directly; do not fetch arbitrary customer URLs.
@@ -82,7 +84,7 @@ def send(module, sender_id, messages):
                 if not path.is_file() or path.stat().st_size > 20 * 1024 * 1024:
                     return dict(result, status='invalid_image', message='Image missing or exceeds 20 MB')
                 with path.open('rb') as attachment:
-                    response = requests.post(url, data={'message_type': 'outgoing', 'private': 'false'},
+                    response = post(url, data={'message_type': 'outgoing', 'private': 'false'},
                         files={'attachments[]': (path.name, attachment, mimetypes.guess_type(path.name)[0] or 'application/octet-stream')}, **kwargs)
             else:
                 return dict(result, status='unsupported_message')
@@ -92,6 +94,7 @@ def send(module, sender_id, messages):
             body = response.json()
             if not isinstance(body, dict) or not body.get('id') or body.get('status') == 'failed':
                 return dict(result, status='unconfirmed', message='Chatwoot did not confirm message creation')
+            result['provider_id'] = str(body['id'])
         except (requests.RequestException, ValueError, OSError):
             return dict(result, status='transport_error', message='Chatwoot request or attachment upload failed')
     return dict(result, ok=True, status='success')
@@ -151,12 +154,13 @@ def install(module):
             return jsonify(ok=True, ignored=True, provider='zernio')
         sender_id = f'{store}::cw-{account}-{conversation}'
         platform = {'Channel::Instagram': 'instagram', 'Channel::Whatsapp': 'whatsapp'}.get(data['conversation'].get('channel'), 'facebook')
+        preview = module.app.extensions.get('sales_runtime_preview') if module.app.testing else None
         attachments = []
         for attachment in data.get('attachments') or []:
             if isinstance(attachment, dict) and attachment.get('data_url'):
                 kind = attachment.get('file_type', 'file')
                 sticker = media.sticker_attachment(attachment, data.get('content_attributes'))
-                if not sticker and kind == 'image' and media.sticker_candidate(attachment):
+                if preview is None and not sticker and kind == 'image' and media.sticker_candidate(attachment):
                     downloaded = module.inbound_media.fetch(attachment['data_url'], 'image',
                                                            configuration()['chatwoot_api_url'])
                     sticker = bool(downloaded and media.known_sticker(downloaded[0]))
@@ -179,8 +183,13 @@ def install(module):
         if name:
             db.execute('UPDATE customers SET name=? WHERE sender_id=?', (str(name), sender_id))
             db.commit()
+        if preview is not None:
+            return jsonify(preview.receive('chatwoot', store, str(account), sender_id,
+                                           f'chatwoot-{account}-{message_id}', str(data.get('content') or ''),
+                                           attachments, ad_context))
         # Use the existing per-sender queue, debounce, order logic and delivery review.
-        module._process_manychat_webhook_async(body, sender_id, platform, sender_id, background_after_intake=True)
+        module._process_manychat_webhook_async(body, sender_id, platform, sender_id, background_after_intake=True,
+                                              signed_channel=('chatwoot', str(account)))
         return jsonify(ok=True)
 
     @module.app.route('/api/chatwoot/diag')

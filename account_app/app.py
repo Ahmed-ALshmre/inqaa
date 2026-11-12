@@ -34,7 +34,7 @@ try:
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from .pricing import quote as price_order, expand_bundles
-    from .checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from .checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media, reply_consultant
     import baraah
@@ -49,8 +49,13 @@ except ImportError:
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
     from pricing import quote as price_order, expand_bundles
-    from checkout import CHECKOUT_ETA_SUFFIX, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
+    from checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 from flask import Flask, g, has_app_context, has_request_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
+
+# Gunicorn also supports launching app:app from inside account_app.
+if not __package__:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from account_app.sales_runtime import live as sales_runtime_live
 
 _ORIGINAL_PRINT = builtins.print
 
@@ -1318,6 +1323,7 @@ def init_db():
     product_questions.seed_owner_facts(db, load_products_from_file(all_stores=True), now_baghdad_iso())
     restore_held_color_reviews(db)
     db.commit()
+    sales_runtime_live.init_db(db)
 
     now = now_baghdad_iso()
     baraah.seed(db, now)
@@ -1636,7 +1642,7 @@ def get_setting(db, key, default=""):
     return row["value"]
 
 
-def set_setting(db, key, value):
+def set_setting(db, key, value, *, commit=True):
     now = now_baghdad_iso()
     db.execute(
         """INSERT INTO app_settings (key, value, updated_at)
@@ -1646,7 +1652,8 @@ def set_setting(db, key, value):
                updated_at=excluded.updated_at""",
         (key, str(value), now),
     )
-    db.commit()
+    if commit:
+        db.commit()
 
 
 def _setting_bool(value, default=False):
@@ -1684,8 +1691,8 @@ def _store_setting_key(key, store_id=None):
     return key if sid == DEFAULT_STORE_ID else f"store:{sid}:{key}"
 
 
-def set_store_setting(db, key, value, store_id=None):
-    return set_setting(db, _store_setting_key(key, store_id), value)
+def set_store_setting(db, key, value, store_id=None, *, commit=True):
+    return set_setting(db, _store_setting_key(key, store_id), value, commit=commit)
 
 
 def get_app_setting(key, default="", db=None, store_id=None):
@@ -2023,6 +2030,8 @@ def _followup_block_reason(db, sender_id):
     owner = db.execute("SELECT store_id,lead_score FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
     if not owner or (owner['store_id'] or DEFAULT_STORE_ID) != current_store_id():
         return "wrong_store"
+    if sales_runtime_live.route(db, sender_id):
+        return "sales_runtime_owns_conversation"
     if not is_ai_enabled(db):
         return "store_ai_disabled"
     if int(owner["lead_score"] or 0) < get_followup_settings(db)["min_interest_score"]:
@@ -2106,7 +2115,7 @@ def schedule_ai_review_followup(db, sender_id, message, interest_score, delay_mi
         meta={'automatic_ai_review': True, 'interest_score': interest_score})
 
 
-def cancel_followups_for_sender(db, sender_id, reason="cancelled"):
+def cancel_followups_for_sender(db, sender_id, reason="cancelled", *, commit=True):
     now = now_baghdad_iso()
     cur = db.execute(
         """UPDATE followups
@@ -2114,7 +2123,8 @@ def cancel_followups_for_sender(db, sender_id, reason="cancelled"):
            WHERE sender_id=? AND status='pending'""",
         (now, f"\n{reason}", sender_id),
     )
-    db.commit()
+    if commit:
+        db.commit()
     return cur.rowcount
 
 
@@ -2313,14 +2323,15 @@ def is_ai_enabled(db):
 def set_store_ai_enabled(db, store_id, enabled):
     """Pause one store's automatic replies and discard its queued followups."""
     sid = _safe_store_id(store_id)
-    set_store_setting(db, "ai_enabled", "1" if enabled else "0", sid)
+    set_store_setting(db, "ai_enabled", "1" if enabled else "0", sid, commit=False)
     cancelled = 0
     if not enabled:
         cancelled = db.execute("""UPDATE followups SET status='cancelled'
             WHERE status='pending' AND sender_id IN
               (SELECT sender_id FROM customers WHERE COALESCE(NULLIF(store_id,''),'default')=?)""",
             (sid,)).rowcount
-        db.commit()
+        sales_runtime_live.pause_store(db, sid)
+    db.commit()
     return cancelled
 
 
@@ -2334,7 +2345,7 @@ def is_customer_ai_enabled(db, sender_id):
     return int(row["enabled"] or 0) == 1
 
 
-def set_customer_ai_enabled(db, sender_id, enabled, reason="manual", allow_manual_resume=False):
+def set_customer_ai_enabled(db, sender_id, enabled, reason="manual", allow_manual_resume=False, *, commit=True):
     # A staff handoff or the conversation switch owns this pause. Product
     # linking, review closure and delayed jobs must never silently undo it.
     pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
@@ -2352,8 +2363,16 @@ def set_customer_ai_enabled(db, sender_id, enabled, reason="manual", allow_manua
     db.execute("""INSERT INTO conversation_pause_state(sender_id,reason,updated_at) VALUES(?,?,?)
                   ON CONFLICT(sender_id) DO UPDATE SET reason=excluded.reason,updated_at=excluded.updated_at""",
                (sender_id, 'enabled' if enabled else reason, now))
-    db.commit()
+    sales_runtime_live.sync_control(db, sender_id, enabled, explicit=allow_manual_resume)
+    if commit:
+        db.commit()
     return True
+
+
+def pause_sales_runtime_for_staff(db, sender_id):
+    row = sales_runtime_live.route(db, sender_id)
+    if row and row['store_id'] == current_store_id():
+        set_customer_ai_enabled(db, sender_id, False)
 
 
 def find_product_by_id(product_id, include_inactive=False, store_id=None):
@@ -3116,7 +3135,7 @@ def infer_explicit_customer_gender(text):
     return owner_sales.explicit_gender(text)
 
 
-def capture_customer_contact(db, sender_id, text):
+def capture_customer_contact(db, sender_id, text, *, commit=True):
     row = db.execute("SELECT phone,province,address FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
     previous = dict(row) if row else {}
     fields = contact_fields(text, previous)
@@ -3126,7 +3145,8 @@ def capture_customer_contact(db, sender_id, text):
     for key, value in fields.items():
         if key in {"phone", "province", "address"}:
             db.execute(f"UPDATE customers SET {key}=? WHERE sender_id=?", (value, sender_id))
-    db.commit()
+    if commit:
+        db.commit()
     return fields
 
 
@@ -3992,7 +4012,7 @@ def send_telegram_photo(photo_url, caption="", chat_id=None, label="notification
         return False
 
 
-def create_human_review(db, ev, reason, candidates=None, notify_telegram=True):
+def create_human_review(db, ev, reason, candidates=None, notify_telegram=True, *, commit=True):
     now = now_baghdad_iso()
     candidates = candidates or []
     existing = db.execute("SELECT id FROM human_reviews WHERE sender_id=? AND status='pending' AND reason=?",
@@ -4009,7 +4029,7 @@ def create_human_review(db, ev, reason, candidates=None, notify_telegram=True):
         db.execute('''INSERT INTO ai_service_incidents(store_id,code,updated_at) VALUES(?,?,?)
                       ON CONFLICT(store_id,code) DO UPDATE SET occurrences=occurrences+1,updated_at=excluded.updated_at''',
                    (store, code, time.time()))
-    db.execute(
+    cursor = db.execute(
         """INSERT INTO human_reviews
            (sender_id, message_text, image_url, candidates_json, reason, status, created_at, store_id)
            VALUES (?,?,?,?,?,'pending',?,?)""",
@@ -4023,8 +4043,9 @@ def create_human_review(db, ev, reason, candidates=None, notify_telegram=True):
             ev.get("store_id") or current_store_id(),
         ),
     )
-    db.commit()
-    review_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+    if commit:
+        db.commit()
+    review_id = cursor.lastrowid
 
     if notify_telegram:
         send_telegram_message(
@@ -4926,7 +4947,7 @@ def get_subscriber_info(subscriber_id: str, page_id: str = "", store_id: str = "
 # ── Messages ──────────────────────────────────────────────────────────────────
 
 def save_message(db, sender_id=None, direction=None, message_type=None, text=None,
-                 image_url=None, ad_id=None, ref=None, raw_payload=None):
+                 image_url=None, ad_id=None, ref=None, raw_payload=None, *, commit=True, prepared_media=None):
     if not hasattr(db, "execute"):
         try:
             memory_db = get_db()
@@ -4953,9 +4974,12 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
         if generation and generation.get('sender_id') == sender_id and raw_payload['sender_type'] != 'staff':
             raw_payload.setdefault('_delivery_status', 'generated')
             raw_payload['_reply_to_message_id'] = generation.get('incoming_id')
-    media = extract_media(raw_payload if direction == "incoming" else {}, text or "", image_url or "")
-    if direction == 'incoming' and any(m['type'] == 'file' for m in media):
-        media = resolve_incoming_media({'attachments': media})
+    if prepared_media is None:
+        media = extract_media(raw_payload if direction == "incoming" else {}, text or "", image_url or "")
+        if direction == 'incoming' and any(m['type'] == 'file' for m in media):
+            media = resolve_incoming_media({'attachments': media})
+    else:
+        media = prepared_media
     images = [m["url"] for m in media if m["type"] == "image"]
     image_url = images[0] if images else None
     if media and (not text or any(m["url"] == text.strip() for m in media)):
@@ -4971,7 +4995,8 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
     )
     if direction == "incoming":
         ad_attribution.save(db, sender_id, cursor.lastrowid, raw_payload, ad_id, ref)
-    db.commit()
+    if commit:
+        db.commit()
     generation = _reply_generation.get()
     if generation is not None:
         if direction == 'incoming' and not generation.get('incoming_id'):
@@ -4983,8 +5008,9 @@ def save_message(db, sender_id=None, direction=None, message_type=None, text=Non
             and any(inbound_media.trusted_source(item['url'], os.environ.get('CHATWOOT_BASE_URL', ''))
                     for item in media)):
         ai_jobs.enqueue(db, current_store_id(), sender_id, 'media_archive',
-                        {'message_id': cursor.lastrowid}, str(cursor.lastrowid))
-        ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
+                        {'message_id': cursor.lastrowid}, str(cursor.lastrowid), commit=commit)
+        if commit:
+            ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
     return cursor.lastrowid
 
 
@@ -5033,7 +5059,7 @@ def get_conversation_history(db, sender_id, limit=10):
     return history
 
 
-def save_conversation_message(db, sender_id, role, content):
+def save_conversation_message(db, sender_id, role, content, *, commit=True):
     """
     Save a user or assistant message inside conversation_memory.
     """
@@ -5046,7 +5072,8 @@ def save_conversation_message(db, sender_id, role, content):
         "INSERT INTO conversation_memory (sender_id, role, content) VALUES (?, ?, ?)",
         (sender_id, role, text),
     )
-    db.commit()
+    if commit:
+        db.commit()
     return True
 
 
@@ -7204,6 +7231,8 @@ def auto_reply_after_product_link(db, sender_id, matched_product, conversation_h
     """Generate and send the first AI reply as soon as a human links a product."""
     if not matched_product:
         return {"sent": False, "reply": "", "reason": "missing_product"}
+    if sales_runtime_live.route(db, sender_id):
+        return {"sent": False, "reply": "", "reason": "sales_runtime_owns_conversation"}
     pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
     if pause and pause['reason'] == 'customer_requested_human':
         return {'sent': False, 'reply': '', 'reason': 'customer_requested_human'}
@@ -7619,7 +7648,7 @@ def post_order_acknowledgement_reply(text):
         return "تدللين عيني، بالخدمة دائماً 🌸"
     courtesy=re.sub(r'[^\w\s]',' ',customer_copy.normalized(text))
     courtesy=re.sub(r'\s+',' ',courtesy).strip()
-    phrase=r'(?:تمام|عيني|حبيبتي|عمري|تسلمين|مشكوره|ممنونه|مقصرتي|ما\s*قصرتي|تعبتج|وياي|مع\s+السلامه|ان\s+شاء\s+الله|بانتظار\s+المندوب)'
+    phrase=r'(?:تمام|شكرا|عيني|حبيبتي|عمري|تسلمين|مشكوره|ممنونه|مقصرتي|ما\s*قصرتي|تعبتج|وياي|مع\s+السلامه|ان\s+شاء\s+الله|بانتظار\s+المندوب)'
     if re.fullmatch(r'(?:و?'+phrase+r'\s*)+',courtesy):
         return 'تدللين، بالخدمة بأي وقت 🌷'
     return ""
@@ -7883,7 +7912,7 @@ def handle_post_order_message(db, ev, customer, history, products, customer_prod
         unanswered = [ev.get("text") or ""]
     acknowledgement = post_order_acknowledgement_reply(ev.get("text"))
     if not acknowledgement and is_confirmation(ev.get('text')):
-        acknowledgement = 'طلبج مسجل عندنا عيني، وما راح نكرر الحجز 🌸'
+        acknowledgement = 'إي عيني، طلبج مسجل عدنا 🌸'
     courtesy_only = bool(not (image_result or {}).get('unmatched_customer_image')
         and not ev.get('image_url') and not ev.get('attachments') and acknowledgement
         and all(post_order_acknowledgement_reply(t) or is_confirmation(t) for t in unanswered))
@@ -9590,7 +9619,7 @@ def _consult_difficult_reply(state, result, problems):
     return reply_consultant.advise(state, result, problems, key=OPENROUTER_KEY,
         endpoint=OPENROUTER_URL, post=ai_transport.post,
         record=lambda payload, elapsed: ai_efficiency.record_usage(get_db(), current_store_id(),
-            'reply_consultation', reply_consultant.MODEL, payload, elapsed))
+            'reply_consultation', state.model, payload, elapsed))
 
 
 def _consulted_reply_failed(result):
@@ -9602,12 +9631,13 @@ def _consulted_reply_failed(result):
 def call_main_ai(ev, message_type, customer, history, products, matched_product,
                  image_result, instructions_text, rules_list, fix_instruction=None,
                  customer_products=None, conversation_history=None, catalog_search_context=None):
-    active = bool(has_app_context() and reply_consultant.enabled() and OPENROUTER_KEY
+    active = bool(has_app_context() and (reply_consultant.enabled() or sales_runtime_live.all_stores()) and OPENROUTER_KEY
         and not ev.get('_staff_preview') and not ev.get('_post_order')
         and not sales_playbook.human_requested(ev.get('text'))
         and not (image_result or {}).get('unmatched_customer_image'))
     prepared_ev = dict(ev, _defer_product_handoff=True) if active else ev
-    with reply_consultant.scope(active, original_ev=ev, already_attempted=ev.get('_reply_consultation_used'),
+    consultant_model = sales_runtime_live.BACKUP_MODEL if sales_runtime_live.all_stores() else reply_consultant.MODEL
+    with reply_consultant.scope(active, model=consultant_model, original_ev=ev, already_attempted=ev.get('_reply_consultation_used'),
             ev=prepared_ev, store_id=current_store_id(), message_type=message_type, customer=customer or {},
             history=ai_efficiency.merge_history(history or [], conversation_history), products=products,
             matched_product=matched_product, image_result=image_result, instructions_text=instructions_text,
@@ -10744,9 +10774,6 @@ def reviewable_checkout_color(db, sender_id, items, matched_product):
         return False
     latest = latest_incoming_message(db, sender_id) or {}
     return bool(contact_fields(latest.get('text')) and recent_checkout_contact_action(db, sender_id))
-
-
-COLOR_REVIEW_STATUS = 'يتطلب مراجعة اللون'
 
 
 def restore_held_color_reviews(db):
@@ -13689,7 +13716,8 @@ def manychat_webhook(store_key=""):
     }), 200
 
 
-def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id=None, background_after_intake=False):
+def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound_subscriber_id=None,
+                                    background_after_intake=False, *, signed_channel=None):
     """Persist incoming data first; waiting for AI must never delay dashboard messages."""
     with app.app_context():
         db = get_db()
@@ -13708,21 +13736,45 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
             media = extract_media({"attachments": ev.get("attachments", [])})
             if not is_chatwoot and is_recent_duplicate_incoming(db, subscriber_id, ev.get("text"), ev.get("image_url"), media=media):
                 return
+            signed_intake = bool(signed_channel and background_after_intake)
+            if not signed_intake and sales_runtime_live.route(db, subscriber_id):
+                return
             get_or_create_customer(db, subscriber_id, ev.get("page_id"), platform)
+            save_options = {}
+            if signed_intake:
+                # Resolve uncertain attachment types before taking SQLite's write lock.
+                prepared = extract_media(fake_body, ev.get('text') or '', ev.get('image_url') or '')
+                if any(item['type'] == 'file' for item in prepared):
+                    prepared = resolve_incoming_media({'attachments': prepared})
+                save_options = dict(commit=False, prepared_media=prepared)
+                db.execute('BEGIN IMMEDIATE')
+                if db.execute("SELECT 1 FROM processed_messages WHERE mid=?", (mid,)).fetchone():
+                    db.rollback()
+                    return
             saved_id = save_message(db, subscriber_id, "incoming", detect_message_type(ev),
-                                    ev.get("text"), ev.get("image_url"), ev.get("ad_id"), ev.get("ref"), fake_body)
-            save_conversation_message(db, subscriber_id, "user", ev.get("text"))
+                                    ev.get("text"), ev.get("image_url"), ev.get("ad_id"), ev.get("ref"), fake_body,
+                                    **save_options)
+            save_conversation_message(db, subscriber_id, "user", ev.get("text"), commit=not signed_intake)
             # Every message is captured before debounce discards older events.
-            capture_customer_contact(db, subscriber_id, ev.get("text"))
+            capture_customer_contact(db, subscriber_id, ev.get("text"), commit=not signed_intake)
             if mid:
                 db.execute("INSERT OR IGNORE INTO processed_messages(mid, processed_at) VALUES (?,?)", (mid, now_baghdad_iso()))
+            runtime_assigned = signed_intake and sales_runtime_live.enroll(
+                sys.modules[__name__], db, current_store_id(), subscriber_id, *signed_channel, saved_id)
+            if background_after_intake:
+                delay = (0 if sales_playbook.human_requested(ev.get('text'))
+                         or detect_message_type(ev) == 'text' and sales_recovery.policy_question(ev.get('text'))
+                         else sales_progress.debounce_seconds(ev.get('text'), detect_message_type(ev), DEBOUNCE_DELAY))
+                payload = dict(fake_body=fake_body, subscriber_id=subscriber_id, platform=platform,
+                               outbound_subscriber_id=outbound_subscriber_id, saved_id=saved_id)
+                kind = 'webhook'
+                if runtime_assigned:
+                    kind, payload = sales_runtime_live.JOB_KIND, {'incoming_id': saved_id}
+                ai_jobs.enqueue(db, current_store_id(), subscriber_id, kind, payload, str(saved_id), delay=delay)
+            else:
                 db.commit()
         args = (fake_body, subscriber_id, platform, outbound_subscriber_id, saved_id)
         if background_after_intake:
-            payload = dict(zip(('fake_body', 'subscriber_id', 'platform', 'outbound_subscriber_id', 'saved_id'), args))
-            delay = (0 if detect_message_type(ev) == 'text' and sales_recovery.policy_question(ev.get('text'))
-                     else sales_progress.debounce_seconds(ev.get('text'), detect_message_type(ev), DEBOUNCE_DELAY))
-            ai_jobs.enqueue(db, current_store_id(), subscriber_id, 'webhook', payload, str(saved_id), delay=delay)
             if os.environ.get('ENABLE_BACKGROUND_JOBS', '1') == '1':
                 ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
             return
@@ -13741,9 +13793,13 @@ def _finish_customer_webhook_async(fake_body, subscriber_id, platform, outbound_
                 raise ai_jobs.Busy()
             return
         try:
+            if sales_runtime_live.route(db, subscriber_id):
+                return {'ok': True, 'reason': 'sales_runtime_owns_conversation'}
             latest = db.execute("SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='incoming'", (subscriber_id,)).fetchone()[0]
             if latest != saved_id:
                 return
+            if delivery_state.answered_turn(db, current_store_id(), subscriber_id, saved_id):
+                return {'ok': True, 'reason': 'already_answered'}
             return _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform,
                                                           outbound_subscriber_id or subscriber_id, incoming_message_id=saved_id)
         finally:
@@ -14230,6 +14286,7 @@ def health():
     return jsonify({
         "status"        : "ok",
         "code_version"  : code_version,
+        "sales_runtime" : sales_runtime_live.rollout_status(sys.modules[__name__], get_db()),
         "conversion_plan": "2026-09-28",
         "conversion_target": 30,
         "sales_ready"   : all(readiness.values()),
@@ -15574,6 +15631,7 @@ def api_send_message(sender_id):
     owner_store = (customer["store_id"] if customer else None) or current_store_id()
     token = _current_store_id.set(owner_store)
     try:
+        pause_sales_runtime_for_staff(db, sender_id)
         text, reply_meta, error = apply_dashboard_ai_checkout(db, sender_id, text) if text else (text, {"manual_reply": True}, None)
         if error:
             return jsonify({"ok": False, "error": error}), 409
@@ -15720,6 +15778,7 @@ def api_send_audio(sender_id):
     public_url = (PUBLIC_URL or request.url_root.rstrip('/')) + media_path
     token = _current_store_id.set(store)
     try:
+        pause_sales_runtime_for_staff(db, sender_id)
         audio_message = {'type': 'audio', 'url': public_url}
         if using_chatwoot or using_zernio:
             audio_message.update(local_path=path, mime_type=mime)
@@ -15799,6 +15858,11 @@ def run_ai_job(job, payload):
             locked = acquire_sender_lock(get_db(), job['sender_id'], wait_seconds=1)
             if not locked:
                 raise ai_jobs.Busy()
+            if job['kind'] == sales_runtime_live.JOB_KIND:
+                row = sales_runtime_live.route(db, job['sender_id'])
+                if not row or row['store_id'] != job['store_id']:
+                    return {'ok': False, 'error': 'تعيين محرك البيع لهذه المحادثة غير متاح.'}
+                return sales_runtime_live.process(sys.modules[__name__], db, row, payload['incoming_id'])
             if job['kind'] == 'resume':
                 return resume_pending_ai_reply(db, job['sender_id'], payload)
             endpoint = 'ask_ai' if job['kind'] == 'preview' else 'link_product'
@@ -16488,6 +16552,9 @@ def api_link_product(sender_id):
         return jsonify({"error": "product_id required"}), 400
 
     db  = get_db()
+    runtime_route = sales_runtime_live.route(db, sender_id)
+    if runtime_route:
+        silent = True
     mappings = data.get('image_links', [])
     if not isinstance(mappings, list) or any(not isinstance(x, dict) for x in mappings):
         return jsonify(error='ربط الصور يجب أن يكون قائمة صور ومنتجات.'), 400
@@ -16556,6 +16623,8 @@ def api_link_product(sender_id):
                 item.update(product_id=by_url[item['image_url']], product_found=True, reason='Manually resolved image')
         customer_image_positions(db, sender_id, product_albums.current_positions(positions, load_active_products(db)))
         db.commit()
+    if runtime_route and len(linked_products) == 1:
+        sales_runtime_live.staff_product(db, sender_id, linked_products[0]['product_id'])
     print(
         f"[Dashboard] Linked {len(linked_products)} product(s) → {sender_id} "
         f"(silent={silent}, resume_ai={resume_ai})",
@@ -18787,6 +18856,10 @@ def resume_pending_ai_reply(db, sender_id, payload):
                         +delivery_state.VISIBLE_SQL+" LIMIT 1",(sender_id,latest['id'])).fetchone()
     if answered:
         return outcome(reason='already_answered')
+    runtime_route = sales_runtime_live.route(db, sender_id)
+    if runtime_route:
+        result = sales_runtime_live.process(sys.modules[__name__], db, runtime_route, latest['id'])
+        return dict(outcome(), **result)
     cutoff=db.execute('SELECT COALESCE(MAX(id),0) FROM human_reviews WHERE sender_id=?',(sender_id,)).fetchone()[0]
     customer=get_or_create_customer(db,sender_id,None)
     event=dict(sender_id=sender_id,text=latest.get('text') or '',image_url=latest.get('image_url'),
@@ -18874,6 +18947,7 @@ def api_send_catalog(sender_id):
     image_count = len(build_catalog_image_messages(load_active_products(db)))
     if not image_count:
         return jsonify({"ok": False, "error": "لا توجد صور متاحة في الكتالوج", "image_count": 0}), 400
+    pause_sales_runtime_for_staff(db, sender_id)
     threading.Thread(
         target=send_catalog_to_customer_background,
         args=(sender_id, page_id, platform),
@@ -18977,6 +19051,23 @@ def api_resend_order_confirmation(order_id):
                        (order_id, current_store_id())).fetchone()
     if not order:
         return jsonify(ok=False, error='الطلب غير موجود في هذا المتجر أو ملغي'), 404
+    runtime_task = db.execute("SELECT id,status FROM sales_v2_order_tasks WHERE order_id=? AND kind='confirmation'",
+                              (order_id,)).fetchone()
+    if runtime_task:
+        if runtime_task['status'] == 'accepted':
+            return jsonify(ok=True, order_id=order_id, confirmation_sent=True)
+        sender_id = order['sender_id']
+        route = sales_runtime_live.route(db, sender_id)
+        if route and runtime_task['status'] in {'queued', 'rejected'}:
+            if not acquire_sender_lock(db, sender_id, wait_seconds=1):
+                return jsonify(ok=False, error='المحادثة قيد المعالجة، حاول مجدداً بعد قليل.'), 409
+            try:
+                result = sales_runtime_live.staff_confirmation(sys.modules[__name__], db, route, runtime_task['id'])
+            finally:
+                release_sender_lock(db, sender_id)
+            if result['status'] == 'accepted':
+                return jsonify(ok=True, order_id=order_id, confirmation_sent=True)
+        return jsonify(ok=False, error='راجع حالة تأكيد الطلب عند مزود الرسائل قبل الإرسال اليدوي.'), 409
     return jsonify(ok=True, order_id=order_id,
                    confirmation_sent=send_saved_order_confirmation(db, order_id, order['sender_id']))
 
@@ -19077,6 +19168,7 @@ def api_create_order(sender_id):
     }
 
     menger.snapshot_prices(order_info, catalog)
+    pause_sales_runtime_for_staff(db, sender_id)
     order_cursor = db.execute(
         "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
         "product_id, product_name, color, size, notes, status, order_items, created_at, store_id) "
@@ -19238,14 +19330,23 @@ def api_product_questions():
     sql = '''SELECT q.id,q.store_id,COALESCE(s.name,q.store_id) AS store_name,q.product_id,q.product_name,
                     q.topic,q.question,q.answer,q.guidance,q.status,q.occurrences,q.created_at,q.updated_at
              FROM product_questions q LEFT JOIN stores s ON s.store_id=q.store_id WHERE q.status=?''' + scope
-    if before:
-        sql += ' AND q.id<?'; args.append(before)
-    rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC LIMIT ?',args+[limit+1])]
-    for row in rows:
+    if status == 'pending' and request.args.get('needs_attention') == '1':
+        pending_rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC', args)]
+        products = load_products_from_file(all_stores=all_stores) if pending_rows else []
+        rows = product_questions.dashboard_questions(db, pending_rows, products)
+        pending = len(rows)
+        if before:
+            rows = [row for row in rows if row['id'] < before]
+    else:
+        if before:
+            sql += ' AND q.id<?'; args.append(before)
+        rows = [dict(row) for row in db.execute(sql+' ORDER BY q.id DESC LIMIT ?',args+[limit+1])]
+        pending = db.execute("SELECT COUNT(*) FROM product_questions q WHERE q.status='pending'"+scope,
+                             [] if all_stores else [current_store_id()]).fetchone()[0]
+    page = rows[:limit]
+    for row in page:
         row['revision'] = product_questions.revision(row)
-    return jsonify(questions=rows[:limit],has_more=len(rows)>limit,
-                   pending=db.execute("SELECT COUNT(*) FROM product_questions q WHERE q.status='pending'"+scope,
-                                      [] if all_stores else [current_store_id()]).fetchone()[0],
+    return jsonify(questions=page,has_more=len(rows)>limit,pending=pending,
                    topics=product_questions.LABELS)
 
 

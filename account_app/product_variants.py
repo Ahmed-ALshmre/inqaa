@@ -47,7 +47,7 @@ def normalize_size_words(value):
         pattern = pattern.replace(r'(?<!\w)', r'(?<!\w)(?:و)?(?:(?:بال|ال)\s*)?', 1)
         pattern = pattern.replace('اكس', '[اأإ]كس')
         text = re.sub(pattern, label, text, flags=re.I)
-    return text
+    return re.sub(r'(?<!\w)(?:بال|ال)?(?:لا?رج|large)(?!\w)', 'L', text, flags=re.I)
 
 
 def size_choice_text(value):

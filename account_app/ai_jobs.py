@@ -40,7 +40,7 @@ def init_db(db):
     ''')
 
 
-def enqueue(db, store, sender, kind, payload, key, delay=0):
+def enqueue(db, store, sender, kind, payload, key, delay=0, *, commit=True):
     identity = hashlib.sha256(f'{store}:{sender}:{kind}:{key}'.encode()).hexdigest()
     now = time.time()
     old = db.execute('SELECT * FROM ai_jobs WHERE dedupe_key=?', (identity,)).fetchone()
@@ -59,7 +59,8 @@ def enqueue(db, store, sender, kind, payload, key, delay=0):
         VALUES(?,?,?,?,?,?,?,?)''',
         (uuid.uuid4().hex, store, sender, kind, identity,
          json.dumps(payload, ensure_ascii=False), now, now + delay))
-    db.commit()
+    if commit:
+        db.commit()
     return dict(db.execute('SELECT * FROM ai_jobs WHERE dedupe_key=?', (identity,)).fetchone())
 
 
@@ -119,7 +120,7 @@ def deliver(db, identity, payload, send):
 def recover_interrupted(db):
     # Delivery may have succeeded immediately before process death. Never replay
     # an uncertain send automatically. Pure previews are safe to recompute.
-    db.execute("UPDATE ai_jobs SET status='queued',owner=NULL WHERE status='running' AND kind IN ('preview','media_archive')")
+    db.execute("UPDATE ai_jobs SET status='queued',owner=NULL WHERE status='running' AND kind IN ('preview','media_archive','sales_runtime')")
     db.execute("""UPDATE ai_jobs SET status='failed',finished_at=?,result=?
         WHERE status='running'""", (time.time(), json.dumps({
             'ok': False, 'error': 'توقفت المعالجة عند إعادة تشغيل السيرفر؛ تحقق من الإرسال قبل المحاولة مجدداً.',

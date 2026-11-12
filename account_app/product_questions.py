@@ -11,10 +11,19 @@ except ImportError:
 LABELS = {'fabric': 'نوع القماش', 'fabric_feel': 'سمك القماش وملمسه', 'season': 'الموسم',
           'stretch': 'الليكرا والمطاطية', 'cut': 'قصة القطعة', 'lining': 'البطانة',
           'closure': 'الإغلاق', 'care': 'الغسل والعناية', 'length': 'الطول', 'width': 'العرض',
-          'photo_source': 'مصدر الصورة', 'price': 'السعر', 'location':'عنوان المحل', 'details': 'تفصيل المنتج', 'service':'متابعة خاصة بهذه المحادثة — لا تُعمّم'}
+          'photo_source': 'مصدر الصورة', 'price': 'السعر', 'location':'عنوان المحل', 'details': 'تفصيل المنتج', 'service':'متابعة خاصة بهذه المحادثة — لا تُعمّم',
+          'origin':'بلد الصنع','composition':'محتويات القطعة وملحقاتها','delivery_time':'مدة التوصيل',
+          'inspection_policy':'سياسة الفحص','payment':'طريقة الدفع','delivery_fee':'أجور التوصيل',
+          'colors':'الألوان','sizes':'القياسات','availability':'التوفر','wholesale':'وحدة البيع بالجملة'}
 FIELDS = {'fabric': 'fabric', 'fabric_feel': 'fabric_feel', 'season': 'season', 'stretch': 'stretch',
           'cut': 'cut', 'lining': 'lining', 'closure': 'closure', 'care': 'care_instructions',
           'photo_source': 'real_photo_notes', 'price': 'price', 'location':'shop_address'}
+
+DASHBOARD_FACTS = frozenset({
+    'fabric', 'fabric_feel', 'season', 'stretch', 'cut', 'lining', 'closure',
+    'care', 'length', 'width', 'photo_source', 'price', 'origin', 'composition',
+    'colors', 'sizes', 'availability', 'wholesale',
+})
 
 
 def init(db):
@@ -74,6 +83,92 @@ def missing(question, product):
     if not missing and gaps and not negotiation and not exact_answer(product, question):
         missing.append('price' if 'price' in selected else 'details')
     return missing
+
+
+def dashboard_questions(db, rows, products):
+    """Project pending product gaps from the current catalog without rewriting their records."""
+    pending_products = {(row['store_id'], row['product_id']) for row in rows}
+    products_by_store = {}
+    for product in products:
+        key = (product['store_id'], product['product_id'])
+        if key in pending_products and product.get('status', 'active') == 'active':
+            products_by_store.setdefault(key[0], []).append(product)
+    catalog = {}
+    for store, scoped_products in products_by_store.items():
+        catalog.update({(store, p['product_id']): p for p in apply(db, store, scoped_products)})
+    result = []
+    for row in rows:
+        product = catalog.get((row['store_id'], row['product_id']))
+        gap = dashboard_gap(row, product) if product else None
+        if gap:
+            result.append(dict(row, question=gap[0], gap_label='، '.join(LABELS[topic] for topic in gap[1])))
+    return result
+
+
+def dashboard_gap(row, product):
+    """Keep only question clauses for actionable, currently missing product facts."""
+    try:
+        from . import checkout, product_albums, pricing
+        from .sales_runtime.facts import product_fact, requested_fields
+    except ImportError:
+        import checkout, product_albums, pricing
+        from sales_runtime.facts import product_fact, requested_fields
+
+    topic = row['topic']
+    if topic not in DASHBOARD_FACTS and topic != 'details':
+        return None
+    question = row['question']
+    if topic == 'details' and (exact_answer(product, question)
+                               or any(note['topic'] == 'details' for note in guidance_for(product, question))):
+        return None
+
+    def missing_value(field):
+        if field == 'price':
+            try:
+                pricing.offer_tiers(product)
+            except (ValueError, TypeError):
+                return True
+            return False
+        if field == 'photo_source':
+            return not sales_answers.field_fact(product, 'real_photo_notes')
+        if field == 'availability':
+            return product_albums.stock_state(product) not in {'available', 'out'}
+        if field == 'wholesale':
+            return not sales_answers.wholesale_lines(product)
+        return product_fact(product, field) is None
+
+    if question.startswith('مراجعة تسعير الحجز:'):
+        if topic == 'price' and missing_value('price'):
+            return 'سعر القطعة أو العرض يحتاج تصحيح بالكتالوج.', ['price']
+        if topic == 'details' and product_albums.color_conflict(product):
+            return 'ألوان المخزون تحتاج تدقيق بالكتالوج.', ['colors']
+        return None
+
+    excerpts, gaps = [], []
+    for match in re.finditer(r'[^\r\n،؛؟?]+[؟?]?', question):
+        clause = match[0].strip()
+        clean = customer_copy.normalized(clause)
+        if (not clause or len(clause) > 220 or checkout.phone_number(clause)
+                or checkout.is_existing_order_followup(clause)
+                or re.search(r'(?<!\w)(?:العنوان|عنواني|عنوان البيت|رقم الهاتف|رقم الموبايل)\b', clean)):
+            continue
+        if not re.search(r'[؟?]|(?<!\w)(?:شنو|شو|ايش|شكد|اشكد|بشكد|كم|كيف|شلون|هل|بيش|بكم|لو)(?!\w)', clean):
+            continue
+        # A discount request or a delivery update cannot stand in for a product fact.
+        candidates = list(dict.fromkeys(requested_fields(clause) + sales_answers.topics(clause)))
+        if topic == 'details' and {'colors', 'sizes'}.intersection(candidates) and 'availability' in candidates:
+            candidates.remove('availability')
+        coached = {note['topic'] for note in guidance_for(product, clause)} - {'price'}
+        wanted = [field for field in candidates if field in DASHBOARD_FACTS
+                  and (field == topic or topic == 'details' and field != 'price') and field not in coached
+                  and not (field == 'price' and re.search(r'خصم|تخفيض|ميزاني|ارخص|غالي', clean))]
+        missing = [field for field in wanted if missing_value(field)]
+        if missing:
+            excerpts.append(clause)
+            gaps.extend(missing)
+    if not excerpts:
+        return None
+    return '\n'.join(dict.fromkeys(excerpts)), list(dict.fromkeys(gaps))
 
 
 def capture(db, store, sender, product, question, topics, review_id, now, *, increment=True):

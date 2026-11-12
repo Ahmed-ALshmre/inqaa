@@ -817,7 +817,7 @@ def personalize_specifications(reply, question):
 def assistant_identity_question(text):
     """Questioning who is replying routes to staff; photo provenance does not."""
     clean = ' '.join(sales_strategy.normalized(text).split())
-    identity = (r'ذكاء|روبوت|بوت|بشر|انسان[ةه]?|موظف[ةه]?|حقيقي[ةه]|برنامج|تلقائي[ةه]?|'
+    identity = (r'ذكاء|روبوت|بوت|بشر|انسان[ةه]?|موظف[ةه]?|حقيقي[ةه]|برنامج|تلقائي[ةه]?|(?i:ai|bot|robot)|'
                 r'(?:شات|تشات)\s*(?:جي\s*بي\s*تي|gpt)|chatgpt|'
                 r'(?:ال)?مساعد[ةه]?\s*(?:المبيعات\s*)?(?:ال)?(?:الي[ةه]?|افتراضي[ةه]?|رقمي[ةه]?)|(?:ال)?الي[ةه]|'
                 r'الي(?=\s*(?:لو|او|[؟?]|$))')

@@ -314,5 +314,6 @@ def missing_contact_reply(customer):
     missing = [label for field, label in [('phone', 'رقم الموبايل'), ('province', 'المحافظة'), ('address', 'العنوان بالتفصيل')]
                if not known_contact(customer, field)]
     if missing:
-        return 'المعلومات اللي دزيتيها موجودة عندي، ناقص بس ' + ' و'.join(missing) + ' حتى نكمل طلبج.'
-    return 'رقمج وعنوانج موجودات عندي. تحبين نكمل على نفس بيانات التوصيل؟'
+        address = 'عيني' if customer.get('gender') == 'male' else 'حبيبتي'
+        return address + '، باقي بس ' + ' و'.join(missing) + ' حتى أثبت الحجز.'
+    return 'نكمل الحجز على نفس العنوان والرقم؟'

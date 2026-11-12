@@ -194,6 +194,18 @@ class ConsultantPipelineTests(unittest.TestCase):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0], 1)
         self.assertEqual(self.count(), 0)
 
+    def test_full_rollout_uses_argon_once_when_legacy_checkout_still_owns_turn(self):
+        with patch.dict(os.environ, SALES_RUNTIME_MODE='all'), \
+             patch.object(self.m, '_call_main_ai_once', return_value=dict(reply='', requires_human=True)), \
+             patch.object(self.m.ai_transport, 'post', return_value=response(status=503)) as advisor:
+            result = self.ask('شكد التوصيل؟')
+        advisor.assert_called_once()
+        self.assertEqual('google/gemini-4-argon', advisor.call_args.kwargs['json']['model'])
+        self.assertEqual(1, advisor.call_args.kwargs['max_attempts'])
+        self.assertEqual('google/gemini-4-argon', result['_reply_consultation']['model'])
+        self.assertTrue(result['requires_human'])
+        self.assertEqual('', result['reply'])
+
     def test_if_main_still_fails_after_advice_there_is_no_third_attempt(self):
         with patch.object(self.m, '_call_main_ai_once', return_value=dict(reply='', requires_human=True)) as main, \
              patch.object(self.m.ai_transport, 'post', return_value=response()) as advisor:

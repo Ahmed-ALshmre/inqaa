@@ -8,6 +8,7 @@ except ImportError:
 
 
 DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+COLOR_REVIEW_STATUS = 'يتطلب مراجعة اللون'
 
 
 def normalized(value):
@@ -29,7 +30,9 @@ def explicit_purchase(value):
     return bool(re.search(direct + '|' + requested + r'|(?<!\w)ثبت\s+(?:الطلب|الحجز)(?!\w)', text))
 
 
-PHONE = re.compile(r"(?<!\d)(?:(?:\+?964|00964)[\s()-]*7|07)(?:[\s()-]*\d){9}(?!\d)")
+_PHONE_SEPARATOR = r"[ \t\u00a0\u200e\u200f\u202f\u2066-\u2069()\-]"
+PHONE = re.compile(rf"(?<!\d)(?:(?:\+?964|00964){_PHONE_SEPARATOR}*7|0{_PHONE_SEPARATOR}*7)"
+                   rf"(?:{_PHONE_SEPARATOR}*\d){{9}}(?!\d)")
 PROVINCES = {
     "بغداد": ("بغداد",), "البصرة": ("البصرة", "البصره", "بصره", "بصرة"),
     "نينوى": ("نينوى", "الموصل", "موصل"), "أربيل": ("اربيل", "هولير"),
@@ -189,7 +192,9 @@ def is_confirmation(text):
     # negations must still invalidate a pending cart, including mixed bursts.
     affirmative = r"(?:اي+|يي+|نعم|تمام|موافق|موافقة|اوكي|اوك|نكمل|كملي|ثبتي|ثبت|ثبتيه|ثبتوا|اعتمدي|اعتمديه|اعتمدها)"
     filler = r"(?:عيني|حياتي|حبيبتي|حبي|عمري|يمعوده|يمعودة|الطلب|الحجز|هسه|رجاء|شكرا|والله|اكيد|بسرعه|بسرعة|زاد|فدوه|فدوة|بلا زحمه|بلا زحمة|ياريت|يا ريت|عادي|ماشي)"
-    return bool(re.fullmatch(affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*", normalized(text).strip()))
+    lead = r"(?:(?:يلا|يله|يالله)(?:\s+|\s*[,،]\s*))?"
+    return bool(re.fullmatch(lead + affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*",
+                             normalized(text).strip()))
 
 
 def accepts_inspection_offer(text):
