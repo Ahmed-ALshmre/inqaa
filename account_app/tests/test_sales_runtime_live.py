@@ -85,10 +85,11 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertEqual('continue', self.work()[1]['action'])
         context = json.loads(model.call_args_list[0].kwargs['json']['messages'][-1]['content'])
         self.assertEqual(dict(status='known', source='auto_product', product_id='P1'), context['reference'])
-        self.transport.assert_called_once()
-        reply = self.transport.call_args.args[2][0]['text']
-        self.assertIn('15 ألف', reply)
-        self.assertNotIn('صور', reply)
+        sent = [call.args[2][0] for call in self.transport.call_args_list]
+        self.assertEqual(['text', 'text'], [part['type'] for part in sent])
+        self.assertIn('15 ألف', sent[0]['text'])
+        self.assertTrue(sent[1]['question_field'].endswith('.size'))
+        self.assertNotIn('صور', ' '.join(part['text'] for part in sent))
 
     def test_checkout_captures_split_address_and_asks_only_for_phone_without_a_model(self):
         self.incoming(10, 'أريد ماروني قياس 44')
@@ -249,8 +250,10 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertEqual('continue', self.work()[1]['action'])
         context = json.loads(model.call_args_list[0].kwargs['json']['messages'][-1]['content'])
         self.assertEqual(dict(status='known', source='image', product_id='P2'), context['reference'])
-        self.transport.assert_called_once()
-        self.assertIn('قطن', self.transport.call_args.args[2][0]['text'])
+        sent = [call.args[2][0] for call in self.transport.call_args_list]
+        self.assertEqual(['text', 'text'], [part['type'] for part in sent])
+        self.assertIn('قطن', sent[0]['text'])
+        self.assertTrue(sent[1]['question_field'].endswith('.color'))
 
     def test_previously_accepted_reply_prevents_generation_for_the_same_incoming(self):
         self.incoming(10, 'أثبتلج؟')

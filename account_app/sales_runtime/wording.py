@@ -56,7 +56,11 @@ def render_amounts(parts, amounts):
                 return 'مجاناً'
             return 'ألفين' if amount == 2000 else customer_copy.chat_amount(amount)
 
+        has_free_fee = amounts.get('delivery_fee') == 0 and '{{delivery_fee}}' in text
         text = SLOT.sub(replace, text)
+        if has_free_fee:
+            free = r'(?:مجان(?:اً|ًا|ا)|مجاني[هة]?)'
+            text = re.sub(rf'(?<!\w)({free})\s+{free}(?!\w)', r'\1', text)
         if '{{' in text or '}}' in text:
             raise ValueError('reply.money: malformed amount token')
         rendered.append(dict(part, text=text))
@@ -98,6 +102,7 @@ def validate_next_step(parts, step):
         'contact.province': (r'محافظ|مدين',),
         'quote.province': (r'محافظ|مدين',),
         'price.accept': (r'سعر|حساب|مجموع|عرض|يناسب|موافق|نكم[لّ]|نمشي|اوك[ي]?',),
+        'offer.quantity': (r'عرض|بكج|باكج|قطعت|ثنين|اثنين|تنوع|قطع',),
         'purchase_intent': (r'ثبت|حجز|نسجل|اكمل|نكمل|طلب|رتب',),
         'product': (r'صور|سكرين|لقط',),
     }

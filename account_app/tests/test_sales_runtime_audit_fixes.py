@@ -100,9 +100,9 @@ class AuditFixTests(unittest.TestCase):
             Mock(status_code=200,json=lambda: {'choices':[{'finish_reason':'length','message':{'content':draft}}]}),
             Mock(status_code=200,json=lambda: {'choices':[{'finish_reason':'stop','message':{'content':draft}}]}),
         ])
-        reply = self.reply(event,out,WriterGateway('test-model','test-key',post))[0]
-        self.assertEqual(draft,reply['text'])
-        self.assertTrue(reply['question_field'].endswith('.color'))
+        replies = self.reply(event,out,WriterGateway('test-model','test-key',post))
+        self.assertEqual(draft,' '.join(part['text'] for part in replies))
+        self.assertTrue(replies[-1]['question_field'].endswith('.color'))
         self.assertIn('response_format',post.call_args_list[0].kwargs['json'])
         self.assertNotIn('response_format',post.call_args_list[1].kwargs['json'])
 
@@ -214,6 +214,36 @@ class AuditFixTests(unittest.TestCase):
         self.assertGreater(len(parts), 1)
         self.assertEqual(compact(reply.replace('{{delivery_fee}}', '5 آلاف')),
                          compact(' '.join(part['text'] for part in parts)))
+
+    def test_sales_writer_gets_verified_offer_and_free_delivery_as_distinct_amounts(self):
+        self.products[0].update(price='15000', offer='قطعتين بـ25000', delivery='توصيل مجاني')
+        self.select()
+        event, outcome = self.run_turn('حبيبتي شكد سعره')
+        draft = ('عيوني، سعر القطعة {{unit_price}}. العرض قطعتين بـ{{offer_total}}. '
+                 'التوصيل مجاني {{delivery_fee}}. تحبين قطعة وحدة لو تستفيدين من عرض القطعتين؟')
+        post = Mock(return_value=Mock(status_code=200, json=lambda: {
+            'choices': [{'message': {'parsed': {'parts': [dict(type='text', text=draft)]}}}]
+        }))
+        replies = self.reply(event, outcome, WriterGateway('test-model','test-key',post),
+                             policy={'delivery_fee': {'بغداد': 5000}})
+        context = json.loads(post.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertEqual({'unit_price': 15000, 'offer_total': 25000, 'delivery_fee': 0}, context['amounts'])
+        self.assertEqual(2, context['promotion_quantity'])
+        self.assertEqual('offer.quantity', replies[-1]['question_field'])
+        self.assertGreaterEqual(len(replies), 2)
+        self.assertIn('25 ألف', ' '.join(part['text'] for part in replies[:-1]))
+        self.assertEqual(1, sum(part['text'].count('مجان') for part in replies))
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_asking_for_other_colors_does_not_repeat_the_same_palette(self):
+        self.select()
+        event, outcome = self.run_turn('لا غير الوان ماعدكم')
+        writer = Mock(return_value=[dict(type='text', text='هاي المتوفرة بهالموديل. شنو اللون اللي ببالج؟')])
+        parts = self.reply(event, outcome, writer)
+        context = writer.call_args.args[0]
+        self.assertTrue(context['action_results']['omit_color_list'])
+        self.assertEqual({'field': 'alternative.color', 'options': []}, context['next_step'])
+        self.assertEqual('alternative.color', parts[-1]['question_field'])
 
     def test_yalla_tamam_resumes_checkout_after_price_discussion(self):
         self.products[0].update(price='16000',colors='أسود، رصاصي')
