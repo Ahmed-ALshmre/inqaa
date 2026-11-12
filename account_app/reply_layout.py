@@ -178,7 +178,7 @@ def _single_sales_kind(result, reply):
     phase = str(result.get('_response_kind') or result.get('intent') or '').lower()
     if result.get('_compact_offer_price'):
         return 'offer_price'
-    if result.get('_human_sales_voice') and len(compact(reply)) <= 140:
+    if result.get('_human_sales_voice') and not result.get('_short_sales_bubbles') and len(compact(reply)) <= 140:
         return 'related_answer'
     if receipt(reply) or phase in {'confirmation', 'order_confirmation'}:
         return 'confirmation'
@@ -195,11 +195,17 @@ def _single_sales_kind(result, reply):
     return ''
 
 
-def _sales_units(reply):
+def _sales_units(reply, *, short_bubbles=False):
     """Recognize independent sales functions, keeping every approved character."""
     markers = (r'(?:و?(?:السعر|سعره|سعرها|القماش|قماشه|قماشها|الخامة|القياسات|قياساته|'
                r'الألوان|الالوان|ألوانه|التوصيل|الفحص|المجموع|الإجمالي|الاجمالي)\b|'
                r'شنو\b|شكد\b|تحبين\b|تحب\b|تكدرين\b|تقدرين\b|ممكن\b|بس\s+(?:كوليلي|كليلي|قوليلي)\b|(?:و?إذا|و?اذا)\s+(?:تحبين|تكليلي|تكليني|تكدرين|تقدرين)\b|أي قياس\b|اي قياس\b)')
+    separate_benefit = (r'و(?:الدفع(?=\s+(?:عند|بعد|وقت))|'
+                        r'التوصيل(?=\s+(?:مجان|علينا))|يوصل(?:ج|چ|ك)|عندنا\s+عرض)\b')
+    if short_bubbles:
+        markers = (r'(?:و?(?:الدفع|تگدرين|تكدرين|تقدرين|يوصل(?:ج|چ|ك)|عرض|العرض|يا لون|أي لون|اي لون)\b|'
+                   r'و(?:تگدر|تكدر)(?:ين)?\s+(?:تاخذ|تاخذين)\b|' + separate_benefit + '|' + markers + ')')
+    combined_total = bool(re.search(r'المجموع|الإجمالي|الاجمالي|(?:فيصير|يصير)\s+الحساب', reply))
     pieces = []
     for unit in semantic_units(reply):
         if '\n' in unit or LIST_ITEM.match(unit):
@@ -207,7 +213,10 @@ def _sales_units(reply):
             continue
         # A comma can separate a full fact from the next sales function, but a
         # number/currency, URL, arbitrary word count or soft wrap cannot.
-        cuts = list(re.finditer(r'(?<=[،,.!?؟؛])\s+(?=' + markers + r')', unit))
+        boundary = r'(?<=[،,.!?؟؛])\s+(?=' + markers + r')'
+        if short_bubbles:
+            boundary += r'|(?<=\S)\s+(?=' + separate_benefit + r')'
+        cuts = list(re.finditer(boundary, unit))
         start = 0
         for cut in cuts:
             pieces.append(unit[start:cut.start()].strip())
@@ -220,7 +229,8 @@ def _sales_units(reply):
         if atomic:
             previous = atomic[-1]
             question = bool(re.search(r'[؟?]$', piece))
-            costs = (cost_detail(previous) and (cost_detail(piece) or topic(piece) == 'delivery'))
+            costs = ((not short_bubbles or combined_total) and cost_detail(previous)
+                     and (cost_detail(piece) or topic(piece) == 'delivery'))
             contact_fields = topic(previous) == topic(piece) == 'contact'
             fit_explanation = topic(previous) == topic(piece) == 'fit' and not question
             continuation = bool(re.match(r'^(?:لأن|لان|و?إذا|و?اذا|يعني|بس|لكن|و?بشرط|أو|او)\s', piece))
@@ -236,6 +246,8 @@ def _sales_units(reply):
                 r'^(?:و?(?:السعر|سعره|سعرها|القماش|قماشه|قماشها|الخامة|القياسات|قياساته|'
                 r'الألوان|الالوان|ألوانه|التوصيل|الفحص|المجموع|الإجمالي|الاجمالي)\b|'
                 r'شنو\b|شكد\b|تحبين\b|تحب\b|تكدرين\b|تقدرين\b|ممكن\b|حتى نكمل\b)', piece))
+            if short_bubbles and re.match(markers, piece):
+                fresh_function = True
             unfinished = not re.search(r'[.!؟?؛:،,]$', previous) and not fresh_function
             dependent_intro = bool(not re.search(r'[.!؟?؛]$', previous) and (
                 re.search(r'(?:بس\s+)?(?:يا\s*ريت\s+)?(?:توضحلي|توضحين|كليلي|قوليلي)\s*[،,:]?$', previous)
@@ -302,8 +314,9 @@ def plan_sales_bubbles(result, reply, image_urls=None):
         # Album descriptions are atomic. A model's arbitrary parts never alter
         # the approved text or override semantic protection of cost/conditions.
         structured = bool(result.get('_semantic_parts') and valid)
+        short_bubbles = bool(result.get('_short_sales_bubbles'))
         units = ([part.strip() for part in proposed] if (result.get('_ordered_album') or structured) and valid
-                 else _sales_units(reply))
+                 else _sales_units(reply, short_bubbles=short_bubbles))
         units = attach_symbols(units)
         # The same size/color can legitimately describe two distinct photos.
         # Check repetition within each product section, not between products.
@@ -316,7 +329,8 @@ def plan_sales_bubbles(result, reply, image_urls=None):
                 or within_album_duplicate):
             reasons.append('duplicate_sales_content')
         parts = list(units)
-        desired = min(limit, len(parts) if (structured or result.get('_ordered_album')) else max(2, math.ceil(len(compact(reply)) / SALES_TARGET_LENGTH)))
+        desired = min(limit, len(parts) if (short_bubbles or structured or result.get('_ordered_album'))
+                      else max(2, math.ceil(len(compact(reply)) / SALES_TARGET_LENGTH)))
         while len(parts) > desired:
             def merge_cost(index):
                 left, right = parts[index:index + 2]

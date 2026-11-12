@@ -121,6 +121,9 @@ class Responses:
                                              question_key=color_key, question_stage='photos')]
             return self.save(scope, key, reply_key, turn_id, snap['version'], photos[:5])
         requested=requested_fields(current)
+        offer_question = bool(re.fullmatch(r'(?:شنو|شني|ما هو|ماهو)\s+(?:ال)?عرض(?:كم|ه)?', clean))
+        if offer_question and 'price' not in requested:
+            requested.append('price')
         age_words = r'عمر|شهر|سنوات|سنه|سنة'
         previous_text = messages[-2].get('text', '') if len(messages) > 1 else ''
         if product and product.get('selection_mode') == 'age' and not requested and (
@@ -157,7 +160,7 @@ class Responses:
         bargaining = bool(requested_offer or state.get('price_request') and pushback(current) or
                           price_pending and (contact_turn or purchase_turn or confirmation or selected or
                                              'price' in requested or destination(current)))
-        quantity = sales_playbook.requested_quantity(current) if quote else None
+        quantity = sales_playbook.requested_quantity(current)
         price_question = 'price' in requested and set(requested) <= {'price', 'delivery_fee'}
         different_quantity = bool(quote and quantity and quantity != sum(line['quantity'] for line in lines))
         per_piece = bool(quote and sum(line['quantity'] for line in lines) > 1 and
@@ -165,6 +168,18 @@ class Responses:
         if different_quantity or per_piece:
             price_question = False  # A hypothetical quantity is not the current cart price.
         quote_turn = bool(quote and not state.get('order_id') and (bargaining or price_question))
+        price_units = retail_price = None
+        promotion = None
+        product_free_delivery = False
+        if product and (price_question or 'delivery_fee' in requested) and not state.get('order_id'):
+            try:
+                price_units, retail_price, product_free_delivery = pricing.terms(product)
+                if price_question and not bargaining and not state.get('purchase_event') and not (quantity and quantity > 1) and (
+                        not quote_turn or sum(line['quantity'] for line in lines) == 1):
+                    promotion = next(iter(pricing.offer_tiers(product)), None)
+            except ValueError:
+                pass
+        product_free_delivery = product_free_delivery and all(line['product_id'] == focus for line in lines)
         references=list(plan.get('facts',[]))
         if product_unresolved:
             references = [fact for fact in references if fact['product_id']=='@store']
@@ -300,6 +315,16 @@ class Responses:
             question = None
         if needs_weight and not feedback and not readiness['conditions']:
             question = f'product.{focus}.weight_kg'
+        if promotion and not feedback and not readiness['conditions']:
+            question = 'offer.quantity'
+            stage = 'offer-quantity'
+        seeking_other_colors = bool(product and 'colors' in requested and
+                                    re.search(r'غير\s+(?:ال)?الوان|(?:ال)?الوان\s+(?:غير|ثاني|اخر)', clean))
+        same_palette_confirmation = bool(product and re.fullmatch(
+            r'(?:يعني\s+)?بس\s+(?:هاي|هذي|هذني)\s+(?:ال)?الوان', clean))
+        if seeking_other_colors and not state.get('order_id') and not feedback and not readiness['conditions']:
+            question = 'alternative.color'
+            stage = 'other-colors'
         def question_key(field):
             if field and field.startswith('cart.'):
                 row=next((r for r in snap['data']['cart'] if r['line_id']==field.split('.')[1]),None)
@@ -331,6 +356,8 @@ class Responses:
                                and not mentioned and not feedback
                                and not repeat_selection and not purchase_turn
                                and not recommendations and not (question or '').endswith('.color'))
+        if seeking_other_colors or same_palette_confirmation:
+            omit_color_list = True
         amounts = {}
         if quote_turn:
             shown = any(part.get('quote_key') == offer_key for part in accepted)
@@ -340,6 +367,8 @@ class Responses:
                 amounts = quote_amounts(quote, compact=True)
         elif 'delivery_fee' in requested and not different_quantity:
             fee = (quote or {}).get('delivery_fee')
+            if fee is None and product_free_delivery:
+                fee = 0
             fees = policy.get('delivery_fee')
             if fee is None and isinstance(fees, dict):
                 province = destination(current) or state['contact'].get('province') or state.get('quote_province')
@@ -348,13 +377,22 @@ class Responses:
                     fee = next(iter(fees.values()))
             if type(fee) is int:
                 amounts['delivery_fee'] = fee
-        price_units = None
         if product and 'price' in requested and not quote_turn and not different_quantity:
             try:
                 price_units, price, _ = pricing.terms(product)
                 amounts['unit_price'] = price
             except ValueError:
                 pass
+        if promotion:
+            requested_fee = amounts.get('delivery_fee') if 'delivery_fee' in requested else None
+            amounts = {'unit_price': retail_price, 'offer_total': promotion[1]}
+            if requested_fee is not None:
+                amounts['delivery_fee'] = requested_fee
+        fees = policy.get('delivery_fee')
+        free_delivery = product_free_delivery or (isinstance(fees, dict) and bool(fees) and set(fees.values()) == {0})
+        if price_question and not bargaining and free_delivery and 'delivery_fee' not in amounts and not any(
+                part.get('price_disclosure', {}).get('delivery_fee') == 0 for part in accepted):
+            amounts['delivery_fee'] = 0
         product_facts = {}
         value_facts = {}
         if product:
@@ -377,7 +415,8 @@ class Responses:
             copy_budget=520 if len(requested) > 1 or quote_turn or recommendations else 230,
             quote=quote if quote_turn else None, amounts=amounts, business_feedback=feedback,
             recommendations=recommendations, value_facts=value_facts,
-            next_step=dict(field=question, options=next_options(step_product, question)),
+            promotion_quantity=promotion[0] if promotion else None,
+            next_step=dict(field=question, options=[] if question=='alternative.color' else next_options(step_product, question)),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
                           checkout_confirmed=stage=='checkout-confirmed',
                           contact_turn=contact_turn, recap_selection=recap,
@@ -555,8 +594,11 @@ class Responses:
                 raise ValueError('reply.photo_color: this photographed catalog color is available')
             if len(reply_layout.compact(text)) > context.get('copy_budget', 520):
                 raise ValueError('reply.length: shorten to the current answer and one relevant next step')
-            layout = reply_layout.plan_sales_bubbles({'_human_sales_voice': True}, text)
-            if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > 270 for part in layout['reply_parts']):
+            sales_turn = context.get('mode') == 'continue' and not context['action_results'].get('order_saved')
+            layout = reply_layout.plan_sales_bubbles(
+                {'_human_sales_voice': True, '_short_sales_bubbles': sales_turn}, text)
+            bubble_limit = 145 if sales_turn and not layout['exception'] else 270
+            if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > bubble_limit for part in layout['reply_parts']):
                 raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
             parts = [dict(type='text', text=part) for part in layout['reply_parts']]
         validate_copy(parts, question, context['action_results'])
