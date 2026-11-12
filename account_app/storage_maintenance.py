@@ -11,6 +11,43 @@ from urllib.parse import unquote
 
 DAY = 86400
 FILE_RE = re.compile(r"product_\d+_\d+\.(?:png|jpe?g|webp)", re.I)
+INCOMING_FILE_RE = re.compile(r'[a-f0-9]{32}\.(?:jpg|png|gif|webp|avif|mp3|m4a|ogg|aac|wav|amr|mp4|mov|3gp)')
+
+
+def init_incoming_deletions(db):
+    db.execute('CREATE TABLE IF NOT EXISTS incoming_media_deletions (filename TEXT PRIMARY KEY)')
+
+
+def queue_incoming_deletions(db, filenames):
+    db.executemany('INSERT OR IGNORE INTO incoming_media_deletions(filename) VALUES(?)',
+                   ((name,) for name in filenames if INCOMING_FILE_RE.fullmatch(name)))
+
+
+def finish_incoming_deletions(db, root, filenames=None):
+    if filenames is None:
+        filenames = [row[0] for row in db.execute('SELECT filename FROM incoming_media_deletions LIMIT 200')]
+    if not filenames:
+        return 0
+    # A file can appear in another retained message after a restore. Keep it
+    # until the last reference is gone.
+    referenced = {row[0] for row in db.execute("""
+        SELECT DISTINCT json_extract(part.value, '$.local_file') AS filename
+        FROM messages AS message, json_each(CASE WHEN json_valid(message.media_json)
+            THEN message.media_json ELSE '[]' END) AS part
+        WHERE part.type='object' AND filename IN (SELECT filename FROM incoming_media_deletions)
+    """)}
+    root = Path(root).resolve()
+    done = []
+    for name in filenames:
+        try:
+            if name not in referenced and INCOMING_FILE_RE.fullmatch(name):
+                (root / name).unlink(missing_ok=True)
+        except OSError:
+            continue  # The durable queue survives a filesystem error or restart.
+        done.append((name,))
+    with db:
+        db.executemany('DELETE FROM incoming_media_deletions WHERE filename=?', done)
+    return len(filenames) - len(done)
 
 
 def init(db):

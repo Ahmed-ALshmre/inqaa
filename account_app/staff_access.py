@@ -118,8 +118,11 @@ def install(app, get_db):
     @app.after_request
     def staff_audit(response):
         if getattr(g, 'staff_person', None) and request.method not in {'GET', 'HEAD', 'OPTIONS'} and response.status_code < 400:
+            path = request.path
+            if request.method == 'DELETE' and request.endpoint == 'api_delete_conversation':
+                path = '/api/conversations/<deleted>'
             get_db().execute('INSERT INTO staff_audit(staff_id,method,path) VALUES(?,?,?)',
-                             (g.staff_person['id'], request.method, request.path))
+                             (g.staff_person['id'], request.method, path))
             get_db().commit()
         return response
 

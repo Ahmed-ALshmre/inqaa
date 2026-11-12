@@ -62,6 +62,26 @@ def scope_for(row):
     return Scope(row['store_id'], row['channel'], row['account_id'], row['sender_id'])
 
 
+def delete_conversation(db, sender_id):
+    """Purge every runtime scope for the sender inside the caller's transaction."""
+    scopes = {row[0] for row in db.execute('SELECT scope FROM sales_v2_scopes WHERE sender=?', (sender_id,))}
+    existing = route(db, sender_id)
+    if existing:
+        scopes.add(scope_for(existing).key)
+    deleted = {}
+    for table in ('sales_v2_events', 'sales_v2_operations', 'sales_v2_evidence',
+                  'sales_v2_outbox', 'sales_v2_model_attempts', 'sales_v2_incidents', 'sales_v2_scopes'):
+        deleted[table] = db.executemany(f'DELETE FROM {table} WHERE scope=?',
+                                        ((scope,) for scope in scopes)).rowcount
+    deleted['sales_v2_order_tasks'] = db.executemany("""DELETE FROM sales_v2_order_tasks
+        WHERE scope=? AND (kind='confirmation' OR NOT EXISTS
+            (SELECT 1 FROM orders WHERE orders.id=sales_v2_order_tasks.order_id))""",
+        ((scope,) for scope in scopes)).rowcount
+    deleted['sales_v2_live_routes'] = db.execute('DELETE FROM sales_v2_live_routes WHERE sender_id=?',
+                                                  (sender_id,)).rowcount
+    return deleted
+
+
 def configured(module, store_id, channel):
     if not percent(store_id) or not module.OPENROUTER_KEY or os.environ.get('ENABLE_BACKGROUND_JOBS', '1') != '1':
         return False
