@@ -56,6 +56,9 @@ from flask import Flask, g, has_app_context, has_request_context, jsonify, redir
 if not __package__:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from account_app.sales_runtime import live as sales_runtime_live
+from account_app.sales_runtime.facts import only_same_day_question
+from account_app.sales_runtime.policies import APPROVED_DELIVERY_TIME
+from account_app.sales_runtime.recovery import weight_fit
 
 _ORIGINAL_PRINT = builtins.print
 
@@ -2376,6 +2379,39 @@ def pause_sales_runtime_for_staff(db, sender_id):
     row = sales_runtime_live.route(db, sender_id)
     if row and row['store_id'] == current_store_id():
         set_customer_ai_enabled(db, sender_id, False)
+
+
+def staff_reply_lock(handler):
+    """Keep the sales worker from answering while a staff message is being sent."""
+    @wraps(handler)
+    def send(sender_id):
+        db = get_db()
+        if not sales_runtime_live.route(db, sender_id):
+            return handler(sender_id)
+        if not acquire_sender_lock(db, sender_id, wait_seconds=1):
+            return jsonify(ok=False, error='المحادثة قيد المعالجة، حاول الإرسال بعد قليل.'), 409
+        try:
+            return handler(sender_id)
+        finally:
+            release_sender_lock(db, sender_id)
+    return send
+
+
+def finish_staff_reply(db, sender_id):
+    """Retire drafts for an answered turn while retaining the conversation switch."""
+    with sales_runtime_live.Store(db).transaction():
+        route = sales_runtime_live.route(db, sender_id)
+        if route:
+            sales_runtime_live.invalidate(db, route)
+        pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?', (sender_id,)).fetchone()
+        if (pause and pause['reason'] in {'sales_runtime_review', 'pending_image_review', 'image_unresolved',
+                                          'unanswered_product_question', 'reply_consultation_unresolved'}
+                and is_ai_enabled(db) and not db.execute(
+                    "SELECT 1 FROM order_action_requests WHERE sender_id=? AND status='pending'", (sender_id,)).fetchone()
+                and not db.execute('SELECT 1 FROM orders WHERE sender_id=? AND status=?',
+                                   (sender_id, COLOR_REVIEW_STATUS)).fetchone()):
+            set_customer_ai_enabled(db, sender_id, True, commit=False)
+    return is_customer_ai_enabled(db, sender_id)
 
 
 def find_product_by_id(product_id, include_inactive=False, store_id=None):
@@ -9267,6 +9303,11 @@ def _call_main_ai_with_context(
     premature_close = sales_strategy.premature_close(result.get('reply'), question)
     repeated_contact = sales_context.reasks_contact(result.get('reply'), customer or {})
     missing_answers = sales_answers.missing_answers(result.get('reply'), question, matched_product)
+    if not ev.get('_post_order'):
+        delivery_window = (get_delivery_settings(get_db())['delivery_time'] or APPROVED_DELIVERY_TIME
+                           if sales_answers.same_day_delivery(question) and has_app_context() else '')
+        missing_answers += sales_answers.current_question_gaps(result.get('reply'), question,
+                                                               fit=weight_fit(matched_product, question), delivery_window=delivery_window)
     browse_checkout = continuation and (result.get('create_order') or re.search(r'تم تثبيت|تم حجز|ثبتت|حجزت', str(result.get('reply') or '')))
     lost_context = bool(matched_product and not is_product_objection(question)
                         and reply_reasks_known_product(result.get("reply")))
@@ -9283,7 +9324,10 @@ def _call_main_ai_with_context(
     format_failure = result.get("failure_reason") == "invalid_ai_response"
     # The provider client already retries transient HTTP failures.
     permanent_failure = result.get("_provider_retries_exhausted") or result.get("failure_reason") in {"provider_http_400", "provider_http_401", "provider_http_402", "provider_http_403", "provider_http_404", "no_api_key"}
-    if needs_review and not permanent_failure and not fix_instruction and not ev.get('_staff_preview') and not (image_result or {}).get("unmatched_customer_image"):
+    retry_preview = ev.get('_staff_preview') and bool(missing_answers) and (
+        sales_answers.fit_question(question) or sales_answers.same_day_delivery(question))
+    if needs_review and not permanent_failure and not fix_instruction and (
+            not ev.get('_staff_preview') or retry_preview) and not (image_result or {}).get('unmatched_customer_image'):
         advice = None
         consultation = reply_consultant.current()
         if _consultant_allowed(consultation, result):
@@ -9672,6 +9716,14 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
             image_result, instructions_text, rules_list, fix_instruction=fix_instruction,
             customer_products=customer_products, conversation_history=conversation_history,
             catalog_search_context=catalog_search_context)
+        question = ev.get('text') or ''
+        window = (get_delivery_settings(get_db())['delivery_time'] or APPROVED_DELIVERY_TIME
+                  if sales_answers.same_day_delivery(question) and has_app_context() else '')
+        if (not ev.get('_post_order') and window and only_same_day_question(question)
+                and (sales_answers.current_question_gaps(result.get('reply'), question, delivery_window=window)
+                     or _consulted_reply_failed(result))):
+            reply = sales_answers.same_day_reply(window)
+            return dict(reply=reply, reply_parts=[reply], intent='delivery', create_order=False, order={}, _local_reply=True)
         pending = dict(result) if result.get('_deferred_product_id') else None
         if _consulted_reply_failed(result) and _consultant_allowed(state, result):
             advice = _consult_difficult_reply(state, result, ['before_human_review'])
@@ -9688,6 +9740,13 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
                     result = customer_identity_handoff(ev)
                 else:
                     result = owner_result_surface(result, rescue_ev, customer, history)
+        if not ev.get('_post_order') and not _consulted_reply_failed(result):
+            checked_product = state.data.get('matched_product') or matched_product
+            gaps = sales_answers.current_question_gaps(
+                result.get('reply'), question, fit=weight_fit(checked_product, question), delivery_window=window)
+            if gaps:
+                result = dict(result, reply='', reply_parts=[], create_order=False, requires_human=True,
+                              failure_reason='unanswered_current_question', handoff_reason='، '.join(gaps))
         if state.enabled and state.attempted:
             failed = _consulted_reply_failed(result) or state.status in {'failed', 'needs_human'}
             state.status = state.status if state.status in {'failed', 'needs_human'} else ('failed_validation' if failed else 'recovered')
@@ -11245,6 +11304,9 @@ def pending_image_policy_reply(db, ev, meta):
             "SELECT 1 FROM orders WHERE sender_id=? LIMIT 1", (ev['sender_id'],)).fetchone():
         return empty
     parts = []
+    if only_same_day_question(ev.get('text') or ''):
+        window = get_delivery_settings(db)['delivery_time'] or APPROVED_DELIVERY_TIME
+        parts.append(sales_answers.same_day_reply(window))
     for question in sales_recovery.independent_policy_questions(ev.get('text')):
         intent = sales_recovery.policy_question(question)
         province = sales_recovery.policy_province(question)
@@ -12117,7 +12179,8 @@ def resume_known_checkout(db, ev, product, customer, customer_products, context)
 
 def collect_unanswered_event(db, ev, incoming_message_id):
     rows = db.execute("""SELECT * FROM messages WHERE sender_id=? AND direction='incoming'
-        AND id<=? AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'
+        AND id<=? AND id>COALESCE((SELECT MAX(COALESCE(""" + delivery_state.REPLY_TO_SQL + """,id))
+        FROM messages WHERE sender_id=? AND direction='outgoing'
         AND COALESCE(raw_payload,'') NOT LIKE '%"_partial_policy_reply": true%' AND """
         + delivery_state.ANSWERED_SQL + "),0) ORDER BY id", (ev["sender_id"], incoming_message_id, ev["sender_id"])).fetchall()
     # An older photo must not be reattached after a later, trusted product link.
@@ -12141,7 +12204,8 @@ def collect_unanswered_event(db, ev, incoming_message_id):
     for row in rows:
         message = dict(row)
         text = str(message.get("text") or "").strip()
-        if text and text != message.get("image_url") and not text.startswith(("http://", "https://")):
+        if (text and text != message.get("image_url") and not text.startswith(("http://", "https://"))
+                and not (message.get('image_url') and text.casefold() == 'shared post')):
             texts.append(text)
         message_attachments = message_media(message)
         row_images = [item['url'] for item in message_attachments if item['type'] == 'image']
@@ -15664,6 +15728,7 @@ def apply_dashboard_ai_checkout(db, sender_id, text):
 
 @app.route("/api/conversations/<sender_id>/send", methods=["POST"])
 @_dash_require
+@staff_reply_lock
 def api_send_message(sender_id):
     data      = request.get_json(silent=True) or {}
     if not isinstance(data, dict) or not isinstance(data.get('text', ''), (str, type(None))) or not isinstance(data.get('image_url', ''), (str, type(None))):
@@ -15697,7 +15762,6 @@ def api_send_message(sender_id):
     owner_store = (customer["store_id"] if customer else None) or current_store_id()
     token = _current_store_id.set(owner_store)
     try:
-        pause_sales_runtime_for_staff(db, sender_id)
         text, reply_meta, error = apply_dashboard_ai_checkout(db, sender_id, text) if text else (text, {"manual_reply": True}, None)
         if error:
             return jsonify({"ok": False, "error": error}), 409
@@ -15722,7 +15786,7 @@ def api_send_message(sender_id):
             if not db.execute("SELECT 1 FROM messages WHERE sender_id=? AND direction='outgoing' AND text=? AND raw_payload LIKE ?",
                               (sender_id, part, '%' + delivery_id + '%')).fetchone():
                 save_message(db, sender_id, 'outgoing', 'text', part, None, None, None,
-                             dict(reply_meta, delivery_id=delivery_id))
+                             dict(reply_meta, delivery_id=delivery_id, _reply_to_message_id=incoming_id))
         text_result = dict(text_result or {}, parts_sent=len(delivered_parts))
     image_urls = list(dict.fromkeys(selected_images + reply_meta.get('image_urls', [])))
     sent_image_urls = []
@@ -15738,7 +15802,7 @@ def api_send_message(sender_id):
             if image_result.get('ok') and not db.execute("SELECT 1 FROM messages WHERE sender_id=? AND image_url=? AND raw_payload LIKE ?",
                     (sender_id, public_img, '%' + delivery_id + '%')).fetchone():
                 save_message(db, sender_id, 'outgoing', 'image', None, public_img, None, None,
-                             dict(reply_meta, delivery_id=delivery_id))
+                             dict(reply_meta, delivery_id=delivery_id, _reply_to_message_id=incoming_id))
             if not image_result.get('ok'):
                 break
 
@@ -15746,6 +15810,11 @@ def api_send_message(sender_id):
         (not text or (text_result and text_result.get("ok")))
         and (not image_urls or (image_result and image_result.get("ok")))
     )
+    token = _current_store_id.set(owner_store)
+    try:
+        ai_enabled = finish_staff_reply(db, sender_id) if sent else is_customer_ai_enabled(db, sender_id)
+    finally:
+        _current_store_id.reset(token)
     manychat_key = (os.environ.get("ZERNIO_API_KEY", "") if zernio.enabled_for_store(owner_store)
                     else os.environ.get("CHATWOOT_API_TOKEN", "") if chatwoot.enabled()
                     else manychat_api_key_for_page(page_id, current_store_id()))
@@ -15776,6 +15845,7 @@ def api_send_message(sender_id):
         "image_result": image_result,
         "sent_image_urls": sent_image_urls,
         "text_sent": bool(text_result and text_result.get('ok')),
+        "ai_enabled": ai_enabled,
     })
 
 
@@ -15810,6 +15880,7 @@ def serve_outgoing_audio(filename):
 
 @app.post('/api/conversations/<sender_id>/send_audio')
 @_dash_require
+@staff_reply_lock
 def api_send_audio(sender_id):
     db = get_db()
     customer = db.execute('SELECT store_id,page_id,COALESCE(platform,\'facebook\') platform FROM customers WHERE sender_id=?',
@@ -15844,7 +15915,7 @@ def api_send_audio(sender_id):
     public_url = (PUBLIC_URL or request.url_root.rstrip('/')) + media_path
     token = _current_store_id.set(store)
     try:
-        pause_sales_runtime_for_staff(db, sender_id)
+        incoming_id = latest_incoming_message(db, sender_id).get('id', 0)
         audio_message = {'type': 'audio', 'url': public_url}
         if using_chatwoot or using_zernio:
             audio_message.update(local_path=path, mime_type=mime)
@@ -15859,11 +15930,12 @@ def api_send_audio(sender_id):
                            status=delivery.get('status')), 502
         message_id = save_message(db, sender_id, 'outgoing', 'audio', None, None, None, None,
                                   {'manual_reply': True, 'sender_type': 'staff',
-                                   'voice_recording': True, 'audio_filename': filename})
+                                   'voice_recording': True, 'audio_filename': filename,
+                                   '_reply_to_message_id': incoming_id})
         db.execute('UPDATE messages SET media_json=? WHERE id=?',
                    (json.dumps([{'type': 'audio', 'url': media_path}]), message_id))
         db.commit()
-        return jsonify(ok=True, message_id=message_id)
+        return jsonify(ok=True, message_id=message_id, ai_enabled=finish_staff_reply(db, sender_id))
     finally:
         _current_store_id.reset(token)
 
@@ -15878,7 +15950,8 @@ def queue_dashboard_ai(sender_id, kind, data):
     key = payload.pop('request_id', None)
     if not key:
         latest = db.execute('SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=?', (sender_id,)).fetchone()[0]
-        key = ai_efficiency.dumps([latest, payload])
+        route = sales_runtime_live.route(db, sender_id) if kind == 'link' else None
+        key = ai_efficiency.dumps([latest, route['control_revision'], payload] if route else [latest, payload])
     job = ai_jobs.enqueue(db, current_store_id(), sender_id, kind, payload, key)
     if os.environ.get('ENABLE_BACKGROUND_JOBS', '1') == '1':
         ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
@@ -15941,15 +16014,13 @@ def run_ai_job(job, payload):
                 result = response.get_json() or {}
                 if response.status_code >= 400:
                     result['ok'] = False
-                if result.get('auto_reply') and not result['auto_reply'].get('sent'):
+                if (result.get('auto_reply') and not result['auto_reply'].get('sent')
+                        and result['auto_reply'].get('reason') != 'already_answered'):
                     auto=result['auto_reply']
-                    if auto.get('needs_human') or auto.get('reason') in {'ai_disabled','customer_requested_human'}:
-                        labels=[product_questions.LABELS.get(key,key) for key in auto.get('missing_topics') or []]
-                        message=('أكمل بيانات المنتج المطلوبة: '+ '، '.join(labels)) if labels else (
-                            auto.get('handoff_reason') or 'المنتج محفوظ، لكن AI متوقف في المحادثة؛ شغّله لإعادة الرد.')
-                        result.update(ok=True,needs_human=True,error=message)
-                    else:
-                        result.update(ok=False, error='تم حفظ المنتج، لكن لم يكتمل إرسال الرد. المراجعة ما زالت مفتوحة.')
+                    labels=[product_questions.LABELS.get(key,key) for key in auto.get('missing_topics') or []]
+                    result.update(needs_human=bool(auto.get('needs_human')), error=(
+                        'أكمل بيانات المنتج المطلوبة: ' + '، '.join(labels) if labels else
+                        auto.get('error') or auto.get('handoff_reason') or 'تم حفظ المنتج، لكن لم يكتمل إرسال الرد.'))
                 return result
         finally:
             if locked:
@@ -16094,7 +16165,9 @@ def api_ask_ai(sender_id):
             previous = [catalog[pid] for pid in json.loads(pending["previous_ids"]) if pid in catalog]
             selected = [catalog[pid] for pid in json.loads(pending["image_ids"]) if pid in catalog]
             return jsonify({"reply": product_choice_question(previous, selected), "intent": "product_choice"})
-        if ev.get("image_url") and not (product_id and matched_product):
+        if only_same_day_question(ev.get('text') or '') and not existing_order:
+            ev['image_url'], ev['attachments'] = None, []  # Store policy is independent of the images.
+        elif ev.get("image_url") and not (product_id and matched_product):
             matched_product, _, image_result = match_product(db, ev, products)
             if not matched_product and (image_result or {}).get('service_error'):
                 return jsonify(reply='', error='تعذر تحليل الصورة مؤقتاً؛ لم يتم رفض المنتج أو إيقاف المحادثة.',
@@ -16112,6 +16185,8 @@ def api_ask_ai(sender_id):
             elif not matched_product and should_use_auto_product(db, sender_id, ev, "text", customer_prods):
                 matched_product = get_auto_product_settings(db).get("product")
         customer_prods = load_customer_products(db, sender_id)
+        if not product_id and not matched_product:
+            matched_product = select_customer_context_product(ev.get('text') or '', customer_prods)
     draft_message_id = db.execute("SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=?", (sender_id,)).fetchone()[0]
     context_key = draft_context_key(db, sender_id)
     ai_result = call_main_ai(
@@ -16619,8 +16694,8 @@ def api_link_product(sender_id):
 
     db  = get_db()
     runtime_route = sales_runtime_live.route(db, sender_id)
-    if runtime_route:
-        silent = True
+    if runtime_route and runtime_route['store_id'] != current_store_id():
+        return jsonify(error='المحادثة غير موجودة في هذا المتجر.'), 404
     mappings = data.get('image_links', [])
     if not isinstance(mappings, list) or any(not isinstance(x, dict) for x in mappings):
         return jsonify(error='ربط الصور يجب أن يكون قائمة صور ومنتجات.'), 400
@@ -16690,7 +16765,8 @@ def api_link_product(sender_id):
         customer_image_positions(db, sender_id, product_albums.current_positions(positions, load_active_products(db)))
         db.commit()
     if runtime_route and len(linked_products) == 1:
-        sales_runtime_live.staff_product(db, sender_id, linked_products[0]['product_id'])
+        sales_runtime_live.staff_product(db, sender_id, linked_products[0]['product_id'],
+                                         {link['image_url'] for link in resolved_links})
     print(
         f"[Dashboard] Linked {len(linked_products)} product(s) → {sender_id} "
         f"(silent={silent}, resume_ai={resume_ai})",
@@ -16706,13 +16782,28 @@ def api_link_product(sender_id):
         set_customer_ai_enabled(db,sender_id,True)
     if not silent and is_ai_enabled(db):
         try:
-            auto_reply = auto_reply_after_product_link(db, sender_id, linked_products[-1], staff_action=True)
+            latest = latest_incoming_message(db, sender_id)
+            if latest and delivery_state.has_answer_after(db, sender_id, latest['id']):
+                auto_reply = dict(sent=False, reason='already_answered')
+            elif runtime_route and len(linked_products) == 1 and latest:
+                resumed = resume_pending_ai_reply(db, sender_id, {'incoming_id': latest['id']})
+                auto_reply = resumed.get('auto_reply') or dict(
+                    sent=False, reason=resumed.get('reason'), error=resumed.get('error'),
+                    needs_human=bool(resumed.get('needs_human')))
+            elif not runtime_route:
+                ev = collect_unanswered_event(db, dict(latest, sender_id=sender_id), latest['id']) if latest else None
+                auto_reply = auto_reply_after_product_link(db, sender_id, linked_products[-1], event=ev, staff_action=True)
+            else:
+                auto_reply = dict(sent=False, error='تم ربط المنتجات. حدد منتجًا واحدًا لإرسال رد على الرسالة المعلقة.' if latest else
+                                  'تم ربط المنتج. ماكو رسالة تنتظر جواب.')
         finally:
             current_pause = db.execute('SELECT reason FROM conversation_pause_state WHERE sender_id=?',(sender_id,)).fetchone()
-            if (temporary_resume and not (auto_reply or {}).get('sent')
+            if (temporary_resume and not (auto_reply or {}).get('sent') and (auto_reply or {}).get('reason') != 'already_answered'
                     and current_pause and current_pause['reason']=='enabled'):
                 set_customer_ai_enabled(db,sender_id,False,reason=pause['reason'])
-    if (silent or (auto_reply or {}).get("sent")) and not order_actions.pending(db, sender_id):
+    elif not silent:
+        auto_reply = dict(sent=False, reason='ai_disabled', error='تم ربط المنتج. الرد الآلي متوقف في المتجر.')
+    if (silent or (auto_reply or {}).get('sent') or (auto_reply or {}).get('reason') == 'already_answered') and not order_actions.pending(db, sender_id):
         rewards.tables(db)
         db.commit()
         db.execute("BEGIN IMMEDIATE")
@@ -16727,7 +16818,7 @@ def api_link_product(sender_id):
         db.commit()
         if not has_pending_human_review(db, sender_id):
             close_human_attention(db, sender_id)
-        if resume_ai and (silent or not pause or pause['reason'] != 'manual' or 'resume_ai' in data):
+        if resume_ai and not is_customer_ai_enabled(db, sender_id) and (silent or not pause or pause['reason'] != 'manual' or 'resume_ai' in data):
             set_customer_ai_enabled(db, sender_id, True)
     return jsonify({
         "ok": True,
@@ -18920,14 +19011,30 @@ def resume_pending_ai_reply(db, sender_id, payload):
         return outcome(reason='conversation_changed')
     if latest.get('message_type')=='sticker':
         return outcome(reason='non_product_sticker')
-    answered=db.execute("SELECT 1 FROM messages WHERE sender_id=? AND direction='outgoing' AND id>? AND "
-                        +delivery_state.VISIBLE_SQL+" LIMIT 1",(sender_id,latest['id'])).fetchone()
-    if answered:
+    if delivery_state.has_answer_after(db, sender_id, latest['id']):
         return outcome(reason='already_answered')
     runtime_route = sales_runtime_live.route(db, sender_id)
     if runtime_route:
-        result = sales_runtime_live.process(sys.modules[__name__], db, runtime_route, latest['id'])
-        return dict(outcome(), **result)
+        if payload.get('control_revision') is not None and payload['control_revision'] != runtime_route['control_revision']:
+            return outcome(reason='conversation_changed')
+        result = sales_runtime_live.process(sys.modules[__name__], db, runtime_route, latest['id'], staff_retry=True)
+        reason = result.get('reason')
+        error = {'ai_disabled': 'الرد الآلي متوقف لهذه المحادثة أو المتجر.',
+                 'delivery_needs_check': 'تحتاج حالة إرسال الرد أو تأكيد الطلب إلى مراجعة قبل إعادة المحاولة.',
+                 'sales_runtime_review': 'الرد يحتاج مراجعة الموظف قبل الإرسال.'}.get(reason)
+        if not error:
+            error = {'already_answered': 'آخر رسالة مجاوب عليها بالفعل.',
+                     'already_handled': 'ماكو رسالة معلّقة قابلة لإعادة الرد.'}.get(reason)
+        sent = bool(result.get('deliveries')) and all(status == 'accepted' for status in result['deliveries'])
+        if sent and not order_actions.pending(db, sender_id):
+            db.execute("""UPDATE human_reviews SET status='reviewed',replied_at=?
+                WHERE sender_id=? AND store_id=? AND status='pending' AND id IN (
+                    SELECT i.review_id FROM sales_v2_incidents i JOIN sales_v2_events e ON e.id=i.event_id AND e.scope=i.scope
+                    WHERE i.scope=? AND (e.external_id=? OR e.external_id GLOB ?))""",
+                (now_baghdad_iso(), sender_id, current_store_id(), sales_runtime_live.scope_for(runtime_route).key,
+                 f'incoming:{latest["id"]}', f'incoming:{latest["id"]}:resume:*'))
+            db.commit()
+        return dict(outcome(auto_reply=dict(sent=True) if sent else None), **result, error=error)
     cutoff=db.execute('SELECT COALESCE(MAX(id),0) FROM human_reviews WHERE sender_id=?',(sender_id,)).fetchone()[0]
     customer=get_or_create_customer(db,sender_id,None)
     event=dict(sender_id=sender_id,text=latest.get('text') or '',image_url=latest.get('image_url'),
@@ -18937,7 +19044,9 @@ def resume_pending_ai_reply(db, sender_id, payload):
     products=load_active_products(db)
     linked=load_customer_products(db,sender_id)
     product=select_customer_context_product(event.get('text') or '',linked)
-    if event.get('image_url'):
+    if product and only_same_day_question(event.get('text') or '') and not get_latest_customer_order(db, sender_id):
+        event['image_url'], event['attachments'] = None, []
+    elif event.get('image_url'):
         product,_,image_result=match_product(db,event,products)
         if image_result and image_result.get('images'):
             event['_image_matches']=image_result['images']
@@ -18994,8 +19103,10 @@ def api_set_conversation_ai(sender_id):
     auto_reply = None
     if enabled and not was_enabled and is_ai_enabled(db):
         latest=latest_incoming_message(db,sender_id)
-        if latest:
-            response,status=queue_dashboard_ai(sender_id,'resume',{'incoming_id':latest['id']})
+        if latest and not delivery_state.has_answer_after(db, sender_id, latest['id']):
+            route = sales_runtime_live.route(db, sender_id)
+            response,status=queue_dashboard_ai(sender_id,'resume',{'incoming_id':latest['id'],
+                                               'control_revision': route['control_revision'] if route else None})
             return jsonify(**response.get_json(),sender_id=sender_id,
                            ai_enabled=is_customer_ai_enabled(db,sender_id)),status
     print(f"[Settings] AI for {sender_id} enabled={enabled}", flush=True)

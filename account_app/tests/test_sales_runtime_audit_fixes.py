@@ -2,7 +2,6 @@
 import json
 import unittest
 from unittest.mock import Mock, patch
-from account_app.checkout import COLOR_REVIEW_STATUS
 from account_app.tests import test_sales_runtime_linking as linking
 from account_app.sales_runtime.runtime import Runtime
 from account_app.sales_runtime.entrypoint import Entrypoint
@@ -22,6 +21,69 @@ class AuditFixTests(unittest.TestCase):
     run_turn=linking.LinkingTests.run_turn
     select=linking.LinkingTests.select
     prompt=linking.LinkingTests.prompt
+
+    def test_current_fit_answer_precedes_a_color_question_and_uses_saved_weight(self):
+        self.products[0].update(sizes='من وزن 60 إلى 130 كيلو')
+        self.run_turn('وزني 68', changes=[dict(values=dict(product_id='P1', weight_kg=68))])
+        event, outcome = self.run_turn('ياقياس ترهم')
+
+        class Writer:
+            structured_sales = True
+
+            def __call__(self, context):
+                return [dict(type='text', text='شنو اللون اللي يعجبج؟')]
+
+            def repair(self, context, previous, error):
+                self.context, self.error = context, error
+                parts = [dict(type='text', text='إي حبيبتي، يناسب وزن 68.')]
+                if (context['question_field'] or '').endswith('.color'):
+                    parts.append(dict(type='text', text='يا لون تحبين؟'))
+                return parts
+
+        writer = Writer()
+        parts = self.reply(event, outcome, writer)
+        self.assertEqual(dict(weight_kg=68.0, within_catalog_range=True), writer.context['progress']['fit'])
+        self.assertIn('reply.current_question', writer.error)
+        self.assertIn('يناسب وزن 68', parts[0]['text'])
+
+    def test_same_day_question_with_unrecognized_images_does_not_turn_into_price_or_review(self):
+        class Writer:
+            structured_sales = True
+
+            def __call__(self, context):
+                return [dict(type='text', text='القطعة بخمسطعش ألف.')]
+
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, province: 5000,
+                           self.decide, writer=Writer(),
+                           media=lambda *args: dict(status='unavailable', product_ids=[]))
+        result = entry.receive(store_id='khuyoot', channel='chatwoot', account_id='a', sender_id='eta',
+                               message_id='images', text='يوصلن اليوم عنواني بغداد', media_kind='image',
+                               media_ref=['first', 'second'])
+        self.assertEqual('queued', result['reply']['action'])
+        reply = self.store.claim_reply(Scope('khuyoot', 'chatwoot', 'a', 'eta'))['payload']['text']
+        self.assertIn(APPROVED_DELIVERY_TIME, reply)
+        self.assertIn('ما أگدر أضمن الوصول اليوم', reply)
+        self.assertNotIn('ألف', reply)
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.decide.assert_not_called()
+
+    def test_same_day_purchase_condition_does_not_book(self):
+        self.select()
+        _, outcome = self.run_turn('اذا يوصل اليوم حجزيلي\n07701234567 بغداد حي التجربة قرب المدرسة')
+        self.assertEqual('continue', outcome['action'])
+        self.assertEqual('delivery_deadline', outcome['readiness']['conditions'][0]['kind'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_question_guard_rejects_same_day_promise_and_generic_weight_range(self):
+        from account_app.sales_answers import current_question_gaps
+        for reply in ('اي يوصل اليوم، التوصيل من 24 ساعة إلى يومين.',
+                      'التوصيل من 24 ساعة إلى يومين، واليوم يوصلج.', 'سعره خمسطعش ألف.'):
+            with self.subTest(reply=reply):
+                self.assertTrue(current_question_gaps(reply, 'يوصلن اليوم', delivery_window=APPROVED_DELIVERY_TIME))
+        self.assertFalse(current_question_gaps('ما أگدر أوعدج يوصل اليوم. التوصيل من 24 ساعة ليومين.',
+                                               'يوصلن اليوم', delivery_window=APPROVED_DELIVERY_TIME))
+        fit = dict(weight_kg=68.0, within_catalog_range=True)
+        self.assertTrue(current_question_gaps('يناسب من 60 إلى 130 كيلو. يا لون؟', 'ياقياس ترهم', fit=fit))
 
     def test_latest_colour_and_explicit_purchase_cannot_be_closed_by_writer_plan(self):
         self.products[0]['sizes'] = 'من وزن 60 إلى 130 كيلو'
@@ -447,6 +509,23 @@ class AuditFixTests(unittest.TestCase):
         _, result = self.run_turn('بغداد حي المنصور قرب المدرسة')
         self.assertEqual('booked', result['action'])
 
+    def test_size_question_after_ambiguous_images_asks_which_image_without_pausing(self):
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, self.decide,
+                           writer=Mock(), media=lambda *args: dict(status='ambiguous', product_ids=['P1', 'B1']))
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        result = entry.receive(**target, message_id='posts', media_kind='image',
+                               media_ref=['first', 'second'], text='شكد السعر')
+        self.assertEqual('media_unresolved', result['action'])
+        part = entry.store.claim_reply(self.scope)
+        entry.store.settle_reply(self.scope, part['id'], 'accepted', 'first-receipt')
+        result = entry.receive(**target, message_id='size', text='عندج قياس 48')
+        self.assertEqual('queued', result['reply']['action'])
+        part = entry.store.claim_reply(self.scope)
+        self.assertIn('أي صورة', part['payload']['text'])
+        self.assertEqual('active', entry.store.snapshot(self.scope)['data']['control_mode'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+
     def test_second_unresolved_photo_stops_the_loop_and_keeps_declared_contact(self):
         writer = Mock(return_value=[dict(type='text', text='حبيبتي، دزيلي صورة أوضح للموديل.')])
         entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, self.decide,
@@ -493,25 +572,31 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(28000,total)
         self.assertEqual(23000,sum(i['unit_price']*i['quantity'] for i in json.loads(items)))
 
-    def test_delivered_checkout_details_hold_the_order_when_only_color_is_missing(self):
+    def test_delivered_checkout_details_keep_the_draft_open_for_an_asked_color(self):
         self.products[0].update(price='17000', sizes='فري سايز من 55 إلى 130 كيلو', colors='نيلي، وردي')
         self.run_turn('اريد قطعتين لارج',changes=[dict(values=dict(product_id='P1',size='L',quantity=2))])
         event,out=self.run_turn('وشكد التوصيل')
         self.reply(event,out,Mock(return_value=[dict(type='text',text='التوصيل {{delivery_fee}}.')]),
                    policy={'delivery_fee':{'واسط':5000}})
+        # This reply includes an accepted color step. Keep the draft open so
+        # the customer's next color can complete it without staff intervention.
         event,out=self.run_turn('سويهن ب30')
         self.reply(event,out,Mock(return_value=[dict(type='text',text=(
             'القطعتين {{subtotal}}، وبعد خصم {{discount}} يصيرن {{discounted_subtotal}} قبل التوصيل. لأي محافظة؟'))]))
         self.run_turn('لا فدوة')
         self.run_turn('07701234567',contact={'phone':'07701234567'})
         event,out=self.run_turn('واسط حي التجربة قرب المدرسة',contact={'address':'واسط حي التجربة قرب المدرسة'})
+        self.assertEqual('continue',out['action'])
+        self.assertTrue(out['waiting_for_color'])
+        self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        event,out=self.run_turn('نيلي')
         self.assertEqual('booked',out['action'])
-        self.assertTrue(out['held_for_color'])
+        self.assertFalse(out['held_for_color'])
         total,status,items=self.db.execute('SELECT total_amount,status,order_items FROM orders').fetchone()
-        self.assertEqual((37000,COLOR_REVIEW_STATUS),(total,status))
-        self.assertEqual([('', 'L', 2)],[(item['color'],item['size'],item['quantity']) for item in json.loads(items)])
-        self.assertEqual(1,self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
-        task_id,kind=self.db.execute('SELECT id,kind FROM sales_v2_order_tasks').fetchone()
+        self.assertEqual((37000,'new'),(total,status))
+        self.assertEqual([('نيلي', 'L', 2)],[(item['color'],item['size'],item['quantity']) for item in json.loads(items)])
+        self.assertEqual(0,self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
+        task_id,kind=self.db.execute("SELECT id,kind FROM sales_v2_order_tasks WHERE kind='confirmation'").fetchone()
         self.assertEqual('confirmation',kind)
         from account_app.sales_runtime.delivery import deliver_confirmation
         send=Mock(return_value=dict(accepted=True,provider_id='confirmation'))

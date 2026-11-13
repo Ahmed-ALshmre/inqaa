@@ -45,11 +45,22 @@ def requested_fields(text):
              'delivery_time':'delivery_time','delivery':'delivery_fee','location':'shop_address'}
     fields=[mapping[t] for t in sales_answers.topics(text) if t in mapping]
     clean=customer_copy.normalized(text)
+    from .contact import checkout_inspection_question
+    if any(checkout_inspection_question(line) for line in clean.splitlines()):
+        fields.append('inspection_policy')
     if re.search(r'(?:ال)?توصيل\s+(?:بلاش|مجاني)|(?:بلاش|مجاني)\s+(?:ال)?توصيل', clean):
         fields.append('delivery_fee')
     if re.search(r'صناعته|صناعتها|منشا|صيني\s*لو\s*تركي|تركي\s*لو\s*صيني',clean):fields.append('origin')
     if re.search(r'بس\s*هو.{0,20}(?:جوار|جنط)|تجي.{0,20}(?:وياه|هديه)',clean):fields.append('composition')
     return list(dict.fromkeys(fields))
+
+
+def only_same_day_question(text):
+    from .intent import constraint, purchase_selected
+    from ..sales_playbook import human_requested
+    return (sales_answers.same_day_delivery(text) and not human_requested(text)
+            and not purchase_selected(text) and not constraint(text)
+            and set(requested_fields(text)) <= {'delivery_time'})
 
 
 def alternatives(catalog,focus,text, *, requested=False):

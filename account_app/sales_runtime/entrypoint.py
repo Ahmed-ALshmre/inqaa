@@ -6,6 +6,7 @@ never from customer text. Existing webhook processing is not enabled by import.
 from .cart import Catalog
 from .backup import BackupSuperseded
 from .contact import capture as capture_contact, declarations
+from .facts import only_same_day_question
 from .intent import explicit_cancellation
 from .orders import Orders, migrate_tasks, CONFIRMATION
 from .runtime import Runtime
@@ -16,7 +17,7 @@ from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
 class Entrypoint:
     def __init__(self, db, load_products, delivery_fee, decide, confirmation=CONFIRMATION,
                  media=None, writer=None,policy_loader=None,backup=None,allow_write=None,on_booking=None,
-                 text_reference=None, product_photos=None, on_photo_focus=None):
+                 text_reference=None, product_photos=None, on_photo_focus=None, history_loader=None):
         self.store = Store(db)
         from .catalog_answers import enrich
         self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
@@ -29,11 +30,11 @@ class Entrypoint:
                                Orders(self.store, self.load_catalog, delivery_fee, confirmation,
                                       allow_write=allow_write, on_booking=on_booking),
                                decide,self.policy_loader,backup=backup,text_reference=text_reference,
-                               on_photo_focus=on_photo_focus)
+                               on_photo_focus=on_photo_focus, history_loader=history_loader)
         self.media = media
         from .response import Responses
         self.responses = Responses(self.store,self.load_catalog,writer,self.policy_loader,backup=backup,
-                                   product_photos=product_photos) if writer else None
+                                   product_photos=product_photos, history_loader=history_loader) if writer else None
 
     def migrate(self):
         self.store.migrate()
@@ -96,7 +97,7 @@ class Entrypoint:
 
     def _receive(self, *, store_id, channel, account_id, sender_id, message_id,
                 text='', ad=None, media_kind='text', actor='customer', ai_enabled=True, media_ref=None,
-                staff_sold_out_product=None):
+                staff_sold_out_product=None, staff_verified_product=None):
         if channel not in {'chatwoot', 'zernio'}:
             raise ValueError('unsupported_channel')
         if media_kind not in {'text', 'image', 'sticker', 'video', 'audio', 'file'}:
@@ -105,6 +106,8 @@ class Entrypoint:
         payload = dict(text=text, ad=ad or {}, media_kind=media_kind, media_ref=media_ref)
         if staff_sold_out_product:
             payload['staff_sold_out_product'] = staff_sold_out_product
+        if staff_verified_product:
+            payload['staff_verified_product'] = staff_verified_product
         event = self.store.append(scope, message_id, kind='message', actor=actor, payload=payload)
         if event['duplicate']:
             latest = self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",
@@ -145,6 +148,8 @@ class Entrypoint:
         # A sticker is social context, never a request for product recognition.
         # Image/video interpretation must be supplied by an explicit media adapter.
         if media_kind in {'image', 'video', 'audio', 'file'}:
+            if media_kind == 'image' and staff_verified_product == state.get('focus_product_id') and staff_verified_product:
+                return self.finish_turn(scope, event['id'])
             if self.media is None:
                 return dict(action='needs_media_adapter', event_id=event['id'])
             saved = self.store.snapshot(scope)
@@ -180,6 +185,8 @@ class Entrypoint:
                 current = self.store.snapshot(scope)['data']
                 reference = self.runtime.reference_for(scope, self.load_catalog(store_id), current,
                                                        dict(text=text, ad=ad, media_kind=media_kind, observation=observed))
+                if media_kind == 'image' and only_same_day_question(text):
+                    return self.finish_turn(scope, event['id'])
                 if reference['status'] in {'known', 'provisional'}:
                     products_in_cart = {line['product_id'] for line in current['cart']}
                     if products_in_cart and reference['product_id'] not in products_in_cart:

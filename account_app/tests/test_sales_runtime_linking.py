@@ -302,6 +302,22 @@ class LinkingTests(unittest.TestCase):
         match.assert_called_once_with(image, self.products)
         fetch.assert_not_called()
 
+    def test_five_shared_post_previews_match_once_per_distinct_image(self):
+        from account_app.sales_runtime.preview import ImageObserver
+        urls = [f'https://cdn.example/preview-{index}.png' for index in range(5)]
+        image = (b'preview', 'image', '', 'image/png')
+        different = (b'different-preview', 'image', '', 'image/png')
+        fetch = Mock(side_effect=[image, image, different, image, image])
+        match = Mock(return_value=dict(product_found=True, product_id='P1'))
+        observer = ImageObserver(fetch, match)
+        with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
+            self.assertEqual(dict(status='matched', product_ids=['P1']), observer(self.scope, 'image', urls, self.products))
+            self.assertEqual(2, match.call_count)
+            fetch.side_effect = [image, different]
+            match.side_effect = [dict(product_found=True, product_id='P1'), dict(product_found=True, product_id='B1')]
+            self.assertEqual(dict(status='ambiguous', product_ids=['B1', 'P1']),
+                             observer(self.scope, 'image', urls, self.products))
+
     def test_red_caption_on_verified_maroon_photo_preserves_size_and_books_once(self):
         from account_app.sales_runtime.entrypoint import Entrypoint
         writer = Mock(side_effect=[

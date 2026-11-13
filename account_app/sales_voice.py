@@ -131,7 +131,7 @@ def remembered_age_availability(question, product, context, customer=None):
 
 def needs_fit_explanation(question):
     text=customer_copy.normalized(question)
-    return bool(re.search(r'اخاف|خايف|اخشي|يعني\s+شنو\s+(?:ال)?قياس|'
+    return sales_answers.fit_question(question) or bool(re.search(r'اخاف|خايف|اخشي|يعني\s+شنو\s+(?:ال)?قياس|'
                           r'(?:قياس|مقاس|سايز).{0,25}(?:نفس|اكبر|اصغر|جبير|كبير|صغير|ضيق|واسع)|'
                           r'(?:يناسب|يرهم).{0,15}(?:وزن|طول)',text))
 

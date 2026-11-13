@@ -13,6 +13,70 @@ except ImportError:
     from sales_playbook import requested_quantity
 
 
+def same_day_delivery(question):
+    text = normalized(question)
+    arrival = r'(?:يوصل\w*|توصل\w*|يلحق\w*|التوصيل)'
+    if re.search(r'وصلني|وصلتني|تاخر|وين\s+وصل|وين\s+صار|ما\s+وصل', text):
+        return False
+    return bool(re.search(rf'(?<!\w){arrival}\s+(?:لنا\s+|لي\s+)?اليوم(?!\w)|'
+                          rf'(?<!\w)اليوم\s+(?:راح\s+)?{arrival}(?!\w)', text))
+
+
+def fit_question(question):
+    text = normalized(question)
+    return bool(re.search(r'(?:يا|اي|شنو|شكد|كم)\s*(?:ال)?(?:قياس|مقاس|سايز)\s*'
+                          r'(?:ترهم|يرهم|يناسب\w*|الانسب|اختار|البس)|'
+                          r'(?:وزن|كيلو|كغم).{0,28}(?:ترهم|يرهم|يناسب\w*)', text, re.S))
+
+
+def same_day_reply(window):
+    return f'ما أگدر أضمن الوصول اليوم. عادةً التوصيل {str(window).strip(" .،")}.' if window else ''
+
+
+def current_question_gaps(reply, question, *, fit=None, delivery_window=''):
+    """Require the current fit or timing answer before a sales follow-up."""
+    clean = normalized(reply)
+    statements = [line for line in re.split(r'(?<=[؟?])|[.!،؛\n]+', clean)
+                  if not re.search(r'[؟?]|(?:^|\s)(?:شنو|شكد|يا\s*لون|اي\s*لون|تحبين|تريدين)', line)]
+    answer = ' '.join(statements)
+    missing = []
+    if same_day_delivery(question):
+        denial = r'(?:ما\s*(?:اقدر|اگدر|نكدر|نگدر|نقدر|نضمن|اضمن|اوعد|راح)|مو\s*(?:مضمون|مؤكد)|غير\s*(?:مضمون|مؤكد)|ماكو\s+ضمان)'
+        approved_window = normalized(delivery_window)
+        if approved_window == 'من 24 ساعة الى يومين':
+            has_window = re.search(r'(?:24\s*ساع[ةه]|يوم)\s*(?:الى|الي|لحد|او|[-–]|ل)\s*يومين', answer)
+        else:
+            has_window = approved_window and approved_window in answer
+        qualifies_today = rf'{denial}.{{0,55}}اليوم|اليوم.{{0,18}}{denial}'
+        claims_today = (r'(?:يوصل\w*|توصل\w*|التوصيل|التسليم|مضمون|مؤكد).{0,14}اليوم|'
+                        r'اليوم.{0,14}(?:يوصل\w*|توصل\w*|مضمون|مؤكد)')
+        unsupported_today = any(re.search(claims_today, line) and not re.search(qualifies_today, line)
+                                for line in statements)
+        answered = has_window if approved_window else re.search(qualifies_today, answer)
+        unrelated_price = (not set(topics(question)) & {'price', 'delivery'}
+                           and re.search(r'سعر|\bالف\b|دنانير', answer))
+        if not answered or unsupported_today or unrelated_price:
+            missing.append('جاوب عن وصول اليوم بمدة التوصيل المعتمدة ومن دون وعد بوصوله اليوم')
+    if fit_question(question):
+        suitability = r'(?<!\w)(?:يرهم\w*|ترهم\w*|يناسب\w*|تناسب\w*|مناسب\w*)(?!\w)'
+        negative = rf'(?<!\w)(?:ما|مو|غير|لا)\s*{suitability}|خارج\s+(?:مجال|نطاق)'
+        positive = r'ضمن\s+(?:المجال|المدى|الوزن|القياس|نطاق)|(?:قياسج|مقاسج|قياسك)\s+(?:موجود|متوفر)'
+        size_label = re.search(r'(?:قياس|مقاس|سايز)\s*\d{2,3}(?!\d)', answer) or product_variants.SIZE_RE.search(answer)
+        if fit is not None and not fit['within_catalog_range']:
+            covered = re.search(negative, answer)
+        elif fit is not None:
+            fit_weight = re.escape(format(fit['weight_kg'], 'g'))
+            personal = re.search(rf'(?<!\d){fit_weight}(?!\d)|(?:وزن|قياس|مقاس)(?:ج|چ|ك)|'
+                                 r'(?:يرهم|يناسب)\s*ل?(?:لج|لچ|لك)', answer)
+            covered = personal and not re.search(negative, answer) and re.search(rf'{positive}|{suitability}', answer)
+        else:
+            covered = (size_label or re.search(rf'{suitability}|{positive}|فري\s*سايز|'
+                                               r'(?:شكد|كم)\s+(?:وزن|كيلو)|(?:دزي|ارسل)\w*\s+وزن', clean))
+        if not covered:
+            missing.append('جاوب عن القياس الملائم حسب الوزن المعروف قبل سؤال اللون')
+    return missing
+
+
 def topics(question):
     text = normalized(question).translate(str.maketrans('یک','يك'))
     text = re.sub(r'(?<!\w)(ال)?توسيل(?!\w)',r'\1توصيل',text)
@@ -64,6 +128,8 @@ def topics(question):
             evidence = re.sub(r'(?<!\w)(?:بال|ال|ب)?وات\s*س\s*ا?ب(?!\w)', '', evidence)
         if re.search(pattern, evidence):
             result.append(key)
+    if 'delivery_time' not in result and same_day_delivery(question):
+        result.append('delivery_time')
     if 'care' in result and 'colors' in result:
         color_question = re.sub(r'(?:يذب|يثبت|ثبات|يغير)\s*(?:ال)?لون', '', text)
         if not re.search(patterns['colors'], color_question):

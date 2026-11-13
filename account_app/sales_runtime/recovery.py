@@ -1,6 +1,6 @@
 """Deterministic grounded recovery when a model proposal cannot be executed."""
 import re
-from .. import checkout,product_variants,sales_playbook
+from .. import catalog_profile,checkout,product_variants,sales_playbook
 from ..sales_recovery import simple_photo_request as catalog_photo_request
 from .facts import requested_fields,POLICY_FIELDS
 from .intent import purchase_selected
@@ -46,13 +46,47 @@ def clothing_size_label(text):
     return match[1] if match else None
 
 
-def weight_fit(product, text, question=''):
+def weight_fit(product, text, question='', *, saved_weight=None):
     if not product or product.get('selection_mode') != 'weight':
         return None
     ranges = product_variants.weight_only_ranges(product)
     weight = product_variants.weight_answer(text, question)
-    value = weight and weight.get('value')
+    value = weight.get('value') if weight else saved_weight
     if not value or not ranges:
         return None
     fits = any(low <= float(value) <= high for low, high in ranges)
     return dict(weight_kg=float(value), within_catalog_range=fits)
+
+
+def browsing_photo_request(current, recent):
+    """Resolve a request for several catalog options from the customer’s recent turns."""
+    clean = checkout.normalized(current)
+    if re.search(r'(?:ما|لا)\s*(?:اريد|تدز|ترسل)|احجز|ثبت|اشتري', clean):
+        return None
+    clauses = clean.splitlines()
+    plural = r'صور(?:ت)?(?:هن|هم)(?!\w)|صور\s+(?:التنانير|الموديلات)'
+    if not any(catalog_photo_request(line) and re.search(plural, line) for line in clauses):
+        return None
+    customer_texts = [message.get('text', '') for message in recent if message['actor'] == 'customer']
+    category = catalog_profile.query_type(current)
+    request = []
+    for text in reversed(customer_texts[-8:]):
+        previous_type = catalog_profile.query_type(text)
+        if previous_type and category and previous_type != category:
+            break
+        category = category or previous_type
+        request.insert(0, text)
+    if not category:
+        return None
+    text = '\n'.join(request)
+    length = skirt_length_request(text) if category == 'skirts' else None
+    return dict(category=category, length=length, occasions=catalog_profile.query_occasions(text),
+                colors=next((product_variants.colors(line) for line in reversed(request)
+                             if product_variants.colors(line)), []))
+
+
+def skirt_length_request(text):
+    """The Iraqi garment term «تسعيني» describes length in skirt shopping."""
+    clean = checkout.normalized(text)
+    matches = list(re.finditer(r'(?<!\w)تسعين[يهة](?!\w)|(?:طولها|طوله|طول|الطول)\s*(\d{2,3})(?!\d)', clean))
+    return int(matches[-1][1] or 90) if matches else None

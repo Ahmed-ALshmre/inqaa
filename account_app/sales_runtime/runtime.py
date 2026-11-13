@@ -8,7 +8,7 @@ import re
 import time
 from copy import deepcopy
 
-from .. import checkout, product_albums, product_variants
+from .. import catalog_profile, checkout, product_albums, product_variants
 from ..sales_recovery import alternative_photo_request
 from .backup import BackupFailed, consult
 from .cart import CartService
@@ -16,12 +16,12 @@ from .contact import capture as capture_contact, contact_only, declined_phone
 from .references import References
 from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
-from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields
+from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields,only_same_day_question
 from .intent import (apply_intent, color_availability, color_correction, direct_clothing_size, direct_color, explicit_color_order,
                      explicit_cancellation, photo_replaces_selection, purchase_declined, purchase_selected,
                      referred_photo_color)
 from .orders import only_color_missing
-from .recovery import catalog_photo_request, clothing_size_label, grounded_plan
+from .recovery import browsing_photo_request, catalog_photo_request, clothing_size_label, grounded_plan, skirt_length_request
 
 
 class TurnTools(Store):
@@ -109,12 +109,13 @@ def allocated_color_changes(lines, product, allocation):
 
 class Runtime:
     def __init__(self, store, catalog_loader, orders, decide,policy_loader=None, *, backup=None, text_reference=None,
-                 on_photo_focus=None):
+                 on_photo_focus=None, history_loader=None):
         self.store, self.catalog_loader, self.orders, self.decide = store, catalog_loader, orders, decide
         self.policy_loader=policy_loader or (lambda sid:dict(inspection_policy=orders.confirmation.split('. ',1)[-1]))
         self.backup = backup
         self.text_reference = text_reference
         self.on_photo_focus = on_photo_focus
+        self.history_loader = history_loader
 
     def photo_choice(self, scope, event_id, text, media, reference, state, catalog):
         # Only the current photo or the immediately adjacent customer turn can
@@ -260,6 +261,10 @@ class Runtime:
 
     def reference_for(self, scope, catalog, state, payload):
         text = payload.get('text', '')
+        if payload.get('staff_verified_product') == state.get('focus_product_id') and payload.get('staff_verified_product'):
+            product_id = payload['staff_verified_product']
+            catalog.get(product_id)
+            return dict(status='known', source='staff', product_id=product_id)
         pending_id, pending = self.pending_photo(state)
         refs = References(self.store, catalog)
         ad = payload.get('ad')
@@ -362,6 +367,9 @@ class Runtime:
             media = state.get('media_observations', {}).get(str(event_id))
             pending_id, pending = self.pending_photo(state)
             reference = self.reference_for(scope, catalog, state, dict(evidence['payload'], observation=media))
+            if (evidence['payload'].get('staff_verified_product') and state['cart'] and
+                    evidence['payload']['staff_verified_product'] not in {line['product_id'] for line in state['cart']}):
+                raise ServiceRequired('image_changes_existing_cart')
             decline = bool(pending and purchase_declined(text_now))
             if pending and reference['status'] != 'known' and not decline:
                 return dict(action='continue', state_version=snap['version'], photo_pending=pending_id,
@@ -394,6 +402,9 @@ class Runtime:
                                          (scope.key,)).fetchall()
             context['recent_messages']=(snap['data'].get('prior_conversation', []) +
                 [dict(actor=row[0], **message_context(json.loads(row[1]))) for row in reversed(recent)])[-30:]
+            if self.history_loader:
+                context['recent_messages'] = [*self.history_loader(scope, event_id),
+                                              dict(actor='customer', **context['event'])][-30:]
             replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
@@ -403,6 +414,20 @@ class Runtime:
                                 and contact_only(evidence['payload'].get('text', '')))
             focus = reference.get('product_id') or state.get('focus_product_id') or (
                 state['cart'][0]['product_id'] if len({line['product_id'] for line in state['cart']}) == 1 else None)
+            focus_product = catalog.products.get(focus) or {}
+            skirt_context = (catalog_profile.effective_family(focus_product) == 'skirts' or
+                             any(catalog_profile.query_type(message.get('text')) == 'skirts'
+                                 for message in context['recent_messages'][-8:] if message['actor'] == 'customer'))
+            length_only = bool(skirt_context and skirt_length_request(text_now) and not product_variants.weight_answer(text_now))
+            if length_only:
+                context['selection_guidance'] = 'تسعيني بطلب التنورة يعني طول 90 سم. لا تسجليه كوزن أو قياس جسم.'
+            if evidence['payload'].get('media_kind') == 'text' and not state.get('order_id'):
+                browsing = browsing_photo_request(text_now, context['recent_messages'])
+                if browsing and (not state.get('purchase_event') or not state['cart'] or re.search(
+                        r'ما\s*عندي\s+موديل\s+معين|مو\s+(?:ال)?قياس', '\n'.join(
+                            message.get('text', '') for message in context['recent_messages'][-8:]
+                            if message['actor'] == 'customer'))):
+                    return dict(action='continue', state_version=snap['version'], browsing_photos=browsing)
             last_reply = context['recent_replies'][-1] if context['recent_replies'] else {}
             alternatives_requested = bool(focus and evidence['payload'].get('media_kind', 'text') == 'text'
                 and alternative_photo_request(text_now, last_reply.get('photo_offer_product') == focus))
@@ -414,6 +439,8 @@ class Runtime:
                 raw = dict(intent='withdraw')
             elif contact_turn or alternatives_requested:
                 raw = dict(intent='continue')
+            elif only_same_day_question(evidence['payload'].get('text', '')):
+                raw = dict(intent='continue', answer=dict(facts=[dict(product_id='@store', field='delivery_time')]))
             elif (reference['status'] != 'known' and (reference['status'] != 'none' or points_to_item)
                     and not snap['data'].get('focus_product_id') and not snap['data']['cart']):
                 # An unresolved referral or "this item" supplies no evidence for a catalog choice.
@@ -428,7 +455,6 @@ class Runtime:
                         raw,used_backup=self.recover_decision(scope,event_id,snap['version'],context,exc)
                     recovered=True
             correction = color_correction(text_now)
-            focus_product = catalog.products.get(focus) or {}
             label = clothing_size_label(text_now)
             size_mode = focus_product.get('selection_mode')
             uses_weight = size_mode == 'weight'
@@ -473,6 +499,12 @@ class Runtime:
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
+                    if length_only:
+                        for change in plan.get('changes', []):
+                            values = change['values']
+                            values.pop('weight_kg', None)
+                            if values.get('size') == '90':
+                                values.pop('size')
                     if explicit_photo:
                         # A photo-only turn cannot change the basket or the checkout fields.
                         quote = plan.get('answer', {}).get('catalog_photos')
@@ -671,6 +703,18 @@ class Runtime:
         new_contact = event_id in state.get('contact_events', {}).values()
         direct_purchase = purchase_selected(evidence['payload'].get('text', ''))
         hold_color = only_color_missing(ready) and (new_contact or direct_purchase)
+        waiting_for_color = False
+        if hold_color:
+            # The customer may still be answering the bot's explicit color choice.
+            latest_choice = self.store.db.execute("""SELECT payload FROM sales_v2_outbox
+                WHERE scope=? AND status='accepted' AND json_extract(payload,'$.question_field') IS NOT NULL
+                ORDER BY id DESC LIMIT 8""", (scope.key,)).fetchall()
+            line_keys = {field.rsplit('.', 1)[0] for field in ready['missing_fields']}
+            waiting_for_color = any(
+                payload.get('question_field', '').rsplit('.', 1)[0] in line_keys
+                and payload.get('question_field', '').endswith('.color')
+                for payload in (json.loads(row[0]) for row in latest_choice))
+            hold_color = not waiting_for_color
         if ((ready['ready'] or hold_color) and not image_only and not photo_request
                 and not (saved.get('photo_choice') or {}).get('availability_question')
                 and not missing_fact and not staff_stock_conflict and not unavailable_cart and not state.get('order_id')):
@@ -683,7 +727,8 @@ class Runtime:
                            quote=saved.get('quote'),recovered=saved.get('recovered',False),
                            withdrawn=saved.get('withdrawn',False),contact_turn=saved.get('contact_turn',False),
                            photo_choice=saved.get('photo_choice'), alternatives_requested=saved.get('alternatives_requested'),
-                           staff_stock_conflict=staff_stock_conflict, state_version=version)
+                           staff_stock_conflict=staff_stock_conflict, waiting_for_color=waiting_for_color,
+                           state_version=version)
         outcome['state_version'] = version + 1
         self.store.apply(scope, key + ':done', version, dict(event_id=event_id), lambda state: dict(outcome=outcome))
         return outcome

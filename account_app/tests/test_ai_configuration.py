@@ -203,3 +203,39 @@ class AIConfigurationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn('رصيد', response.get_json()['error'])
         self.assertEqual(response.get_json()['reply'], '')
+
+    def test_staff_preview_keeps_same_day_question_before_two_photos(self):
+        m.save_message(self.db, self.sender, 'incoming', 'text', 'يوصلن اليوم عنواني بغداد', None, None, None, {})
+        for index in range(2):
+            image = f'https://images.test/{index}.jpg'
+            m.save_message(self.db, self.sender, 'incoming', 'image', image, image, None, None, {})
+        with patch.object(m, 'match_product') as match, patch.object(m, '_call_main_ai_primary',
+                return_value=dict(reply='سعر القطعة 15 ألف')) as main:
+            response = self.client.post(f'/api/conversations/{self.sender}/ask_ai', json={'allow_empty': True})
+        self.assertEqual(200, response.status_code)
+        self.assertEqual('يوصلن اليوم عنواني بغداد', main.call_args.args[0]['text'])
+        self.assertIn('24 ساعة', response.get_json()['reply'])
+        self.assertNotIn('ألف', response.get_json()['reply'])
+        match.assert_not_called()
+
+    def test_staff_preview_blocks_color_only_after_fit_question(self):
+        for text in ('وزني 68', 'ياقياس ترهم'):
+            m.save_message(self.db, self.sender, 'incoming', 'text', text, None, None, None, {})
+        with patch.object(m, '_call_main_ai_primary', return_value=dict(reply='شنو لون؟')):
+            response = self.client.post(f'/api/conversations/{self.sender}/ask_ai', json={'allow_empty': True})
+        self.assertTrue(response.get_json()['needs_human'])
+        self.assertEqual('', response.get_json()['reply'])
+
+    def test_staff_preview_retries_model_that_ignored_fit_question(self):
+        product = dict(self.product, sizes='من وزن 60 إلى 130 كيلو')
+        for text in ('وزني 68', 'ياقياس ترهم'):
+            m.save_message(self.db, self.sender, 'incoming', 'text', text, None, None, None, {})
+        replies = [dict(reply='شنو اللون؟'), dict(reply='إي حبيبتي، يناسب وزن 68.')]
+        with patch.object(m, 'load_active_products', return_value=[product]), \
+             patch.object(m, 'find_product_by_id', return_value=product), \
+             patch.object(m, '_call_main_ai_once', side_effect=replies) as generate:
+            response = self.client.post(f'/api/conversations/{self.sender}/ask_ai',
+                                        json={'allow_empty': True, 'product_id': 'P003'})
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(2, generate.call_count)
+        self.assertIn('يناسب وزن 68', response.get_json()['reply'])
