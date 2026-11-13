@@ -119,6 +119,8 @@ def constraint(text):
         return None
     if re.search(r'(?:اريد[هة]|لازم|بشرط|ضروري|اذا|لو).{0,30}(?:باجر|باچر|غدا|الصبح|الخميس|الجمعه|السبت)',value):
         return dict(kind='delivery_deadline',text=text,status='pending')
+    if re.search(r'(?:لازم|بشرط|ضروري|اذا|لو)\s+.{0,24}(?:يوصل\w*|توصل\w*|التوصيل)\s+اليوم(?!\w)', value):
+        return dict(kind='delivery_deadline',text=text,status='pending')
     if (re.search(r'(?:اذا|لو|بشرط|بس\s+ب).{0,35}(?:ب\s*\d|بعشرين|بثلاثين)',value)
             and re.search(r'احجز|ثبت|اشتري|اطلب|اريد',value)):
         return dict(kind='price',text=text,status='pending')

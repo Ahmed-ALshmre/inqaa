@@ -244,6 +244,19 @@ class RecoveryTests(unittest.TestCase):
         backup.write.assert_called_once()
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
+    def test_greeting_survives_failure_of_primary_and_backup_wording(self):
+        writer = Mock(side_effect=DecisionUnavailable('writer_provider_http_503'))
+        backup = Mock()
+        backup.write.side_effect = DecisionUnavailable('writer_provider_http_503')
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000,
+                           self.decide, writer=writer, backup=backup)
+        result = entry.receive(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                               sender_id=self.scope.sender, message_id='greeting', text='مرحبا')
+        self.assertEqual('queued', result['reply']['action'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+        self.assertIn('هلا', self.store.claim_reply(self.scope)['payload']['text'])
+        backup.write.assert_called_once()
+
     def test_a_new_message_supersedes_an_in_flight_backup(self):
         backup=Mock()
         def recover(context):

@@ -5,6 +5,18 @@ from .. import checkout
 from .store import Conflict
 
 
+INSPECTION_QUESTION = re.compile(
+    r'(?:و?اذا|لو|في حال)\s+.{0,55}(?:ارجع\w*|يرجع\w*|ترجع\w*|استبدل\w*)')
+LOCAL_MOBILE = re.compile(r'(?:(?:رقمي|رقم(?: الموبايل| الهاتف)?|موبايل)\s*[:،,-]?\s*)?(7(?:[ \t-]*\d){9})')
+
+
+def checkout_inspection_question(text):
+    """A question about inspecting the parcel before paying."""
+    clean = checkout.normalized(text)
+    return bool(INSPECTION_QUESTION.search(clean)
+                and not re.search(r'استلمت|وصلتني|رجعته|الغ[يى]|بشرط|ثبتي|احجزي|اشتري|اطلب', clean))
+
+
 def declined_phone(text):
     return bool(re.search(r'رقم(?:كم| المندوب| المتجر)|مو رقمي|ما اريد استخدم هالرقم', checkout.normalized(text)))
 
@@ -20,6 +32,10 @@ def declarations(text, previous):
     for line in text.splitlines():
         current = {**previous, **fields}
         parsed = checkout.contact_fields(line, current)
+        # A standalone Iraqi mobile can arrive without its initial zero.
+        local_mobile = LOCAL_MOBILE.fullmatch(checkout.normalized(line).strip(' .،,:'))
+        if local_mobile:
+            parsed['phone'] = '0' + re.sub(r'\D', '', local_mobile[1])
         if _zone_unit(line, fields.get('address')):
             parsed['address'] = f"{fields['address']}، {line.strip()}"
         if declined_phone(line):
@@ -40,14 +56,21 @@ def declarations(text, previous):
 def contact_only(text):
     """Allow local checkout for plain phone and address declarations."""
     address = ''
+    contact_found = False
     for line in text.splitlines():
         clean = checkout.normalized(line).strip(' .،,:')
         if not clean:
+            continue
+        if checkout_inspection_question(clean) and not checkout.phone_number(clean):
+            continue
+        if LOCAL_MOBILE.fullmatch(clean):
+            contact_found = True
             continue
         remainder = checkout.PHONE.sub('', clean).strip(' .،,:')
         remainder = re.sub(r'^(?:(?:هذا|هاي)\s+)?(?:رقمي|رقم(?: الموبايل| الهاتف)?|موبايل)\s*[:،,]?\s*',
                            '', remainder).strip(' .،,:')
         if not remainder and checkout.phone_number(clean):
+            contact_found = True
             continue
         if _zone_unit(remainder, address):
             continue
@@ -56,8 +79,9 @@ def contact_only(text):
         parsed = checkout.contact_fields(remainder)
         if not parsed.get('address') and not parsed.get('province'):
             return False
+        contact_found = True
         address = parsed.get('address') or address
-    return bool(text.strip())
+    return contact_found
 
 
 def capture(store, scope, event_id, allow_write):

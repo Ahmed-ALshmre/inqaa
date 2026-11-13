@@ -2,27 +2,29 @@
 import json
 import re
 
-from .. import checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_playbook, sales_strategy, sales_voice
+from .. import catalog_profile, checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_playbook, sales_strategy, sales_voice
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
 from .copy_guard import ROOMY_FIT, validate_copy, validate_material
-from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives
+from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives,only_same_day_question
 from .intent import constraint, purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
-from .recovery import catalog_photo_request, clothing_size_label, weight_fit
+from .recovery import catalog_photo_request, clothing_size_label, skirt_length_request, weight_fit
 from .wording import checkout_question, mentions_free_size, next_options, quote_amounts, render_amounts, validate_next_step
 
 
 class Responses:
-    def __init__(self, store, catalog_loader, writer,policy_loader=None, *, backup=None, product_photos=None):
+    def __init__(self, store, catalog_loader, writer,policy_loader=None, *, backup=None, product_photos=None,
+                 history_loader=None):
         self.store, self.catalog_loader, self.writer = store, catalog_loader, writer
         self.policy_loader=policy_loader or (lambda sid:{})
         self.backup = backup
         self.product_photos = product_photos
+        self.history_loader = history_loader
 
-    def prepare(self, scope, turn_id, outcome):
+    def prepare(self, scope, turn_id, outcome, *, retry_revision=None):
         mode = 'withdrawn' if outcome.get('withdrawn') else outcome['action']
         if mode not in {'continue', 'withdrawn', 'cancelled', 'media_unresolved'}:
             # Order confirmations use durable order tasks, never model rewriting.
@@ -34,6 +36,9 @@ class Responses:
             'media_unresolved': f'clarify-image:{turn_id}',
         }[mode]
         key = reply_key if mode == 'media_unresolved' else f'writer-v3:{turn_id}'
+        if retry_revision is not None:
+            suffix = f':resume:{retry_revision}'
+            key, reply_key = key + suffix, reply_key + suffix
         saved = self.store.db.execute('SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?',
                                      (scope.key,key)).fetchone()
         if saved:
@@ -53,6 +58,8 @@ class Responses:
                                      (scope.key,)).fetchall()
         messages=(snap['data'].get('prior_conversation', []) +
                   [dict(actor=row[0], **message_context(json.loads(row[1]))) for row in reversed(recent)])[-15:]
+        if self.history_loader and messages:
+            messages = [*self.history_loader(scope, turn_id), messages[-1]][-15:]
         replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                       (scope.key,)).fetchall()
         accepted=[json.loads(row[0]) for row in reversed(replies)]
@@ -63,7 +70,7 @@ class Responses:
         greeting = dict(
             omit_return_salam=not new_salam,
             omit_welcome=bool(accepted or snap['data'].get('order_id') or
-                              any(message['actor']=='staff' for message in messages))
+                              any(message['actor'] in {'staff', 'assistant'} for message in messages))
                          and not (new_salam or new_welcome),
         )
         if mode == 'media_unresolved':
@@ -73,6 +80,9 @@ class Responses:
             part = dict(type='text', text=prompt, question_field='product',
                         question_key='product', question_stage='product-detail')
             return self.save(scope, key, reply_key, turn_id, snap['version'], [part])
+        if outcome.get('browsing_photos') and self.product_photos:
+            parts = self.browsing_photos(catalog, outcome['browsing_photos'])
+            return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if outcome.get('photo_pending'):
             result = self.answer_pending_photo(scope, turn_id, outcome, catalog, policy, current, messages,
                                                accepted, greeting, snap['data']['contact'])
@@ -160,7 +170,10 @@ class Responses:
         previous_reply = accepted[-1] if accepted else {}
         weight_question = (previous_reply.get('text', '')
                            if previous_reply.get('question_key') == f'product.{focus}.weight_kg' else '')
-        fit = weight_fit(product, current, weight_question) if not purchase_turn else None
+        saved_weights = {line.get('weight_kg') or line.get('size') for line in lines
+                         if line['product_id'] == focus and (line.get('weight_kg') or line.get('size_source_kind') == 'weight')}
+        saved_weight = next(iter(saved_weights)) if len(saved_weights) == 1 and sales_answers.fit_question(current) else None
+        fit = weight_fit(product, current, weight_question, saved_weight=saved_weight) if not purchase_turn else None
         fit_stock = product_albums.stock_state(product) if fit else None
         needs_weight = bool(product and product.get('selection_mode') == 'weight'
                             and not product_variants.is_free_size_product(product) and clothing_size_label(current)
@@ -358,6 +371,8 @@ class Responses:
                 self.product_photos(catalog.get(match['product_id']), []) for match in recommendations['matches'])
             question = 'alternatives.photos' if can_send else None
             stage = 'stock-alternatives'
+        if only_same_day_question(current):
+            question = None
         def question_key(field):
             if field and field.startswith('cart.'):
                 row=next((r for r in snap['data']['cart'] if r['line_id']==field.split('.')[1]),None)
@@ -370,7 +385,8 @@ class Responses:
                 question = None  # Choosing a color does not require quoting the same total in consecutive replies.
         if stage == 'checkout-confirmed' and accepted and accepted[-1].get('question_field') == question:
             question = None
-        if question and question != 'product' and question not in outcome.get('invalid_fields',[]):
+        if (question and question != 'product' and question not in outcome.get('invalid_fields', [])
+                and not (outcome.get('waiting_for_color') and question.endswith('.color'))):
             previous = [p for p in question_records
                         if (p.get('question_key') or question_key(p.get('question_field'))) == question_key(question)]
             if question == 'purchase_intent':
@@ -488,12 +504,21 @@ class Responses:
                                 discount_allowed=bool(quote_turn and quote.get('discount'))),
             recent_messages=messages, recent_replies=accepted, greeting=greeting,
         )
+        if (skirt_length_request(current) and not product_variants.weight_answer(current) and
+                (catalog_profile.effective_family(product) == 'skirts' or any(
+                    catalog_profile.query_type(message.get('text')) == 'skirts'
+                    for message in messages if message['actor'] == 'customer'))):
+            context['requested_skirt_length_cm'] = skirt_length_request(current)
         if focus:
             from ..product_questions import guidance_for
             context['reply_guidance'] = guidance_for(product,current)
         if photo_choice:
             context['verified_photo_choice'] = photo_choice
-        if needs_weight and question == f'product.{focus}.weight_kg' and set(requested) <= {'sizes'}:
+        if (outcome.get('waiting_for_color') and self.product_photos and product
+                and question and question.endswith('.color') and not requested):
+            photos = self.product_photos(product, [])[:4]
+            parts = photos + [dict(type='text', text='باقي بس اللون اللي يعجبج حتى أثبتلج الحجز 🌷')]
+        elif needs_weight and question == f'product.{focus}.weight_kg' and set(requested) <= {'sizes'}:
             parts = [dict(type='text', text='هالموديل قياساته حسب الوزن عيني، شكد الوزن تقريباً؟')]
         elif outcome.get('contact_turn') and not requested and not quote_turn and not feedback and (
                 getattr(type(self.writer), 'structured_sales', False)):
@@ -505,7 +530,12 @@ class Responses:
                 final_detail = set(missing) == {question} or question == 'contact.details'
                 parts = [dict(type='text', text=checkout_question(question, gender, final_detail=final_detail))]
             else:
-                parts = self.write(context, catalog, scope, turn_id, snap['version'])
+                try:
+                    parts = self.write(context, catalog, scope, turn_id, snap['version'])
+                except (DecisionRejected, DecisionUnavailable):
+                    if not outcome.get('waiting_for_color'):
+                        raise
+                    parts = [dict(type='text', text='باقي بس اللون اللي يعجبج حتى أثبتلج الحجز 🌷')]
         else:
             parts = self.write(context, catalog, scope, turn_id, snap['version'])
         if question in {'contact.phone','contact.address','contact.province','contact.details'}:
@@ -536,6 +566,30 @@ class Responses:
         what = f'لـ{label}' if label else 'لهاللون' if colors else 'لهالموديل'
         return dict(type='text', text=f'هسه ما عدنا صور {what} حتى أدزها.')
 
+    def browsing_photos(self, catalog, request):
+        def matches(product):
+            if (catalog_profile.effective_family(product) != request['category']
+                    or product_albums.stock_state(product) != 'available'):
+                return False
+            if request['length'] is None:
+                return True
+            length = sales_strategy.measurement_fact(product, 'length')
+            return bool(re.search(rf'(?<!\d){request["length"]}(?![\d.,])', checkout.normalized(length)))
+
+        candidates = sorted((product for product in catalog.products.values() if matches(product)),
+                            key=lambda product: not bool(set(request['occasions']) & set(product.get('occasions') or [])))
+        photos = []
+        seen = set()
+        for product in candidates:
+            for color in request['colors'] or [None]:
+                for part in self.product_photos(product, [color] if color else [])[:1]:
+                    if part['url'] not in seen:
+                        seen.add(part['url'])
+                        photos.append(part)
+                        if len(photos) == 5:
+                            return photos
+        return photos or [self.no_photo(request['colors'], 'بهالمواصفات')]
+
     def answer_pending_photo(self, scope, turn_id, outcome, catalog, policy, current, messages, accepted, greeting, contact):
         """Discuss a possible campaign product without applying it to the cart."""
         requested = requested_fields(current)
@@ -548,6 +602,14 @@ class Responses:
             requested.append('stock')
             if 'colors' not in requested and product_variants.requested(current)['colors']:
                 requested.append('colors')
+            if 'sizes' not in requested and product_variants.requested(current)['sizes']:
+                requested.append('sizes')
+        if not product_id and not wants_purchase and set(requested) <= {'price', 'sizes', 'colors', 'stock'}:
+            if requested and accepted and accepted[-1].get('question_stage') == 'product-detail':
+                return [dict(type='text', text='أي صورة من اللي دزيتيهن تقصدين؟ حتى أشيّك لج هالقطعة 🌷',
+                             question_field='product', question_key='product', question_stage='image-choice')]
+            if accepted and accepted[-1].get('question_stage') == 'image-choice':
+                return dict(action='skipped')
         if not product_id and (wants_photos or wants_purchase or any(field not in POLICY_FIELDS for field in requested)):
             return dict(action='photo_review')
         if wants_photos and product and self.product_photos:
@@ -611,19 +673,46 @@ class Responses:
                 if isinstance(exc, DecisionUnavailable) or getattr(type(self.writer), 'repair', None) is None:
                     break
 
-        alternate = consult(self.store, scope, turn_id, version, 'writer',
-                            self.backup.write if self.backup else None, context, error, parts)
-        if alternate is not None:
-            try:
-                return self.validate_parts(alternate, context, catalog, True)
-            except ValueError as exc:
-                raise BackupFailed('backup_reply_invalid') from exc
+        try:
+            alternate = consult(self.store, scope, turn_id, version, 'writer',
+                                self.backup.write if self.backup else None, context, error, parts)
+            if alternate is not None:
+                try:
+                    return self.validate_parts(alternate, context, catalog, True)
+                except ValueError as exc:
+                    raise BackupFailed('backup_reply_invalid') from exc
+        except BackupFailed:
+            recovered = self.same_day_recovery(context) or self.greeting_recovery(context)
+            if recovered:
+                return recovered
+            raise
+        recovered = self.same_day_recovery(context)
+        if recovered:
+            return recovered
         if isinstance(failure, DecisionUnavailable):
             raise failure
         if question == 'product' or context.get('progress', {}).get('product_unresolved'):
             raise DecisionUnavailable('product_reply_retryable') from failure
         raise DecisionRejected('writer_invalid_after_validation') from failure
 
+    @staticmethod
+    def same_day_recovery(context):
+        if only_same_day_question(context['customer_message']) and not context.get('action_results', {}).get('order_saved'):
+            text = sales_answers.same_day_reply(context.get('policies', {}).get('delivery_time'))
+            if text:
+                return [dict(type='text', text=text)]
+        return None
+
+    @staticmethod
+    def greeting_recovery(context):
+        clean = checkout.normalized(context.get('customer_message', '')).strip(' .!؟?،🌷')
+        if (context.get('progress', {}).get('product_unresolved') and context.get('mode') == 'continue'
+                and re.fullmatch(r'(?:(?:السلام|سلام)\s+عليكم(?:\s+ورحمة\s+الله)?|مرحبا|هلا|هلو|صباح الخير|مساء الخير)', clean)):
+            greeting = ('وعليكم السلام، يا هلا بيج 🌷' if clean.startswith(('السلام', 'سلام')) else
+                        'صباح النور 🌷' if clean == 'صباح الخير' else
+                        'مساء النور 🌷' if clean == 'مساء الخير' else 'يا هلا بيج 🌷')
+            return [dict(type='text', text=greeting)]
+        return None
     def validate_parts(self, parts, context, catalog, strict):
         from ..customer_copy import public_product_wording
         question = context['question_field']
@@ -637,10 +726,17 @@ class Responses:
                 raise ValueError('image_not_in_catalog')
         if strict:
             text = '\n\n'.join(part['text'] for part in parts if part['type'] == 'text')
+            gaps = sales_answers.current_question_gaps(
+                text, context['customer_message'], fit=context.get('progress', {}).get('fit'),
+                delivery_window=context.get('policies', {}).get('delivery_time', ''))
+            if gaps:
+                raise ValueError('reply.current_question: ' + '، '.join(gaps))
             value_facts = context.get('value_facts', {})
             fabric = value_facts.get('fabric') or context.get('product_facts', {}).get('fabric')
             validate_material(text, fabric, 'fabric' in context.get('requested_fields', ()))
             clean_copy = checkout.normalized(text)
+            if context.get('requested_skirt_length_cm') and re.search(r'وزن|كيلو|كغم', clean_copy):
+                raise ValueError('reply.length: the customer described skirt length, not body weight')
             if context.get('weight_only'):
                 reported_size = clothing_size_label(context['customer_message'])
                 if reported_size and reported_size.isdigit() and not context['progress'].get('fit'):

@@ -1,5 +1,6 @@
 """Isolated Flask wiring for authenticated channel events and their receipts."""
 import base64
+from hashlib import sha256
 import threading
 
 from .. import chatwoot, inbound_media, media, product_variants, zernio
@@ -19,6 +20,8 @@ def media_input(attachments):
 
 
 class ImageObserver:
+    MAX_REFERENCES = 8
+
     def __init__(self, fetch, match, archived=None):
         self.fetch = fetch
         self.match = match
@@ -27,12 +30,14 @@ class ImageObserver:
     def __call__(self, scope, kind, references, products):
         if kind != 'image':
             return dict(status='unsupported')
-        if not references or len(references) > 4:
+        urls = list(dict.fromkeys(references or ()))
+        if not urls or len(urls) > self.MAX_REFERENCES:
             return dict(status='ambiguous')
         base = chatwoot.configuration()['chatwoot_api_url'] if scope.channel == 'chatwoot' else ''
         matches = set()
         colors = set()
-        for url in references:
+        inspected = set()
+        for url in urls:
             if not inbound_media.trusted_source(url, base):
                 return dict(status='unknown')
             image = self.archived(scope, url) if self.archived else ''
@@ -46,9 +51,11 @@ class ImageObserver:
                 data, _, _, mime = attachment
                 image = f'data:{mime};base64,{base64.b64encode(data).decode("ascii")}'
             if media.known_sticker(data):
-                if len(references) == 1:
-                    return dict(status='sticker')
-                return dict(status='ambiguous')
+                continue
+            fingerprint = sha256(data).digest()
+            if fingerprint in inspected:
+                continue
+            inspected.add(fingerprint)
             result = self.match(image, products)
             if not isinstance(result, dict) or result.get('service_error') or result.get('pending'):
                 raise DecisionUnavailable('vision_service_unavailable')
@@ -56,6 +63,10 @@ class ImageObserver:
                 return dict(status='unknown')
             matches.add(result['product_id'])
             colors.add(product_variants.single_color(result.get('observed_color')))
+            if len(matches) > 1:
+                return dict(status='ambiguous', product_ids=sorted(matches))
+        if not matches:
+            return dict(status='sticker')
         observation = dict(status='matched' if len(matches) == 1 else 'ambiguous', product_ids=sorted(matches))
         if len(matches) == 1 and len(colors) == 1 and '' not in colors:
             observation['observed_color'] = next(iter(colors))

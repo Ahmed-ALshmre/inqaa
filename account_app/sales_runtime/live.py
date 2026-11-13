@@ -8,6 +8,7 @@ from functools import partial
 from urllib.parse import urlsplit
 
 from .. import ad_attribution, checkout, delivery_state, sales_playbook
+from .contracts import DecisionRejected, DecisionUnavailable
 from .delivery import deliver_confirmation, deliver_replies
 from .entrypoint import Entrypoint
 from .gateway import BACKUP_MODEL, BackupGateway, DecisionGateway, WriterGateway
@@ -232,9 +233,9 @@ def sync_control(db, sender_id, enabled, *, explicit=False):
         if enabled and explicit:
             scope = scope_for(row)
             db.execute("""UPDATE sales_v2_outbox SET status='superseded'
-                          WHERE scope=? AND status IN ('unknown','rejected')""", (scope.key,))
+                          WHERE scope=? AND status='rejected'""", (scope.key,))
             db.execute("""UPDATE sales_v2_order_tasks SET status='superseded'
-                          WHERE scope=? AND kind='confirmation' AND status IN ('unknown','rejected')""", (scope.key,))
+                          WHERE scope=? AND kind='confirmation' AND status='rejected'""", (scope.key,))
 
 
 def pause_store(db, store_id):
@@ -243,16 +244,22 @@ def pause_store(db, store_id):
                   (SELECT sender_id FROM sales_v2_live_routes WHERE store_id=?)''', (store_id, store_id))
 
 
-def staff_product(db, sender_id, product_id):
+def staff_product(db, sender_id, product_id, resolved_urls=()):
     row = route(db, sender_id)
     if not row:
         return
     scope = scope_for(row)
     Store(db)._ensure(scope)
     invalidate(db, row)
-    db.execute('''UPDATE sales_v2_scopes SET data=json_set(data,'$.focus_product_id',?,'$.focus_source','staff')
-                  WHERE scope=?''', (product_id, scope.key))
-    db.commit()
+    with db:
+        state = Store(db).snapshot(scope)['data']
+        state.update(focus_product_id=product_id, focus_source='staff')
+        for event_id in sorted(state.get('media_observations', ()), key=int, reverse=True):
+            refs = Store(db).evidence(scope, int(event_id))['payload'].get('media_ref') or []
+            if refs and all(url in resolved_urls for url in refs):
+                state['resolved_photo_event'] = max(state.get('resolved_photo_event', 0), int(event_id))
+                break
+        db.execute('UPDATE sales_v2_scopes SET data=? WHERE scope=?', (encode(state), scope.key))
 
 
 def pending_input(module, db, row, incoming_id, staff_reply_id):
@@ -265,7 +272,9 @@ def pending_input(module, db, row, incoming_id, staff_reply_id):
     audio_pending = False
     for message in rows:
         text = (message['text'] or '').strip()
-        if text and text != message['image_url']:
+        shared_post_caption = (row['channel'] == 'chatwoot' and message['image_url']
+                               and text.casefold() == 'shared post')
+        if text and text != message['image_url'] and not shared_post_caption:
             texts.append(text)
         ad = ad_attribution.extract(delivery_state.metadata(message['raw_payload'])) or ad
         for item in module.message_media(message):
@@ -425,6 +434,28 @@ def make_entry(module, db, scope, allow_write):
         module.remember_customer_product(db, current.sender, product, 'image_recognition',
                                          confidence=100, commit=False)
 
+    def conversation_history(current, event_id):
+        event = db.execute('SELECT external_id FROM sales_v2_events WHERE scope=? AND id=?',
+                           (current.key, event_id)).fetchone()
+        match = re.fullmatch(r'incoming:(\d+)(?::resume:\d+)?', event[0]) if event else None
+        if not match:
+            return []
+        incoming_id = int(match[1])
+        rows = db.execute(f'''SELECT direction,text,raw_payload,image_url FROM messages
+            WHERE store_id=? AND sender_id=? AND (id<? OR (direction='outgoing' AND {delivery_state.REPLY_TO_SQL}<?))
+            AND {delivery_state.VISIBLE_SQL} ORDER BY id DESC LIMIT 29''',
+            (current.store, current.sender, incoming_id, incoming_id)).fetchall()
+        history = []
+        for row in reversed(rows):
+            text = (row['text'] or '').strip()
+            if not text or text == row['image_url'] or (row['image_url'] and text.casefold() == 'shared post'):
+                continue
+            meta = delivery_state.metadata(row['raw_payload'])
+            actor = ('customer' if row['direction'] == 'incoming' else
+                     'staff' if meta.get('sender_type') == 'staff' or meta.get('manual_reply') else 'assistant')
+            history.append(dict(actor=actor, text=text[:700]))
+        return history
+
     return Entrypoint(db, lambda store: module.load_products_from_file(store_id=store),
         lambda store, province: module.delivery_fee_for_province(province, db),
         DecisionGateway(model, module.OPENROUTER_KEY, post), module.get_order_confirmation_text(db),
@@ -432,7 +463,7 @@ def make_entry(module, db, scope, allow_write):
         backup=BackupGateway(module.OPENROUTER_KEY, post),
         policy_loader=lambda store: {'delivery_time': module.get_delivery_settings(db)['delivery_time']},
         allow_write=allow_write, on_booking=partial(finish_order, module, db), text_reference=text_reference,
-        product_photos=product_photos, on_photo_focus=remember_photo_focus)
+        product_photos=product_photos, on_photo_focus=remember_photo_focus, history_loader=conversation_history)
 
 
 def delivery_callbacks(module, db, scope, incoming_id, enabled):
@@ -493,7 +524,7 @@ def drain(module, db, entry, scope, incoming_id, enabled):
     return results or ([blocked[0]] if blocked else [])
 
 
-def process(module, db, row, incoming_id):
+def process(module, db, row, incoming_id, *, staff_retry=False):
     """Called with the existing per-conversation worker lock held."""
     scope = scope_for(row)
     latest = module.latest_incoming_message(db, scope.sender)
@@ -539,24 +570,82 @@ def process(module, db, row, incoming_id):
             mark_handled()
         return dict(ok=True, needs_human=True, human_review_id=review_id, reason=pause)
 
-    if incoming_id <= row['handled_id']:
+    if incoming_id <= row['handled_id'] and not staff_retry:
         return dict(ok=True, reason='already_handled')
-    staff_reply_id = db.execute("""SELECT COALESCE(MAX(id),0) FROM messages WHERE sender_id=? AND store_id=?
-        AND direction='outgoing' AND json_extract(CASE WHEN json_valid(raw_payload) THEN raw_payload ELSE '{}' END,
-        '$.sender_type')='staff'""", (scope.sender, scope.store)).fetchone()[0]
-    if staff_reply_id > incoming_id:
+    staff_reply_id = db.execute(f"""SELECT COALESCE(MAX(COALESCE({delivery_state.REPLY_TO_SQL},id)),0)
+        FROM messages WHERE sender_id=? AND store_id=?
+        AND direction='outgoing' AND json_extract(CASE WHEN json_valid(raw_payload) THEN raw_payload ELSE '{{}}' END,
+        '$.sender_type')='staff' AND {delivery_state.ANSWERED_SQL}""", (scope.sender, scope.store)).fetchone()[0]
+    if staff_reply_id >= incoming_id:
         with db:
             mark_handled()
         return dict(ok=True, reason='already_answered')
     external_id = f'incoming:{incoming_id}'
-    prior = db.execute('SELECT payload FROM sales_v2_events WHERE scope=? AND external_id=?',
-                       (scope.key, external_id)).fetchone()
-    if not prior and delivery_state.answered_turn(db, scope.store, scope.sender, incoming_id):
+    prior = db.execute('''SELECT id,payload,external_id FROM sales_v2_events WHERE scope=? AND
+                          (external_id=? OR external_id GLOB ?) ORDER BY id DESC LIMIT 1''',
+                       (scope.key, external_id, external_id + ':resume:*')).fetchone()
+    if (staff_retry or not prior) and delivery_state.answered_turn(db, scope.store, scope.sender, incoming_id):
         with db:
             mark_handled()
         return dict(ok=True, reason='already_answered')
-    event, audio_pending = ((json.loads(prior[0]), False) if prior
+    if staff_retry:
+        uncertain = db.execute("SELECT 1 FROM sales_v2_outbox WHERE scope=? AND status IN ('sending','unknown')", (scope.key,)).fetchone()
+        pending_confirmation = db.execute("""SELECT 1 FROM sales_v2_order_tasks WHERE scope=? AND kind='confirmation'
+                                               AND status IN ('queued','sending','unknown','rejected')""", (scope.key,)).fetchone()
+        if uncertain or pending_confirmation:
+            return dict(ok=True, reason='delivery_needs_check', needs_human=True)
+    if staff_retry and prior:
+        committed = db.execute('''SELECT result FROM sales_v2_operations WHERE scope=? AND operation_key=?''',
+                               (scope.key, f'turn-v3:{prior["id"]}:done')).fetchone()
+        if committed:
+            # Resume the reply from the committed basket without replaying cart changes or booking.
+            outcome = json.loads(committed[0])['outcome']
+            if outcome['action'] != 'continue':
+                return dict(ok=True, reason='already_handled')
+            entry = make_entry(module, db, scope, allowed)
+            snapshot = entry.store.snapshot(scope)
+            version = snapshot['version']
+            if outcome.get('photo_pending', 0) <= snapshot['data'].get('resolved_photo_event', 0):
+                outcome.pop('photo_pending', None)
+            try:
+                if not allowed(scope):
+                    return dict(ok=True, reason='conversation_changed')
+                reply = entry.responses.prepare(scope, prior['id'], dict(outcome, state_version=version),
+                                                retry_revision=row['control_revision'])
+                if reply['action'] == 'missing_fact':
+                    return review('معلومات المنتج تحتاج مراجعة', entry.handoff_fact(scope, prior['id'], version, reply))
+                if reply['action'] == 'photo_review':
+                    return review('تحتاج صورة المنتج إلى مراجعة')
+                deliveries = drain(module, db, entry, scope, incoming_id, allowed)
+            except (DecisionRejected, DecisionUnavailable) as exc:
+                return review('تعذر إكمال الرد بعد إعادة التشغيل: ' + str(exc))
+            except Conflict:
+                if not allowed(scope):
+                    return dict(ok=True, reason='conversation_changed')
+                return review('تعذر استكمال الرد من حالة المحادثة الحالية')
+            if any(status in {'sending', 'unknown', 'rejected'} for status in deliveries):
+                return review('تحقق من قبول الرسالة لدى مزود الإرسال قبل إعادة المحاولة')
+            with db:
+                mark_handled()
+            return dict(ok=True, action='continue', deliveries=deliveries,
+                        reason=None if deliveries else 'already_handled')
+        if db.execute('SELECT 1 FROM sales_v2_operations WHERE scope=? AND operation_key IN (?,?)',
+                      (scope.key, f'turn-v3:{prior["id"]}', f'turn-v3:{prior["id"]}:booking')).fetchone():
+            return dict(ok=True, reason='delivery_needs_check', needs_human=True)
+        external_id += f':resume:{row["control_revision"]}'
+    elif prior:
+        external_id = prior['external_id']
+    event, audio_pending = ((json.loads(prior['payload']), False) if prior
                             else pending_input(module, db, row, incoming_id, staff_reply_id))
+    if staff_retry and not prior and incoming_id <= row['handled_id']:
+        return dict(ok=True, reason='already_handled')
+    if staff_retry and event['media_kind'] == 'image':
+        references = event.get('media_ref') or []
+        focus = Store(db).snapshot(scope)['data'].get('focus_product_id')
+        if references and focus and all(db.execute('''SELECT 1 FROM manual_image_links WHERE store_id=?
+                AND sender_id=? AND image_url=? AND product_id=?''', (scope.store, scope.sender, url, focus)).fetchone()
+                for url in references):
+            event.update(staff_verified_product=focus)
     if audio_pending and not sales_playbook.human_requested(event['text']):
         customer = db.execute('SELECT * FROM customers WHERE sender_id=? AND store_id=?',
                               (scope.sender, scope.store)).fetchone()

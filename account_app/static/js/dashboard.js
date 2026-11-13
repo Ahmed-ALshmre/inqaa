@@ -1040,10 +1040,17 @@ async function hiLinkProduct() {
       return;
     }
     const sent = data.auto_reply && data.auto_reply.sent;
-    showToast(sent ? 'تم ربط المنتج وإرسال رد' : data.error || 'تم ربط المنتج — لم يُرسل رد تلقائي', sent ? 'success' : 'warning');
-    if (!sent) return;
-    _hiCloseModal();
-    hideHumanIntervention();
+    const answered = data.auto_reply?.reason === 'already_answered';
+    const reasons = {already_answered: 'آخر رسالة مجاوب عليها بالفعل.',
+      already_handled: 'ماكو رسالة معلّقة قابلة لإعادة الرد.',
+      conversation_changed: 'وصلت رسالة جديدة أثناء الربط.'};
+    showToast(sent ? 'تم ربط المنتج وإرسال رد' : answered && data.ai_resumed
+      ? 'تم ربط المنتج. صوف شغّال وينتظر رسالة الزبون الجاية.' : data.error ||
+      `تم ربط المنتج. ${reasons[data.auto_reply?.reason] || 'ما انرسل رد تلقائي.'}`, sent || answered ? 'success' : 'warning');
+    if (sent || answered) {
+      _hiCloseModal();
+      if (sent) hideHumanIntervention();
+    }
     await loadConversations(false);
     await loadMessages(currentSenderId);
     await refreshLinkedProductSync();
@@ -1271,6 +1278,7 @@ async function sendMessage(text = null, imgUrl = null) {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      if ('ai_enabled' in data) applyInboxAttention(sendingTo, data);
       if (currentSenderId===sendingTo && helperSource && helperDraftRevision===helperSource.revision
           && document.getElementById('hiUnifiedText').value===helperSource.text) {
         document.getElementById('hiUnifiedText').value='';

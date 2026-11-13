@@ -13,6 +13,14 @@ ANSWERED_SQL = VISIBLE_SQL + """ AND COALESCE(json_extract(
     CASE WHEN json_valid(raw_payload) THEN raw_payload ELSE '{}' END,
     '$._partial_delivery_reply'),0)=0"""
 
+REPLY_TO_SQL = "json_extract(CASE WHEN json_valid(raw_payload) THEN raw_payload ELSE '{}' END, '$._reply_to_message_id')"
+
+
+def has_answer_after(db, sender, incoming_id):
+    return bool(db.execute(f"""SELECT 1 FROM messages WHERE sender_id=? AND direction='outgoing' AND id>?
+        AND {ANSWERED_SQL} AND ({REPLY_TO_SQL} IS NULL OR {REPLY_TO_SQL}>=?) LIMIT 1""",
+        (sender, incoming_id, incoming_id)).fetchone())
+
 
 def metadata(value):
     try:

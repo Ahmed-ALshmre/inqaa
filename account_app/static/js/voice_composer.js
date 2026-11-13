@@ -166,6 +166,7 @@ async function sendRecordedVoice() {
     const response = await apiFetch(`/api/conversations/${encodeURIComponent(sender)}/send_audio`,{method:'POST',body});
     const data = await response.json();
     if (!response.ok || !data.ok) throw Error(data.error || 'مزود الرسائل لم يؤكد إرسال الصوت');
+    if ('ai_enabled' in data) applyInboxAttention(sender, data);
     if (generation === voiceGeneration && currentSenderId === sender) { discardRecordedVoice(); await loadMessages(sender,true); }
     showToast('تم إرسال التسجيل الصوتي','success');
   } catch (error) { showToast('فشل إرسال الصوت: '+error.message,'danger'); }
