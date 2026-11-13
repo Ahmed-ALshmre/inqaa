@@ -23,7 +23,7 @@ ALIASES = {alias: color for color, aliases in COLORS.items() for alias in aliase
 COLOR_RE = re.compile(r'(?<!\w)(?:و?ال|و?لل|و?ل|و)?(' + '|'.join(re.escape(x) for x in sorted(ALIASES,key=len,reverse=True)) + r')(?!\w)', re.I)
 SIZE_RE = re.compile(r'(?<!\w)(?:[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?!\w)',re.I)
 FREE_SIZE_RE = re.compile(r'(?<!\w)(?:فري\s*سايز|free\s*size|قياس\s*موحد|مقاس\s*موحد)(?!\w)', re.I)
-RANGE_RE = re.compile(r'(\d{1,3})\s*(?:كيلو\s*)?(?:الي|[-–—]|لحد)\s*(\d{1,3})')
+RANGE_RE = re.compile(r'(\d{1,3})\s*(?:(?:كيلو(?:\s*[غج]رام)?|كغم|كجم|kg)\s*)?(?:الي|[-–—]|لحد)\s*(\d{1,3})')
 WIDTH_REQUEST_PATTERN = (r'(?<!\w)(?:و?ال)?عرض(?:ه|ها)(?!\w)|'
                         r'(?<!\w)و?العرض\s+(?:شكد|كم|اشكد)(?!\w)|'
                         r'عرض\s+(?:القطعة|الصدر|الورك|الخصر|الكتف)|'
@@ -385,8 +385,8 @@ def size_data(value):
             years.append((lo,hi))
         elif re.match(r'\s*(?:اشهر|شهر|شهور)', after):
             years.append((lo / 12, hi / 12))
-        elif not explicit and ('كيلو' in inside or re.search(r'وزن\s*(?:من\s*)?$',before)
-                               or re.match(r'\s*(?:كيلو|كغم|كغ)',after)):
+        elif not explicit and (re.search(r'كيلو|كغم|كجم|kg', inside) or re.search(r'وزن\s*(?:من\s*)?$',before)
+                               or re.match(r'\s*(?:كيلو|كغم|كغ|كجم|kg)',after)):
             weights.append((lo,hi))
         elif explicit or (lo>=10 and hi<=80 and not re.search(r'وزن|كيلو|سنوات',text)):
             ranges.append((lo,hi))

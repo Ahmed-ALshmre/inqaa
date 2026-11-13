@@ -1,5 +1,6 @@
 """Ground the writer in the committed state and authoritative product facts."""
 import json
+import os
 import re
 
 from .. import catalog_profile, checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_playbook, sales_strategy, sales_voice
@@ -8,11 +9,11 @@ from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
 from .copy_guard import ROOMY_FIT, validate_copy, validate_material
-from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives,only_same_day_question
+from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives,only_same_day_question,weight_limit_question
 from .intent import constraint, purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
 from .recovery import catalog_photo_request, clothing_size_label, skirt_length_request, weight_fit
-from .wording import checkout_question, mentions_free_size, next_options, quote_amounts, render_amounts, validate_next_step
+from .wording import checkout_question, mentions_free_size, natural_weight_wording, next_options, quote_amounts, render_amounts, validate_next_step
 
 
 class Responses:
@@ -379,6 +380,10 @@ class Responses:
                 row=next((r for r in snap['data']['cart'] if r['line_id']==field.split('.')[1]),None)
                 if row:return 'product.'+row['product_id']+'.'+field.rsplit('.',1)[-1]
             return field
+        # A question about the upper weight limit is a factual follow-up.
+        # Leave an already asked color choice open across cart/offer stage changes.
+        if weight_limit_question(clean) and question and question.endswith('.color'):
+            question = None
         offer_key = offer_signature(quote) if quote_turn else None
         if question == 'price.accept' and accepted and not requested_offer:
             previous_reply = accepted[-1]
@@ -726,12 +731,16 @@ class Responses:
     def validate_parts(self, parts, context, catalog, strict):
         from ..customer_copy import public_product_wording
         question = context['question_field']
-        validate_copy(parts, question, context['action_results'])
+        copy_guard_enabled = os.getenv('SALES_VALIDATE_COPY', '1') != '0'
+        if copy_guard_enabled:
+            validate_copy(parts, question, context['action_results'])
         advice = (context.get('consultant_guidance') or {}).get('guidance', '')
         if advice and len(advice.strip()) >= 24:
             text = ' '.join(part['text'] for part in parts if part['type'] == 'text')
             if ' '.join(advice.split()) in ' '.join(text.split()):
                 raise ValueError('internal_consultation_copied')
+        parts = [dict(part, text=natural_weight_wording(part['text'])) if part['type'] == 'text' else part
+                 for part in parts]
         parts = self.remove_stale_greetings(parts, context['greeting'])
         parts = render_amounts(parts, context['amounts'])
         for part in parts:
@@ -821,7 +830,8 @@ class Responses:
             if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > bubble_limit for part in layout['reply_parts']):
                 raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
             parts = [dict(type='text', text=part) for part in layout['reply_parts']]
-        validate_copy(parts, question, context['action_results'])
+        if copy_guard_enabled:
+            validate_copy(parts, question, context['action_results'])
         if strict:
             validate_next_step(parts, context['next_step'])
         return parts

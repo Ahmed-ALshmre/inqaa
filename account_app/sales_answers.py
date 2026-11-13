@@ -67,6 +67,7 @@ def current_question_gaps(reply, question, *, fit=None, delivery_window=''):
         elif fit is not None:
             fit_weight = re.escape(format(fit['weight_kg'], 'g'))
             personal = re.search(rf'(?<!\d){fit_weight}(?!\d)|(?:وزن|قياس|مقاس)(?:ج|چ|ك)|'
+                                 r'(?<!\w)(?:يرهم|يناسب)(?:ج|چ|ك)(?!\w)|'
                                  r'(?:يرهم|يناسب)\s*ل?(?:لج|لچ|لك)', answer)
             covered = personal and not re.search(negative, answer) and re.search(rf'{positive}|{suitability}', answer)
         else:

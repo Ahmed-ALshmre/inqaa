@@ -9,6 +9,7 @@ from account_app.sales_runtime.response import Responses
 from account_app.sales_runtime.copy_guard import validate_copy
 from account_app.sales_runtime.contracts import DecisionRejected,ServiceRequired
 from account_app.sales_runtime.gateway import WriterGateway
+from account_app.sales_runtime.wording import natural_weight_wording, next_options
 from account_app.sales_runtime.policies import APPROVED_DELIVERY_TIME
 from account_app.sales_runtime import Scope
 
@@ -21,6 +22,23 @@ class AuditFixTests(unittest.TestCase):
     run_turn=linking.LinkingTests.run_turn
     select=linking.LinkingTests.select
     prompt=linking.LinkingTests.prompt
+
+    def test_size_question_does_not_truncate_catalog_to_first_two_sizes(self):
+        for catalog_sizes, options in [('38، 40، 44', []), ('38 إلى 44', []), ('38، 40', ['38', '40'])]:
+            with self.subTest(catalog_sizes=catalog_sizes):
+                product = dict(self.products[0], sizes=catalog_sizes, selection_mode='clothing')
+                self.assertEqual(options, next_options(product, 'product.P1.size'))
+
+    def test_weight_wording_uses_one_spoken_unit_and_keeps_distinct_weights(self):
+        from account_app.product_variants import size_data
+        self.assertEqual('من ٦٠ إلى ٩٥ كيلو، والقميص الثاني يناسب 105 كيلو.',
+                         natural_weight_wording('من ٦٠ كغم إلى ٩٥ كيلوجرام، والقميص الثاني يناسب 105kg.'))
+        self.assertEqual([(60, 95)], size_data('من وزن 60 كغم إلى 95 كغم')['weights'])
+        from account_app.sales_answers import current_question_gaps
+        question = 'وزني ٨٠ كغم، يرهمني هذا القميص؟'
+        fit = dict(weight_kg=80, within_catalog_range=True)
+        self.assertEqual([], current_question_gaps('إي حبيبتي، يرهمج. يا لون عجبج؟', question, fit=fit))
+        self.assertTrue(current_question_gaps('يناسب من 60 إلى 95 كيلو. يا لون عجبج؟', question, fit=fit))
 
     def test_current_fit_answer_precedes_a_color_question_and_uses_saved_weight(self):
         self.products[0].update(sizes='من وزن 60 إلى 130 كيلو')
