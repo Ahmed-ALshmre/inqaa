@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock, patch
 
 from account_app import app as m
@@ -461,7 +462,9 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.incoming(10, 'شنو القماش؟')
 
         def deliver_staff(*args, **kwargs):
-            self.incoming(11, 'شكد سعره؟')
+            # The customer webhook arrives with its own Flask request and database connection.
+            with ThreadPoolExecutor(max_workers=1) as worker:
+                worker.submit(self.incoming, 11, 'شكد سعره؟').result(timeout=10)
             return dict(ok=True, status='accepted')
 
         with patch.object(m, 'send_text_via_manychat_detailed', side_effect=deliver_staff):
