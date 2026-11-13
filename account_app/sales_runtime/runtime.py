@@ -189,18 +189,22 @@ class Runtime:
         self.store.apply(scope, f'photo-focus:{event_id}', snap['version'], dict(product_id=product_id), apply_focus)
         return self.store.snapshot(scope)
 
-    def decision_call(self,scope,event_id,context,previous=None,error=None):
+    def decision_call(self,scope,event_id,context,previous=None,error=None,*,advice=None):
         # A duplicate webhook or worker restart cannot reset the model budget.
         with self.store.transaction():
             count=self.store.db.execute("""SELECT COUNT(*) FROM sales_v2_model_attempts WHERE scope=? AND event_id=?
-                                           AND stage IN ('decision','repair')""",
+                                           AND stage IN ('decision','repair','consulted_decision')""",
                                        (scope.key,event_id)).fetchone()[0]
-            if count>=2:raise DecisionRejected('decision_budget_exhausted')
+            if count >= (3 if advice else 2):
+                raise DecisionRejected('decision_budget_exhausted')
             attempt=self.store.db.execute('''INSERT INTO sales_v2_model_attempts
                 (scope,event_id,stage,status,created_at) VALUES(?,?,?,'running',?)''',
-                (scope.key,event_id,'repair' if error else 'decision',time.time())).lastrowid
+                (scope.key,event_id,'consulted_decision' if advice else 'repair' if error else 'decision',time.time())).lastrowid
         try:
-            result=self.decide(context) if error is None else self.decide.repair(context,previous,error)
+            if advice:
+                result = self.decide.with_advice(context, advice)
+            else:
+                result=self.decide(context) if error is None else self.decide.repair(context,previous,error)
         except Exception as exc:
             with self.store.transaction():
                 self.store.db.execute("UPDATE sales_v2_model_attempts SET status='failed',error_code=? WHERE id=?",
@@ -211,32 +215,20 @@ class Runtime:
         return result
 
     def recover_decision(self, scope, event_id, version, context, failure, previous=None, reason=None):
-        alternate = consult(self.store, scope, event_id, version, 'decision',
-                            self.backup.decide if self.backup else None, context, reason or str(failure), previous)
-        if isinstance(alternate, dict):
-            # The backup sees which contact fields exist. Exact values come from the scoped customer event.
-            text = context['event'].get('text') or ''
-            local = checkout.contact_fields(text, context['state']['contact'])
-            if not local.get('address'):
-                # The whole turn can also name the chosen size. Look at the
-                # actual delivery line, or the declaration after the phone.
-                address_candidates = list(reversed(text.splitlines()))
-                phone_match = checkout.PHONE.search(text.translate(checkout.DIGITS))
-                if phone_match:
-                    address_candidates.insert(0, text[phone_match.end():].strip(' ,،؛.\n'))
-                for candidate in address_candidates:
-                    address = checkout.contact_fields(candidate).get('address')
-                    if address:
-                        local['address'] = address
-                        break
-            contacts = {field: value for field, value in local.items()
-                        if field in {'phone', 'address'} and (field == 'phone'
-                            or checkout.normalized(value) in checkout.normalized(text))}
-            return dict(alternate, contact=contacts), True
-        if self.backup:
-            raise BackupFailed('backup_plan_invalid')
+        advice = consult(self.store, scope, event_id, version, 'decision', self.backup,
+                         context, reason or str(failure), previous, history_loader=self.history_loader)
+        if advice is not None:
+            try:
+                alternate = clean_plan(self.decision_call(scope,event_id,context,advice=advice))
+            except (DecisionRejected, DecisionUnavailable, ValueError):
+                raise BackupFailed('primary_decision_failed_after_consultation') from None
+            # The normal cart transaction validates every change. An explicit Sol
+            # correction takes precedence over the primary's suggested cart changes.
+            if advice['changes']:
+                alternate['changes'] = advice['changes']
+            return alternate, advice
         if isinstance(failure, DecisionRejected) and getattr(type(self.decide), 'fallback_allowed', False):
-            return grounded_plan(context), False
+            return grounded_plan(context), None
         raise failure
 
     def accept_checkout_prompt(self, scope, key, version, outbox_id):
@@ -408,7 +400,7 @@ class Runtime:
             replies=self.store.db.execute("SELECT payload FROM sales_v2_outbox WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 10",
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
-            recovered=False;used_backup=False;business_feedback=None
+            recovered=False;used_backup=None;business_feedback=None
             contact_turn = bool(captured.get('fields') and state['cart'] and not state.get('order_id')
                                 and (state.get('purchase_event') or state.get('checkout_prompt'))
                                 and contact_only(evidence['payload'].get('text', '')))
@@ -640,7 +632,8 @@ class Runtime:
                                 state['stated_clothing_size'] = dict(product_id=focus, by_color=preferences)
                         return dict(plan=plan,invalid_fields=invalid_fields,business_feedback=business_feedback,
                                     quote=price,recovered=recovered,withdrawn=withdrawn,contact_turn=contact_turn,
-                                    photo_choice=photo_choice, alternatives_requested=alternatives_requested)
+                                    photo_choice=photo_choice, alternatives_requested=alternatives_requested,
+                                    consultant_guidance=used_backup)
                     saved=self.store.apply(scope,key,snap['version'],dict(event_id=event_id),apply_proposal)['result']
                     break
                 except BusinessChoice as exc:
@@ -727,6 +720,7 @@ class Runtime:
                            quote=saved.get('quote'),recovered=saved.get('recovered',False),
                            withdrawn=saved.get('withdrawn',False),contact_turn=saved.get('contact_turn',False),
                            photo_choice=saved.get('photo_choice'), alternatives_requested=saved.get('alternatives_requested'),
+                           consultant_guidance=saved.get('consultant_guidance'),
                            staff_stock_conflict=staff_stock_conflict, waiting_for_color=waiting_for_color,
                            state_version=version)
         outcome['state_version'] = version + 1

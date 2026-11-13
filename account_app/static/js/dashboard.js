@@ -676,6 +676,10 @@ async function loadMessages(senderId, scroll = true, older = false) {
     if (controller.signal.aborted) return;
     const merged = new Map(cached.messages.map(m => [m.id, m]));
     (data.messages || []).forEach(m => merged.set(m.id, m));
+    for (const [id, status] of Object.entries(data.consultations || {})) {
+      const message = merged.get(Number(id));
+      if (message) merged.set(Number(id), {...message, consultation: status});
+    }
     const messages = [...merged.values()].sort((a,b) => a.id-b.id);
     const hasOlder = older || !cached.messages.length ? Boolean(data.has_more) : cached.hasOlder;
     messageCache.set(senderId, {messages,hasOlder});
@@ -812,7 +816,10 @@ function messageMarkup(m) {
   const sender = m.direction === 'outgoing'
     ? (m.sender_type === 'staff' ? ((m.staff_name || 'موظف') + (m.ai_assisted ? ' · بمساعدة AI' : ''))
       : m.sender_type === 'ai' ? 'ذكاء اصطناعي' : 'مرسل غير محدد') : '';
-  return content + `<span class="msg-time">${sender ? `<span class="msg-sender" aria-label="مصدر الرد">${esc(sender)}</span> · ` : ''}${esc(fmtDatetime(m.created_at))}</span>`;
+  const consultation = m.direction === 'incoming'
+    ? {running:'Sol يراجع', returned:'استشارة Sol', failed:'تعذّرت استشارة Sol'}[m.consultation] : '';
+  const badge = consultation ? `<span class="msg-consultation"><i class="bi bi-stars" aria-hidden="true"></i> ${consultation}</span>` : '';
+  return content + `<span class="msg-time">${sender ? `<span class="msg-sender" aria-label="مصدر الرد">${esc(sender)}</span> · ` : ''}${esc(fmtDatetime(m.created_at))}${badge}</span>`;
 }
 
 const resolvingMedia = new Set();

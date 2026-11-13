@@ -239,20 +239,21 @@ class Responses:
                 missing = dict(action='missing_fact',product_id=fact['product_id'],field=field)
                 if self.backup:
                     relevant_ids = {pid for pid in (focus, fact['product_id']) if pid and pid != '@store'}
+                    relevant_ids.update(line['product_id'] for line in state['cart'])
                     review = dict(state=state, event=messages[-1] if messages else {},
                                   recent_messages=messages, recent_replies=accepted, policies=policy,
                                   products=[catalog.get(pid) for pid in sorted(relevant_ids)], missing_fact=missing)
                     try:
-                        alternate = consult(self.store, scope, turn_id, snap['version'], 'fact',
-                                            self.backup.decide, review, 'requested_catalog_fact_missing', plan)
+                        advice = consult(self.store, scope, turn_id, snap['version'], 'fact', self.backup,
+                                         review, 'requested_catalog_fact_missing', plan,
+                                         history_loader=self.history_loader)
                     except BackupFailed:
-                        alternate = None  # Preserve the existing factual review and question record.
-                    proposed = (alternate or {}).get('answer', {}).get('facts', [])
-                    # A backup may catch a stale fact reference, but only the committed focus can supply its replacement.
-                    if focus and field not in POLICY_FIELDS and dict(product_id=focus, field=field) in proposed:
+                        advice = None  # Preserve the existing factual review and question record.
+                    if advice and focus and field not in POLICY_FIELDS:
                         fact_value = resolve_fact(catalog, focus, field, policy)
                         if fact_value is not None:
                             fact = dict(product_id=focus, field=field)
+                            outcome = dict(outcome, consultant_guidance=advice)
                 if fact_value is None:
                     return missing
             if not any(f['field']==fact_value['field'] and f['product_id']==fact['product_id'] for f in allowed_facts):
@@ -478,6 +479,7 @@ class Responses:
             step_product = catalog.get(question_key(question).split('.', 1)[1].rsplit('.', 1)[0])
         context = dict(
             mode=mode, state=state, facts=allowed_facts, product_facts=product_facts,
+            **({'consultant_guidance': outcome['consultant_guidance']} if outcome.get('consultant_guidance') else {}),
             question_field=question, goal=plan.get('goal',''), policies=policy,
             customer_message=current, requested_fields=requested,
             copy_budget=520 if len(requested) > 1 or quote_turn or recommendations else 230,
@@ -674,13 +676,21 @@ class Responses:
                     break
 
         try:
-            alternate = consult(self.store, scope, turn_id, version, 'writer',
-                                self.backup.write if self.backup else None, context, error, parts)
-            if alternate is not None:
+            state = self.store.snapshot(scope)['data']
+            product_ids = {line['product_id'] for line in state['cart']}
+            if state.get('focus_product_id') in catalog.products:
+                product_ids.add(state['focus_product_id'])
+            product_ids.update(fact['product_id'] for fact in context.get('facts', []) if fact['product_id'] != '@store')
+            consultation_context = dict(context, products=[catalog.products[pid] for pid in sorted(product_ids)
+                                                           if pid in catalog.products])
+            advice = consult(self.store, scope, turn_id, version, 'writer', self.backup,
+                             consultation_context, error, parts, history_loader=self.history_loader)
+            if advice is not None:
                 try:
-                    return self.validate_parts(alternate, context, catalog, True)
-                except ValueError as exc:
-                    raise BackupFailed('backup_reply_invalid') from exc
+                    guided = dict(context, consultant_guidance=advice)
+                    return self.validate_parts(self.writer(guided), guided, catalog, strict)
+                except (ValueError, DecisionUnavailable) as exc:
+                    raise BackupFailed('primary_reply_failed_after_consultation') from exc
         except BackupFailed:
             recovered = self.same_day_recovery(context) or self.greeting_recovery(context)
             if recovered:
@@ -717,6 +727,11 @@ class Responses:
         from ..customer_copy import public_product_wording
         question = context['question_field']
         validate_copy(parts, question, context['action_results'])
+        advice = (context.get('consultant_guidance') or {}).get('guidance', '')
+        if advice and len(advice.strip()) >= 24:
+            text = ' '.join(part['text'] for part in parts if part['type'] == 'text')
+            if ' '.join(advice.split()) in ' '.join(text.split()):
+                raise ValueError('internal_consultation_copied')
         parts = self.remove_stale_greetings(parts, context['greeting'])
         parts = render_amounts(parts, context['amounts'])
         for part in parts:

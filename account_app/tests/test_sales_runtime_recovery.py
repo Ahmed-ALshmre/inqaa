@@ -196,28 +196,39 @@ class RecoveryTests(unittest.TestCase):
         self.decide.assert_called_once()
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM sales_v2_incidents').fetchone()[0])
 
-    def test_configured_gateway_uses_argon_once_when_primary_plan_is_invalid(self):
+    def test_sol_corrects_cart_and_the_primary_receives_guidance(self):
         bad = Mock(status_code=200,json=lambda: {'choices':[{'message':{'content':'invalid'}}]})
-        plan = dict(intent='continue',changes=[dict(values=dict(product_id='P1',color='ماروني',size='44'))])
+        advice = dict(decision='assist', reason='last selection', guidance='احفظي الماروني بقياس 44.',
+                      changes=[dict(new_line=True, values=dict(product_id='P1', color='ماروني', size='44'))])
+        advised = Mock(status_code=200,json=lambda: {'choices':[{'message':{'parsed':advice}}]})
+        plan = dict(intent='continue', changes=[dict(values=dict(product_id='P1', color='أزرق', size='40'))])
         good = Mock(status_code=200,json=lambda: {'choices':[{'message':{'parsed':plan}}]})
-        post = Mock(side_effect=[bad,bad,good])
+        post = Mock(side_effect=[bad,bad,advised,good])
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,DecisionGateway('primary', 'test-key', post))
+        for i in range(48):
+            self.event(f'دور سابق {i}')
         result=entry.receive(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
                              sender_id=self.scope.sender,message_id='fallback',text='ماروني قياس 44 07701234567',
                              ad={'ad_id':'120251717777850095'})
         self.assertEqual('continue',result['action'])
-        self.assertEqual(['primary','primary',BACKUP_MODEL],[c.kwargs['json']['model'] for c in post.call_args_list])
-        sent=post.call_args.kwargs['json']['messages'][-1]['content']
+        self.assertEqual(['primary','primary',BACKUP_MODEL,'primary'],
+                         [c.kwargs['json']['model'] for c in post.call_args_list])
+        sent=post.call_args_list[2].kwargs['json']['messages'][-1]['content']
         self.assertIn('decision_invalid_after_retry',sent)
         self.assertNotIn('07701234567',sent)
+        self.assertEqual(48, len(json.loads(sent)['conversation_history']))
+        primary = json.loads(post.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertEqual(advice['guidance'], primary['consultant_guidance']['guidance'])
         state=self.store.snapshot(self.scope)['data']
         self.assertEqual('44',state['cart'][0]['size'])
+        self.assertEqual('ماروني',state['cart'][0]['color'])
         self.assertEqual('07701234567',state['contact']['phone'])
 
     def test_backup_budget_is_shared_between_planning_and_wording(self):
         backup=Mock()
-        backup.decide.return_value=dict(intent='continue')
+        backup.advise.return_value=dict(guidance='راجعي السلة الحالية.', reason='test', changes=[])
         decide=Mock(side_effect=DecisionRejected('invalid_plan'))
+        decide.with_advice.return_value=dict(intent='continue')
         writer=Mock(return_value=[dict(type='text',text='تم تثبيت الطلب')])
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,decide,writer=writer,backup=backup)
         kwargs=dict(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
@@ -226,14 +237,30 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(('needs_review','backup_attempt_already_used',''),
                          (result['action'],result['error_code'],result['reply']))
         entry.receive(**kwargs)
-        backup.decide.assert_called_once()
-        backup.write.assert_not_called()
+        backup.advise.assert_called_once()
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
         self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM sales_v2_outbox').fetchone()[0])
 
+    def test_invalid_consultant_cart_correction_rolls_back_the_whole_proposal(self):
+        backup = Mock()
+        backup.advise.return_value = dict(reason='test', guidance='أضيفي القطعتين.', changes=[
+            dict(new_line=True, values=dict(product_id='P1', size='44')),
+            dict(new_line=True, values=dict(product_id='unknown')),
+        ])
+        decide = Mock(side_effect=DecisionUnavailable('primary_unavailable'))
+        decide.with_advice.return_value = dict(intent='continue')
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda s,p:5000, decide, backup=backup)
+        result = entry.receive(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                               sender_id=self.scope.sender, message_id='bad-consultation', text='أريد قطعتين',
+                               ad={'ad_id':'120251717777850095'})
+        self.assertEqual(('needs_review', 'backup_plan_invalid'), (result['action'], result['error_code']))
+        self.assertEqual([], self.store.snapshot(self.scope)['data']['cart'])
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM sales_v2_evidence').fetchone()[0])
+        backup.advise.assert_called_once()
+
     def test_failed_backup_call_hands_off_silently_and_never_retries(self):
         backup=Mock()
-        backup.write.side_effect=DecisionUnavailable('writer_provider_http_503')
+        backup.advise.side_effect=DecisionUnavailable('writer_provider_http_503')
         writer=Mock(side_effect=DecisionUnavailable('writer_provider_http_503'))
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer,backup=backup)
         kwargs=dict(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
@@ -241,13 +268,13 @@ class RecoveryTests(unittest.TestCase):
         result=entry.receive(**kwargs)
         self.assertEqual(('needs_review','backup_model_failed',''),(result['action'],result['error_code'],result['reply']))
         entry.receive(**kwargs)
-        backup.write.assert_called_once()
+        backup.advise.assert_called_once()
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
     def test_greeting_survives_failure_of_primary_and_backup_wording(self):
         writer = Mock(side_effect=DecisionUnavailable('writer_provider_http_503'))
         backup = Mock()
-        backup.write.side_effect = DecisionUnavailable('writer_provider_http_503')
+        backup.advise.side_effect = DecisionUnavailable('writer_provider_http_503')
         entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000,
                            self.decide, writer=writer, backup=backup)
         result = entry.receive(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
@@ -255,7 +282,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual('queued', result['reply']['action'])
         self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
         self.assertIn('هلا', self.store.claim_reply(self.scope)['payload']['text'])
-        backup.write.assert_called_once()
+        backup.advise.assert_called_once()
 
     def test_a_new_message_supersedes_an_in_flight_backup(self):
         backup=Mock()
@@ -263,7 +290,7 @@ class RecoveryTests(unittest.TestCase):
             self.assertFalse(self.db.in_transaction)
             self.event('تغيير من الزبونة')
             return dict(intent='continue',changes=[dict(values=dict(product_id='P1',size='44'))])
-        backup.decide.side_effect=recover
+        backup.advise.side_effect=recover
         decide=Mock(side_effect=DecisionRejected('invalid_plan'))
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,decide,backup=backup)
         result=entry.receive(store_id=self.scope.store,channel=self.scope.channel,account_id=self.scope.account,
