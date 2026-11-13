@@ -8,6 +8,7 @@ from functools import partial
 from urllib.parse import urlsplit
 
 from .. import ad_attribution, checkout, delivery_state, sales_playbook
+from .backup import consultation_markers
 from .contracts import DecisionRejected, DecisionUnavailable
 from .delivery import deliver_confirmation, deliver_replies
 from .entrypoint import Entrypoint
@@ -380,7 +381,7 @@ def notify_orders(module, db, scope):
 
 def make_entry(module, db, scope, allow_write):
     model = module.get_ai_model(db, 'main_model', module.MAIN_MODEL)
-    # The runtime owns its attempt budget, including exactly one Argon request.
+    # The runtime owns its attempt budget, including one Sol consultation.
     post = partial(module.ai_transport.post, max_attempts=1, budget_seconds=48)
     observe = ImageObserver(module.inbound_media.fetch, module.match_customer_image_with_catalog,
                             lambda current, url: module._archived_incoming_image_data(db, current.sender, url))
@@ -434,26 +435,30 @@ def make_entry(module, db, scope, allow_write):
         module.remember_customer_product(db, current.sender, product, 'image_recognition',
                                          confidence=100, commit=False)
 
-    def conversation_history(current, event_id):
+    def conversation_history(current, event_id, *, consultation=False):
         event = db.execute('SELECT external_id FROM sales_v2_events WHERE scope=? AND id=?',
                            (current.key, event_id)).fetchone()
         match = re.fullmatch(r'incoming:(\d+)(?::resume:\d+)?', event[0]) if event else None
         if not match:
             return []
         incoming_id = int(match[1])
-        rows = db.execute(f'''SELECT direction,text,raw_payload,image_url FROM messages
+        limit = '' if consultation else 'LIMIT 29'
+        rows = db.execute(f'''SELECT id,direction,text,raw_payload,image_url,message_type FROM messages
             WHERE store_id=? AND sender_id=? AND (id<? OR (direction='outgoing' AND {delivery_state.REPLY_TO_SQL}<?))
-            AND {delivery_state.VISIBLE_SQL} ORDER BY id DESC LIMIT 29''',
+            AND {delivery_state.VISIBLE_SQL} ORDER BY id DESC {limit}''',
             (current.store, current.sender, incoming_id, incoming_id)).fetchall()
         history = []
         for row in reversed(rows):
             text = (row['text'] or '').strip()
-            if not text or text == row['image_url'] or (row['image_url'] and text.casefold() == 'shared post'):
+            if text == row['image_url'] or (row['image_url'] and text.casefold() == 'shared post'):
+                text = ''
+            if not text and (not consultation or row['message_type'] == 'text'):
                 continue
             meta = delivery_state.metadata(row['raw_payload'])
             actor = ('customer' if row['direction'] == 'incoming' else
                      'staff' if meta.get('sender_type') == 'staff' or meta.get('manual_reply') else 'assistant')
-            history.append(dict(actor=actor, text=text[:700]))
+            history.append(dict(actor=actor, message_id=row['id'], text=text, media_kind=row['message_type'])
+                           if consultation else dict(actor=actor, text=text[:700]))
         return history
 
     return Entrypoint(db, lambda store: module.load_products_from_file(store_id=store),

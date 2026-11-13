@@ -45,6 +45,8 @@ def requested_fields(text):
              'delivery_time':'delivery_time','delivery':'delivery_fee','location':'shop_address'}
     fields=[mapping[t] for t in sales_answers.topics(text) if t in mapping]
     clean=customer_copy.normalized(text)
+    if weight_limit_question(clean):
+        fields.append('sizes')
     from .contact import checkout_inspection_question
     if any(checkout_inspection_question(line) for line in clean.splitlines()):
         fields.append('inspection_policy')
@@ -53,6 +55,10 @@ def requested_fields(text):
     if re.search(r'صناعته|صناعتها|منشا|صيني\s*لو\s*تركي|تركي\s*لو\s*صيني',clean):fields.append('origin')
     if re.search(r'بس\s*هو.{0,20}(?:جوار|جنط)|تجي.{0,20}(?:وياه|هديه)',clean):fields.append('composition')
     return list(dict.fromkeys(fields))
+
+
+def weight_limit_question(text):
+    return bool(re.search(r'(?:اعلى|اقصى|اكثر|اكبر)\s+وزن|(?:لحد|حدود)\s+(?:كم|شكد)\s+(?:وزن|كيلو)', text))
 
 
 def only_same_day_question(text):

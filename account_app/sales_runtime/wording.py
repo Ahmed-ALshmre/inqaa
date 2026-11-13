@@ -11,6 +11,15 @@ RAW_MONEY = re.compile(
     r'واحد|ثلاث|اربع|خمس|ست|سبع|ثمان|تسع|مي[هة]|مائ[هة])\s+(?:الف|الاف|دينار)(?!\w)'
 )
 FREE_SIZE_WORDS = re.compile(r'فري\s*سايز|free\s*size|(?:ال)?(?:قياس|مقاس)\s+(?:ال)?موحد')
+WEIGHT_UNIT = re.compile(r'(?<![^\W\d])(?:كيلو\s*[غج]رام|كغم|كجم|kg)(?!\w)', re.IGNORECASE)
+WEIGHT_RANGE = re.compile(r'(\d+(?:[.٫]\d+)?)\s*كيلو\s*(إلى|الى|لحد|لغاية|[-–—])\s*(\d+(?:[.٫]\d+)?)\s*كيلو(?!\w)')
+
+
+def natural_weight_wording(text):
+    """Use the spoken unit once per range, without changing the numbers."""
+    text = WEIGHT_UNIT.sub(lambda match: (' ' if match.start() and text[match.start() - 1].isdigit() else '') + 'كيلو', text)
+    text = WEIGHT_RANGE.sub(r'\1 \2 \3 كيلو', text)
+    return re.sub(r'(?<!\w)كيلو(?:[ \t]+كيلو)+(?!\w)', 'كيلو', text)
 
 
 def mentions_free_size(text):
@@ -76,7 +85,10 @@ def next_options(product, question):
         return product_variants.colors(product.get('colors'))[:2]
     if question.endswith('.size') and product.get('selection_mode') not in {'age', 'weight'}:
         sizes = product_variants.size_data(product.get('sizes'))
-        return (sizes['labels'] + [str(value) for value in sizes['numbers']])[:2]
+        options = list(dict.fromkeys(sizes['labels'] + [str(value) for value in sizes['numbers']]))
+        # A forced choice is only accurate when it covers the catalog.
+        if not sizes['ranges'] and not sizes['weights'] and not sizes['years'] and len(options) <= 2:
+            return options
     return []
 
 

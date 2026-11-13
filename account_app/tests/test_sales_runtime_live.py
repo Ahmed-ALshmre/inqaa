@@ -515,7 +515,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.transport.assert_called_once()
         self.notify.assert_called_once()
 
-    def test_argon_fails_once_and_leaves_silent_dashboard_review(self):
+    def test_sol_fails_once_and_marks_the_incoming_message_without_sending(self):
         self.incoming(10, 'شكد سعره؟')
         failure = self.model_response(None, status=503)
         with patch.object(m.ai_transport, 'post', return_value=failure) as post:
@@ -528,7 +528,53 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.transport.assert_not_called()
         with m.app.app_context():
             db = m.get_db()
+            incoming_id = m.latest_incoming_message(db, self.sender)['id']
             self.assertFalse(m.is_customer_ai_enabled(db, self.sender))
+            self.assertEqual(1, db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
+        for suffix in ('', f'&after_id={incoming_id}'):
+            response = self.client.get(f'/api/conversations/{self.sender}/messages?store_id=khuyoot{suffix}')
+            self.assertEqual({str(incoming_id): 'failed'}, response.get_json()['consultations'])
+
+    def test_sol_guides_rewrite_and_only_the_primary_text_is_sent(self):
+        self.incoming(10, 'شكد سعره؟')
+        guidance = 'اذكري سعر القطعة المثبت بالكتالوج واطلبي فقط الخطوة المحددة.'
+        responses = [
+            self.model_response(dict(intent='continue')),
+            self.model_response(None, status=503),
+            self.model_response(dict(decision='assist', reason='writer unavailable', guidance=guidance, changes=[])),
+            self.model_response({'parts': [dict(type='text', text='سعره {{unit_price}} حبيبتي، شكد قياس تلبسين؟')]}),
+        ]
+        with patch.object(m.ai_transport, 'post', side_effect=responses) as post:
+            self.assertEqual('continue', self.work()[1]['action'])
+        calls = [call.kwargs['json'] for call in post.call_args_list]
+        self.assertEqual([m.MAIN_MODEL, m.MAIN_MODEL, BACKUP_MODEL, m.MAIN_MODEL],
+                         [call['model'] for call in calls])
+        self.assertEqual('writer', json.loads(calls[2]['messages'][-1]['content'])['recovery']['stage'])
+        self.assertEqual(guidance, json.loads(calls[3]['messages'][-1]['content'])['consultant_guidance']['guidance'])
+        sent = [call.args[2][0]['text'] for call in self.transport.call_args_list]
+        self.assertIn('15 ألف', ' '.join(sent))
+        self.assertNotIn(guidance, ' '.join(sent))
+        data = self.client.get(f'/api/conversations/{self.sender}/messages?store_id=khuyoot').get_json()
+        incoming_id = next(message['id'] for message in data['messages'] if message['direction'] == 'incoming')
+        self.assertEqual({str(incoming_id): 'returned'}, data['consultations'])
+
+    def test_primary_outage_after_sol_advice_requires_review_without_booking(self):
+        self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')
+        unavailable = self.model_response(None, status=503)
+        advice = self.model_response(dict(decision='assist', reason='purchase is clear',
+                                          guidance='اعتمدي الأزرق قياس 44.', changes=self.model_plan()['changes']))
+        with patch.object(m.ai_transport, 'post', side_effect=[unavailable, advice, unavailable]) as post:
+            self.assertTrue(self.work()[1]['needs_human'])
+        self.assertEqual([m.MAIN_MODEL, BACKUP_MODEL, m.MAIN_MODEL],
+                         [call.kwargs['json']['model'] for call in post.call_args_list])
+        self.transport.assert_not_called()
+        self.notify.assert_not_called()
+        with m.app.app_context():
+            db = m.get_db()
+            route = live.route(db, self.sender)
+            state = live.Store(db).snapshot(live.scope_for(route))['data']
+            self.assertEqual([], state['cart'])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
             self.assertEqual(1, db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
 
     def test_link_and_send_resumes_the_unanswered_caption_after_manual_image_binding(self):
@@ -630,17 +676,22 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         with m.app.app_context():
             self.assertEqual(1, m.get_db().execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
-    def test_argon_recovers_booking_and_uncertain_confirmation_is_never_resent(self):
+    def test_sol_guides_booking_and_uncertain_confirmation_is_never_resent(self):
         self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')
         self.transport.return_value = {'ok': False, 'status': 'transport_error', 'status_code': 0}
+        advice = dict(decision='assist', reason='test', guidance='احفظي الاختيار الأخير وتابعي الحجز.',
+                      changes=self.model_plan()['changes'])
         with patch.object(m.ai_transport, 'post', side_effect=[
-            self.model_response(None, status=503), self.model_response(self.model_plan()),
+            self.model_response(None, status=503), self.model_response(advice), self.model_response(self.model_plan()),
         ]) as post:
             kind, result = self.work()
         self.assertEqual(live.JOB_KIND, kind)
         self.assertTrue(result.get('needs_human'), result)
-        self.assertEqual([m.MAIN_MODEL, BACKUP_MODEL], [call.kwargs['json']['model'] for call in post.call_args_list])
-        self.assertNotIn(self.phone, post.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertEqual([m.MAIN_MODEL, BACKUP_MODEL, m.MAIN_MODEL],
+                         [call.kwargs['json']['model'] for call in post.call_args_list])
+        consult_payload = post.call_args_list[1].kwargs['json']['messages'][-1]['content']
+        self.assertNotIn(self.phone, consult_payload)
+        self.assertNotIn(self.address, consult_payload)
         self.transport.assert_called_once()
         with m.app.app_context():
             db = m.get_db()

@@ -15483,7 +15483,18 @@ def api_conversation_messages(sender_id):
         if item["media"] and len({m["type"] for m in item["media"]}) == 1:
             item["message_type"] = item["media"][0]["type"]
         messages.append(item)
-    return jsonify({"messages": messages, "has_more": more, "ad_context": ad_attribution.load(db, sender_id)})
+    markers = {}
+    route = sales_runtime_live.route(db, sender_id)
+    if route and route['store_id'] == current_store_id():
+        incoming_ids = [row['id'] for row in rows if row['direction'] == 'incoming']
+        if after:
+            recent = db.execute("""SELECT id FROM messages WHERE sender_id=? AND store_id=?
+                AND direction='incoming' AND id<=? ORDER BY id DESC LIMIT 10""",
+                (sender_id, route['store_id'], after))
+            incoming_ids.extend(row[0] for row in recent)
+        markers = sales_runtime_live.consultation_markers(db, sales_runtime_live.scope_for(route), incoming_ids)
+    return jsonify({"messages": messages, "has_more": more, "ad_context": ad_attribution.load(db, sender_id),
+                    "consultations": markers})
 
 
 @app.route('/api/conversations/<sender_id>/messages/<int:message_id>/media', methods=['POST'])
