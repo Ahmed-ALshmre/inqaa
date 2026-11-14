@@ -196,7 +196,11 @@ class Responses:
                            if previous_reply.get('question_key') == f'product.{focus}.weight_kg' else '')
         saved_weights = {line.get('weight_kg') or line.get('size') for line in lines
                          if line['product_id'] == focus and (line.get('weight_kg') or line.get('size_source_kind') == 'weight')}
-        saved_weight = next(iter(saved_weights)) if len(saved_weights) == 1 and sales_answers.fit_question(current) else None
+        labels = product_variants.garment_labels(product)
+        asked_labels = set(product_variants.requested(current)['sizes']).intersection(labels)
+        if not asked_labels and product_variants.requested(current)['colors']:
+            asked_labels = {line['size'] for line in lines if line['product_id'] == focus and line.get('size') in labels}
+        saved_weight = next(iter(saved_weights)) if len(saved_weights) == 1 and (asked_labels or sales_answers.fit_question(current)) else None
         fit = weight_fit(product, current, weight_question, saved_weight=saved_weight) if not purchase_turn else None
         fit_stock = product_albums.stock_state(product) if fit else None
         tracked = bool(product and product.get('variant_stock'))
@@ -211,6 +215,17 @@ class Responses:
         if tracked and fit and stock_rows and (chosen_color or chosen_size) and not variant_inventory.choices(
                 product, color=chosen_color, size=chosen_size):
             fit_stock = 'out'
+        wanted_colors = product_variants.requested(current)['colors']
+        label_availability = None
+        if asked_labels and product_albums.stock_state(product) == 'available':
+            offered = product_variants.colors(product.get('colors'))
+            checked_colors = wanted_colors or ([selected_line['color']] if selected_line.get('color') else [])
+            available = (all(variant_inventory.choices(product, color=color, size=label)
+                             for color in checked_colors or [''] for label in sorted(asked_labels)) if tracked
+                         else all(color in offered for color in checked_colors))
+            label_availability = dict(labels=sorted(asked_labels), available=bool(available),
+                                      weight_compatible=fit['within_catalog_range'] if fit else None,
+                                      weight_was_asked=bool(product_variants.weight_answer(current) or sales_answers.fit_question(current)))
         needs_weight = bool(product and product.get('selection_mode') == 'weight'
                             and not product_variants.is_free_size_product(product) and clothing_size_label(current)
                             and state.get('stated_clothing_size', {}).get('product_id') == focus
@@ -442,6 +457,12 @@ class Responses:
                 question = None  # Choosing a color does not require quoting the same total in consecutive replies.
         if stage == 'checkout-confirmed' and accepted and accepted[-1].get('question_field') == question:
             question = None
+        if label_availability and question and question.startswith('product.') and question.endswith(('.size', '.weight_kg')):
+            question = f'product.{focus}.color' if product.get('colors') and not wanted_colors and not chosen_color else None
+        if label_availability and label_availability['weight_compatible'] is False and not quote_turn:
+            # An alphabetical label cannot make an out-of-range garment fit.
+            if question and (question.startswith(('contact.', 'cart.', 'product.')) or question == 'purchase_intent'):
+                question = None
         if market['requested'] and market.get('requested_age_months') and not market['matches'] and not feedback and not quote_turn:
             question = None
         if (market['matches'] and not feedback and not quote_turn and not inventory_feedback
@@ -580,7 +601,8 @@ class Responses:
             free_delivery_min_quantity=free_quantity if free_quantity and free_quantity > 1 else None,
             stock_conflict=stock_conflict,
             weight_only=bool(product and product.get('selection_mode') == 'weight' and not free_size),
-            documented_size_labels=product_variants.size_data(product.get('sizes'))['labels'] if product else [],
+            documented_size_labels=labels,
+            label_availability=label_availability,
             next_step=dict(field=question, options=step_options),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
                           checkout_confirmed=stage=='checkout-confirmed',
@@ -917,6 +939,13 @@ class Responses:
             fabric = value_facts.get('fabric') or context.get('product_facts', {}).get('fabric')
             validate_material(text, fabric, 'fabric' in context.get('requested_fields', ()))
             clean_copy = checkout.normalized(text)
+            label_availability = context.get('label_availability')
+            if label_availability and not label_availability['weight_was_asked'] and re.search(
+                    r'\d{2,3}\s*(?:كيلو|كغم)|شكد\s+وزن|مو\s+بنظام', clean_copy):
+                raise ValueError('reply.size_label: answer the label and continue without a weight range')
+            if label_availability and label_availability['weight_compatible'] is False and not re.search(
+                    r'(?:ما|مو|غير)\s+(?:راح\s+)?(?:يرهم|ترهم|يناسب|تناسب)|ما\s+(?:انصح|ادري)|خارج\s+(?:مدى|مجال|نطاق)', clean_copy):
+                raise ValueError('reply.size_label: acknowledge the known weight does not fit this product')
             if context.get('requested_skirt_length_cm') and re.search(r'وزن|كيلو|كغم', clean_copy):
                 raise ValueError('reply.length: the customer described skirt length, not body weight')
             if context.get('weight_only'):

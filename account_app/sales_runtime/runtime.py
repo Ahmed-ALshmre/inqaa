@@ -85,7 +85,7 @@ def allocated_color_changes(lines, product, allocation):
     changes = [dict(line_ref=line['line_id'], values={}, remove=True) for line in lines
                if product_variants.single_color(line.get('color')) not in colors]
     weight_mode = product['selection_mode'] == 'weight'
-    documented_labels = set(product_variants.size_data(product.get('sizes'))['labels'])
+    documented_labels = set(product_variants.garment_labels(product))
     known_weights = {line.get('weight_kg') or line.get('size') for line in lines
                      if line.get('weight_kg') or line.get('size_source_kind') == 'weight'}
     shared_weight = next(iter(known_weights)) if len(known_weights) == 1 else None
@@ -452,6 +452,8 @@ class Runtime:
             context['catalog_memory'] = market
             context['learned_sales_tactics'] = sales_intelligence.learned_tactics(
                 self.store.db, scope.store, text_now, bool(market['matches']))
+            if labels := product_variants.garment_labels(focus_product):
+                context['available_garment_labels'] = labels
             separate_product = bool(focus and state['cart'] and all(
                 line['product_id'] != focus for line in state['cart']) and
                 (reference.get('source') in {'image', 'confirmed_photo_context'}
@@ -518,7 +520,7 @@ class Runtime:
             label = clothing_size_label(text_now)
             size_mode = focus_product.get('selection_mode')
             uses_weight = size_mode == 'weight'
-            documented_labels = set(product_variants.size_data(focus_product.get('sizes'))['labels']) if uses_weight else set()
+            documented_labels = set(product_variants.garment_labels(focus_product)) if uses_weight else set()
             free_size = product_variants.is_free_size_product(focus_product)
             numeric_purchase = label and label.isdigit() and purchase_selected(text_now)
             size_label_for = focus if (label and uses_weight and not free_size
@@ -527,6 +529,8 @@ class Runtime:
                 if last_reply.get('question_key') == f'product.{focus}.weight_kg' else '')
             measured = product_variants.weight_answer(text_now, previous_weight_question) if uses_weight else None
             weight = (measured or {}).get('value')
+            saved_weights = {line.get('weight_kg') or line.get('size') for line in state['cart']
+                             if line['product_id'] == focus and (line.get('weight_kg') or line.get('size_source_kind') == 'weight')}
             same_product = not state['cart'] or (len(state['cart']) == 1 and state['cart'][0]['product_id'] == focus)
             single_product_cart = all(line['product_id'] == focus for line in state['cart'])
             accept_pair = bool(state.get('purchase_event') and all(line['quantity'] == 1 for line in state['cart']))
@@ -552,6 +556,9 @@ class Runtime:
                 if len(named_colors) == 1:
                     chosen_color = named_colors[0]
             explicit_size = direct_clothing_size(text_now) if size_mode in {'clothing', 'shoe'} else ''
+            if (uses_weight and label in documented_labels and not product_variants.is_lookup(text_now)
+                    and focus_product.get('size_system') in (None, '', 'legacy') and not weight and not saved_weights):
+                explicit_size = label
             if not explicit_size and size_mode in {'clothing', 'shoe'} and photo_choice and direct_color(text_now):
                 sizes = product_variants.requested(text_now)['sizes']
                 if len(sizes) == 1:
@@ -629,10 +636,13 @@ class Runtime:
                         for change in plan.get('changes', []):
                             values = change['values']
                             supplied = values.get('size', '')
-                            if (values.get('product_id') in (None, focus)
-                                    and product_variants.SIZE_RE.fullmatch(supplied)
-                                    and supplied.upper() not in documented_labels):
-                                values.pop('size')
+                            if values.get('product_id') in (None, focus):
+                                if label and product_variants.SIZE_RE.fullmatch(label) and not weight:
+                                    values.pop('weight_kg', None)
+                                    if saved_weights or product_variants.is_lookup(text_now) or supplied.upper() != label:
+                                        values.pop('size', None)
+                                elif product_variants.SIZE_RE.fullmatch(supplied) and supplied.upper() not in documented_labels:
+                                    values.pop('size')
                     if weight and same_product and not business_feedback and not state.get('order_id'):
                         changes = plan.setdefault('changes', [])
                         if not changes:
