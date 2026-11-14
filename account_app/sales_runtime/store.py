@@ -89,6 +89,8 @@ class Store:
                 review_id INTEGER, created_at REAL NOT NULL,
                 UNIQUE(scope,event_id,category));
         ''')
+        from ..sales_intelligence import init as init_sales_intelligence
+        init_sales_intelligence(self.db)
 
     @contextmanager
     def transaction(self):

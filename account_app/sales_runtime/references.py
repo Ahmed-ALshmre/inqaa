@@ -3,7 +3,7 @@ from copy import deepcopy
 import re
 from urllib.parse import urlsplit
 
-from .. import ad_attribution, product_albums, product_variants
+from .. import ad_attribution, product_albums, product_variants, variant_inventory
 from .store import Conflict
 
 
@@ -43,6 +43,7 @@ class References:
                 reference['observed_color'] = observed
                 if (product_albums.stock_state(product) == 'available'
                         and observed in product_variants.colors(product.get('colors'))
+                        and (not product.get('variant_stock') or variant_inventory.choices(product, color=observed))
                         and not product_variants.order_choice_error(product, 'color', observed)):
                     reference['available_photo_color'] = observed
             return reference

@@ -11,6 +11,26 @@ POLICY_FIELDS=('inspection_policy','delivery_time','delivery_fee','payment','sho
 
 
 def product_fact(product,field):
+    if product.get('discount_iqd') and field == 'price':
+        from .. import pricing
+        try:
+            pieces, amount, _ = pricing.terms(product)
+        except ValueError:
+            return None
+        unit = f'للبكج من {pieces} قطع' if pieces > 1 else 'لوحدة البيع'
+        return dict(field=field, value=f'{amount} دينار {unit}')
+    if product.get('variant_stock') and field in {'colors', 'sizes', 'stock'}:
+        from .. import variant_inventory
+        from ..product_albums import stock_state
+        if field == 'stock':
+            return dict(field=field, value=stock_state(product))
+        rows = variant_inventory.choices(product) if stock_state(product) == 'available' else []
+        if field == 'sizes' and any(row['size'] in {variant_inventory.WEIGHT_STOCK, variant_inventory.FREE_SIZE}
+                                    for row in rows):
+            return dict(field=field, value=product.get('sizes') or variant_inventory.WEIGHT_STOCK)
+        key = 'color' if field == 'colors' else 'size'
+        options = list(dict.fromkeys(row[key] for row in rows if row[key]))
+        return dict(field=field, value='، '.join(options) if options else 'ماكو خيارات متوفرة حالياً')
     if field=='sizes' and product.get('size_system')=='none':return dict(field='size_system',value='none')
     if field=='fabric':value=customer_copy.fact(product.get('fabric'))
     elif field in {'length','width'}:value=sales_strategy.measurement_fact(product,field)

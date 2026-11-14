@@ -72,6 +72,32 @@ class LinkingTests(unittest.TestCase):
         self.assertEqual(result, self.runtime.turn(self.scope, event))
         self.assertEqual(calls, self.decide.call_count)
 
+    def test_variant_last_piece_is_atomic_and_cancel_returns_only_its_stock(self):
+        from account_app import variant_inventory
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        entry = Entrypoint(self.db, lambda _: self.products, lambda *_: 5000, self.decide)
+        variant_inventory.init(self.db)
+        rows = [dict(color='ماروني', size='44', quantity=1), dict(color='أزرق', size='44', quantity=3)]
+        variant_inventory.replace(self.db, self.scope.store, 'P1', rows)
+        self.db.commit()
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account)
+        self.plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', color='ماروني', size='44'))])
+        message = 'احجزيلي ماروني قياس 44\nرقمي 07701234567\nبغداد حي المنصور قرب المدرسة'
+        first = entry.receive(**target, sender_id='variant-first', message_id='select', text=message)
+        self.assertEqual('booked', first['action'], first)
+        self.assertEqual(first['order_id'],
+                         entry.receive(**target, sender_id='variant-first', message_id='select', text=message)['order_id'])
+        second = entry.receive(**target, sender_id='variant-second', message_id='select', text=message)
+        self.assertEqual('continue', second['action'])
+        self.assertEqual('ماروني', second['variant_stock_feedback']['requested']['color'])
+        self.assertEqual(1, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.assertEqual([3, 0], [row['quantity'] for row in variant_inventory.rows_by_product(
+            self.db, self.scope.store)['P1']])
+        cancelled = entry.receive(**target, sender_id='variant-first', message_id='cancel', text='الغي الطلب')
+        self.assertEqual('cancelled', cancelled['action'])
+        self.assertEqual([3, 1], [row['quantity'] for row in variant_inventory.rows_by_product(
+            self.db, self.scope.store)['P1']])
+
     def test_scattered_contacts_after_accepted_prompt_book_without_extra_question(self):
         self.select(); self.prompt()
         self.run_turn('07701234567', contact=dict(phone='07701234567'))

@@ -218,7 +218,8 @@ class CartService:
                 missing.append(f"catalog.{line['product_id']}.size_system")
             unsupported_weight_label = (product.get('selection_mode') == 'weight'
                                         and not product_variants.is_free_size_product(product)
-                                        and product_variants.SIZE_RE.fullmatch(line.get('size') or ''))
+                                        and product_variants.SIZE_RE.fullmatch(line.get('size') or '')
+                                        and line['size'].upper() not in product_variants.garment_labels(product))
             if (system in {'legacy', 'clothing', 'shoe'} and (product.get('sizes') or system == 'shoe')
                     and (not line.get('size') or unsupported_weight_label)):
                 missing.append(f"cart.{line['line_id']}.size")

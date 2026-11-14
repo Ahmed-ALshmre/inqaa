@@ -595,6 +595,41 @@ class AuditFixTests(unittest.TestCase):
         line, = self.store.snapshot(self.scope)['data']['cart']
         self.assertEqual(('105', 'weight'), (line['size'], line['size_source_kind']))
 
+    def test_legacy_weight_card_answers_2x_and_retains_it_for_color_followup(self):
+        self.products[0].update(sizes='وزن من 60 إلى 130 كيلو', colors='ماروني رصاصي')
+        self.plan = dict(intent='continue', changes=[dict(values=dict(product_id='P1', weight_kg=90))])
+        event = self.store.append(self.scope, '2x-with-ad', kind='message', actor='customer',
+                                  payload=dict(text='قياس 2x', ad={'ad_id':'120251717777850095'}))['id']
+        outcome = self.runtime.turn(self.scope, event)
+        line, = self.store.snapshot(self.scope)['data']['cart']
+        self.assertEqual('XXL', line['size'])
+        self.assertFalse(line.get('weight_kg'))
+        writer = Mock(return_value=[dict(type='text', text='إي، قياس 2X متوفر. أي لون يعجبج؟')])
+        self.reply(event, outcome, writer)
+        self.assertTrue(writer.call_args.args[0]['label_availability']['available'])
+        event, outcome = self.run_turn('رصاصي و ما روني')
+        writer.return_value = [dict(type='text', text='إي، قياسج موجود بالرصاصي والماروني.')]
+        self.reply(event, outcome, writer)
+        self.assertEqual(['XXL'], writer.call_args.args[0]['label_availability']['labels'])
+        from account_app.product_variants import requested
+        self.assertEqual(['رصاصي', 'ماروني'], requested('رصاصي و ما روني')['colors'])
+        _, booked = self.run_turn('ثبتيلي رصاصي قياس 2x، 07701234567، بغداد حي الاختبار قرب المدرسة')
+        self.assertEqual('booked', booked['action'])
+        self.assertEqual('XXL', self.db.execute('SELECT size FROM orders').fetchone()[0])
+
+    def test_5x_label_does_not_override_an_explicit_weight_outside_fit_range(self):
+        self.products[0].update(sizes='من 55 كيلو الى 95')
+        self.plan = dict(intent='continue')
+        linked = self.store.append(self.scope, '100-with-ad', kind='message', actor='customer',
+                                   payload=dict(text='وزني ١٠٠', ad={'ad_id':'120251717777850095'}))['id']
+        self.runtime.turn(self.scope, linked)
+        event, outcome = self.run_turn('بيهن ٥ اكسات ذني الدشاديش')
+        writer = Mock(return_value=[dict(type='text', text='قياس 5X موجود، بس هالموديل ما يرهم على وزنج.')])
+        self.reply(event, outcome, writer)
+        fit = writer.call_args.args[0]['label_availability']
+        self.assertEqual(['5XL'], fit['labels'])
+        self.assertFalse(fit['weight_compatible'])
+
     def test_quote_requested_discount_matches_persisted_invoice(self):
         self.run_turn('اريد قطعتين ماروني 44',changes=[dict(values=dict(product_id='P1',size='44',color='ماروني',quantity=2))])
         self.run_turn('سويهن ب28 والتوصيل لبغداد')

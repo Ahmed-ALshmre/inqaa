@@ -35,8 +35,10 @@ ADULT_LABELS = ('S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL')
 
 def normalize_size_words(value):
     text = str(value or '').translate(str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'))
-    text = re.sub(r'(?<!\w)2\s*xl(?!\w)', 'XXL', text, flags=re.I)
-    text = re.sub(r'(?<!\w)xxxl(?!\w)', '3XL', text, flags=re.I)
+    text = re.sub(r'(?<!\w)([2-6])\s*x(?:l)?(?!\w)',
+                  lambda match: 'XXL' if match[1] == '2' else match[1] + 'XL', text, flags=re.I)
+    text = re.sub(r'(?<!\w)(x{2,6})l(?!\w)',
+                  lambda match: 'XXL' if len(match[1]) == 2 else f'{len(match[1])}XL', text, flags=re.I)
     for pattern, label in (
         (r'(?<!\w)(?:[2٢]\s*اكس(?:ات)?(?:\s+لارج)?|اكسين(?:\s+لارج)?|اكس\s+اكس(?:\s+لارج)?|(?:دبل|دوبل|دابل|تو)\s*اكس(?:ات)?(?:\s+لارج)?)(?!\w)', 'XXL'),
         (r'(?<!\w)(?:[3٣]|ثلاث[ةه]?)\s*اكس(?:ات)?(?:\s+لارج)?(?!\w)', '3XL'),
@@ -177,8 +179,20 @@ def owner_adult_labels(product):
     return ADULT_LABELS if 'نسائي' in text or adult_chart else ()
 
 
+def garment_labels(product):
+    """Product labels, including the owner's adult labels for legacy cards."""
+    product = product or {}
+    labels = size_data(product.get('sizes'))['labels']
+    return tuple(labels) or (owner_adult_labels(product) if product.get('size_system') in (None, '', 'legacy')
+                             and not is_free_size_product(product) else ())
+
+
 def colors(value):
-    return list(dict.fromkeys(ALIASES[m[1]] for m in COLOR_RE.finditer(normalized(value))))
+    return list(dict.fromkeys(ALIASES[m[1]] for m in COLOR_RE.finditer(color_text(value))))
+
+
+def color_text(value):
+    return re.sub(r'(?<!\w)ما\s+روني(?!\w)', 'ماروني', normalized(value))
 
 
 def single_color(value):
@@ -518,7 +532,7 @@ def color_quantities(value):
 
 
 def requested(question):
-    text=size_choice_text(question)
+    text=color_text(size_choice_text(question))
     sizes=list(dict.fromkeys(m[1].upper() for m in re.finditer(
         r'(?:قياس(?:ي|ه|ها)?|مقاس(?:ي|ه|ها)?|سايز)\s*(?:هو\s+|هي\s+)?(\d{1,3}(?:\.5)?|[2-6]xl|xxxl|xxl|xl|xs|s|m|l)(?![\w.])',text)))
     # A narrow stock question supplies a preferred garment size, never consent.
