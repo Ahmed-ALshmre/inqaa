@@ -18,6 +18,12 @@ class BackupSuperseded(Conflict):
     """Staff or a newer message superseded the backup in flight."""
 
 
+def failure_code(error):
+    """Keep diagnostic identifiers without logging model output or customer text."""
+    value = str(error).split(':', 1)[0]
+    return value if re.fullmatch(r'[a-z][a-z0-9_.]{0,95}', value) else type(error).__name__
+
+
 def consultation_history(store, scope, event_id, load_history):
     if load_history:
         history = load_history(scope, event_id, consultation=True)
@@ -124,7 +130,7 @@ def consult(store, scope, event_id, version, stage, backup, context, reason, pre
         result = backup.advise(payload)
         status, error = ('returned', None) if result is not None else ('failed', 'no_backup_proposal')
     except (DecisionRejected, DecisionUnavailable, ValueError) as exc:
-        status, error, result = 'failed', type(exc).__name__, None
+        status, error, result = 'failed', failure_code(exc), None
     with store.transaction():
         store.db.execute("UPDATE sales_v2_model_attempts SET status=?,error_code=? WHERE id=?",
                          (status, error, attempt))

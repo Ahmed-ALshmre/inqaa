@@ -1,6 +1,7 @@
 """Read approved teaching without committing SQL or turning guidance into facts."""
 from copy import deepcopy
 import sqlite3
+from ..product_questions import DASHBOARD_ANSWER_TOPICS, apply_fact
 
 
 def enrich(db,store,products):
@@ -11,16 +12,12 @@ def enrich(db,store,products):
     except sqlite3.OperationalError as exc:
         if 'no such table' not in str(exc):raise
         return result
-    fields={'fabric':'fabric','stretch':'stretch','lining':'lining','closure':'closure','cut':'cut',
-            'season':'season','fabric_feel':'fabric_feel','care':'care_instructions','origin':'country_of_origin',
-            'composition':'bundle_contents'}
     for product in result:
         if product.get('store_id','default')!=store:continue
         for row in rows:
             if row['product_id']!=product['product_id']:continue
-            if row['answer'] and row['topic'] in fields:product[fields[row['topic']]]=row['answer']
-            if row['answer'] and row['topic'] in {'length','width'}:
-                product['measurements']=str(product.get('measurements') or '')+'\n'+('الطول' if row['topic']=='length' else 'العرض')+': '+row['answer']
+            if row['answer'] and row['topic'] in DASHBOARD_ANSWER_TOPICS:
+                apply_fact(product, row['topic'], row['answer'])
             if row['guidance'] and row['topic']!='service':
                 product.setdefault('_staff_guidance',[]).append({k:row[k] for k in ('topic','question_key','guidance')})
     return result

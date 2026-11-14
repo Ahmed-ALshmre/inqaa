@@ -128,6 +128,7 @@ class LatestReviewPipeline(TestCase):
     def test_paused_image_callback_is_not_a_failed_webhook_but_transport_failure_stays_failed(self):
         self.link();self.m.set_customer_ai_enabled(self.db,self.sender,False,reason='manual')
         for meta,expected in [({'auto_reply':{'sent':False,'reason':'ai_disabled_for_conversation'}},True),
+                ({'skipped':True,'auto_reply':{'sent':False,'reason':'ai_globally_disabled'}},True),
                 ({'auto_reply':{'sent':False,'needs_human':True}},True),
                 ({'auto_reply':{'sent':False,'reason':'delivery_failed'}},False),
                 ({'service_error':True},False)]:

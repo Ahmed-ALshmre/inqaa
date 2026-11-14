@@ -75,12 +75,9 @@ class Responses:
                          and not (new_salam or new_welcome),
         )
         if mode == 'media_unresolved':
-            prompt = ('الصور وصلن. تگدرين تحددين القطعة اللي تقصدينها باللون أو وصفها؟'
-                      if outcome.get('multiple_images') else
-                      'الصورة وصلتني. تگدرين تكتبين لون القطعة أو وصفها حتى أتأكد منها؟')
-            part = dict(type='text', text=prompt, question_field='product',
-                        question_key='product', question_stage='product-detail')
-            return self.save(scope, key, reply_key, turn_id, snap['version'], [part])
+            parts = self.ask_about_photo(scope, turn_id, snap['version'], catalog, current, messages, accepted,
+                                         greeting, 'product-detail', multiple=bool(outcome.get('multiple_images')))
+            return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if outcome.get('browsing_photos') and self.product_photos:
             parts = self.browsing_photos(catalog, outcome['browsing_photos'])
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
@@ -113,6 +110,8 @@ class Responses:
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
+        matched_photo_only = bool(product and state.get('focus_source') == 'image' and not current.strip()
+                                  and messages[-1].get('media_kind') == 'image')
         if outcome.get('alternatives_requested') and product and self.product_photos:
             matches = alternatives(catalog, focus, current, requested=True)['matches']
             photos = []
@@ -139,6 +138,8 @@ class Responses:
                                              question_key=color_key, question_stage='photos')]
             return self.save(scope, key, reply_key, turn_id, snap['version'], photos[:5])
         requested=requested_fields(current)
+        if matched_photo_only and not lines:
+            requested.append('price')
         offer_question = bool(re.fullmatch(r'(?:شنو|شني|ما هو|ماهو)\s+(?:ال)?عرض(?:كم|ه)?', clean))
         if offer_question and 'price' not in requested:
             requested.append('price')
@@ -375,6 +376,12 @@ class Responses:
             stage = 'stock-alternatives'
         if only_same_day_question(current):
             question = None
+        if outcome.get('separate_photo_product'):
+            if question and not (question.startswith(f'product.{focus}.')
+                                 or question in {'alternative.color', 'alternatives.photos'}):
+                question = None
+            if feedback and feedback.get('product_id') != focus:
+                feedback, recommendations = None, None
         def question_key(field):
             if field and field.startswith('cart.'):
                 row=next((r for r in snap['data']['cart'] if r['line_id']==field.split('.')[1]),None)
@@ -511,6 +518,8 @@ class Responses:
                                 discount_allowed=bool(quote_turn and quote.get('discount'))),
             recent_messages=messages, recent_replies=accepted, greeting=greeting,
         )
+        if state.get('focus_source') == 'image' and focus:
+            context['verified_photo_product_id'] = focus
         if (skirt_length_request(current) and not product_variants.weight_answer(current) and
                 (catalog_profile.effective_family(product) == 'skirts' or any(
                     catalog_profile.query_type(message.get('text')) == 'skirts'
@@ -525,7 +534,8 @@ class Responses:
                 and question and question.endswith('.color') and not requested):
             photos = self.product_photos(product, [])[:4]
             parts = photos + [dict(type='text', text='باقي بس اللون اللي يعجبج حتى أثبتلج الحجز 🌷')]
-        elif needs_weight and question == f'product.{focus}.weight_kg' and set(requested) <= {'sizes'}:
+        elif (needs_weight and question == f'product.{focus}.weight_kg' and set(requested) <= {'sizes'}
+              and 'verified_photo_product_id' not in context):
             parts = [dict(type='text', text='هالموديل قياساته حسب الوزن عيني، شكد الوزن تقريباً؟')]
         elif outcome.get('contact_turn') and not requested and not quote_turn and not feedback and (
                 getattr(type(self.writer), 'structured_sales', False)):
@@ -604,7 +614,6 @@ class Responses:
         wants_purchase = not wants_photos and purchase_selected(current)
         product_id = outcome.get('provisional_product')
         product = catalog.get(product_id) if product_id else {}
-        label = customer_copy.reply_category(product) or customer_copy.fact(product.get('product_name'))[:70].strip() or 'منتج الإعلان'
         if 'availability' in sales_answers.topics(current):
             requested.append('stock')
             if 'colors' not in requested and product_variants.requested(current)['colors']:
@@ -613,8 +622,8 @@ class Responses:
                 requested.append('sizes')
         if not product_id and not wants_purchase and set(requested) <= {'price', 'sizes', 'colors', 'stock'}:
             if requested and accepted and accepted[-1].get('question_stage') == 'product-detail':
-                return [dict(type='text', text='أي صورة من اللي دزيتيهن تقصدين؟ حتى أشيّك لج هالقطعة 🌷',
-                             question_field='product', question_key='product', question_stage='image-choice')]
+                return self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
+                                            accepted, greeting, 'image-choice', multiple=True)
             if accepted and accepted[-1].get('question_stage') == 'image-choice':
                 return dict(action='skipped')
         if not product_id and (wants_photos or wants_purchase or any(field not in POLICY_FIELDS for field in requested)):
@@ -622,17 +631,28 @@ class Responses:
         if wants_photos and product and self.product_photos:
             colors = product_variants.requested(current)['colors']
             photos = self.product_photos(product, colors)
-            return [*photos[:4], dict(type='text', text=f'هاي صور {label} من الكتالوج.')] if photos else [
-                self.no_photo(colors, f'{label} بهاللون' if colors else label)]
+            if photos:
+                return photos[:5]
+            context = dict(mode='continue', customer_message=current, recent_messages=messages,
+                           recent_replies=accepted, question_field=None, next_step=dict(field=None, options=[]),
+                           copy_budget=145, amounts={}, greeting=greeting, action_results={},
+                           missing_catalog_photos=dict(colors=colors))
+            return self.write(context, catalog, scope, turn_id, outcome['state_version'])
         if wants_purchase:
             if outcome.get('active_cart') or constraint(current):
                 return dict(action='photo_review')
             target = {'event': outcome['photo_pending'], 'product_id': product_id}
             if accepted and accepted[-1].get('confirm_photo_product') == target:
                 return dict(action='skipped')
-            return [dict(type='text', text=f'تقصدين {label} للحجز؟', confirm_photo_product=target)]
+            label = customer_copy.reply_category(product) or customer_copy.fact(product.get('product_name'))[:70].strip()
+            parts = self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
+                                         accepted, greeting, 'confirm-product', label=label)
+            parts[-1]['confirm_photo_product'] = target
+            return parts
         if product and not current.strip() and turn_id == outcome['photo_pending']:
             requested = ['price']
+        if not requested and outcome.get('latest_verified_image') and weight_fit(product, current):
+            requested = ['sizes']
         if not requested:
             return dict(action='skipped')
 
@@ -644,26 +664,63 @@ class Responses:
                 stock = product_albums.stock_state(product)
                 fact = dict(field='stock', value=stock) if stock != 'unknown' else None
             if fact is None:
+                if pid and field == 'wholesale':
+                    return dict(action='missing_fact', product_id=pid, field=field)
                 return dict(action='photo_review')
             facts.append(dict(product_id=pid, **fact))
         amounts = {}
+        price_units = None
+        promotion = None
         if 'price' in requested:
             try:
-                _, amounts['unit_price'], _ = pricing.terms(product)
+                price_units, amounts['unit_price'], _ = pricing.terms(product)
+                if outcome.get('latest_verified_image'):
+                    promotion = next(iter(pricing.offer_tiers(product)), None)
+                    if promotion:
+                        amounts['offer_total'] = promotion[1]
             except ValueError:
                 return dict(action='photo_review')
+        if 'delivery_fee' in requested:
+            free_minimum, product_fee = pricing.delivery_terms(product)
+            fees = policy.get('delivery_fee')
+            province = destination(current) or contact.get('province')
+            fee = 0 if free_minimum == 1 else product_fee
+            if fee is None and isinstance(fees, dict):
+                fee = fees.get(province)
+                if fee is None and fees and len(set(fees.values())) == 1:
+                    fee = next(iter(fees.values()))
+            if type(fee) is int:
+                amounts['delivery_fee'] = fee
         version = outcome['state_version']
         context = dict(mode='continue', state={'contact': contact}, facts=facts, policies=policy, amounts=amounts,
                        product_facts={fact['field']: fact['value'] for fact in facts if fact['product_id']==product_id},
                        question_field=None, next_step=dict(field=None, options=[]), copy_budget=220,
                        customer_message=current, requested_fields=requested, recent_messages=messages,
                        recent_replies=accepted, greeting=greeting, action_results={},
-                       provisional_photo=True)
+                       provisional_photo=not outcome.get('latest_verified_image'),
+                       promotion_quantity=promotion[0] if promotion else None)
+        if outcome.get('latest_verified_image'):
+            fit = weight_fit(product, current)
+            context.update(verified_photo_product_id=product_id,
+                           progress=dict(fit=fit, price_unit_quantity=price_units),
+                           value_facts=dict(fit_availability=dict(stock=product_albums.stock_state(product))))
+        elif product_id:
+            context['possible_photo_product'] = customer_copy.reply_category(product) or customer_copy.fact(
+                product.get('product_name'))[:70].strip()
         parts = self.write(context, catalog, scope, turn_id, version)
         if any(part['type'] != 'text' for part in parts):
             return dict(action='photo_review')
-        if any(fact['product_id'] != '@store' for fact in facts):
-            parts[0] = dict(parts[0], text=f'إذا تقصدين {label}، {parts[0]["text"]}')
+        return parts
+
+    def ask_about_photo(self, scope, turn_id, version, catalog, current, messages, accepted, greeting,
+                        stage, *, multiple=False, label=''):
+        context = dict(mode='continue', customer_message=current, recent_messages=messages, recent_replies=accepted,
+                       question_field='photo.reference', next_step=dict(field='photo.reference', options=[]),
+                       copy_budget=145,
+                       amounts={}, greeting=greeting, action_results={},
+                       photo_clarification=dict(multiple=multiple, possible_product=label))
+        parts = self.write(context, catalog, scope, turn_id, version)
+        parts[-1].update(question_field='product', question_key='product', question_stage=stage)
         return parts
 
     def write(self, context, catalog, scope, turn_id, version):

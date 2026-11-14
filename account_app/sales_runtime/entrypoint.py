@@ -4,7 +4,7 @@ Channel adapters determine actor/account/store from trusted routing metadata,
 never from customer text. Existing webhook processing is not enabled by import.
 """
 from .cart import Catalog
-from .backup import BackupSuperseded
+from .backup import BackupFailed, BackupSuperseded, failure_code
 from .contact import capture as capture_contact, declarations
 from .facts import only_same_day_question
 from .intent import explicit_cancellation
@@ -65,6 +65,9 @@ class Entrypoint:
         from zoneinfo import ZoneInfo
         rejected=isinstance(error,DecisionRejected)
         category='invalid_decision' if rejected else 'provider_unavailable'
+        incident_code = failure_code(error)
+        if isinstance(error, BackupFailed) and error.__cause__:
+            incident_code += ':' + failure_code(error.__cause__)
         snap=self.store.snapshot(scope)
         if not rejected:
             # An outage must not stale an already committed turn/writer input.
@@ -72,7 +75,7 @@ class Entrypoint:
                 self.store.db.execute('''INSERT INTO sales_v2_incidents
                     (scope,event_id,category,error_code,created_at) VALUES(?,?,?,?,?)
                     ON CONFLICT(scope,event_id,category) DO UPDATE SET error_code=excluded.error_code''',
-                    (scope.key,event_id,category,str(error),time.time()))
+                    (scope.key,event_id,category,incident_code,time.time()))
             return dict(action='service_failure',error_code=str(error),review_id=None,retryable=True,reply='')
         latest=self.store.db.execute("SELECT MAX(id) FROM sales_v2_events WHERE scope=? AND kind<>'receipt'",(scope.key,)).fetchone()[0]
         if latest!=event_id:return dict(action='superseded',reply='')
@@ -89,7 +92,7 @@ class Entrypoint:
                 state['control_mode']='human'
             self.store.db.execute('''INSERT INTO sales_v2_incidents
                 (scope,event_id,category,error_code,review_id,created_at) VALUES(?,?,?,?,?,?)''',
-                (scope.key,event_id,category,str(error),review_id,time.time()))
+                (scope.key,event_id,category,incident_code,review_id,time.time()))
             return dict(action='needs_review' if rejected else 'service_failure',error_code=str(error),
                         review_id=review_id,retryable=not rejected,reply='')
         return self.store.apply(scope,f'failure:{event_id}:{category}',snap['version'],
@@ -143,7 +146,16 @@ class Entrypoint:
         if explicit_cancellation(text) and not state.get('order_id'):
             return self.handoff_service(scope, event['id'], 'order_cancellation')
         looking_for_order = bool(state.get('order_id') or re.search(r'(?<!\w)(?:طلبي|حجزي)(?!\w)', clean))
-        if prior_order or (tracking and looking_for_order and not sending_checkout and not explicit_cancellation(text)):
+        delay_complaint = bool(re.search(
+            r'(?:مو\s+)?صار(?:لي|\s+لي)?\s+(?:.{0,20}\s+)?(?:يومين|يوم(?:ا|اً)?|ايام|اسبوع|اسبوعين)(?!\w)'
+            r'|كل\s+مر[هة]\s+(?:ت)?عيدولي\s+نفس\s+الكلام', clean))
+        if delay_complaint and not sending_checkout and not looking_for_order:
+            looking_for_order = self.store.db.execute("""SELECT 1 FROM orders
+                WHERE store_id=? AND sender_id=? AND julianday(created_at)>=julianday('now','-30 days')
+                  AND LOWER(COALESCE(status,'new')) NOT IN ('cancelled','canceled','ملغي','delivered','returned')
+                LIMIT 1""", (store_id, sender_id)).fetchone() is not None
+        if prior_order or ((tracking or delay_complaint) and looking_for_order and not sending_checkout
+                           and not explicit_cancellation(text)):
             return self.handoff_service(scope,event['id'],'order_tracking')
         # A sticker is social context, never a request for product recognition.
         # Image/video interpretation must be supplied by an explicit media adapter.
@@ -168,6 +180,10 @@ class Entrypoint:
                 if observed['status']=='matched' and len(candidates)!=1:
                     raise ValueError('media_match_requires_one_product')
                 clean = dict(status=observed['status'], product_ids=candidates)
+                if observed.get('verified_pair') is True and clean['status'] == 'ambiguous' and len(set(candidates)) == 2:
+                    clean['verified_pair'] = True
+                if clean['status'] == 'ambiguous' and candidates == [observed.get('latest_match')] and candidates[0]:
+                    clean['latest_match'] = candidates[0]
                 color = product_variants.single_color(observed.get('observed_color'))
                 if clean['status'] == 'matched' and color:
                     clean['observed_color'] = color
@@ -187,10 +203,10 @@ class Entrypoint:
                                                        dict(text=text, ad=ad, media_kind=media_kind, observation=observed))
                 if media_kind == 'image' and only_same_day_question(text):
                     return self.finish_turn(scope, event['id'])
+                if observed.get('verified_pair') and not current.get('order_id') and self.runtime.requested_photo_pair(
+                        scope, event['id'], current, checkout.normalized(text)):
+                    return self.finish_turn(scope, event['id'])
                 if reference['status'] in {'known', 'provisional'}:
-                    products_in_cart = {line['product_id'] for line in current['cart']}
-                    if products_in_cart and reference['product_id'] not in products_in_cart:
-                        return self.handoff_service(scope, event['id'], 'image_changes_existing_cart')
                     return self.finish_turn(scope, event['id'])
                 if observed['status'] == 'unavailable':
                     return self.handoff_service(scope, event['id'], 'product_image_service_unavailable')

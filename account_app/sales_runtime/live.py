@@ -16,6 +16,7 @@ from .gateway import BACKUP_MODEL, BackupGateway, DecisionGateway, WriterGateway
 from .intent import purchase_selected
 from .orders import migrate_tasks
 from .preview import ImageObserver, media_input
+from .runtime import Runtime
 from .store import Conflict, Scope, Store, encode, initial_state
 
 
@@ -255,6 +256,12 @@ def staff_product(db, sender_id, product_id, resolved_urls=()):
     with db:
         state = Store(db).snapshot(scope)['data']
         state.update(focus_product_id=product_id, focus_source='staff')
+        if not resolved_urls:
+            # The conversation-level link selects the current product for
+            # answers. It does not label individual attachments for training.
+            pending_id, _ = Runtime.pending_photo(state)
+            if pending_id:
+                state['resolved_photo_event'] = pending_id
         for event_id in sorted(state.get('media_observations', ()), key=int, reverse=True):
             refs = Store(db).evidence(scope, int(event_id))['payload'].get('media_ref') or []
             if refs and all(url in resolved_urls for url in refs):
@@ -384,7 +391,8 @@ def make_entry(module, db, scope, allow_write):
     # The runtime owns its attempt budget, including one Sol consultation.
     post = partial(module.ai_transport.post, max_attempts=1, budget_seconds=48)
     observe = ImageObserver(module.inbound_media.fetch, module.match_customer_image_with_catalog,
-                            lambda current, url: module._archived_incoming_image_data(db, current.sender, url))
+                            lambda current, url: module._archived_incoming_image_data(db, current.sender, url),
+                            match_album=module.match_customer_album_with_catalog)
 
     def media(current, kind, references, products):
         from .contracts import DecisionUnavailable
@@ -612,6 +620,8 @@ def process(module, db, row, incoming_id, *, staff_retry=False):
             version = snapshot['version']
             if outcome.get('photo_pending', 0) <= snapshot['data'].get('resolved_photo_event', 0):
                 outcome.pop('photo_pending', None)
+                outcome.pop('provisional_product', None)
+                outcome.pop('latest_verified_image', None)
             try:
                 if not allowed(scope):
                     return dict(ok=True, reason='conversation_changed')

@@ -6087,7 +6087,8 @@ def vision_service_failure(exc):
             "reason": "Image analysis service failed: " + code}
 
 
-def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_model=None) -> dict:
+def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_model=None,
+                        related_customer_images=()) -> dict:
     """إرجاع product_id فقط من Vision بعد مقارنة صورة الزبون بصور المنتجات."""
     if catalog_model is None and not is_store_feature_enabled("vision_enabled", VISION_ENABLED):
         return {
@@ -6101,9 +6102,11 @@ def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_mo
         }
 
     try:
+        customer_images = [customer_image_url, *related_customer_images]
         prefix = [
-            {"type": "text",      "text": "صورة الزبون:"},
-            {"type": "image_url", "image_url": {"url": vision_payload.image_url(_image_ref_for_openrouter(customer_image_url))}},
+            {"type": "text", "text": "صور الزبون:" if related_customer_images else "صورة الزبون:"},
+            *[{"type": "image_url", "image_url": {"url": vision_payload.image_url(_image_ref_for_openrouter(reference))}}
+              for reference in customer_images],
             {
                 "type": "text",
                 "text": (
@@ -6138,6 +6141,12 @@ def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_mo
                 'وليس لون الصورة المرجعية أو دليل توفره؛ اتركه فارغاً إذا كان غامضاً أو تظهر عدة ألوان للموديل.'
             ),
         }]
+        if related_customer_images:
+            suffix[0]["text"] += (
+                " كل الصور في بداية الرسالة تخص الزبون. اربطها بمعرف واحد فقط عندما تتطابق القطع "
+                "في القصة والياقة والأكمام والتفاصيل، حتى إذا تغيّر اللون أو الوقفة. "
+                "إذا كانت الصور لموديلات مختلفة أو غير واضحة، أجب NONE. اترك observed_color فارغاً."
+            )
 
         system_prompt = render_setting_template(None, "prompt_vision_product_id", DEFAULT_VISION_PRODUCT_ID_PROMPT)
         system_prompt += ('\nقاعدة هوية الموديل: اللون وحده ليس سبب رفض التطابق عند تطابق القصّة والنقشة والتفاصيل الأساسية. '
@@ -6375,6 +6384,14 @@ def _clean_catalog_product_id(raw, products):
 
 def match_customer_image_with_catalog(customer_image_url, products):
     return dict(_match_customer_image_with_catalog_once(customer_image_url, products), attempts=1)
+
+
+def match_customer_album_with_catalog(images, products):
+    candidates = build_product_vision_candidates(products, limit=len(products))
+    if not candidates or not is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED):
+        return dict(product_found=False)
+    model = get_ai_model(None, "catalog_match_model", CATALOG_MATCH_MODEL)
+    return confirm_with_vision(images[0], candidates, catalog_model=model, related_customer_images=images[1:])
 
 
 def _match_customer_image_with_catalog_once(customer_image_url, products):
@@ -13965,7 +13982,7 @@ def _process_manychat_webhook_async_locked(fake_body, subscriber_id, platform, o
         meta = result.get('meta') or {}
         auto=meta.get('auto_reply') or {}
         intentional=(auto.get('needs_human') or auto.get('reason') in {
-            'ai_disabled','ai_disabled_for_conversation','customer_requested_human','conversation_changed',
+            'ai_disabled','ai_globally_disabled','ai_disabled_for_conversation','customer_requested_human','conversation_changed',
             'child_availability_review'})
         if meta.get('service_error') or auto.get('service_error') or (auto and not auto.get('sent') and not intentional):
             return {'ok': False, 'error': auto.get('error') or 'تعذر توليد الرد أو إرساله؛ راجع مشاكل النظام.', 'meta': meta}
@@ -19558,7 +19575,8 @@ def api_product_question_answer(identity):
             row = product_questions.save_guidance(get_db(),current_store_id(),identity,body['guidance'],author,
                 now_baghdad_iso(),expected_revision=body.get('expected_revision'))
         else:
-            row = product_questions.save_answer(get_db(),current_store_id(),identity,body.get('answer'),author,now_baghdad_iso())
+            row = product_questions.save_answer(get_db(),current_store_id(),identity,body.get('answer'),author,
+                now_baghdad_iso(),expected_revision=body.get('expected_revision'))
     except product_questions.GuidanceConflict as error:
         return jsonify(error=str(error)),409
     except ValueError as error:

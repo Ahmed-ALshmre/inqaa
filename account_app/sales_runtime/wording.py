@@ -118,6 +118,7 @@ def validate_next_step(parts, step):
         'purchase_intent': (r'ثبت|حجز|نسجل|اكمل|نكمل|طلب|رتب',),
         'alternatives.photos': (r'صور|اشوف|تشوف|ادز|ارسل', r'بديل|بدائل|موديل|خيارات|سوتات|اطقم'),
         'product': (r'صور|سكرين|لقط',),
+        'photo.reference': (r'صور|سكرين|لقط|قطع[هة]|موديل|لون|تقصد',),
     }
     field = question.rsplit('.', 1)[-1]
     if field == 'color' and question not in required:

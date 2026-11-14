@@ -315,8 +315,161 @@ class LinkingTests(unittest.TestCase):
             self.assertEqual(2, match.call_count)
             fetch.side_effect = [image, different]
             match.side_effect = [dict(product_found=True, product_id='P1'), dict(product_found=True, product_id='B1')]
-            self.assertEqual(dict(status='ambiguous', product_ids=['B1', 'P1']),
-                             observer(self.scope, 'image', urls, self.products))
+            self.assertEqual(dict(status='ambiguous', product_ids=['B1', 'P1'], verified_pair=True),
+                             observer(self.scope, 'image', urls[:2], self.products))
+
+    def test_a_failed_attachment_does_not_hide_the_verified_image_in_the_batch(self):
+        from account_app.sales_runtime.preview import ImageObserver, media_input
+        url = 'https://cdn.example/picture.png'
+        self.assertEqual(('image', [url]), media_input([
+            dict(type='image', payload={'url': url}), dict(type='video')]))
+        attachment = (b'synthetic-image', 'image', '', 'image/png')
+        fetch = Mock(side_effect=[None, attachment])
+        match = Mock(return_value=dict(product_found=True, product_id='P1'))
+        observer = ImageObserver(fetch, match)
+        with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
+            result = observer(self.scope, 'image', ['https://cdn.example/failed.png', url], self.products)
+        self.assertEqual(dict(status='ambiguous', product_ids=['P1'], latest_match='P1'), result)
+        match.assert_called_once()
+
+    def test_album_comparison_recognizes_one_product_across_distinct_colors(self):
+        from account_app.sales_runtime.preview import ImageObserver
+        urls = [f'https://cdn.example/dress-{index}.jpg' for index in range(4)]
+        fetch = Mock(side_effect=[(f'color-{i}'.encode(), 'image', '', 'image/jpeg') for i in range(4)])
+        match = Mock(side_effect=[dict(product_found=False), dict(product_found=True, product_id='P1'),
+                                  dict(product_found=False), dict(product_found=False)])
+        album = Mock(return_value=dict(product_found=True, product_id='P1'))
+        observer = ImageObserver(fetch, match, match_album=album)
+        with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
+            self.assertEqual(dict(status='matched', product_ids=['P1']), observer(self.scope, 'image', urls, self.products))
+        images, products = album.call_args.args
+        self.assertEqual(4, len(images))
+        self.assertEqual(self.products, products)
+
+    def test_colloquial_price_and_delivery_use_verified_amounts_without_a_cart(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        self.products[0].update(price='12000', offer='قطعتين ب 20000')
+        writer = Mock(return_value=[dict(type='text',
+            text='سعر القطعة {{unit_price}} والقطعتين بالعرض {{offer_total}}. والتوصيل {{delivery_fee}}.')])
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, p: 5000, self.decide,
+                           media=lambda *args: dict(status='ambiguous', product_ids=['P1'], latest_match='P1'),
+                           writer=writer, policy_loader=lambda _sid: {'delivery_fee': {'بغداد': 5000, 'أخرى': 5000}})
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        result = entry.receive(**target, message_id='price', media_kind='image', media_ref=['one', 'two'],
+                               text='جكد سعر\nوالتوصيل')
+        self.assertEqual('continue', result['action'], result)
+        context = writer.call_args.args[0]
+        self.assertEqual({'unit_price': 12000, 'offer_total': 20000, 'delivery_fee': 5000}, context['amounts'])
+        self.assertEqual('P1', context['verified_photo_product_id'])
+        self.assertEqual([], entry.store.snapshot(self.scope)['data']['cart'])
+
+    def test_wholesale_question_on_known_photo_records_only_the_missing_wholesale_fact(self):
+        from sqlite3 import Row
+        from account_app import product_questions
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        from account_app.sales_runtime.facts import product_fact
+        writer = Mock()
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, p: 5000, self.decide,
+                           media=lambda *args: dict(status='matched', product_ids=['P1']), writer=writer)
+        entry.migrate()
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        result = entry.receive(**target, message_id='wholesale', media_kind='image', media_ref=['one'],
+                               text='نص درزن بيش')
+        self.assertEqual('human', result['action'], result)
+        writer.assert_not_called()
+        self.db.row_factory = Row
+        row = self.db.execute('SELECT id,topic FROM product_questions').fetchone()
+        self.assertEqual('wholesale', row['topic'])
+        self.assertEqual([], entry.store.snapshot(self.scope)['data']['cart'])
+        product_questions.save_answer(self.db, self.scope.store, row['id'], 'نص درزن 6 قطع بـ48000',
+                                      'اختبار', '2026-11-14T12:00:00+03:00')
+        product = entry.load_catalog(self.scope.store).get('P1')
+        self.assertEqual('نص درزن 6 قطع بـ48000', product_fact(product, 'wholesale')['value'])
+        self.assertEqual('12000', product['price'])
+
+    def test_price_question_uses_last_verified_photo_in_an_incomplete_batch(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        self.products[0].update(price='15000')
+        media = Mock(return_value=dict(status='ambiguous', product_ids=['P1'], latest_match='P1'))
+        writer = Mock(return_value=[dict(type='text', text='القطعة اللي بآخر صورة بـ{{unit_price}}.')])
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, p: 5000, self.decide,
+                           media=media, writer=writer)
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        result = entry.receive(**target, message_id='batch', media_kind='image', media_ref=['old', 'recent'],
+                               text='وهذا شكد؟')
+        self.assertEqual('continue', result['action'], result)
+        self.assertEqual('القطعة اللي بآخر صورة بـ15 ألف.', entry.store.claim_reply(self.scope)['payload']['text'])
+        self.assertEqual('P1', writer.call_args.args[0]['verified_photo_product_id'])
+        self.assertEqual([], entry.store.snapshot(self.scope)['data']['cart'])
+
+    def test_photo_of_different_product_answers_its_price_and_preserves_checkout(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        other = dict(self.products[0], product_id='P2', price='27000', ad_ids=[])
+        self.products.append(other)
+        self.run_turn('أريد ماروني قياس 44', changes=[
+            dict(values=dict(product_id='P1', color='ماروني', size='44'))])
+        original = self.store.snapshot(self.scope)['data']['cart']
+        self.plan = dict(intent='buy', changes=[dict(line_ref=original[0]['line_id'],
+                         values=dict(product_id='P2', color='أزرق', size='44'))])
+        writer = Mock(side_effect=[
+            [dict(type='text', text='سعر هاي القطعة {{unit_price}}.')],
+            [dict(type='text', text='باقي بس العنوان عيني حتى أثبتلج الطلب.')],
+        ])
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, p: 5000, self.decide,
+                           media=lambda *args: dict(status='matched', product_ids=['P2']), writer=writer)
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        photo = entry.receive(**target, message_id='another-photo', media_kind='image',
+                              media_ref=['photo'], text='وهذا شكد؟')
+        self.assertEqual('continue', photo['action'], photo)
+        self.assertEqual('P2', self.decide.call_args.args[0]['reference']['product_id'])
+        context = writer.call_args.args[0]
+        self.assertEqual(27000, context['amounts']['unit_price'])
+        self.assertIsNone(context['next_step']['field'])
+        self.assertEqual(original, self.store.snapshot(self.scope)['data']['cart'])
+        self.assertIsNone(self.db.execute('SELECT id FROM orders').fetchone())
+        phone = entry.receive(**target, message_id='phone', text='رقمي 07701234567')
+        self.assertEqual('continue', phone['action'], phone)
+        booked = entry.receive(**target, message_id='address', text='بغداد حي المنصور قرب المدرسة')
+        self.assertEqual('booked', booked['action'], booked)
+        order = self.db.execute('SELECT order_items FROM orders').fetchone()
+        self.assertEqual(['P1'], [line['product_id'] for line in json.loads(order[0])])
+
+    def test_buying_both_photos_requires_two_verified_products_in_the_cart(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        other = dict(self.products[0], product_id='P2', ad_ids=[])
+        self.products.append(other)
+        media = Mock(side_effect=[dict(status='matched', product_ids=['P1']),
+                                  dict(status='matched', product_ids=['P2'])])
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, p: 5000, self.decide, media=media)
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        for mid in ('one', 'two'):
+            entry.receive(**target, message_id=mid, media_kind='image', media_ref=[mid])
+        self.plan = dict(intent='buy', changes=[dict(values=dict(product_id='P2', quantity=2, size='44'))])
+        with self.assertRaisesRegex(Conflict, 'photo_pair_requires_both_verified_products'):
+            entry.receive(**target, message_id='purchase', text='عيوني اريد هذن ثنينهن')
+        self.assertEqual(['P1', 'P2'], self.decide.call_args.args[0]['requested_photo_products'])
+        self.assertFalse(self.store.snapshot(self.scope)['data']['cart'])
+        self.assertIsNone(self.db.execute('SELECT id FROM orders').fetchone())
+
+    def test_buying_both_verified_images_in_one_message_can_book_with_saved_contact(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        self.products.append(dict(self.products[0], product_id='P2', ad_ids=[]))
+        media = Mock(return_value=dict(status='ambiguous', product_ids=['P1', 'P2'], verified_pair=True))
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, p: 5000, self.decide, media=media)
+        target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                      sender_id=self.scope.sender)
+        self.plan = dict(intent='buy', changes=[dict(values=dict(product_id=pid, size='44', color='ماروني'))
+                                                for pid in ('P1', 'P2')])
+        result = entry.receive(**target, message_id='pair', media_kind='image', media_ref=['one', 'two'],
+                               text='اريد هذني الثنين\nرقمي 07701234567\nبغداد حي المنصور قرب المدرسة')
+        self.assertEqual('booked', result['action'], result)
+        result_rows = json.loads(self.db.execute('SELECT order_items FROM orders').fetchone()[0])
+        self.assertCountEqual(['P1', 'P2'], [row['product_id'] for row in result_rows])
 
     def test_red_caption_on_verified_maroon_photo_preserves_size_and_books_once(self):
         from account_app.sales_runtime.entrypoint import Entrypoint

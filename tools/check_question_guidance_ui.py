@@ -1,4 +1,4 @@
-"""Temporary Flask/Edge acceptance: question coaching, no real sends or models."""
+"""Temporary Flask/Edge acceptance: product facts and coaching, no real sends or models."""
 import json
 import os
 import sys
@@ -30,13 +30,16 @@ def main():
         try:
             db = m.get_db();db.execute('DELETE FROM product_questions');db.commit()
             m.ensure_store(db, 'khuyoot', 'خيوط')
+            products = []
             for index in range(18):
                 store = 'khuyoot' if index % 2 else 'default'
-                questions.capture(db, store, f'{store}::test',
-                    dict(product_id=f'Q{index}', product_name='طقم اختبار' if index % 2 else 'قميص اختبار'),
+                product = dict(store_id=store, product_id=f'Q{index}',
+                               product_name='طقم اختبار' if index % 2 else 'قميص اختبار')
+                products.append(product)
+                questions.capture(db, store, f'{store}::test', product,
                     'بيه بطانة لو لا؟' if index % 2 else 'قماشه ثخين لو خفيف؟',
                     ['lining' if index % 2 else 'fabric_feel'], None, m.now_baghdad_iso())
-            with patch.object(m, 'load_products_from_file', return_value=[]), patch.object(m, 'load_active_products', return_value=[]), sync_playwright() as w:
+            with patch.object(m, 'load_products_from_file', return_value=products), patch.object(m, 'load_active_products', return_value=[]), sync_playwright() as w:
                 browser = w.chromium.launch(channel='msedge', headless=True)
                 controls = {'fail': False, 'draft': False, 'fail_load': False}
 
@@ -84,19 +87,21 @@ def main():
                 checks.append('On opening the dashboard, a focused dialog shows a bounded queue from both stores')
 
                 first = page.locator('#pqDialogList .pq-card').first
-                guide = 'اشرحي لها أن هذا القميص قماشه ثقيل وشتوي، واسألي عن القياس إذا ما ذكرته قبل.'
-                first.locator('textarea').fill(guide);controls['fail'] = True
+                fact = 'بيه بطانة قطن.'
+                first.locator('textarea').fill(fact);controls['fail'] = True
                 first.locator('button').click()
                 first.locator('[data-error=true]').wait_for()
-                assert first.locator('textarea').input_value() == guide
-                first.locator('button').click();first.locator('.pq-card-status').filter(has_text='تم حفظ الشرح').wait_for()
+                assert first.locator('textarea').input_value() == fact
+                saved_id = int(first.locator('textarea').get_attribute('id').replace('pqGuidance', ''))
+                first.locator('button').click()
+                page.wait_for_function("document.querySelectorAll('#pqDialogList .pq-card').length===11")
                 row = db.execute("SELECT * FROM product_questions WHERE status='answered'").fetchone()
-                assert row['guidance'] == guide and row['answer'] == ''
+                assert row['guidance'] == '' and row['answer'] == fact and row['id'] == saved_id
                 assert row['store_id'] == 'khuyoot'
                 assert '17 سؤال' in page.locator('#pqDialogCount').inner_text()
-                checks.append('A failed save retains the explanation; retry saves teaching in the correct store, separately from facts')
+                checks.append('A failed save retains the draft; retry saves the missing product fact in the correct store')
 
-                other = page.locator('#pqDialogList .pq-card').nth(1)
+                other = page.locator('#pqDialogList .pq-card').first
                 identity = int(other.locator('textarea').get_attribute('id').replace('pqGuidance', ''))
                 old = db.execute('SELECT store_id FROM product_questions WHERE id=?', (identity,)).fetchone()
                 questions.save_guidance(db, old['store_id'], identity, 'شرح جديد من موظفة أخرى.', 'اختبار', m.now_baghdad_iso())
@@ -107,8 +112,8 @@ def main():
                 checks.append('Concurrent staff edits are rejected without losing the current draft')
 
                 page.locator('#pqDialogMore').click()
-                page.wait_for_function("document.querySelectorAll('#pqDialogList .pq-card').length===18")
-                assert first.locator('textarea').input_value() == guide
+                page.wait_for_function("document.querySelectorAll('#pqDialogList .pq-card').length===17")
+                assert 'لا أريد فقده' in other.locator('textarea').input_value()
                 assert page.locator('#pqDialogMore').is_hidden()
                 page.locator('#pqDialogClose').click();page.evaluate('loadStats()')
                 page.wait_for_timeout(150)
@@ -149,7 +154,7 @@ def main():
                 assert 'اشرح للبوت' in page.locator('#pqList label').first.inner_text()
                 page.locator('#pqList textarea').first.fill('توجيه محدّث من صفحة الأسئلة نفسها، بدون نسخ رسالة جاهزة.')
                 page.locator('#pqList .pq-card').first.locator('button').click()
-                page.locator('#pqList .pq-card-status').filter(has_text='تم حفظ الشرح').wait_for()
+                page.locator('#pqList .pq-card-status').filter(has_text='تم حفظ التوجيه').wait_for()
                 checks.append('A store-filtered dashboard and the management page share the explanatory editor and saved guidance')
                 context.close()
 
@@ -161,8 +166,10 @@ def main():
                 checks.append('A queue-loading failure leaves the dashboard usable and provides a manual questions link')
                 context.close();controls['fail_load'] = False
 
-                injected = '<img src=x onerror="window.questionXss=1">'
-                questions.capture(db, 'default', 'test', dict(product_id='XSS', product_name='قميص اختبار'), injected, ['details'], None, m.now_baghdad_iso())
+                injected = '<img src=x onerror="window.questionXss=1"> بيه بطانة؟'
+                product = dict(store_id='default', product_id='XSS', product_name='قميص اختبار')
+                products.append(product)
+                questions.capture(db, 'default', 'test', product, injected, ['lining'], None, m.now_baghdad_iso())
                 context, page = page_for(viewport={'width': 1280, 'height': 900})
                 go(page);page.locator('#productQuestionsDialog').wait_for(state='visible')
                 assert page.locator('#pqDialogList .pq-question').first.inner_text() == injected
