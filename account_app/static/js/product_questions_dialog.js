@@ -45,7 +45,7 @@
       if(!response.ok)throw new Error(data.error||'تعذر تحميل الأسئلة');
       pending=data.pending;prompt.pending=pending>0;updateCount();
       for(const row of data.questions){
-        const card=window.soofProductQuestions.card(row,{topics:data.topics,send,
+        const card=window.soofProductQuestions.card(row,{topics:data.topics,send,fact:row.accepts_fact,
           url:row=>url(`/api/product-questions/${row.id}/answer`,row),onSaved:(_row,wasPending)=>{
             saved=true;
             if(!wasPending)return;

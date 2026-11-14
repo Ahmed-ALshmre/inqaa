@@ -5,7 +5,7 @@ try:
 except ImportError:
     import sales_answers,sales_strategy,customer_copy
 
-PRODUCT_FACT_FIELDS=('fabric','description','notes','colors','sizes','price','offer','product_type','size_system','stock',
+PRODUCT_FACT_FIELDS=('fabric','description','notes','colors','sizes','price','offer','product_type','size_system','stock','wholesale',
                      'length','width','stretch','lining','closure','cut','care','season','fabric_feel','origin','composition','faq')
 POLICY_FIELDS=('inspection_policy','delivery_time','delivery_fee','payment','shop_address')
 
@@ -17,6 +17,8 @@ def product_fact(product,field):
     elif field=='season':value=sales_answers.season_fact(product)
     elif field=='fabric_feel':value=sales_answers.fabric_feel_fact(product)
     elif field=='care':value=sales_answers.care_fact(product)
+    elif field=='wholesale':
+        value = sales_answers.field_fact(product, 'wholesale_terms') or ' '.join(sales_answers.wholesale_lines(product))
     elif field=='composition':value=customer_copy.fact(product.get('bundle_contents'),'bundle_contents')
     elif field=='origin':
         value=product.get('country_of_origin') or product.get('origin')
@@ -41,10 +43,18 @@ def resolve(catalog,product_id,field,policy):
 def requested_fields(text):
     mapping={'price':'price','colors':'colors','sizes':'sizes','fabric':'fabric','length':'length','width':'width','stretch':'stretch','lining':'lining',
              'closure':'closure','cut':'cut','care':'care','season':'season','fabric_feel':'fabric_feel',
-             'composition':'composition','inspection':'inspection_policy','payment':'payment',
+             'composition':'composition','wholesale':'wholesale','inspection':'inspection_policy','payment':'payment',
              'delivery_time':'delivery_time','delivery':'delivery_fee','location':'shop_address'}
     fields=[mapping[t] for t in sales_answers.topics(text) if t in mapping]
     clean=customer_copy.normalized(text)
+    if 'wholesale' in fields and 'price' in fields:
+        fields.remove('price')
+    if 'colors' in fields and refers_to_photo_colors(clean):
+        fields.remove('colors')
+    if any(re.fullmatch(r'(?:(?:و\s*)?(?:هذا|هاذا|هاي|هذي|هذه)\s+)?(?:شكد|اشكد|جكد|بشكد|بيش|بكم)'
+                        r'(?:\s+(?:هذا|هاذا|هاي|هذي|هذه|هالموديل|(?:ال)?سعر[هة]?))?[ .،؟?]*', line.strip())
+           for line in clean.splitlines()):
+        fields.append('price')
     if weight_limit_question(clean):
         fields.append('sizes')
     from .contact import checkout_inspection_question
@@ -55,6 +65,12 @@ def requested_fields(text):
     if re.search(r'صناعته|صناعتها|منشا|صيني\s*لو\s*تركي|تركي\s*لو\s*صيني',clean):fields.append('origin')
     if re.search(r'بس\s*هو.{0,20}(?:جوار|جنط)|تجي.{0,20}(?:وياه|هديه)',clean):fields.append('composition')
     return list(dict.fromkeys(fields))
+
+
+def refers_to_photo_colors(clean):
+    return bool(re.search(r'(?<!\w)نفس\s+(?:(?:هاي|هذي|هذه|هذني)\s+)?(?:ال)?الوان'
+                          r'|(?:صور[هة]|الوان).{0,20}(?:قصدي|اقصد)', clean)
+                and not re.search(r'متوفر|موجود|شنو\s+(?:ال)?الوان|يا\s*لون', clean))
 
 
 def weight_limit_question(text):

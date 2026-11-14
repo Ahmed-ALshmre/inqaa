@@ -17,13 +17,22 @@ LABELS = {'fabric': 'نوع القماش', 'fabric_feel': 'سمك القماش �
           'colors':'الألوان','sizes':'القياسات','availability':'التوفر','wholesale':'وحدة البيع بالجملة'}
 FIELDS = {'fabric': 'fabric', 'fabric_feel': 'fabric_feel', 'season': 'season', 'stretch': 'stretch',
           'cut': 'cut', 'lining': 'lining', 'closure': 'closure', 'care': 'care_instructions',
-          'photo_source': 'real_photo_notes', 'price': 'price', 'location':'shop_address'}
+          'photo_source': 'real_photo_notes', 'price': 'price', 'location':'shop_address',
+          'origin': 'country_of_origin', 'composition': 'bundle_contents', 'wholesale': 'wholesale_terms'}
 
 DASHBOARD_FACTS = frozenset({
     'fabric', 'fabric_feel', 'season', 'stretch', 'cut', 'lining', 'closure',
     'care', 'length', 'width', 'photo_source', 'price', 'origin', 'composition',
     'colors', 'sizes', 'availability', 'wholesale',
 })
+DASHBOARD_ANSWER_TOPICS = ((FIELDS.keys() | {'length', 'width'}) & DASHBOARD_FACTS) - {'price'}
+QUESTION_CUE = r'[؟?]|(?<!\w)(?:شنو|شو|ايش|شكد|اشكد|جكد|بشكد|كم|كيف|شلون|هل|بيش|بكم|لو)(?!\w)'
+YES_NO_SPECIFICATIONS = {
+    'lining': r'^(?:يعني\s+)?(?:مبطن[هة]?|بيه[ا]?\s+بطان[هة])(?:\s|$)',
+    'season': r'^(?:يعني\s+)?(?:يلبس(?:ها|وه)?\s+)?(?:(?:هاي|هذه|هذا|هذي)\s+)?(?:ال)?(?:شتوي|صيفي|بهاري|خريفي)[هة]?(?:\s|$)',
+    'stretch': r'^(?:يعني\s+)?(?:بيه[ا]?\s+)?(?:ليكرا|مطاط(?:ي[هة]?)?)(?:\s|$)',
+    'fabric_feel': r'^(?:يعني\s+)?(?:قماش[هةا]?\s+)?(?:ثخين|سميك|ثقيل|خفيف|ناعم)[هة]?(?:\s|$)',
+}
 
 
 def init(db):
@@ -96,23 +105,30 @@ def dashboard_questions(db, rows, products):
     catalog = {}
     for store, scoped_products in products_by_store.items():
         catalog.update({(store, p['product_id']): p for p in apply(db, store, scoped_products)})
-    result = []
-    for row in rows:
+    result, seen = [], set()
+    # A concrete field can accept a factual answer; an older generic review
+    # can only accept guidance. Prefer the field if both represent the same gap.
+    for row in sorted(rows, key=lambda row: row['topic'] == 'details'):
         product = catalog.get((row['store_id'], row['product_id']))
         gap = dashboard_gap(row, product) if product else None
         if gap:
-            result.append(dict(row, question=gap[0], gap_label='، '.join(LABELS[topic] for topic in gap[1])))
-    return result
+            fields = [field for field in gap[1] if (row['store_id'], row['product_id'], field) not in seen]
+            if not fields:
+                continue
+            seen.update((row['store_id'], row['product_id'], field) for field in fields)
+            result.append(dict(row, question=gap[0], gap_label='، '.join(LABELS[field] for field in fields),
+                               accepts_fact=row['topic'] in DASHBOARD_ANSWER_TOPICS))
+    return sorted(result, key=lambda row: row['id'], reverse=True)
 
 
 def dashboard_gap(row, product):
     """Keep only question clauses for actionable, currently missing product facts."""
     try:
         from . import checkout, product_albums, pricing
-        from .sales_runtime.facts import product_fact, requested_fields
+        from .sales_runtime.facts import product_fact, refers_to_photo_colors, requested_fields
     except ImportError:
         import checkout, product_albums, pricing
-        from sales_runtime.facts import product_fact, requested_fields
+        from sales_runtime.facts import product_fact, refers_to_photo_colors, requested_fields
 
     topic = row['topic']
     if topic not in DASHBOARD_FACTS and topic != 'details':
@@ -134,7 +150,7 @@ def dashboard_gap(row, product):
         if field == 'availability':
             return product_albums.stock_state(product) not in {'available', 'out'}
         if field == 'wholesale':
-            return not sales_answers.wholesale_lines(product)
+            return not (sales_answers.field_fact(product, 'wholesale_terms') or sales_answers.wholesale_lines(product))
         return product_fact(product, field) is None
 
     if question.startswith('مراجعة تسعير الحجز:'):
@@ -145,23 +161,31 @@ def dashboard_gap(row, product):
         return None
 
     excerpts, gaps = [], []
-    for match in re.finditer(r'[^\r\n،؛؟?]+[؟?]?', question):
-        clause = match[0].strip()
+    for excerpt in re.split(r'[\r\n،؛]+|(?<=[؟?])|\s+و(?=(?:شنو|شكد|هل|شلون|كم|بيه|بيها)\b)', question):
+        clause = excerpt.strip()
         clean = customer_copy.normalized(clause)
         if (not clause or len(clause) > 220 or checkout.phone_number(clause)
                 or checkout.is_existing_order_followup(clause)
                 or re.search(r'(?<!\w)(?:العنوان|عنواني|عنوان البيت|رقم الهاتف|رقم الموبايل)\b', clean)):
             continue
-        if not re.search(r'[؟?]|(?<!\w)(?:شنو|شو|ايش|شكد|اشكد|بشكد|كم|كيف|شلون|هل|بيش|بكم|لو)(?!\w)', clean):
-            continue
-        # A discount request or a delivery update cannot stand in for a product fact.
         candidates = list(dict.fromkeys(requested_fields(clause) + sales_answers.topics(clause)))
+        if not re.search(QUESTION_CUE, clause) and not re.search(QUESTION_CUE, clean):
+            candidates = [field for field in candidates
+                          if field in YES_NO_SPECIFICATIONS and re.search(YES_NO_SPECIFICATIONS[field], clean)]
+        if refers_to_photo_colors(clean):
+            candidates = [field for field in candidates if field not in {'colors', 'availability'}]
+        if re.search(r'خصم|تخفيض|ميزاني|ارخص|غالي', clean):
+            candidates = [field for field in candidates if field not in {'price', 'availability'}]
+        if checkout.explicit_purchase(clause):
+            candidates = [field for field in candidates if field not in {'colors', 'sizes', 'availability'}]
+        if not re.search(r'شكد|كم|شنو|شلون|ايش|بشكد|بيش|بكم|قديش', clean):
+            if set(candidates) & {'lining', 'stretch', 'cut', 'closure', 'season', 'fabric_feel'}:
+                candidates = [field for field in candidates if field != 'fabric']
         if topic == 'details' and {'colors', 'sizes'}.intersection(candidates) and 'availability' in candidates:
             candidates.remove('availability')
         coached = {note['topic'] for note in guidance_for(product, clause)} - {'price'}
         wanted = [field for field in candidates if field in DASHBOARD_FACTS
-                  and (field == topic or topic == 'details' and field != 'price') and field not in coached
-                  and not (field == 'price' and re.search(r'خصم|تخفيض|ميزاني|ارخص|غالي', clean))]
+                  and (field == topic or topic == 'details' and field != 'price') and field not in coached]
         missing = [field for field in wanted if missing_value(field)]
         if missing:
             excerpts.append(clause)
@@ -219,12 +243,7 @@ def apply(db, store, products, *, sender=None):
         approved = [dict(row) for row in rows if row['topic']=='location'] + [row for row in grouped.get(product.get('product_id'), []) if row['topic']!='location']
         factual = [row for row in approved if row['answer'] and row['topic'] != 'service']
         for row in factual:
-            field = FIELDS.get(row['topic'])
-            if field:
-                product[field] = row['answer']
-            elif row['topic'] in {'length', 'width'}:
-                label = 'الطول' if row['topic']=='length' else 'العرض'
-                product['measurements'] = str(product.get('measurements') or '') + '\n' + label + ': ' + row['answer']
+            apply_fact(product, row['topic'], row['answer'])
         if factual:
             product['_staff_answers'] = [{key:row[key] for key in ('topic','question_key','answer')} for row in factual]
             product['_catalog_faq'] = product.get('_catalog_faq',str(product.get('faq') or ''))
@@ -241,6 +260,14 @@ def apply(db, store, products, *, sender=None):
             product['_staff_guidance'] = list(notes.values())
         result.append(product)
     return result
+
+
+def apply_fact(product, topic, answer):
+    field = FIELDS.get(topic)
+    if field:
+        product[field] = answer
+    elif topic in {'length', 'width'}:
+        product['measurements'] = str(product.get('measurements') or '') + '\n' + LABELS[topic] + ': ' + answer
 
 
 def guidance_for(product, question):
@@ -311,7 +338,7 @@ def exact_answer(product, question):
                  if row['topic']=='details' and row['question_key']==key), '')
 
 
-def save_answer(db, store, identity, answer, author, now):
+def save_answer(db, store, identity, answer, author, now, *, expected_revision=None):
     answer = str(answer or '').strip()
     instructions = re.search(r'تجاهل.{0,30}(?:تعليم|قاعد)|ignore.{0,25}instructions|system\s*prompt',customer_copy.normalized(answer))
     if not 2 <= len(answer) <= 1200 or customer_copy.has_instructions(answer) or instructions:
@@ -319,6 +346,9 @@ def save_answer(db, store, identity, answer, author, now):
     row = db.execute('SELECT * FROM product_questions WHERE id=? AND store_id=?', (identity, store)).fetchone()
     if not row:
         return None
+    row = dict(row)
+    if expected_revision is not None and expected_revision != revision(row):
+        raise GuidanceConflict('موظف آخر حدّث السؤال. المعلومة باقية بالحقل وتكدر تراجعها قبل الحفظ.')
     if row['topic']=='price':
         try:
             from .pricing import terms
@@ -328,8 +358,12 @@ def save_answer(db, store, identity, answer, author, now):
             terms(dict(price=answer))
         except (ValueError,TypeError):
             raise ValueError('اكتب سعر القطعة والعرض بشكل واضح، مثلاً: القطعة ب12 ألف والقطعتين ب20 ألف.')
-    db.execute("UPDATE product_questions SET answer=?,status='answered',answered_by=?,updated_at=? WHERE id=? AND store_id=?",
-               (answer, author, now, identity, store))
+    changed = db.execute("""UPDATE product_questions SET answer=?,status='answered',answered_by=?,updated_at=?
+        WHERE id=? AND store_id=? AND status=? AND answer=? AND guidance=? AND updated_at=?""",
+        (answer, author, now, identity, store, row['status'], row['answer'], row['guidance'], row['updated_at']))
+    if changed.rowcount != 1:
+        db.rollback()
+        raise GuidanceConflict('تغيّر السؤال أثناء الحفظ. المعلومة باقية بالحقل.')
     db.commit()
     # Saving knowledge does not send a customer message, close a review or
     # re-enable automation. Staff retains control of the paused conversation.

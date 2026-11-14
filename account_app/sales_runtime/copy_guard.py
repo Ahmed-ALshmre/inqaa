@@ -94,7 +94,7 @@ def validate_copy(parts,question,action_results=None):
         raise ValueError('reply.product: internal product IDs are not customer-facing names')
     image_request=(r'(?:دز\w*|ارس\w*).{0,35}(?:صور|سكرين|اسم\s*الموديل)'
                    r'|(?:ممكن|احتاج|ابعثي).{0,8}(?:صور|سكرين)')
-    if re.search(image_request,text) and question not in {'product', 'alternatives.photos'}:
+    if re.search(image_request,text) and question not in {'product', 'photo.reference', 'alternatives.photos'}:
         raise ValueError('reply.question: do not repeat product identification outside the selected step')
     if not any(part['type'] == 'image' for part in parts) and (
             claims_sent_models(text) or promises_photo_attachment(text) or

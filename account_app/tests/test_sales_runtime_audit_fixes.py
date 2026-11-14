@@ -498,6 +498,16 @@ class AuditFixTests(unittest.TestCase):
         self.decide.assert_not_called()
         self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
+    def test_implicit_delay_complaint_after_staff_order_goes_to_tracking(self):
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, self.decide)
+        self.db.execute("""INSERT INTO orders(sender_id,store_id,created_at,status)
+                           VALUES(?,?,datetime('now'),'new')""", (self.scope.sender, self.scope.store))
+        self.db.commit()
+        result = entry.receive(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
+                               sender_id=self.scope.sender, message_id='delay', text='مو صار أربعه أيام يا عيني')
+        self.assertEqual('order_tracking', result['reason'])
+        self.decide.assert_not_called()
+
     def test_generic_delivery_questions_do_not_stop_a_new_sale(self):
         from account_app.sales_runtime.recovery import grounded_plan
         entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, grounded_plan)
@@ -528,8 +538,12 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual('booked', result['action'])
 
     def test_size_question_after_ambiguous_images_asks_which_image_without_pausing(self):
+        writer = Mock(side_effect=[
+            [dict(type='text', text='عيني، يا صورة تحبين أعرف لج سعرها؟')],
+            [dict(type='text', text='أي صورة من اللي دزيتيهن أشيّك لج قياسها؟')],
+        ])
         entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, self.decide,
-                           writer=Mock(), media=lambda *args: dict(status='ambiguous', product_ids=['P1', 'B1']))
+                           writer=writer, media=lambda *args: dict(status='ambiguous', product_ids=['P1', 'B1']))
         target = dict(store_id=self.scope.store, channel=self.scope.channel, account_id=self.scope.account,
                       sender_id=self.scope.sender)
         result = entry.receive(**target, message_id='posts', media_kind='image',
@@ -541,6 +555,7 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual('queued', result['reply']['action'])
         part = entry.store.claim_reply(self.scope)
         self.assertIn('أي صورة', part['payload']['text'])
+        self.assertEqual('عندج قياس 48', writer.call_args.args[0]['customer_message'])
         self.assertEqual('active', entry.store.snapshot(self.scope)['data']['control_mode'])
         self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
@@ -553,13 +568,13 @@ class AuditFixTests(unittest.TestCase):
         first = entry.receive(**target, message_id='image-1', media_kind='image', media_ref='image-1')
         self.assertEqual('media_unresolved', first['action'])
         part = entry.store.claim_reply(scope)
-        self.assertIn('الصورة وصلتني', part['payload']['text'])
+        self.assertEqual('حبيبتي، دزيلي صورة أوضح للموديل.', part['payload']['text'])
         entry.store.settle_reply(scope, part['id'], 'accepted', 'receipt')
         second = entry.receive(**target, message_id='image-2', media_kind='image', media_ref='image-2',
                                text='رقمي 07701234567')
         self.assertEqual('product_image_unresolved_after_retry', second['reason'])
         self.assertEqual('07701234567', entry.store.snapshot(scope)['data']['contact']['phone'])
-        writer.assert_not_called()
+        writer.assert_called_once()
         self.decide.assert_not_called()
 
     def test_clothing_size_is_not_a_weight_and_a_later_weight_is_remembered(self):

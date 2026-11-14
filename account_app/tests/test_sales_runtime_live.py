@@ -295,6 +295,57 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.assertIn('قطن', sent[0]['text'])
         self.assertTrue(sent[1]['question_field'].endswith('.color'))
 
+    def test_sticker_then_verified_photo_and_weight_are_worded_by_the_model(self):
+        product = m.load_products_from_file()[0]
+        product.update(sizes='قياسات من وزن 60 كيلو إلى 130 كيلو.',
+                       price='15000 او بكج قطعتين ب 25000')
+        denied = self.model_response(None, status=402)
+        image = dict(attachments=[{'file_type': 'image', 'data_url': 'https://cdn.example/verified.jpg'}])
+        opening = self.model_response(dict(parts=[
+            dict(type='text', text='ينحسب لج بـ{{unit_price}}، والقطعتين بالعرض بـ{{offer_total}}.'),
+            dict(type='text', text='تحبين وحدة لو تستفادين من عرض القطعتين؟'),
+        ]))
+        fit = self.model_response(dict(parts=[
+            dict(type='text', text='إي عيني، أكو قياس يناسبج بهالموديل.'),
+            dict(type='text', text='يا لون عجبج؟'),
+        ]))
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='matched', product_ids=['P1'])), \
+             patch.object(m.ai_transport, 'post', side_effect=[denied, opening, denied, fit]) as model:
+            self.incoming(10, '', attachments=[{'file_type': 'sticker', 'data_url': 'https://cdn.example/sticker.webp'}])
+            self.work()
+            self.incoming(11, '', **image)
+            result = self.work()[1]
+            self.assertEqual('continue', result.get('action'), result)
+            opening = ' '.join(call.args[2][0]['text'] for call in self.transport.call_args_list)
+            self.assertIn('15 ألف', opening)
+            self.assertIn('25 ألف', opening)
+            self.transport.reset_mock()
+            self.incoming(12, 'الوزن ٩٥')
+            result = self.work()[1]
+            self.assertEqual('continue', result.get('action'), result)
+        reply = ' '.join(call.args[2][0]['text'] for call in self.transport.call_args_list)
+        self.assertIn('أكو قياس يناسبج', reply)
+        self.assertIn('لون', reply)
+        self.assertNotIn('شكد الوزن', reply)
+        context = json.loads(model.call_args.kwargs['json']['messages'][1]['content'])
+        self.assertEqual('P1', context['verified_photo_product_id'])
+        self.assertEqual(95, context['progress']['fit']['weight_kg'])
+        with m.app.app_context():
+            db = m.get_db()
+            state = live.Store(db).snapshot(live.scope_for(live.route(db, self.sender)))['data']
+            self.assertEqual(95, float(state['cart'][0].get('weight_kg') or state['cart'][0]['size']))
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
+
+    def test_outage_after_verified_photo_does_not_send_saved_text(self):
+        denied = self.model_response(None, status=402)
+        self.incoming(10, '', attachments=[{'file_type': 'image', 'data_url': 'https://cdn.example/verified.jpg'}])
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='matched', product_ids=['P1'])), \
+             patch.object(m.ai_transport, 'post', return_value=denied):
+            result = self.work()[1]
+        self.assertTrue(result.get('needs_human'), result)
+        self.transport.assert_not_called()
+
     def test_agreement_to_see_alternatives_sends_available_product_images(self):
         products = m.load_products_from_file()
         products[0].update(stock='غير متوفر', product_type='tops')
@@ -598,6 +649,35 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         context = json.loads(post.call_args_list[0].kwargs['json']['messages'][-1]['content'])
         self.assertEqual('P1', context['state']['focus_product_id'])
         self.assertEqual('شكد سعره؟', context['event']['text'])
+
+    def test_conversation_link_resolves_pending_album_for_followup_without_training_each_image(self):
+        self.payload['conversation']['additional_attributes'] = {}
+        album = [dict(file_type='image', data_url=f'https://cdn.example/color-{i}.jpg') for i in range(4)]
+        clarify = self.model_response(dict(parts=[dict(type='text', text='يا صورة تقصدين حتى أعرف لج سعرها؟')]))
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='ambiguous')), \
+             patch.object(m.ai_transport, 'post', return_value=clarify):
+            self.incoming(10, '', attachments=album)
+            self.assertEqual('media_unresolved', self.work()[1]['action'])
+        self.incoming(11, 'جكد سعر\nوالتوصيل')
+        with m.app.app_context():
+            db = m.get_db()
+            live.staff_product(db, self.sender, 'P1')
+            state = live.Store(db).snapshot(live.scope_for(live.route(db, self.sender)))['data']
+            self.assertEqual((None, None), live.Runtime.pending_photo(state))
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM manual_image_links').fetchone()[0])
+        wording = self.model_response(dict(parts=[
+            dict(type='text', text='سعرها {{unit_price}} والتوصيل {{delivery_fee}}.'),
+            dict(type='text', text='شنو قياسج حتى أشيّك لج المتوفر؟'),
+        ]))
+        decision = self.model_response(dict(intent='continue'))
+        with patch.object(m.ai_transport, 'post', side_effect=[decision, wording]) as provider, \
+             patch.object(live.ImageObserver, '__call__') as vision:
+            result = self.work()[1]
+        self.assertEqual('continue', result.get('action'), result)
+        vision.assert_not_called()
+        context = json.loads(provider.call_args.kwargs['json']['messages'][1]['content'])
+        self.assertEqual('P1', context['state']['focus_product_id'])
+        self.assertEqual(15000, context['amounts']['unit_price'])
 
     def test_resume_preserves_the_committed_size_after_writer_failure(self):
         self.incoming(10, 'اريد ماروني قياس 44')

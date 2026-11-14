@@ -4,7 +4,6 @@ from hashlib import sha256
 import threading
 
 from .. import chatwoot, inbound_media, media, product_variants, zernio
-from .contracts import DecisionUnavailable
 from .delivery import deliver_confirmation, deliver_replies, recover_confirmations
 from .entrypoint import Entrypoint
 from .store import Scope
@@ -14,18 +13,18 @@ def media_input(attachments):
     files = [item for item in attachments if item.get('type') != 'sticker']
     if not files:
         return ('sticker' if attachments else 'text'), None
-    if any(item.get('type') != 'image' for item in files):
-        return 'file', None
-    return 'image', [item['payload']['url'] for item in files]
+    images = [item['payload']['url'] for item in files if item.get('type') == 'image']
+    return ('image', images) if images else ('file', None)
 
 
 class ImageObserver:
     MAX_REFERENCES = 8
 
-    def __init__(self, fetch, match, archived=None):
+    def __init__(self, fetch, match, archived=None, match_album=None):
         self.fetch = fetch
         self.match = match
         self.archived = archived
+        self.match_album = match_album
 
     def __call__(self, scope, kind, references, products):
         if kind != 'image':
@@ -37,9 +36,18 @@ class ImageObserver:
         matches = set()
         colors = set()
         inspected = set()
+        unresolved = False
+        unavailable = False
+        verified = {}
+        album_images = []
+        skipped_file = False
+        latest_match = None
         for url in urls:
             if not inbound_media.trusted_source(url, base):
-                return dict(status='unknown')
+                unresolved = True
+                skipped_file = True
+                latest_match = None
+                continue
             image = self.archived(scope, url) if self.archived else ''
             if image:
                 _, encoded = image.split(',', 1)
@@ -47,27 +55,47 @@ class ImageObserver:
             else:
                 attachment = self.fetch(url, 'image', base)
                 if not attachment or attachment[1] != 'image' or len(attachment[0]) > inbound_media.MAX_BYTES:
-                    return dict(status='unknown')
+                    unresolved = True
+                    skipped_file = True
+                    latest_match = None
+                    continue
                 data, _, _, mime = attachment
                 image = f'data:{mime};base64,{base64.b64encode(data).decode("ascii")}'
             if media.known_sticker(data):
                 continue
             fingerprint = sha256(data).digest()
             if fingerprint in inspected:
+                latest_match = verified.get(fingerprint)
                 continue
             inspected.add(fingerprint)
+            album_images.append(image)
+            latest_match = None
             result = self.match(image, products)
             if not isinstance(result, dict) or result.get('service_error') or result.get('pending'):
-                raise DecisionUnavailable('vision_service_unavailable')
+                unavailable = True
+                continue
             if not result.get('product_found') or not result.get('product_id'):
-                return dict(status='unknown')
+                unresolved = True
+                continue
             matches.add(result['product_id'])
             colors.add(product_variants.single_color(result.get('observed_color')))
-            if len(matches) > 1:
-                return dict(status='ambiguous', product_ids=sorted(matches))
+            latest_match = verified[fingerprint] = result['product_id']
+        if unavailable or unresolved:
+            status = 'ambiguous' if matches else 'unavailable' if unavailable else 'unknown'
+            observation = dict(status=status, product_ids=sorted(matches))
+            if self.match_album and not unavailable and not skipped_file and len(matches) <= 1 and 2 <= len(album_images) <= 4:
+                album = self.match_album(album_images, products)
+                product_id = album.get('product_id') if isinstance(album, dict) and album.get('product_found') else None
+                if product_id and not matches.difference({product_id}):
+                    return dict(status='matched', product_ids=[product_id])
+            if len(matches) == 1 and latest_match:
+                observation['latest_match'] = latest_match
+            return observation
         if not matches:
             return dict(status='sticker')
         observation = dict(status='matched' if len(matches) == 1 else 'ambiguous', product_ids=sorted(matches))
+        if len(matches) == 2:
+            observation['verified_pair'] = True
         if len(matches) == 1 and len(colors) == 1 and '' not in colors:
             observation['observed_color'] = next(iter(colors))
         return observation

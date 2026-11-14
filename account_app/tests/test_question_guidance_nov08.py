@@ -274,6 +274,27 @@ class QuestionGuidanceTests(unittest.TestCase):
             remaining = client.get('/api/product-questions?needs_attention=1&store_id=baraah-kids').json
             self.assertEqual((remaining['pending'], remaining['questions']), (0, []))
 
+    def test_dashboard_keeps_unpunctuated_specifications_and_excludes_photo_references(self):
+        product = dict(self.product, store_id='baraah-kids', lining='', season='', fabric='', colors='')
+        self.capture('lining', 'مبطن من داخله', product=product)
+        self.capture('details', 'بيه بطانة؟', product=product)
+        self.capture('colors', 'نفس هذه الألوان؟\nهاي الصوره قصدي', product=product)
+        self.capture('season', 'يعني يلبسها هذه الشتوية', product=product)
+        self.capture('fabric', 'قماشه شتوي؟', product=product)
+        client, headers = self.owner()
+        url = '/api/product-questions?needs_attention=1&store_id=baraah-kids'
+        with patch.object(self.m, 'load_products_from_file', return_value=[product]):
+            rows = client.get(url).json['questions']
+            self.assertCountEqual([row['gap_label'] for row in rows], ['البطانة', 'الموسم'])
+            season = next(row for row in rows if row['topic'] == 'season')
+            self.assertTrue(season['accepts_fact'])
+            response = client.post(f"/api/product-questions/{season['id']}/answer?store_id=baraah-kids", headers=headers,
+                                   json={'answer': 'شتوي', 'expected_revision': season['revision']})
+            self.assertEqual(response.status_code, 200, response.json)
+            self.assertEqual(['البطانة'], [row['gap_label'] for row in client.get(url).json['questions']])
+            from account_app.sales_runtime.catalog_answers import enrich
+            self.assertEqual('شتوي', enrich(self.db, 'baraah-kids', [product])[0]['season'])
+
 
 class QuestionGuidancePermissions(unittest.TestCase):
     setUp = staff_fixtures.StaffAccessTests.setUp
