@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ..checkout import COLOR_REVIEW_STATUS
+from .. import variant_inventory
 from .cart import CartService
 from .store import Conflict, encode
 
@@ -60,6 +61,7 @@ class Orders:
             if not held_for_color and (row[0]!='new' or not pending or pending[0]!='queued'):
                 raise ServiceRequired('order_cancellation_requires_fulfillment_review')
             self.store.db.execute("UPDATE orders SET status='cancelled' WHERE id=?",(order_id,))
+            variant_inventory.allocate(self.store.db, order_id, scope.store, (), ())
             self.store.db.execute("UPDATE sales_v2_order_tasks SET status='superseded' WHERE order_id=? AND status='queued'",(order_id,))
             if held_for_color:
                 self.store.db.execute("""UPDATE human_reviews SET status='reviewed'
@@ -88,7 +90,8 @@ class Orders:
                 raise ServiceRequired('quoted_price_changed_before_booking')
             # When a numeric piece count is present, respect it across all lines.
             for pid in {line['product_id'] for line in state['cart']}:
-                quantity = catalog.get(pid).get('stock_quantity')
+                product = catalog.get(pid)
+                quantity = product.get('stock_quantity') if not product.get('variant_stock') else None
                 if quantity is not None and str(quantity).isdigit():
                     requested = sum(line['quantity'] for line in state['cart'] if line['product_id']==pid)
                     if requested > int(quantity):
@@ -98,6 +101,9 @@ class Orders:
                 product = catalog.get(line['product_id'])
                 from ..product_albums import stock_state
                 if stock_state(product) != 'available':
+                    if product.get('variant_stock'):
+                        raise variant_inventory.StockError(product['product_id'], [],
+                                                           variant_inventory.line_key(product, line), line['quantity'])
                     raise Conflict('checkout_stock_not_confirmed')
                 item = dict(line, product_name=product.get('product_name', ''), quantity_unit='piece')
                 system = line['size_system']
@@ -125,6 +131,8 @@ class Orders:
                  COLOR_REVIEW_STATUS if held_for_color else '', status, encode(items), now,
                  quote['product_total'], quote['delivery_fee'], quote['total']))
             order_id = cursor.lastrowid
+            variant_inventory.allocate(self.store.db, order_id, scope.store, items,
+                                       catalog.products.values())
             booking = dict(id=order_id, sender_id=scope.sender, store_id=scope.store,
                            created_at=now, items=items, **contact,
                            product_total=quote['product_total'], delivery_fee=quote['delivery_fee'],

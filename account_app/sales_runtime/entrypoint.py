@@ -12,6 +12,7 @@ from .orders import Orders, migrate_tasks, CONFIRMATION
 from .runtime import Runtime
 from .store import Store, Scope, Conflict
 from .contracts import DecisionRejected, DecisionUnavailable,ServiceRequired
+from .. import variant_inventory
 
 
 class Entrypoint:
@@ -20,7 +21,8 @@ class Entrypoint:
                  text_reference=None, product_photos=None, on_photo_focus=None, history_loader=None):
         self.store = Store(db)
         from .catalog_answers import enrich
-        self.load_catalog = lambda sid: Catalog(sid, enrich(db,sid,load_products(sid)))
+        self.load_catalog = lambda store: Catalog(
+            store, variant_inventory.with_stock(db, store, enrich(db, store, load_products(store))))
         from .policies import view
         self.policy_loader=lambda sid:view(sid,confirmation,delivery_fee,policy_loader(sid) if policy_loader else None)
         from .gateway import BACKUP_MODEL, BackupGateway, DecisionGateway

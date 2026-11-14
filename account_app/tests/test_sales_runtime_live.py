@@ -71,6 +71,107 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         response.json.return_value = {'choices': [{'message': {'parsed': plan}}]}
         return response
 
+    def test_stock_editor_and_manual_order_share_the_same_inventory(self):
+        products = m.load_products_from_file()
+        endpoint = '/api/products/manage/P1/stock?store_id=khuyoot'
+        catalog = '/api/products/manage?store_id=khuyoot'
+        headers = {'X-CSRF-Token': 'test-csrf'}
+        self.incoming(10, 'مرحبا')
+        saved = self.client.get(catalog).json['products'][0]
+        variants = [dict(color='ازرق', size='٤٤', quantity=2), dict(color='ماروني', size='44', quantity=1)]
+        response = self.client.put(endpoint, headers=headers,
+                                   json=dict(revision=saved['variant_stock_revision'], variants=variants))
+        self.assertEqual(200, response.status_code, response.json)
+        order_url = f'/api/conversations/{self.sender}/create_order?store_id=khuyoot'
+        with patch.object(m, 'send_saved_order_confirmation', return_value=True):
+            booked = self.client.post(order_url, headers=headers, json={
+                'phone': self.phone, 'province': 'بغداد', 'address': self.address, 'items': [
+                    {'product_id': 'P1', 'color': 'ماروني', 'size': '44', 'quantity': 1}]})
+        self.assertEqual(200, booked.status_code, booked.json)
+        latest = self.client.get(catalog).json['products'][0]
+        self.assertEqual([2, 0], [row['quantity'] for row in latest['variant_stock']])
+        available = self.client.get('/api/products?store_id=khuyoot').json['products'][0]
+        self.assertEqual([dict(color='أزرق', size='44', quantity=2)], available['variant_stock'])
+        self.assertTrue(available['tracks_variants'])
+        stale = self.client.put(endpoint, headers=headers,
+                                json=dict(revision=response.json['revision'], variants=variants))
+        self.assertEqual(409, stale.status_code)
+        change = f"/api/orders/{booked.json['order_id']}?store_id=khuyoot"
+        self.assertEqual(200, self.client.patch(change, headers=headers, json={'color': 'أزرق'}).status_code)
+        self.assertEqual([1, 1], [row['quantity'] for row in self.client.get(catalog).json['products'][0]['variant_stock']])
+        self.assertEqual(200, self.client.patch(change, headers=headers, json={'status': 'cancelled'}).status_code)
+        self.assertEqual([2, 1], [row['quantity'] for row in self.client.get(catalog).json['products'][0]['variant_stock']])
+        self.assertEqual('40 إلى 48', products[0]['sizes'])
+
+    def test_stock_mode_switch_controls_the_catalog_and_preserves_saved_counts(self):
+        from account_app import variant_inventory
+        endpoint = '/api/products/manage/P1/stock?store_id=khuyoot'
+        editor = '/api/products/manage?store_id=khuyoot'
+        public = '/api/products?store_id=khuyoot'
+        headers = {'X-CSRF-Token': 'test-csrf'}
+        variants = [dict(color='ماروني', size='44', quantity=1)]
+        product = self.client.get(editor).json['products'][0]
+        self.assertEqual('general', product['variant_stock_mode'])
+        detailed = self.client.put(endpoint, headers=headers, json=dict(
+            mode='detailed', variants=variants, revision=product['variant_stock_revision']))
+        self.assertEqual(200, detailed.status_code, detailed.json)
+        self.assertEqual(variants, self.client.get(public).json['products'][0]['variant_stock'])
+        with m.app.app_context():
+            db = m.get_db()
+            items = [dict(product_id='P1', color='ماروني', size='44', quantity=1)]
+            with variant_inventory.transaction(db):
+                variant_inventory.allocate(db, 501, 'khuyoot', items, m.load_products_from_file())
+        detailed = self.client.get(editor).json['products'][0]
+        general = self.client.put(endpoint, headers=headers, json=dict(
+            mode='general', revision=detailed['variant_stock_revision']))
+        self.assertEqual(200, general.status_code, general.json)
+        self.assertEqual([dict(variants[0], quantity=0)], general.json['variants'])
+        current = self.client.get(public).json['products'][0]
+        self.assertFalse(current['tracks_variants'])
+        self.assertEqual('40 إلى 48', current['sizes'])
+        self.assertIn('أزرق', current['colors'])
+        with m.app.app_context():
+            db = m.get_db()
+            with variant_inventory.transaction(db):
+                variant_inventory.allocate(db, 502, 'khuyoot', items, m.load_products_from_file())
+                variant_inventory.allocate(db, 501, 'khuyoot', [], [])
+            self.assertEqual(1, variant_inventory.rows_by_product(db, 'khuyoot')['P1'][0]['quantity'])
+            self.assertFalse(db.execute('SELECT 1 FROM order_variant_stock WHERE order_id=502').fetchone())
+        product = self.client.get(editor).json['products'][0]
+        enabled = self.client.put(endpoint, headers=headers, json=dict(mode='detailed', variants=variants,
+                                  revision=product['variant_stock_revision']))
+        self.assertEqual(200, enabled.status_code, enabled.json)
+        self.assertTrue(self.client.get(public).json['products'][0]['tracks_variants'])
+
+    def test_model_reads_variant_quantities_only_in_detailed_mode(self):
+        from account_app import variant_inventory
+        from account_app.sales_runtime.facts import product_fact
+
+        rows = [dict(color='أزرق', size='44', quantity=3), dict(color='ماروني', size='44', quantity=0)]
+        with m.app.app_context():
+            db = m.get_db()
+            variant_inventory.replace(db, 'khuyoot', 'P1', rows)
+            db.commit()
+        plan = self.model_response(dict(intent='continue'))
+        wording = self.model_response(dict(parts=[
+            dict(type='text', text='الأزرق موجود بقياس 44، المتبقي 3 قطع.'),
+        ]))
+        self.incoming(10, 'متوفر أزرق قياس 44؟')
+        with patch.object(m.ai_transport, 'post', side_effect=[plan, wording, wording, wording]) as provider:
+            self.work()
+        decision = json.loads(provider.call_args_list[0].kwargs['json']['messages'][1]['content'])
+        copy = json.loads(provider.call_args_list[1].kwargs['json']['messages'][1]['content'])
+        self.assertEqual(rows, decision['products'][0]['variant_stock'])
+        self.assertEqual(3, copy['variant_stock']['selected_quantity'])
+        self.assertEqual([rows[0]], copy['variant_stock']['available'])
+        with m.app.app_context():
+            db = m.get_db()
+            variant_inventory.set_mode(db, 'khuyoot', 'P1', 'general')
+            db.commit()
+            product = variant_inventory.with_stock(db, 'khuyoot', m.load_products_from_file())[0]
+        self.assertNotIn('variant_stock', product)
+        self.assertEqual('40 إلى 48', product_fact(product, 'sizes')['value'])
+
     def test_text_campaign_uses_configured_product_without_asking_for_photo(self):
         with m.app.app_context():
             db = m.get_db()
@@ -755,6 +856,138 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.notify.assert_called_once()
         with m.app.app_context():
             self.assertEqual(1, m.get_db().execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_nightly_job_runs_two_models_and_exposes_store_report_without_sending(self):
+        from account_app import sales_intelligence
+        day = sales_intelligence.BAGHDAD
+        from datetime import datetime
+        now = datetime.now(day).replace(hour=23, minute=30, second=0, microsecond=0)
+        with m.app.app_context():
+            db = m.get_db()
+            db.execute("INSERT INTO messages(store_id,sender_id,direction,message_type,text,created_at) VALUES(?,?,'incoming','text',?,?)",
+                       ('khuyoot', self.sender, 'السعر غالي، اكو عرض؟', now.replace(hour=20).isoformat()))
+            db.commit()
+            sales_intelligence.schedule(db, 'khuyoot', now)
+        report = dict(findings=[dict(example=1, observation='الزبونة سألت عن العرض')], tactics=['lead_with_offer'])
+        with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(report), self.model_response(report)]) as provider:
+            kind, result = self.work()
+        self.assertEqual(sales_intelligence.JOB_KIND, kind)
+        self.assertEqual('done', result['status'])
+        self.assertEqual(2, provider.call_count)
+        self.assertEqual(BACKUP_MODEL, provider.call_args.kwargs['json']['model'])
+        self.transport.assert_not_called()
+        evaluation = self.client.get('/api/evaluation?store_id=khuyoot').get_json()
+        self.assertEqual('done', evaluation['nightly_analyses']['conversations']['report']['status'])
+        self.assertIsNone(evaluation['nightly_analyses']['products']['report'])
+        other = self.client.get('/api/evaluation?store_id=default').get_json()
+        self.assertIsNone(other['nightly_analyses']['conversations']['report'])
+
+    def test_evaluation_controls_scope_rules_and_run_products_manually(self):
+        root = '/api/evaluation/analysis'
+        store = '?store_id=khuyoot'
+        headers = {'X-CSRF-Token': 'test-csrf'}
+        page = self.client.get('/evaluation' + store).get_data(as_text=True)
+        self.assertEqual(2, page.count('data-analysis-toggle='))
+        self.assertEqual(1, page.count('data-analysis-run'))
+        self.assertEqual(403, self.client.put(root + '/conversations' + store, json={}).status_code)
+        response = self.client.put(root + '/conversations' + store, headers=headers,
+                                   json={'setting': 'conversations', 'enabled': False})
+        self.assertEqual(200, response.status_code)
+        controls = response.json['nightly_analyses']
+        self.assertFalse(controls['conversations']['enabled'])
+        self.assertTrue(controls['conversations']['apply_learned_rules'])
+        response = self.client.put(root + '/conversations' + store, headers=headers,
+                                   json={'setting': 'learned_rules', 'enabled': False})
+        self.assertFalse(response.json['nightly_analyses']['conversations']['apply_learned_rules'])
+
+        rules_url = root + '/products/rules'
+        added = self.client.post(rules_url + store, headers=headers, json={'text': 'ركّز على قطع التصفية'})
+        rule = added.json['nightly_analyses']['products']['rules'][0]
+        target = f"{rules_url}/{rule['id']}"
+        self.assertEqual(404, self.client.delete(target + '?store_id=default', headers=headers).status_code)
+        self.assertEqual(404, self.client.delete(target.replace('/products/', '/conversations/') + store, headers=headers).status_code)
+        edited = self.client.put(target + store, headers=headers, json={'text': 'راجع القياسات المعروضة'})
+        self.assertEqual('راجع القياسات المعروضة', edited.json['nightly_analyses']['products']['rules'][0]['text'])
+        queued = self.client.post(root + '/products/run' + store, headers=headers, json={})
+        self.assertTrue(queued.json['nightly_analyses']['products']['busy'])
+        report = {'clearance': [{'product_id': 'P1', 'suggestion': 'اعرض القياسات المتوفرة'}]}
+        def respond(*args, **kwargs):
+            body = json.loads(kwargs['json']['messages'][1]['content'])
+            self.assertEqual({'products', 'metrics'}, set(body['evidence']))
+            self.assertEqual(['راجع القياسات المعروضة'], body['analysis_rules'])
+            return self.model_response(report)
+        with patch.object(m.ai_transport, 'post', side_effect=respond) as provider:
+            self.assertEqual('done', self.work()[1]['status'])
+        self.assertEqual(2, provider.call_count)
+        latest = self.client.get(root + store).json['nightly_analyses']
+        self.assertFalse(latest['products']['busy'])
+        self.assertEqual(report, latest['products']['report']['review'])
+        self.assertIsNone(latest['conversations']['report'])
+        switched = self.client.put(target + store, headers=headers, json={'enabled': False})
+        self.assertFalse(switched.json['nightly_analyses']['products']['rules'][0]['enabled'])
+        self.assertEqual(200, self.client.delete(target + store, headers=headers).status_code)
+        self.assertTrue(self.client.get(root + '?store_id=default').json['nightly_analyses']['conversations']['enabled'])
+        self.transport.assert_not_called()
+
+    def test_confirmed_order_suggests_clearance_only_when_asked_and_sends_right_photo(self):
+        self.start_patch(patch.object(m, 'PUBLIC_URL', 'https://catalog.test'))
+        self.start_patch(patch.object(m, 'product_image_variants', side_effect=lambda product: [
+            dict(url=product['image_url'], color='')] if product.get('image_url') else []))
+        products = m.load_products_from_file()
+        products[0].update(product_type='tops', audience='women')
+        products.append(dict(products[0], product_id='P2', product_name='بلوزة تجربة',
+            image_url=m.PUBLIC_URL + '/product_image/test-clearance.jpg', ad_ids=[],
+            clearance=True, discount_iqd=2000, reply_category='بلوزة'))
+        self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')
+        with patch.object(m.ai_transport, 'post', return_value=self.model_response(self.model_plan())):
+            self.assertEqual('booked', self.work()[1]['action'])
+        self.transport.assert_called_once()
+        self.assertEqual(CONFIRMATION, self.transport.call_args.args[2][0]['text'])
+
+        self.incoming(11, 'اكو موديل ثاني يجي على قياسي؟')
+        replies = iter([self.model_response(dict(intent='continue')),
+            self.model_response(dict(parts=['إي عيني، أكو بلوزة تصفية تناسب قياسج. تحبين أدزلج صورتها؟']))])
+        def respond(*args, **kwargs):
+            context = json.loads(kwargs['json']['messages'][-1]['content'])
+            self.assertFalse(context.get('validation_feedback'), context.get('validation_feedback'))
+            return next(replies)
+        with patch.object(m.ai_transport, 'post', side_effect=respond) as provider:
+            self.assertFalse(self.work()[1].get('needs_human'))
+        writer_context = json.loads(provider.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertEqual(['P2'], [item['product_id'] for item in writer_context['catalog_memory']['matches']])
+        self.incoming(12, 'اي دزيها')
+        with patch.object(m.ai_transport, 'post') as provider:
+            self.assertFalse(self.work()[1].get('needs_human'))
+            provider.assert_not_called()
+        with m.app.app_context():
+            db = m.get_db()
+            self.assertEqual(1, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+            last_photo = db.execute("SELECT image_url FROM messages WHERE direction='outgoing' ORDER BY id DESC LIMIT 1").fetchone()[0]
+            self.assertTrue(last_photo.endswith('test-clearance.jpg'))
+
+    def test_price_objection_proposes_one_cheaper_product_without_changing_cart(self):
+        self.start_patch(patch.object(m, 'PUBLIC_URL', 'https://catalog.test'))
+        self.start_patch(patch.object(m, 'product_image_variants', side_effect=lambda product: [
+            dict(url=product['image_url'], color='')] if product.get('image_url') else []))
+        products = m.load_products_from_file()
+        products[0].update(product_type='tops', audience='women')
+        products.append(dict(products[0], product_id='P2', product_name='بلوزة تجربة',
+            image_url=m.PUBLIC_URL + '/product_image/alternative.jpg', ad_ids=[], price='13000'))
+        self.incoming(10, 'لأعيني غالي')
+        decision = self.model_response(dict(intent='continue', changes=[dict(values=dict(product_id='P2', size='44'))]))
+        written = self.model_response(dict(parts=[dict(type='text', text='أفهمج عيني، عندي خيار أوفر بـ{{alternative_price}}. تحبين تشوفين صورته؟')]))
+        with patch.object(m.ai_transport, 'post', side_effect=[decision, written]) as provider:
+            self.assertFalse(self.work()[1].get('needs_human'))
+        context = json.loads(provider.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertEqual('price_hesitation', context['catalog_memory']['opportunity'])
+        self.assertEqual({'alternative_price': 13000}, context['amounts'])
+        with m.app.app_context():
+            db = m.get_db()
+            scope = live.scope_for(live.route(db, self.sender))
+            from account_app import sales_intelligence
+            self.assertTrue(sales_intelligence.already_suggested(db, scope, None))
+            self.assertFalse(live.Store(db).snapshot(scope)['data']['cart'])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
     def test_sol_guides_booking_and_uncertain_confirmation_is_never_resent(self):
         self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')

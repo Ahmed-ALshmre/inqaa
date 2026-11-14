@@ -2087,6 +2087,7 @@ function addManualOrderItem() {
     <div class="col-12"><label for="manual-product-${id}" class="form-label small">المنتج</label>
       <select id="manual-product-${id}" class="form-select" data-field="product_id"><option value="">اختر المنتج</option>${allProducts.map(p => `<option value="${esc(p.product_id)}">${esc(p.product_name)}</option>`).join('')}</select></div>
     <div class="col-12"><label for="manual-name-${id}" class="form-label small">اسم القطعة — يمكن كتابته بحرية</label><input id="manual-name-${id}" class="form-control" data-field="product_name"></div>
+    <div class="col-12" data-variant-picker hidden><label for="manual-variant-${id}" class="form-label small">اللون والقياس المتوفران</label><select id="manual-variant-${id}" class="form-select"></select></div>
     <div class="col-4"><label for="manual-quantity-${id}" class="form-label small">العدد</label><input id="manual-quantity-${id}" class="form-control" data-field="quantity" type="number" min="1" step="1" value="1"></div>
     <div class="col-4"><label for="manual-size-${id}" class="form-label small">القياس</label><input id="manual-size-${id}" class="form-control" data-field="size"></div>
     <div class="col-4"><label for="manual-color-${id}" class="form-label small">اللون</label><input id="manual-color-${id}" class="form-control" data-field="color"></div>
@@ -2094,9 +2095,34 @@ function addManualOrderItem() {
     <div class="col-6"><label for="manual-price-${id}" class="form-label small">سعر القطعة بالدينار — اختياري</label><input id="manual-price-${id}" class="form-control" data-field="unit_price" type="number" min="0" step="1" placeholder="سعر الكتالوج أو سعر يدوي"></div>
     <div class="col-12 text-end"><button class="btn btn-outline-danger btn-sm" type="button" data-remove>حذف القطعة</button></div>
   </div>`;
+  const variants = row.querySelector('[data-variant-picker] select');
+  const size = row.querySelector('[data-field="size"]');
+  const color = row.querySelector('[data-field="color"]');
+  const count = row.querySelector('[data-field="quantity"]');
+  let inStock = [];
   row.querySelector('[data-field="product_id"]').addEventListener('change', event => {
     const product = allProducts.find(p => p.product_id === event.target.value);
     row.querySelector('[data-field="product_name"]').value = product?.product_name || '';
+    inStock = product?.variant_stock || [];
+    variants.parentElement.hidden = !product?.tracks_variants;
+    variants.replaceChildren(new Option(inStock.length ? 'اختر تركيبة' : 'لا توجد كمية متوفرة', ''));
+    for (const [index, option] of inStock.entries()) {
+      variants.add(new Option([option.color, option.size, `متبقي ${option.quantity}`].filter(Boolean).join(' · '), index));
+    }
+    size.value = ''; color.value = ''; count.removeAttribute('max');
+    color.readOnly = size.readOnly = Boolean(product?.tracks_variants);
+  });
+  variants.addEventListener('change', () => {
+    const variant = variants.value === '' ? null : inStock[Number(variants.value)];
+    color.value = variant?.color || '';
+    size.value = variant?.size === 'حسب الوزن' ? '' : variant?.size || '';
+    if (variant) {
+      count.max = variant.quantity;
+      size.readOnly = variant.size !== 'حسب الوزن';
+    } else {
+      size.readOnly = true;
+      count.removeAttribute('max');
+    }
   });
   row.querySelector('[data-remove]').addEventListener('click', () => {
     if (container.children.length > 1) row.remove();
@@ -2105,9 +2131,12 @@ function addManualOrderItem() {
   container.appendChild(row);
 }
 
-function openOrderModal() {
+async function openOrderModal() {
   if (!currentSenderId) { showToast('اختر محادثة أولاً', 'warning'); return; }
-  manualOrderSender = currentSenderId;
+  const sender = currentSenderId;
+  await loadProducts(currentCustomer?.store_id || 'default');
+  if (currentSenderId !== sender) return;
+  manualOrderSender = sender;
   manualOrderCreatedId = null;
   document.getElementById('submitManualOrderBtn').textContent = 'تثبيت الطلب';
   for (const [id, key] of [['orderPhone','phone'],['orderProvince','province'],['orderAddress','address']]) {

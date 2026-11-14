@@ -117,8 +117,10 @@ def validate_next_step(parts, step):
         'offer.quantity': (r'عرض|بكج|باكج|قطعت|ثنين|اثنين|تنوع|قطع',),
         'purchase_intent': (r'ثبت|حجز|نسجل|اكمل|نكمل|طلب|رتب',),
         'alternatives.photos': (r'صور|اشوف|تشوف|ادز|ارسل', r'بديل|بدائل|موديل|خيارات|سوتات|اطقم'),
+        'catalog.show_option': (r'صور|اشوف|تشوف|ادز|ارسل',),
         'product': (r'صور|سكرين|لقط',),
         'photo.reference': (r'صور|سكرين|لقط|قطع[هة]|موديل|لون|تقصد',),
+        'inventory.alternative': (r'بديل|(?:لون|قياس|موديل)\s+(?:ثاني|اخر|غير)|تحب|تريد|يناسب',),
     }
     field = question.rsplit('.', 1)[-1]
     if field == 'color' and question not in required:

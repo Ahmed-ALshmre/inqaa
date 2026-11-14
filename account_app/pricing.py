@@ -98,7 +98,7 @@ def delivery_terms(product):
     return None, None
 
 
-def terms(product):
+def base_terms(product):
     raw = clean(product.get("price"))
     # The price field defines the sale unit. Notes and offers may describe the
     # contents of a package or a multi-item discount without changing that unit.
@@ -121,9 +121,27 @@ def terms(product):
     return size, price, bool(free_quantity and size >= free_quantity)
 
 
+def product_discount(value):
+    if value in (None, ''):
+        return 0
+    amount = str(value).translate(DIGITS).strip()
+    if isinstance(value, bool) or not re.fullmatch(r'[0-9]{1,9}', amount):
+        raise ValueError('اكتب مبلغ الخصم بالدينار كعدد صحيح.')
+    return int(amount)
+
+
+def terms(product):
+    size, price, free_delivery = base_terms(product)
+    discount = product_discount(product.get('discount_iqd'))
+    if discount >= price:
+        raise ValueError('خصم المنتج لازم يكون أقل من سعر البيع.')
+    return size, price - discount, free_delivery
+
+
 def offer_tiers(product):
     """Return explicit quantity/total promotions; never infer a discount."""
-    size, regular, _ = terms(product)
+    size, retail, _ = base_terms(product)
+    _, effective, _ = terms(product)
     if size != 1:
         return []
     tiers = {}
@@ -134,12 +152,12 @@ def offer_tiers(product):
             if not 2 <= count <= 20:
                 continue
             total = money(match[2] + (" الف" if match[3] else ""))
-            if total <= 0 or total >= count * regular:
+            if total <= 0 or total >= count * retail:
                 continue
             if count in tiers and tiers[count] != total:
                 raise ValueError("أسعار العرض متعارضة؛ راجع بيانات المنتج قبل تثبيت الطلب")
             tiers[count] = total
-    return sorted(tiers.items())
+    return sorted((count, amount) for count, amount in tiers.items() if amount < count * effective)
 
 
 def _best_price(count, regular, tiers):

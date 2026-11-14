@@ -5,6 +5,9 @@ let productImageColors = {};
 let relatedProductIds = new Set();
 let cleanProductSnapshot = '';
 let savingProduct = false;
+let stockRevision = '';
+let stockSnapshot = '';
+let savedStockMode = 'general';
 const catalogSchema = JSON.parse(document.getElementById('catalogSchema')?.textContent || '{"audiences":{},"product_types":{}}');
 const byId = id => document.getElementById(id);
 
@@ -51,6 +54,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const requestedProduct=new URLSearchParams(location.search).get('product_id');
   if(requestedProduct&&allProducts.some(p=>p.product_id===requestedProduct))editProduct(requestedProduct,true);
   byId('productImages').addEventListener('input', () => { renderImagePreview(); markProductDirty(); });
+  byId('variantStockAdd').addEventListener('click', () => addStockRow());
+  byId('variantStockSave').addEventListener('click', saveVariantStock);
+  byId('variantStockMode').addEventListener('change', () => {
+    renderStockMode();
+    markProductDirty();
+  });
   byId('relatedProductsSearch').addEventListener('input', renderRelatedProducts);
   byId('productId').addEventListener('input', renderRelatedProducts);
   byId('productType').addEventListener('change',()=>{
@@ -83,6 +92,7 @@ function apiFetch(url, opts = {}) {
   opts.headers = {
     ...(opts.headers || {}),
     'X-Dashboard-Key': DASH_KEY,
+    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
   };
   return fetch(url, opts);
 }
@@ -179,6 +189,7 @@ function newProduct(rerender = true, force = false) {
   byId('productId').disabled = false; byId('formTitle').textContent = 'إضافة منتج';
   byId('deleteProductBtn').hidden = true; byId('productFormError').hidden = true;
   byId('recommendationPreview').replaceChildren();
+  renderVariantStock();
   renderImagePreview(); renderRelatedProducts(); updateSizeFields(); updateProductSummary();
   showProductTab('basics'); rememberProductSnapshot();
   if (rerender) { renderProducts(); showProductEditor(); } else updateProductNavigation();
@@ -200,6 +211,8 @@ function editProduct(productId, force = false) {
   renderProductTypeOptions(product.product_type||'');
   relatedProductIds = new Set(product.related_product_ids || []);
   for (const [key, id] of Object.entries(fields)) setSelectValue(id, product[key]);
+  byId('productDiscount').value = product.discount_iqd || '';
+  byId('productClearance').checked = product.clearance === true;
   byId('productAdIds').value = (product.ad_ids || []).join('\n');
   byId('productImages').value = imageText(product.image_url);
   productImageColors = normalizeImageColors(product.image_colors, imageLines());
@@ -219,6 +232,7 @@ function editProduct(productId, force = false) {
   byId('productId').disabled = true; byId('formTitle').textContent = product.product_name || productId;
   byId('deleteProductBtn').hidden = false; byId('productFormError').hidden = true;
   byId('recommendationPreview').replaceChildren();
+  renderVariantStock(product);
   renderImagePreview(); renderProducts(); renderRelatedProducts(); updateSizeFields(); updateProductSummary(); rememberProductSnapshot();
   showProductEditor();
   if (window.innerWidth < 741 && !force) document.querySelector('.catalog-editor').scrollIntoView({behavior:'smooth',block:'start'});
@@ -233,7 +247,10 @@ function showProductTab(name) {
     const selected = tab.id === 'tab-'+name; tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1;
   }
 }
-function hasProductChanges() { return cleanProductSnapshot && JSON.stringify(collectPayload()) !== cleanProductSnapshot; }
+function hasProductChanges() {
+  return (cleanProductSnapshot && JSON.stringify(collectPayload()) !== cleanProductSnapshot)
+    || (currentProductId && JSON.stringify(collectStockSettings()) !== stockSnapshot);
+}
 function allowProductNavigation() { return !hasProductChanges() || confirm('عندك تعديلات غير محفوظة. تريد تتركها وتنتقل؟'); }
 function rememberProductSnapshot() { cleanProductSnapshot = JSON.stringify(collectPayload()); markProductDirty(); }
 function markProductDirty() { const dirty = hasProductChanges(); byId('saveState').textContent = dirty ? 'تعديلات غير محفوظة' : 'لا توجد تعديلات'; byId('saveState').classList.toggle('dirty', Boolean(dirty)); }
@@ -346,6 +363,11 @@ function renderRelatedProducts() {
 
 async function saveProduct(event) {
   event.preventDefault();
+  if (currentProductId && JSON.stringify(collectStockSettings()) !== stockSnapshot) {
+    showProductTab('inventory');
+    showToast('احفظ المخزون من تبويب المخزون أولاً.', 'warning');
+    return;
+  }
   const payload = collectPayload();
   if (!payload.product_id || !payload.product_name) {
     showProductTab('basics');
@@ -378,6 +400,125 @@ async function saveProduct(event) {
     showToast(err.message || 'فشل حفظ المنتج', 'danger');
   } finally {
     setSaving(false);
+  }
+}
+
+function collectStockRows() {
+  return [...byId('variantStockRows').children].map(row => {
+    const [color, size, quantity] = [...row.querySelectorAll('input')].map(input => input.value.trim());
+    return {color, size, quantity: quantity === '' ? null : Number(quantity)};
+  });
+}
+
+function collectStockSettings() {
+  const mode = byId('variantStockMode').value;
+  return {mode, ...(mode === 'detailed' ? {variants: collectStockRows()} : {})};
+}
+
+function renderStockMode() {
+  const detailed = byId('variantStockMode').value === 'detailed';
+  byId('variantStockDetails').hidden = !detailed;
+  byId('variantStockGeneralHelp').hidden = detailed;
+  byId('variantStockReview').hidden = !detailed || savedStockMode !== 'general' || !collectStockRows().length;
+}
+
+function updateStockSummary() {
+  const rows = collectStockRows();
+  const units = rows.reduce((sum, row) => sum + (row.quantity || 0), 0);
+  byId('variantStockSummary').textContent = rows.length
+    ? `${units} قطعة متبقية · ${rows.filter(row => row.quantity === 0).length} تركيبة نافدة`
+    : 'أضف اللون والقياس والعدد لكل تركيبة.';
+}
+
+function addStockRow(variant = {}) {
+  const row = document.createElement('div'); row.className = 'catalog-stock-grid catalog-stock-row';
+  const fields = [['color', 'اللون', 'مثال: أسود'], ['size', 'القياس', '44، XL، أو 24 شهر'],
+    ['quantity', 'العدد المتبقي', '0']];
+  const status = document.createElement('span');
+  const update = () => {
+    const count = row.querySelector('input[type="number"]').value;
+    status.textContent = count === '' ? '—' : Number(count) === 0 ? 'نافد' : 'متوفر';
+    status.classList.toggle('out', count !== '' && Number(count) === 0);
+    updateStockSummary();
+    markProductDirty();
+  };
+  for (const [key, label, placeholder] of fields) {
+    const input = document.createElement('input'); input.className = 'form-control';
+    input.setAttribute('aria-label', label); input.placeholder = placeholder;
+    input.value = variant[key] ?? '';
+    if (key === 'size' && ['none','weight'].includes(byId('productSizeSystem').value)) {
+      input.readOnly = true;
+      input.placeholder = byId('productSizeSystem').value === 'none' ? 'بلا قياس' : 'حسب الوزن';
+    }
+    if (key === 'quantity') { input.type = 'number'; input.min = '0'; input.step = '1'; }
+    else {
+      input.maxLength = 80;
+      if (key === 'color') input.setAttribute('list', 'variantStockColors');
+    }
+    input.addEventListener('input', update);
+    row.append(input);
+  }
+  const state = document.createElement('div'); state.className = 'catalog-stock-row-actions';
+  const remove = document.createElement('button');
+  remove.type = 'button'; remove.className = 'btn btn-sm btn-outline-secondary';
+  remove.setAttribute('aria-label', 'حذف السطر'); remove.textContent = 'حذف';
+  remove.onclick = () => { row.remove(); updateStockSummary(); markProductDirty(); };
+  state.append(status, remove); row.append(state);
+  byId('variantStockRows').append(row);
+  update();
+  if (!Object.keys(variant).length) row.querySelector('input').focus();
+}
+
+function renderVariantStock(product) {
+  byId('variantStockNew').hidden = Boolean(product);
+  byId('variantStockEditor').hidden = !product;
+  byId('variantStockRows').replaceChildren();
+  byId('variantStockStatus').textContent = '';
+  stockRevision = product?.variant_stock_revision || '';
+  savedStockMode = product?.variant_stock_mode || 'general';
+  byId('variantStockMode').value = savedStockMode;
+  byId('variantStockColors').replaceChildren(...(product?.colors || '').split(/[،,؛;\n]+/)
+    .map(color => color.trim()).filter(Boolean).map(color => new Option(color, color)));
+  for (const row of product?.variant_stock || []) addStockRow(row);
+  stockSnapshot = JSON.stringify(collectStockSettings());
+  renderStockMode();
+  updateStockSummary();
+}
+
+async function saveVariantStock() {
+  const productId = currentProductId;
+  if (!productId) return;
+  const button = byId('variantStockSave');
+  const controls = [...byId('variantStockEditor').querySelectorAll('button,input,select')];
+  const status = byId('variantStockStatus');
+  const store = new URLSearchParams(location.search).get('store_id') || 'default';
+  controls.forEach(control => { control.disabled = true; });
+  status.textContent = 'جارٍ حفظ المخزون…';
+  try {
+    const response = await apiFetch(`/api/products/manage/${encodeURIComponent(productId)}/stock`, {
+      method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({revision: stockRevision, ...collectStockSettings()}),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'تعذر حفظ المخزون.');
+    if ((new URLSearchParams(location.search).get('store_id') || 'default') !== store) return;
+    const product = allProducts.find(row => row.product_id === productId);
+    if (product) {
+      Object.assign(product, {variant_stock: result.variants, variant_stock_mode: result.mode,
+        variant_stock_revision: result.revision});
+      if (product.catalog_meta) product.catalog_meta.stock_state = result.stock_state;
+      renderProducts();
+    }
+    if (currentProductId === productId && product) {
+      renderVariantStock(product);
+      markProductDirty();
+      status.textContent = 'تم حفظ المخزون.';
+    }
+  } catch (error) {
+    if (currentProductId === productId) status.textContent = error.message;
+  } finally {
+    controls.forEach(control => { control.disabled = false; });
+    button.disabled = false;
   }
 }
 
@@ -459,6 +600,8 @@ function collectPayload() {
   for (const [key, id] of Object.entries(fields)) {
     payload[key] = document.getElementById(id).value.trim();
   }
+  payload.discount_iqd = byId('productDiscount').value;
+  payload.clearance = byId('productClearance').checked;
   payload.ad_ids = [...new Set(byId('productAdIds').value.split(/[\s,،;؛]+/).map(x => x.trim()).filter(Boolean))];
   payload.age_min_months = numericValue('productAgeMin', byId('productAgeMinUnit').value === 'years' ? 12 : 1);
   payload.age_max_months = numericValue('productAgeMax', byId('productAgeMaxUnit').value === 'years' ? 12 : 1);

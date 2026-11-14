@@ -22,6 +22,185 @@ async function loadEvaluation() {
   renderFollowupPerformance(data.followup_performance || []);
   renderSuggestions(data.suggestions || []);
   renderActiveRules(data.active_rules || []);
+  renderNightlyAnalyses(data.nightly_analyses);
+}
+
+const analysisPanels = [...document.querySelectorAll('[data-analysis-track]')];
+let analysisPoll;
+let analysisMutation;
+let analysisRevision = 0;
+
+function fillAnalysisList(list, lines) {
+  list.replaceChildren(...lines.map(text => {
+    const item = document.createElement('li');
+    item.textContent = text;
+    return item;
+  }));
+}
+
+function renderNightlyAnalyses(analyses) {
+  for (const panel of analysisPanels) {
+    const track = panel.dataset.analysisTrack;
+    const data = analyses[track];
+    const report = data.report;
+    const metrics = report?.evidence?.metrics;
+    for (const input of panel.querySelectorAll('[data-analysis-toggle]')) {
+      input.checked = input.dataset.analysisToggle === 'conversations' ? data.enabled : data.apply_learned_rules;
+      input.disabled = false;
+    }
+    const run = panel.querySelector('[data-analysis-run]');
+    if (run) {
+      run.disabled = data.busy;
+      run.textContent = data.busy ? 'جاري تحليل المنتجات…' : 'حلّل المنتجات الآن';
+    }
+    const labels = {empty: 'ماكو بيانات كافية للتحليل', pending: 'بانتظار إكمال التحليل', retry: 'تعذر إكمال التحليل'};
+    const summary = track === 'products'
+      ? `${metrics?.available_products || 0} منتج متوفر، منها ${metrics?.clearance_products || 0} ضمن التصفية`
+      : `${metrics?.conversations || 0} محادثة، ${metrics?.booked_in_window || 0} بحجز، عينة التحليل ${report?.evidence?.sampled_conversations || 0}`;
+    const status = panel.querySelector('[data-analysis-status]');
+    const paused = track === 'conversations' && !data.enabled;
+    const lastRun = report ? `${report.sales_day} · ${report.status === 'done' ? summary : labels[report.status] || 'بانتظار التحليل'}` : 'ماكو تقرير بعد';
+    status.textContent = paused ? `التحليل الليلي متوقف · ${lastRun}` : lastRun;
+    const lines = track === 'products' ? (report?.review?.clearance || []).map(item => `${item.product_id} · ${item.suggestion}`)
+      : (report?.review?.findings || []).map(item => item.observation);
+    const list = panel.querySelector('[data-analysis-report]');
+    fillAnalysisList(list, lines);
+    list.hidden = !lines.length;
+    const guidance = panel.querySelector('[data-analysis-guidance]');
+    if (guidance) {
+      const tactics = report?.applied_guidance || [];
+      guidance.hidden = !data.apply_learned_rules || !tactics.length;
+      fillAnalysisList(guidance.querySelector('ul'), tactics);
+    }
+    panel.querySelector('[data-analysis-form] textarea').disabled = false;
+    panel.querySelector('[data-rule-submit]').disabled = false;
+    renderAnalysisRules(panel, data.rules);
+  }
+  clearTimeout(analysisPoll);
+  if (analyses.products.busy) analysisPoll = setTimeout(refreshAnalysisStatus, 3000);
+}
+
+async function refreshAnalysisStatus() {
+  if (analysisMutation) {
+    analysisPoll = setTimeout(refreshAnalysisStatus, 3000);
+    return;
+  }
+  const revision = analysisRevision;
+  try {
+    const response = await fetch(adminApi('/api/evaluation/analysis'));
+    if (!response.ok) throw new Error('تعذر تحميل حالة التحليل');
+    const result = await response.json();
+    if (revision === analysisRevision) renderNightlyAnalyses(result.nightly_analyses);
+  } catch (error) {
+    if (revision !== analysisRevision) return;
+    setAnalysisFeedback(analysisPanels.find(panel => panel.dataset.analysisTrack === 'products'), error.message, false);
+    analysisPoll = setTimeout(refreshAnalysisStatus, 5000);
+  }
+}
+
+function setAnalysisFeedback(panel, text, ok = true) {
+  const feedback = panel.querySelector('[data-analysis-feedback]');
+  feedback.textContent = text;
+  feedback.classList.toggle('text-danger', !ok);
+}
+
+async function changeAnalysis(panel, suffix, method, body) {
+  analysisRevision++;
+  const save = async () => {
+    const response = await fetch(adminApi(`/api/evaluation/analysis/${panel.dataset.analysisTrack}${suffix}`), {
+      method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'تعذر حفظ التغيير');
+    renderNightlyAnalyses(result.nightly_analyses);
+  };
+  const pending = analysisMutation ? analysisMutation.catch(() => {}).then(save) : save();
+  analysisMutation = pending;
+  try { await pending; }
+  finally { if (analysisMutation === pending) analysisMutation = null; }
+}
+
+function editAnalysisRule(panel, rule) {
+  const form = panel.querySelector('[data-analysis-form]');
+  form.dataset.ruleId = rule ? rule.id : '';
+  form.elements.text.value = rule ? rule.text : '';
+  form.querySelector('[data-rule-submit]').textContent = rule ? 'حفظ التعديل' : 'إضافة قاعدة';
+  form.querySelector('[data-rule-cancel]').hidden = !rule;
+  if (rule) form.elements.text.focus();
+}
+
+function renderAnalysisRules(panel, rules) {
+  const list = panel.querySelector('[data-analysis-rules]');
+  list.replaceChildren(...rules.map(rule => {
+    const row = document.createElement('li');
+    row.className = 'pb-2 mb-2 border-bottom';
+    const text = document.createElement('p');
+    text.className = 'mb-1 text-break';
+    text.textContent = rule.text;
+    const actions = document.createElement('div');
+    actions.className = 'd-flex flex-wrap gap-2';
+    function action(label, callback) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-sm btn-outline-secondary';
+      button.textContent = label;
+      button.addEventListener('click', callback);
+      actions.append(button);
+    }
+    async function update(method, body) {
+      try {
+        await changeAnalysis(panel, `/rules/${rule.id}`, method, body);
+        if (method === 'DELETE' && panel.querySelector('[data-analysis-form]').dataset.ruleId === String(rule.id)) editAnalysisRule(panel, null);
+        setAnalysisFeedback(panel, 'تم حفظ التغيير.');
+      } catch (error) { setAnalysisFeedback(panel, error.message, false); }
+    }
+    action('تعديل', () => editAnalysisRule(panel, rule));
+    action(rule.enabled ? 'إيقاف القاعدة' : 'تشغيل القاعدة', () => update('PUT', {enabled: !rule.enabled}));
+    action('حذف', () => { if (confirm('تحذف هذه القاعدة من تحليل هذا المتجر؟')) update('DELETE'); });
+    row.append(text, actions);
+    return row;
+  }));
+}
+
+for (const panel of analysisPanels) {
+  for (const input of panel.querySelectorAll('[data-analysis-toggle]')) {
+    input.addEventListener('change', async () => {
+      const enabled = input.checked;
+      input.disabled = true;
+      try {
+        await changeAnalysis(panel, '', 'PUT', {setting: input.dataset.analysisToggle, enabled});
+        setAnalysisFeedback(panel, 'تم حفظ الإعداد.');
+      } catch (error) {
+        input.checked = !enabled;
+        setAnalysisFeedback(panel, error.message, false);
+      } finally { input.disabled = false; }
+    });
+  }
+  const run = panel.querySelector('[data-analysis-run]');
+  run?.addEventListener('click', async () => {
+    run.disabled = true;
+    try {
+      await changeAnalysis(panel, '/run', 'POST', {});
+      setAnalysisFeedback(panel, 'تم طلب تحليل المنتجات.');
+    } catch (error) {
+      run.disabled = false;
+      setAnalysisFeedback(panel, error.message, false);
+    }
+  });
+  const form = panel.querySelector('[data-analysis-form]');
+  const submit = panel.querySelector('[data-rule-submit]');
+  form.querySelector('[data-rule-cancel]').addEventListener('click', () => editAnalysisRule(panel, null));
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const id = form.dataset.ruleId;
+    submit.disabled = true;
+    try {
+      await changeAnalysis(panel, id ? `/rules/${id}` : '/rules', id ? 'PUT' : 'POST', {text: form.elements.text.value});
+      editAnalysisRule(panel, null);
+      setAnalysisFeedback(panel, 'تم حفظ القاعدة.');
+    } catch (error) { setAnalysisFeedback(panel, error.message, false); }
+    finally { submit.disabled = false; }
+  });
 }
 
 function renderEvaluationCards(metrics) {

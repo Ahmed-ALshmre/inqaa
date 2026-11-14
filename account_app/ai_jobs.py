@@ -70,7 +70,7 @@ def claim(db, owner):
         row = db.execute('''SELECT * FROM ai_jobs j WHERE status='queued' AND available_at<=?
             AND NOT EXISTS (SELECT 1 FROM ai_jobs r WHERE r.store_id=j.store_id
                 AND r.sender_id=j.sender_id AND r.status='running')
-            ORDER BY j.created_at,j.rowid LIMIT 1''', (time.time(),)).fetchone()
+            ORDER BY (j.kind='nightly_sales_learning'),j.created_at,j.rowid LIMIT 1''', (time.time(),)).fetchone()
         if not row:
             return None
         db.execute("UPDATE ai_jobs SET status='running',started_at=?,owner=? WHERE id=?",
@@ -120,7 +120,7 @@ def deliver(db, identity, payload, send):
 def recover_interrupted(db):
     # Delivery may have succeeded immediately before process death. Never replay
     # an uncertain send automatically. Pure previews are safe to recompute.
-    db.execute("UPDATE ai_jobs SET status='queued',owner=NULL WHERE status='running' AND kind IN ('preview','media_archive','sales_runtime')")
+    db.execute("UPDATE ai_jobs SET status='queued',owner=NULL WHERE status='running' AND kind IN ('preview','media_archive','sales_runtime','nightly_sales_learning')")
     db.execute("""UPDATE ai_jobs SET status='failed',finished_at=?,result=?
         WHERE status='running'""", (time.time(), json.dumps({
             'ok': False, 'error': 'توقفت المعالجة عند إعادة تشغيل السيرفر؛ تحقق من الإرسال قبل المحاولة مجدداً.',

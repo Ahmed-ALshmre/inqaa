@@ -8,7 +8,7 @@ import re
 import time
 from copy import deepcopy
 
-from .. import catalog_profile, checkout, product_albums, product_variants
+from .. import catalog_profile, checkout, product_albums, product_variants, sales_intelligence, variant_inventory
 from ..sales_recovery import alternative_photo_request
 from .backup import BackupFailed, consult, failure_code
 from .cart import CartService
@@ -445,6 +445,13 @@ class Runtime:
             focus = reference.get('product_id') or state.get('focus_product_id') or (
                 state['cart'][0]['product_id'] if len({line['product_id'] for line in state['cart']}) == 1 else None)
             focus_product = catalog.products.get(focus) or {}
+            order_confirmed = sales_intelligence.confirmation_accepted(self.store.db, scope, state)
+            market = sales_intelligence.relevant(self.store.db, catalog, state, focus, text_now,
+                order_confirmed=order_confirmed, history=context['recent_messages'][:-1],
+                already_suggested=sales_intelligence.already_suggested(self.store.db, scope, state.get('order_id')))
+            context['catalog_memory'] = market
+            context['learned_sales_tactics'] = sales_intelligence.learned_tactics(
+                self.store.db, scope.store, text_now, bool(market['matches']))
             separate_product = bool(focus and state['cart'] and all(
                 line['product_id'] != focus for line in state['cart']) and
                 (reference.get('source') in {'image', 'confirmed_photo_context'}
@@ -468,6 +475,10 @@ class Runtime:
                             if message['actor'] == 'customer'))):
                     return dict(action='continue', state_version=snap['version'], browsing_photos=browsing)
             last_reply = context['recent_replies'][-1] if context['recent_replies'] else {}
+            offered_option = last_reply.get('catalog_photo_offer')
+            if (offered_option and evidence['payload'].get('media_kind') == 'text'
+                    and alternative_photo_request(text_now, True)):
+                return dict(action='continue', state_version=snap['version'], catalog_option_photo=offered_option)
             alternatives_requested = bool(focus and evidence['payload'].get('media_kind', 'text') == 'text'
                 and alternative_photo_request(text_now, last_reply.get('photo_offer_product') == focus))
             if alternatives_requested:
@@ -548,6 +559,11 @@ class Runtime:
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
+                    if order_confirmed and (market['requested'] or market['opportunity']):
+                        # An enquiry about another model cannot rewrite a confirmed cart.
+                        plan = dict(intent='continue', contact={}, answer={})
+                    elif market['opportunity'] == 'price_hesitation' and market['matches'] and not purchase_selected(text_now):
+                        plan = dict(intent='continue', contact={}, answer=plan.get('answer', {}))
                     if length_only:
                         for change in plan.get('changes', []):
                             values = change['values']
@@ -770,6 +786,15 @@ class Runtime:
         new_contact = event_id in state.get('contact_events', {}).values()
         direct_purchase = purchase_selected(evidence['payload'].get('text', ''))
         hold_color = only_color_missing(ready) and (new_contact or direct_purchase)
+        tracked_cart = any(catalog.get(line['product_id']).get('variant_stock') for line in state['cart'])
+        if tracked_cart and not state.get('order_id') and not saved.get('separate_photo_product'):
+            complete = [line for line in state['cart'] if not any(
+                field.startswith(f"cart.{line['line_id']}.") for field in ready['missing_fields'])]
+            try:
+                variant_inventory.reservation_changes(self.store.db, None, scope.store, complete, catalog.products.values())
+            except variant_inventory.StockError as error:
+                ready['ready'] = False
+                saved['variant_stock_feedback'] = error.feedback()
         waiting_for_color = False
         if hold_color:
             # The customer may still be answering the bot's explicit color choice.
@@ -781,16 +806,21 @@ class Runtime:
                 payload.get('question_field', '').rsplit('.', 1)[0] in line_keys
                 and payload.get('question_field', '').endswith('.color')
                 for payload in (json.loads(row[0]) for row in latest_choice))
-            hold_color = not waiting_for_color
+            hold_color = not waiting_for_color and not tracked_cart
+        booking_outcome = None
         if ((ready['ready'] or hold_color) and not image_only and not photo_request
                 and not saved.get('separate_photo_product')
                 and not (saved.get('photo_choice') or {}).get('availability_question')
                 and not missing_fact and not staff_stock_conflict and not unavailable_cart and not state.get('order_id')):
-            booking = self.orders.commit(scope, f'{key}:booking', version, allow_color_hold=hold_color)
-            outcome = dict(action='booked', **booking['result'])
-            version = booking['result']['state_version']
-        else:
-            outcome = dict(action='continue', readiness=ready, answer_plan=plan.get('answer', {}),
+            try:
+                booking = self.orders.commit(scope, f'{key}:booking', version, allow_color_hold=hold_color)
+            except variant_inventory.StockError as error:
+                ready['ready'] = False
+                saved['variant_stock_feedback'] = error.feedback()
+            else:
+                booking_outcome = dict(action='booked', **booking['result'])
+                version = booking['result']['state_version']
+        outcome = booking_outcome or dict(action='continue', readiness=ready, answer_plan=plan.get('answer', {}),
                            invalid_fields=saved.get('invalid_fields',[]),business_feedback=saved.get('business_feedback'),
                            quote=saved.get('quote'),recovered=saved.get('recovered',False),
                            withdrawn=saved.get('withdrawn',False),contact_turn=saved.get('contact_turn',False),
@@ -798,6 +828,7 @@ class Runtime:
                            photo_choice=saved.get('photo_choice'), alternatives_requested=saved.get('alternatives_requested'),
                            consultant_guidance=saved.get('consultant_guidance'),
                            staff_stock_conflict=staff_stock_conflict, waiting_for_color=waiting_for_color,
+                           variant_stock_feedback=saved.get('variant_stock_feedback'),
                            state_version=version)
         outcome['state_version'] = version + 1
         self.store.apply(scope, key + ':done', version, dict(event_id=event_id), lambda state: dict(outcome=outcome))

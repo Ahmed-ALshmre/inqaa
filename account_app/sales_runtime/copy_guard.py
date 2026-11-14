@@ -57,7 +57,8 @@ def validate_copy(parts,question,action_results=None):
         'color':r'(?:(?:شنو|يا|اي)\s*(?:ال)?لون|(?:تختار\w*|تحدد\w*|تگول\w*|قولي|گولي|دز\w*).{0,25}(?:اللون|لونج))',
         'size':r'(?:(?:شنو|شكد|اي)\s*(?:ال)?(?:قياس|عمر|وزن)|(?:دز\w*|قولي|گولي).{0,20}(?:قياسج|وزنج|عمره))'}
     for field,pattern in asks.items():
-        permitted=bool(question and (question.endswith('.'+field) or field=='size' and question.endswith(('.age_months','.weight_kg'))))
+        permitted=bool(question and (question == 'inventory.alternative' or question.endswith('.'+field)
+                                     or field=='size' and question.endswith(('.age_months','.weight_kg'))))
         if re.search(pattern,text) and not permitted:raise ValueError('reply.question: do not repeat '+field+' outside its selected step')
     if question and question.startswith('alternative.') and re.search(r'(?:نونو|طفل)\s*ثاني|تحبين\s*قياس',text):
         raise ValueError('reply.alternative: offer a compatible product; do not request a different child or age')
@@ -94,7 +95,7 @@ def validate_copy(parts,question,action_results=None):
         raise ValueError('reply.product: internal product IDs are not customer-facing names')
     image_request=(r'(?:دز\w*|ارس\w*).{0,35}(?:صور|سكرين|اسم\s*الموديل)'
                    r'|(?:ممكن|احتاج|ابعثي).{0,8}(?:صور|سكرين)')
-    if re.search(image_request,text) and question not in {'product', 'photo.reference', 'alternatives.photos'}:
+    if re.search(image_request,text) and question not in {'product', 'photo.reference', 'alternatives.photos', 'catalog.show_option'}:
         raise ValueError('reply.question: do not repeat product identification outside the selected step')
     if not any(part['type'] == 'image' for part in parts) and (
             claims_sent_models(text) or promises_photo_attachment(text) or

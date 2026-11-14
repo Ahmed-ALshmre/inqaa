@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="/static/css/dashboard.css?v=25"><link rel="stylesheet" href="/static/css/theme.css?v=2">
   <link rel="stylesheet" href="/static/css/ui.css?v=2"><script defer src="/static/js/ui.js?v=2"></script>
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="/manifest.webmanifest">
-  <link rel="stylesheet" href="/static/css/products.css?v=2">
+  <link rel="stylesheet" href="/static/css/products.css?v=3">
   <link rel="stylesheet" href="/static/css/mobile-shell.css?v=3">
   <link rel="stylesheet" href="/static/css/responsive-workspace.css?v=5">
 </head>
@@ -46,13 +46,16 @@
   <form id="productForm" class="product-form catalog-form" novalidate onsubmit="saveProduct(event)">
     <div class="catalog-profile-summary"><div class="catalog-summary-image" id="productSummaryImage"><i class="bi bi-bag"></i></div><div><strong id="productSummaryName">منتج جديد</strong><p id="productSummaryMeta">حدد الجمهور ونوع القطعة ليسهل اقتراحها.</p></div><div class="catalog-completeness"><span id="profileReadiness">بيانات المنتج</span><progress id="profileProgress" max="7" value="0"></progress></div></div>
     <div class="catalog-tabbar" role="tablist" aria-label="أقسام بطاقة المنتج">
-      {% for id,title,icon in [('basics','الأساسيات','box'),('fit','الجمهور والمقاسات','rulers'),('knowledge','تفاصيل البيع','chat-square-text'),('media','الصور','images'),('links','البدائل والاقتراح','diagram-3')] %}<button type="button" role="tab" id="tab-{{ id }}" aria-controls="panel-{{ id }}" aria-selected="{{ 'true' if loop.first else 'false' }}" onclick="showProductTab('{{ id }}')"><i class="bi bi-{{ icon }}"></i>{{ title }}</button>{% endfor %}
+      {% for id,title,icon in [('basics','الأساسيات','box'),('fit','الجمهور والمقاسات','rulers'),('inventory','المخزون','boxes'),('knowledge','تفاصيل البيع','chat-square-text'),('media','الصور','images'),('links','البدائل والاقتراح','diagram-3')] %}<button type="button" role="tab" id="tab-{{ id }}" aria-controls="panel-{{ id }}" aria-selected="{{ 'true' if loop.first else 'false' }}" onclick="showProductTab('{{ id }}')"><i class="bi bi-{{ icon }}"></i>{{ title }}</button>{% endfor %}
     </div>
     <div id="productFormError" class="catalog-error" role="alert" hidden></div>
     <section id="panel-basics" role="tabpanel" aria-labelledby="tab-basics" class="catalog-tabpanel">
       <div class="catalog-section-heading"><h3>هوية المنتج وسعره</h3><p>المعلومات التي يرجع لها المساعد عند سؤال الزبون.</p></div>
       <div class="catalog-fields">{{ input('productName','اسم الموديل الداخلي','مثال: فستان الاميرات',wide=true) }}{{ input('productReplyCategory','فئة القطعة في رد الزبون','اكتبها يدوياً مثل التراك الولادي أو القميص. اختيارية.',wide=true) }}{{ input('productId','كود المنتج','P015') }}{{ input('productPrice','السعر بالدينار','13000، أو بكج 3 قطع بـ25000') }}
-      {{ select('productStatus','الظهور بالكتالوج',{'active':'نشط — ظاهر','inactive':'مخفي'}) }}{{ select('productStock','التوفر',{'متوفر':'متوفر','نفذ':'غير متوفر'},'غير مؤكد') }}{{ input('productStockQuantity','الكمية الفعلية المتبقية','اتركها فارغة إذا غير معروفة','number') }}{{ input('productOffer','العرض الحالي','مثال: عرض على آخر القطع') }}{{ area('productDescription','وصف قصير للزبون','ما الذي يميز القطعة؟ وصف حقيقي بدون أسعار قديمة.') }}
+      {{ select('productStatus','الظهور بالكتالوج',{'active':'نشط — ظاهر','inactive':'مخفي'}) }}{{ select('productStock','التوفر',{'متوفر':'متوفر','نفذ':'غير متوفر'},'غير مؤكد') }}{{ input('productStockQuantity','الكمية الفعلية المتبقية','اتركها فارغة إذا غير معروفة','number') }}{{ input('productOffer','العرض الحالي','مثال: عرض على آخر القطع') }}
+      <label class="field"><span>الخصم بالدينار لكل وحدة بيع</span><input id="productDiscount" class="form-control" type="number" min="0" step="1" placeholder="مثال 2000"></label>
+      <label class="form-check align-self-center"><input id="productClearance" class="form-check-input" type="checkbox"><span class="form-check-label">ضمن التصفية</span></label>
+      {{ area('productDescription','وصف قصير للزبون','ما الذي يميز القطعة؟ وصف حقيقي بدون أسعار قديمة.') }}
       </div><details class="catalog-advanced"><summary>ربط الإعلانات واسم الطلب</summary><div class="catalog-fields">{{ input('productRef','مرجع الإعلان Ref') }}{{ input('productAdId','معرف الإعلان الرئيسي Ad ID') }}{{ area('productAdIds','معرفات إعلانات إضافية لنفس المنتج','كل معرف بسطر؛ يمكن ربط عدة إعلانات بالقطعة نفسها.') }}<p class="catalog-help wide">استخدمي معرف الإعلان، وليس معرف المنشور. أي إعلان مسجّل هنا يربط الزبون مباشرة بهذا المنتج.</p>{{ input('productOrderName','اسم المنتج في الطلبات','الاسم المطابق في نظام الطلبات',wide=true) }}</div></details>
     </section>
     <section id="panel-fit" role="tabpanel" aria-labelledby="tab-fit" class="catalog-tabpanel" hidden>
@@ -62,6 +65,26 @@
       <div class="catalog-size-block catalog-fields" id="ageSizeFields" hidden>{{ input('productAgeMin','من عمر','مثال: 6','number') }}{{ select('productAgeMinUnit','وحدة البداية',{'months':'شهر','years':'سنة'},'اختر الوحدة') }}{{ input('productAgeMax','إلى عمر','مثال: 7','number') }}{{ select('productAgeMaxUnit','وحدة النهاية',{'months':'شهر','years':'سنة'},'اختر الوحدة') }}<p class="catalog-help wide">النطاق يشمل كل الأعمار بين البداية والنهاية. إذا المتوفر أعمار متقطعة، استخدم المقاسات المحفوظة واكتب الأعمار المؤكدة فقط.</p></div>
       <div class="catalog-size-block catalog-fields" id="weightSizeFields" hidden>{{ input('productWeightMin','من وزن / كيلو','60','number') }}{{ input('productWeightMax','إلى وزن / كيلو','90','number') }}<p class="catalog-help wide">نطاق تقريبي للبالغين، وليس ضمان ملاءمة. أضف قياسات القطعة بالسنتيمتر عند توفرها.</p></div>
       <div class="catalog-fields"><div class="catalog-field wide" id="legacySizeField"><label for="productSizes">المقاسات المتوفرة فعلياً</label><input class="form-control" id="productSizes" placeholder="38، 40، 44 أو S / M / L أو 3 إلى 7 سنوات"><small>لا تضف قياساً أو عمراً غير متوفر.</small></div><div class="catalog-size-preview wide" id="sizePreview" role="status"></div>{{ area('knowledge_measurements','قياسات القطعة بالسنتيمتر','مثال: قياس 42 — صدر 100 سم، طول 120 سم') }}{{ area('knowledge_fit_notes','ملاحظات الملاءمة','ملاحظات مؤكدة؛ لا تخمين من الوزن فقط.') }}</div>
+    </section>
+    <section id="panel-inventory" role="tabpanel" aria-labelledby="tab-inventory" class="catalog-tabpanel" hidden>
+      <div class="catalog-section-heading"><h3>المخزون حسب اللون والقياس</h3><p>أدخل العدد الموجود حالياً لكل تركيبة. الصفر يوقف بيعها، والحجز يخصم من عددها تلقائياً.</p></div>
+      <p id="variantStockNew" class="catalog-help">احفظ بطاقة المنتج أولاً حتى تضيف المخزون.</p>
+      <div id="variantStockEditor" hidden>
+        <div class="catalog-field"><label for="variantStockMode">طريقة متابعة المخزون</label><select id="variantStockMode" class="form-select"><option value="general">التوفر العام (الطريقة القديمة)</option><option value="detailed">حسب اللون والقياس</option></select></div>
+        <p id="variantStockGeneralHelp" class="catalog-help">صوف يعتمد على حالة التوفر والألوان والقياسات المسجلة ببطاقة المنتج. العدد الإجمالي اختياري.</p>
+        <div id="variantStockDetails" hidden>
+          <p id="variantStockReview" class="catalog-help" hidden>راجع الأعداد قبل إعادة تفعيل المخزون التفصيلي. الحجوزات الجديدة بالطريقة العامة ما تخصم من هذه الأعداد.</p>
+          <datalist id="variantStockColors"></datalist>
+          <p id="variantStockSummary" class="catalog-help" role="status"></p>
+          <div class="catalog-stock-grid catalog-stock-head" aria-hidden="true"><span>اللون</span><span>القياس</span><span>المتبقي</span><span>الحالة</span></div>
+          <div id="variantStockRows"></div>
+          <button id="variantStockAdd" class="btn btn-outline-secondary" type="button"><i class="bi bi-plus-lg"></i> إضافة تركيبة</button>
+        </div>
+        <div class="catalog-stock-actions">
+          <button id="variantStockSave" class="btn btn-primary" type="button">حفظ المخزون</button>
+        </div>
+        <p id="variantStockStatus" role="status"></p>
+      </div>
     </section>
     <section id="panel-knowledge" role="tabpanel" aria-labelledby="tab-knowledge" class="catalog-tabpanel" hidden>
       <div class="catalog-section-heading"><h3>إجابات جاهزة من معلومات صحيحة</h3><p>اترك غير المعروف فارغاً. المعلومة الفارغة لا تعني أن الميزة غير موجودة.</p></div>
@@ -89,6 +112,6 @@
 </main>
 <script id="catalogSchema" type="application/json">{{ catalog_schema|tojson }}</script>
 <div class="toast-container position-fixed top-0 start-0 p-3" id="toastContainer"></div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script><script src="/static/js/products.js?v=21"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script><script src="/static/js/products.js?v=24"></script>
 {% include "_mobile_nav.html" %}
 </body></html>

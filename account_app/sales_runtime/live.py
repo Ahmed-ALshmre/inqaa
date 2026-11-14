@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from functools import partial
 from urllib.parse import urlsplit
 
-from .. import ad_attribution, checkout, delivery_state, sales_playbook
+from .. import ad_attribution, checkout, delivery_state, product_albums, sales_playbook, variant_inventory
 from .backup import consultation_markers
 from .contracts import DecisionRejected, DecisionUnavailable
 from .delivery import deliver_confirmation, deliver_replies
@@ -427,6 +427,14 @@ def make_entry(module, db, scope, allow_write):
 
     def product_photos(product, colors):
         origin = urlsplit(module.PUBLIC_URL).netloc
+        stocked_colors = None
+        if product.get('variant_stock'):
+            if product_albums.stock_state(product) != 'available':
+                return []
+            stocked_colors = {row['color'] for row in variant_inventory.choices(product)}
+            if colors and not stocked_colors.intersection(variant_inventory.color_key(color) for color in colors):
+                return []
+            colors = [color for color in colors if variant_inventory.color_key(color) in stocked_colors]
         color_by_url = {url: color for color in colors for url in module.select_product_image_urls(product, color)}
         photos = []
         for variant in module.product_image_variants(product):
@@ -434,6 +442,9 @@ def make_entry(module, db, scope, allow_write):
             if not origin or url.scheme != 'https' or url.netloc != origin or not url.path.startswith('/product_image/'):
                 continue
             if colors and variant['url'] not in color_by_url:
+                continue
+            if stocked_colors is not None and variant['color'] and variant_inventory.color_key(
+                    variant['color']) not in stocked_colors:
                 continue
             photos.append(dict(type='image', url=variant['url'], product_id=product['product_id'],
                                color=color_by_url.get(variant['url'], variant['color'])))

@@ -135,6 +135,8 @@ def sales_product(product):
     still require review; they cannot introduce a new color into inventory.
     """
     result = dict(product)
+    if result.get('variant_stock'):
+        return result
     remaining = remaining_colors(product)
     recorded = set(product_variants.colors(product.get('colors')))
     if remaining and set(remaining) <= recorded:
@@ -143,6 +145,8 @@ def sales_product(product):
 
 
 def color_conflict(product):
+    if (product or {}).get('variant_stock'):
+        return False
     recorded = set(product_variants.colors((product or {}).get('colors')))
     remaining = set(remaining_colors(product))
     return bool(recorded and remaining and not remaining <= recorded)
@@ -152,10 +156,12 @@ def stock_state(product):
     stock = str((product or {}).get('stock') or '').strip().lower()
     if str((product or {}).get('status') or '').lower() in ('inactive', 'disabled'):
         return 'out'
+    if any(word in stock for word in ('نفذ', 'نافذ', 'نافد', 'خلص', 'غير متوفر', 'مو متوفر', 'not available', 'out')):
+        return 'out'
+    if variants := (product or {}).get('variant_stock'):
+        return 'available' if any(row['quantity'] > 0 for row in variants) else 'out'
     quantity = (product or {}).get('stock_quantity')
     if quantity is not None and str(quantity).strip() and str(quantity).strip().isdigit() and int(str(quantity).strip()) == 0:
-        return 'out'
-    if any(word in stock for word in ('نفذ', 'نافذ', 'نافد', 'خلص', 'غير متوفر', 'مو متوفر', 'not available', 'out')):
         return 'out'
     if color_conflict(product):
         return 'unknown'

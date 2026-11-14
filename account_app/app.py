@@ -33,7 +33,7 @@ try:
     from .reply_layout import approved_parts, plan_sales_bubbles, polish_surface_punctuation
     from .staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     from . import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
-    from .pricing import quote as price_order, expand_bundles, delivery_terms
+    from .pricing import quote as price_order, expand_bundles, delivery_terms, product_discount, terms as product_price_terms
     from .checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 except ImportError:
     import ai_efficiency, ai_transport, ai_jobs, rewrite_guard, rewards, inbound_media, reply_consultant
@@ -48,13 +48,14 @@ except ImportError:
     from reply_layout import approved_parts, plan_sales_bubbles, polish_surface_punctuation
     from staff_access import install as install_staff, authenticate as authenticate_staff, tables as staff_tables, StaffPermissionDenied
     import conversation_quality, order_actions, conversion_growth, sales_strategy, sales_context, storage_maintenance, product_albums, sales_learning, customer_copy, product_variants, sales_answers, sales_playbook, sales_decision, catalog_truth
-    from pricing import quote as price_order, expand_bundles, delivery_terms
+    from pricing import quote as price_order, expand_bundles, delivery_terms, product_discount, terms as product_price_terms
     from checkout import CHECKOUT_ETA_SUFFIX, COLOR_REVIEW_STATUS, checkout_declaration, contact_fields, invalid_shipping_address, has_shipping_landmark, phone_number, is_confirmation, is_existing_order_followup, unsupported_order_action, order_line_error, optional_order_weight, measurement_history_error, child_cart_error, chosen_color_error, unresolved_purchase_terms, unresolved_condition
 from flask import Flask, g, has_app_context, has_request_context, jsonify, redirect, render_template, request, send_file, send_from_directory, session, url_for
 
 # Gunicorn also supports launching app:app from inside account_app.
 if not __package__:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from account_app import sales_intelligence, variant_inventory
 from account_app.sales_runtime import live as sales_runtime_live
 from account_app.sales_runtime.facts import only_same_day_question
 from account_app.sales_runtime.policies import APPROVED_DELIVERY_TIME
@@ -1323,6 +1324,7 @@ def init_db():
     db.execute("CREATE INDEX IF NOT EXISTS idx_orders_stats ON orders(store_id,created_at,sender_id)")
     inbox_queries.init_db(db)
     product_questions.init(db)
+    variant_inventory.init(db)
     order_actions.init(db)
     product_questions.seed_owner_facts(db, load_products_from_file(all_stores=True), now_baghdad_iso())
     restore_held_color_reviews(db)
@@ -1522,7 +1524,7 @@ PRODUCT_FIELDS = (
     "lining", "transparency", "stretch", "closure", "measurements", "fit_notes",
     "bundle_contents", "sale_unit", "real_photo_notes", "video_url", "faq", "inspection_policy",
     "image_colors", "image_embedding", "status", "notes", "order_name",
-    "related_product_ids", "sales_cues", *catalog_profile.FIELDS,
+    "related_product_ids", "sales_cues", "discount_iqd", "clearance", *catalog_profile.FIELDS,
 )
 
 
@@ -1532,6 +1534,8 @@ def _normalize_product(raw_product):
     product["product_id"] = str(product.get("product_id") or "").strip()
     product["store_id"] = _safe_store_id(product.get("store_id") or DEFAULT_STORE_ID)
     product["status"] = str(product.get("status") or "active").strip() or "active"
+    product['clearance'] = product.get('clearance') is True
+    product['discount_iqd'] = product_discount(product.get('discount_iqd'))
     product['ad_ids'] = ad_attribution.normalize_product_ids(product.get('ad_ids'))
     product["image_colors"] = _normalize_product_image_colors(
         product.get("image_colors"), product.get("image_url")
@@ -2375,10 +2379,10 @@ def set_customer_ai_enabled(db, sender_id, enabled, reason="manual", allow_manua
     return True
 
 
-def pause_sales_runtime_for_staff(db, sender_id):
+def pause_sales_runtime_for_staff(db, sender_id, *, commit=True):
     row = sales_runtime_live.route(db, sender_id)
     if row and row['store_id'] == current_store_id():
-        set_customer_ai_enabled(db, sender_id, False)
+        set_customer_ai_enabled(db, sender_id, False, commit=commit)
 
 
 def staff_reply_lock(handler):
@@ -5273,11 +5277,11 @@ def detect_message_type(ev):
 # ── Product matching ──────────────────────────────────────────────────────────
 
 def load_active_products(db):
-    return [
-        product_albums.sales_product(product)
-        for product in product_questions.apply(db or (get_db() if has_app_context() else None), current_store_id(), load_products_from_file())
-        if product.get("status") == "active"
-    ]
+    db = db or (get_db() if has_app_context() else None)
+    products = product_questions.apply(db, current_store_id(), load_products_from_file())
+    return [variant_inventory.sales_view(product_albums.sales_product(product))
+            for product in variant_inventory.with_stock(db, current_store_id(), products)
+            if product.get('status') == 'active']
 
 
 def _strip_arabic_prefix(word):
@@ -10216,6 +10220,12 @@ def _call_main_ai_once(
             "image_colors" if full else None,
         )
         shortened = {k: prod.get(k) for k in keys if k and prod.get(k) not in (None, "", [])}
+        if prod.get('discount_iqd') or prod.get('clearance'):
+            profile = sales_intelligence.profile(prod)
+            if profile:
+                shortened['verified_sale'] = profile
+                if prod.get('discount_iqd'):
+                    shortened.pop('price', None)
         shortened['has_images'] = bool(product_image_urls(prod))
         if full:
             shortened["image_variants"] = product_image_variants(prod)
@@ -10228,6 +10238,7 @@ def _call_main_ai_once(
     if matched_product:
         detailed_ids.add(matched_product.get('product_id'))
     question_text = ev.get("text") or ""
+    learned_tactics = sales_intelligence.learned_tactics(db, current_store_id(), question_text, False)
     normalized_question = sales_strategy.normalized(question_text)
     wants_options = (
         bool(ev.get('_voice_inputs')) or sales_context.browse_request(question_text)
@@ -10300,6 +10311,10 @@ def _call_main_ai_once(
     system_prompt += "\n\n" + owner_sales.GUIDE
     system_prompt += "\n\n" + owner_sales.address_guidance(customer['gender'])
     system_prompt += "\n\n" + product_questions.guidance_prompt(matched_product, question_text)
+    if learned_tactics:
+        system_prompt += "\n\nإرشادات البيع اللي ثبتت بالمراجعة اليومية لهالمتجر:\n" + '\n'.join(learned_tactics)
+    if matched_short and matched_short.get('verified_sale'):
+        system_prompt += '\nverified_sale يعطي سعر وحدة البيع الفعلي وعروض الكمية المتحققة. لا تجمعين خصم المنتج مع عرض الكمية ولا تذكرين العدد الداخلي للمخزون.'
     if not post_order:
         system_prompt += "\n\n" + sales_progress.brief(ev, matched_product, customer, history)
     if not post_order and matched_product:
@@ -10908,7 +10923,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
 
     # An unavailable choice is resolved before collecting delivery contacts.
     # A suggested replacement still needs the customer's explicit acceptance.
-    preview_catalog=[product_albums.sales_product(p) for p in load_products_from_file()]
+    preview_catalog = [product_albums.sales_product(p) for p in
+                       variant_inventory.with_stock(db, current_store_id(), load_products_from_file())]
     if not cart_confirmed:
         history=load_history(db,sender_id,limit=100)
         choice_error=chosen_color_error(checkout_lines(order_data,matched_product),history,preview_catalog)
@@ -10935,7 +10951,8 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
     if not valid_phone:
         return None, "رقم الموبايل غير مكتمل؛ دزيلي رقم عراقي صحيح حتى أثبتلج الحجز."
     phone = order_data["phone"] = valid_phone
-    catalog_products = [product_albums.sales_product(p) for p in load_products_from_file()]
+    catalog_products = [product_albums.sales_product(p) for p in
+                        variant_inventory.with_stock(db, current_store_id(), load_products_from_file())]
     raw_items = checkout_lines(order_data, matched_product)
     if any(product_albums.color_conflict(product) for product in catalog_products
            if any(isinstance(item, dict) and item.get('product_id') == product.get('product_id') for item in raw_items)):
@@ -11067,6 +11084,12 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         if owns_transaction:
             db.rollback()
         return None, ''
+    try:
+        variant_inventory.reservation_changes(db, None, current_store_id(), items, catalog_products)
+    except variant_inventory.StockError as exc:
+        if owns_transaction:
+            db.rollback()
+        return None, str(exc)
     order_cursor = db.execute(
         """INSERT INTO orders
            (sender_id, customer_name, phone, province, address,
@@ -11090,6 +11113,7 @@ def create_order_if_valid(db, sender_id, ai_result, matched_product, *, cart_con
         ),
     )
 
+    variant_inventory.allocate(db, order_cursor.lastrowid, current_store_id(), items, catalog_products)
     db.execute("UPDATE orders SET product_total=?,delivery_fee=?,total_amount=? WHERE id=?",
                (product_total, delivery_fee, total_amount, order_cursor.lastrowid))
 
@@ -14675,6 +14699,8 @@ def _order_payload_by_id(db, order_id):
 @_dash_require
 def api_update_order(order_id):
     db = get_db()
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
     current = _order_payload_by_id(db, order_id)
     if not current:
         return jsonify({"ok": False, "error": "order not found"}), 404
@@ -14701,6 +14727,8 @@ def api_update_order(order_id):
                 value = str(changed.get(key) or '').strip()
                 if not value:
                     return jsonify(ok=False, error="حدد قياس ولون كل قطعة"), 400
+                if key == 'size' and value != item.get(key):
+                    item.pop('age_months', None)
                 item[key] = value
         updates['order_items'] = json.dumps(items, ensure_ascii=False)
         updates['product_name'] = order_items_summary(items)
@@ -14712,6 +14740,8 @@ def api_update_order(order_id):
         if len(items) == 1:
             for key in ("size", "color"):
                 if key in updates:
+                    if key == 'size' and updates[key] != items[0].get(key):
+                        items[0].pop('age_months', None)
                     items[0][key] = updates[key]
             updates["order_items"] = json.dumps(items, ensure_ascii=False)
             updates["product_name"] = order_items_summary(items)
@@ -14734,6 +14764,23 @@ def api_update_order(order_id):
         return jsonify(ok=False, error="راجع لون الصورة قبل تجهيز الطلب"), 400
     if not updates:
         return jsonify({"ok": False, "error": "no fields to update"}), 400
+
+    next_status = updates.get('status', current.get('status'))
+    update_stock = (bool({'order_items', 'product_id'}.intersection(updates))
+                    or ((next_status in variant_inventory.CANCELLED) !=
+                        (current.get('status') in variant_inventory.CANCELLED)))
+    if update_stock and next_status != COLOR_REVIEW_STATUS:
+        catalog = load_products_from_file(store_id=current['store_id'])
+        reserved_items = [] if next_status in variant_inventory.CANCELLED else items
+        tracked = variant_inventory.rows_by_product(db, current['store_id']).keys()
+        if ('product_id' in updates and updates['product_id'] != current['product_id'] and items
+                and tracked & ({item.get('product_id') for item in items} | {updates['product_id']})):
+            return jsonify(ok=False, error='عدّل القطعة من تفاصيل الطلب حتى يتم تحديث المخزون بشكل صحيح.'), 400
+        try:
+            variant_inventory.allocate(db, order_id, current['store_id'], reserved_items, catalog)
+        except variant_inventory.StockError as exc:
+            db.rollback()
+            return jsonify(ok=False, error=str(exc)), 409
 
     set_clause = ", ".join(f"{field}=?" for field in updates)
     values = list(updates.values()) + [order_id]
@@ -16020,6 +16067,21 @@ def run_ai_job(job, payload):
                 return dict(cached, ok=stored['status'] == 'done', _job_cached=True)
             if job['kind'] == 'media_archive':
                 return {'ok': True, 'archived': _archive_incoming_message_media(db, int(payload['message_id']))}
+            if job['kind'] == sales_intelligence.JOB_KIND:
+                from account_app.sales_runtime.cart import Catalog
+                from account_app.sales_runtime.gateway import BACKUP_MODEL
+                store = job['store_id']
+                track = payload.get('track')
+                if track not in sales_intelligence.TRACKS:
+                    return {'ok': True, 'status': 'superseded'}
+                main = get_ai_model(db, 'main_model', MAIN_MODEL)
+                models = [main if main != BACKUP_MODEL else MAIN_MODEL, BACKUP_MODEL]
+                def load_catalog():
+                    products = variant_inventory.with_stock(db, store, load_products_from_file(store_id=store))
+                    return Catalog(store, products)
+                return sales_intelligence.run(db, store, payload['sales_day'], track, payload.get('revision'), load_catalog, models,
+                    lambda model, evidence, rules, proposal=None: sales_intelligence.analyze(
+                        ai_transport.post, OPENROUTER_KEY, model, track, evidence, rules, proposal))
             if job['kind'] == 'webhook':
                 return _finish_customer_webhook_async(**payload) or {'ok': True}
             locked = acquire_sender_lock(get_db(), job['sender_id'], wait_seconds=1)
@@ -16321,6 +16383,8 @@ def api_products():
             "stock":        p.get("stock"),
             "sizes":        p.get("sizes"),
             "colors":       p.get("colors"),
+            "variant_stock": variant_inventory.choices(p) if _stock_state(p) == 'available' else [],
+            "tracks_variants": bool(p.get('variant_stock')),
             "delivery":     p.get("delivery"),
             "image_url":    p.get("image_url"),
             "image_urls":   product_image_urls(p),
@@ -16508,6 +16572,10 @@ def _product_from_request(data, existing=None):
     if len(primary) > 1:
         raise ValueError('اكتبي معرفاً واحداً في المعرف الرئيسي، وبقية المعرفات في حقل الإعلانات الإضافية.')
     product['ad_id'] = primary[0] if primary else ''
+    if 'clearance' in data and type(data['clearance']) is not bool:
+        raise ValueError('حدد إذا كان المنتج ضمن التصفية.')
+    if product_discount(product.get('discount_iqd')):
+        product_price_terms(product)
     product["image_url"] = _normalize_product_image_value(product.get("image_url"))
     product["image_colors"] = _normalize_product_image_colors(
         product.get("image_colors"), product["image_url"]
@@ -16538,8 +16606,57 @@ def _sync_related_product_links(products, changed):
 def api_manage_products():
     include_inactive = request.args.get("all", "1") != "0"
     products = load_products_from_file() if include_inactive else load_active_products(None)
-    return jsonify(products=[product_payload(p) for p in products],catalog_schema=catalog_editor_schema(),
+    db, store = get_db(), current_store_id()
+    stock = variant_inventory.rows_by_product(db, store)
+    general = variant_inventory.general_products(db, store)
+    payloads = []
+    for product in products:
+        rows = stock.get(product['product_id'], [])
+        mode = variant_inventory.mode_for(product['product_id'], rows, general)
+        payload = product_payload(product)
+        payload.update(variant_stock=rows, variant_stock_mode=mode,
+                       variant_stock_revision=variant_inventory.revision(rows, mode))
+        payload['catalog_meta']['stock_state'] = product_albums.stock_state(
+            dict(payload, variant_stock=rows if mode == variant_inventory.DETAILED else []))
+        payloads.append(payload)
+    return jsonify(products=payloads,catalog_schema=catalog_editor_schema(),
                    revision=catalog_linking.revision(products,current_store_id()))
+
+
+@app.put('/api/products/manage/<product_id>/stock')
+@_dash_require
+def api_variant_stock(product_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify(error='بيانات المخزون غير صحيحة.'), 400
+    db = get_db()
+    store = current_store_id()
+    mode = body.get('mode', variant_inventory.DETAILED)
+    if mode not in (variant_inventory.GENERAL, variant_inventory.DETAILED):
+        return jsonify(error='اختر طريقة متابعة المخزون.'), 400
+    if not secrets.compare_digest(request.headers.get('X-CSRF-Token',''), session.get('csrf_token') or secrets.token_hex(32)):
+        return jsonify(error='حدّث الصفحة ثم حاول مجدداً.'), 403
+    with _products_file_lock, variant_inventory.transaction(db):
+        product = next((p for p in load_products_from_file() if p['product_id'] == product_id), None)
+        if not product:
+            return jsonify(error='المنتج غير موجود.'), 404
+        existing = variant_inventory.rows_by_product(db, store).get(product_id, [])
+        previous_mode = variant_inventory.mode_for(product_id, existing, variant_inventory.general_products(db, store))
+        if body.get('revision') != variant_inventory.revision(existing, previous_mode):
+            return jsonify(error='تغيّر المخزون بعد فتح المنتج. حدّث القائمة وراجع الأعداد قبل الحفظ.'), 409
+        try:
+            rows = existing
+            if mode == variant_inventory.DETAILED:
+                rows = variant_inventory.validated_rows(product, body.get('variants'))
+                if not rows:
+                    raise ValueError('أضف تركيبة لون وقياس واحدة على الأقل أو اختر التوفر العام.')
+                variant_inventory.replace(db, store, product_id, rows)
+            variant_inventory.set_mode(db, store, product_id, mode)
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 400
+    return jsonify(ok=True, variants=rows, mode=mode, revision=variant_inventory.revision(rows, mode),
+                   stock_state=product_albums.stock_state(
+                       dict(product, variant_stock=rows if mode == variant_inventory.DETAILED else [])))
 
 
 @app.post('/api/products/manage/classify')
@@ -16663,6 +16780,12 @@ def api_update_product(product_id):
                     ad_attribution.validate_product_ids(updated, products)
                     updated["related_product_ids"] = product_links.validate_related_ids(
                         updated["related_product_ids"], product_id, updated["store_id"], products)
+                    stock_rows = variant_inventory.rows_by_product(
+                        get_db(), updated['store_id'], active_only=True).get(product_id)
+                    if stock_rows and {key: updated.get(key) for key in ('colors', 'sizes', 'size_system')} != {
+                            key: existing.get(key) for key in ('colors', 'sizes', 'size_system')}:
+                        if variant_inventory.validated_rows(updated, stock_rows) != stock_rows:
+                            raise ValueError('تغيير طريقة المقاس يؤثر على المخزون المسجل. راجع التركيبات أولاً.')
                 except ValueError as exc:
                     return jsonify({"error": str(exc)}), 400
                 products[idx] = updated
@@ -16680,6 +16803,7 @@ def api_delete_product(product_id):
     if not product_id:
         return jsonify({"error": "product_id required"}), 400
 
+    db = get_db()
     with _products_file_lock:
         products = load_products_from_file(all_stores=True)
         remaining = [p for p in products if not (p.get("product_id") == product_id and p.get("store_id") == current_store_id())]
@@ -16690,6 +16814,13 @@ def api_delete_product(product_id):
                 peer["related_product_ids"] = [item for item in product_links.normalize_related_ids(
                     peer.get("related_product_ids")) if item != product_id]
         save_products_to_file(remaining)
+        with variant_inventory.transaction(db):
+            db.execute('DELETE FROM product_variant_stock WHERE store_id=? AND product_id=?',
+                       (current_store_id(), product_id))
+            db.execute('DELETE FROM order_variant_stock WHERE store_id=? AND product_id=?',
+                       (current_store_id(), product_id))
+            db.execute('DELETE FROM general_product_stock WHERE store_id=? AND product_id=?',
+                       (current_store_id(), product_id))
     return jsonify({"ok": True, "deleted": product_id})
 
 
@@ -18323,7 +18454,56 @@ def api_evaluation():
         "followup_performance": followups,
         "suggestions": get_evaluation_suggestions(db, limit=50),
         "active_rules": get_active_ai_rules(db),
+        "nightly_analyses": sales_intelligence.controls(db, current_store_id()),
     })
+
+
+@app.get('/api/evaluation/analysis')
+@_dash_require
+def api_analysis_status():
+    return jsonify(ok=True, nightly_analyses=sales_intelligence.controls(get_db(), current_store_id()))
+
+
+@app.put('/api/evaluation/analysis/<track>', defaults={'action': 'toggle'})
+@app.post('/api/evaluation/analysis/<track>/run', defaults={'action': 'run'})
+@app.post('/api/evaluation/analysis/<track>/rules', defaults={'action': 'rule'})
+@app.route('/api/evaluation/analysis/<track>/rules/<int:rule_id>', methods=['PUT', 'DELETE'], defaults={'action': 'rule'})
+@_dash_require
+def api_analysis_controls(track, action, rule_id=None):
+    token = session.get('csrf_token')
+    if not token or not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), token):
+        return jsonify(ok=False, error='حدّث الصفحة ثم حاول مجدداً.'), 403
+    db, store = get_db(), current_store_id()
+    if track not in sales_intelligence.TRACKS or not get_store(db, store):
+        return jsonify(ok=False, error='التحليل أو المتجر غير موجود.'), 404
+    data = request.get_json(silent=True)
+    try:
+        if request.method == 'DELETE':
+            if not sales_intelligence.delete_rule(db, store, track, rule_id):
+                raise LookupError('القاعدة غير موجودة في هذا المتجر والتحليل.')
+        elif not isinstance(data, dict):
+            raise ValueError('بيانات غير صالحة.')
+        elif action == 'toggle':
+            if track != 'conversations':
+                return jsonify(ok=False, error='تحليل المنتجات يبدأ عند الطلب.'), 400
+            setting = data.get('setting')
+            if setting not in ('conversations', 'learned_rules'):
+                raise ValueError('مفتاح التحليل غير معروف.')
+            sales_intelligence.set_enabled(db, store, setting, data.get('enabled'))
+        elif action == 'run':
+            if track != 'products':
+                return jsonify(ok=False, error='تحليل المحادثات يعمل حسب الجدول اليومي.'), 400
+            if not OPENROUTER_KEY:
+                return jsonify(ok=False, error='مفتاح مزوّد التحليل غير مضبوط.'), 503
+            sales_intelligence.request_product_analysis(db, store)
+            ai_jobs.start(DB_PATH, run_ai_job, ai_transport.LIMIT)
+        else:
+            sales_intelligence.save_rule(db, store, track, data, rule_id)
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+    except LookupError as exc:
+        return jsonify(ok=False, error=str(exc)), 404
+    return jsonify(ok=True, nightly_analyses=sales_intelligence.controls(db, store))
 
 
 @app.route("/api/evaluation/generate_suggestions", methods=["POST"])
@@ -18503,38 +18683,47 @@ def start_smart_reviewer_thread():
     def loop():
         while True:
             try:
-                db = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
-                db.row_factory = sqlite3.Row
-                try:
-                    with _incoming_media_lock:
-                        storage_maintenance.finish_incoming_deletions(db, INCOMING_MEDIA_DIR)
-                    with _products_file_lock:
-                        storage_maintenance.cleanup(db, UPLOADS_DIR, storage_maintenance.catalog_snapshot(PRODUCTS_FILE), product_root=PRODUCT_IMAGE_DIR)
-                except Exception as cleanup_error:
-                    print(f"[Storage] Cleanup skipped: {type(cleanup_error).__name__}")
-                for store in list_stores(db):
-                    if not store.get("active"):
-                        continue
-                    token = _current_store_id.set(store["store_id"])
-                    try:
-                        activate_conversion_plan(db)
-                        send_due_followups(db)
-                        run_smart_reviewer_cycle(db)
-                    finally:
-                        _current_store_id.reset(token)
-                db.close()
+                with app.app_context():
+                    tick_smart_reviewer()
             except Exception as e:
-                print(f"[SmartReviewer] Thread error: {e}")
+                print(f"[SmartReviewer] Thread error: {type(e).__name__}")
             time.sleep(60)
-            
+
     t = threading.Thread(target=loop, daemon=True)
     t.start()
     print("[SmartReviewer] Background thread started.")
 
 
+def tick_smart_reviewer():
+    db = get_db()
+    stores = list_stores(db)
+    if OPENROUTER_KEY:
+        now = datetime.now(sales_intelligence.BAGHDAD)
+        for store in stores:
+            sales_intelligence.schedule(db, store['store_id'], now)
+    try:
+        with _incoming_media_lock:
+            storage_maintenance.finish_incoming_deletions(db, INCOMING_MEDIA_DIR)
+        with _products_file_lock:
+            storage_maintenance.cleanup(db, UPLOADS_DIR, storage_maintenance.catalog_snapshot(PRODUCTS_FILE), product_root=PRODUCT_IMAGE_DIR)
+    except Exception as cleanup_error:
+        print(f"[Storage] Cleanup skipped: {type(cleanup_error).__name__}")
+    for store in stores:
+        token = _current_store_id.set(store['store_id'])
+        try:
+            activate_conversion_plan(db)
+            send_due_followups(db)
+            if sales_intelligence.settings(db, store['store_id'], 'conversations')[0]:
+                run_smart_reviewer_cycle(db)
+        finally:
+            _current_store_id.reset(token)
+
+
 @app.route("/api/evaluation/run_daily_learning", methods=["POST"])
 @_dash_require
 def api_run_daily_learning():
+    if not sales_intelligence.settings(get_db(), current_store_id(), 'conversations')[0]:
+        return jsonify(ok=False, error='تحليل المحادثات متوقف لهذا المتجر.'), 409
     data = request.get_json(silent=True) or {}
     return jsonify(run_daily_learning(get_db(), data.get("date_from"), data.get("date_to")))
 
@@ -18543,6 +18732,8 @@ def api_run_daily_learning():
 @_dash_require
 def api_ai_self_analysis():
     db = get_db()
+    if not sales_intelligence.settings(db, current_store_id(), 'conversations')[0]:
+        return jsonify(ok=False, error='تحليل المحادثات متوقف لهذا المتجر.'), 409
     data = request.get_json(silent=True) or {}
     start_date = data.get("date_from")
     end_date = data.get("date_to")
@@ -19333,25 +19524,6 @@ def api_create_order(sender_id):
     if not product_id_text and not product_name_text.strip():
         return jsonify({"ok": False, "error": "اختر منتجاً قبل تثبيت الطلب"}), 400
 
-    duplicate = find_duplicate_order(
-        db,
-        sender_id,
-        data.get("phone"),
-        product_id_text,
-        data.get("address"),
-        items=items,
-    )
-    if duplicate:
-        print(f"[Dashboard] Duplicate manual order skipped for {sender_id}: existing #{duplicate.get('id')}", flush=True)
-        return jsonify({
-            "ok": True,
-            "duplicate": True,
-            "existing_order_id": duplicate.get("id"),
-            "confirmation_sent": send_saved_order_confirmation(db, duplicate['id'], sender_id),
-            "telegram_sent": False,
-            "message": "هذا الطلب مثبت مسبقاً ولم يتم تكراره",
-        })
-
     order_info = {
         "created_at": now,
         "store_id": current_store_id(),
@@ -19375,7 +19547,21 @@ def api_create_order(sender_id):
     }
 
     menger.snapshot_prices(order_info, catalog)
-    pause_sales_runtime_for_staff(db, sender_id)
+    if not db.in_transaction:
+        db.execute('BEGIN IMMEDIATE')
+    duplicate = find_duplicate_order(db, sender_id, data.get('phone'), product_id_text,
+                                     data.get('address'), items=items)
+    if duplicate:
+        db.rollback()
+        return jsonify(ok=True, duplicate=True, existing_order_id=duplicate['id'],
+                       confirmation_sent=send_saved_order_confirmation(db, duplicate['id'], sender_id),
+                       telegram_sent=False, message='هذا الطلب مثبت مسبقاً ولم يتم تكراره')
+    try:
+        variant_inventory.reservation_changes(db, None, current_store_id(), items, catalog)
+    except variant_inventory.StockError as exc:
+        db.rollback()
+        return jsonify(ok=False, error=str(exc)), 409
+    pause_sales_runtime_for_staff(db, sender_id, commit=False)
     order_cursor = db.execute(
         "INSERT INTO orders (sender_id, customer_name, phone, province, address, "
         "product_id, product_name, color, size, notes, status, order_items, created_at, store_id) "
@@ -19385,6 +19571,7 @@ def api_create_order(sender_id):
          product_name_text, data.get("color"), data.get("size"),
          data.get("notes"), json.dumps(items, ensure_ascii=False), now, current_store_id()),
     )
+    variant_inventory.allocate(db, order_cursor.lastrowid, current_store_id(), items, catalog)
     db.execute("UPDATE orders SET product_total=?,delivery_fee=?,total_amount=? WHERE id=?",
                (product_total, delivery_fee, total_amount, order_cursor.lastrowid))
     db.execute(

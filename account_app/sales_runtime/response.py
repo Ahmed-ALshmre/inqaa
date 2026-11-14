@@ -3,7 +3,7 @@ import json
 import os
 import re
 
-from .. import catalog_profile, checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_playbook, sales_strategy, sales_voice
+from .. import catalog_profile, checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_intelligence, sales_playbook, sales_strategy, sales_voice, variant_inventory
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
@@ -87,6 +87,22 @@ class Responses:
             if isinstance(result, dict):
                 return result
             return self.save(scope, key, reply_key, turn_id, snap['version'], result)
+        if outcome.get('catalog_option_photo') and self.product_photos:
+            option = outcome['catalog_option_photo']
+            source_event = option['source_event']
+            source = self.store.evidence(scope, source_event)['payload'].get('text', '')
+            history = self.history_loader(scope, source_event) if self.history_loader else []
+            market = sales_intelligence.relevant(self.store.db, catalog, snap['data'], option['focus'], source,
+                order_confirmed=sales_intelligence.confirmation_accepted(self.store.db, scope, snap['data']), history=history)
+            match = next((item for item in market['matches'] if item['product_id'] == option['product_id']), None)
+            photos = self.product_photos(catalog.get(match['product_id']), match['colors'] or [])[:4] if match else []
+            if photos:
+                return self.save(scope, key, reply_key, turn_id, snap['version'], photos)
+            context = dict(mode='continue', question_field=None, next_step=dict(field=None, options=[]),
+                customer_message=current, recent_messages=messages, amounts={}, greeting=greeting, action_results={},
+                missing_catalog_photos=dict(colors=[], product_unavailable=match is None), copy_budget=145)
+            parts = self.write(context, catalog, scope, turn_id, snap['version'])
+            return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if mode != 'continue':
             question = None
             context = dict(mode=mode, question_field=question, next_step=dict(field=question, options=[]),
@@ -110,10 +126,16 @@ class Responses:
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
+        market = sales_intelligence.relevant(self.store.db, catalog, state, focus, current,
+            order_confirmed=sales_intelligence.confirmation_accepted(self.store.db, scope, state),
+            requested=bool(outcome.get('alternatives_requested')), history=messages[:-1],
+            already_suggested=sales_intelligence.already_suggested(self.store.db, scope, state.get('order_id')))
         matched_photo_only = bool(product and state.get('focus_source') == 'image' and not current.strip()
                                   and messages[-1].get('media_kind') == 'image')
         if outcome.get('alternatives_requested') and product and self.product_photos:
-            matches = alternatives(catalog, focus, current, requested=True)['matches']
+            matches = (alternatives(catalog, focus, current, requested=True)['matches']
+                       if not market['matches'] and accepted and accepted[-1].get('photo_offer_product') == focus
+                       else market['matches'])
             photos = []
             for match in matches:
                 photos.extend(self.product_photos(catalog.get(match['product_id']), [])[:1])
@@ -177,6 +199,18 @@ class Responses:
         saved_weight = next(iter(saved_weights)) if len(saved_weights) == 1 and sales_answers.fit_question(current) else None
         fit = weight_fit(product, current, weight_question, saved_weight=saved_weight) if not purchase_turn else None
         fit_stock = product_albums.stock_state(product) if fit else None
+        tracked = bool(product and product.get('variant_stock'))
+        inventory_feedback = outcome.get('variant_stock_feedback')
+        requested_color, requested_size = variant_inventory.target(current) if tracked else ('', '')
+        selected_line = next((line for line in lines if line['product_id'] == focus), {})
+        chosen_color = variant_inventory.color_key(requested_color or selected_line.get('color'))
+        chosen_size = (variant_inventory.size_key(product, requested_size) if requested_size
+                       else variant_inventory.line_key(product, selected_line)[1]) if tracked else ''
+        stock_rows = (variant_inventory.choices(product) if tracked
+                      and product_albums.stock_state(product) == 'available' else [])
+        if tracked and fit and stock_rows and (chosen_color or chosen_size) and not variant_inventory.choices(
+                product, color=chosen_color, size=chosen_size):
+            fit_stock = 'out'
         needs_weight = bool(product and product.get('selection_mode') == 'weight'
                             and not product_variants.is_free_size_product(product) and clothing_size_label(current)
                             and state.get('stated_clothing_size', {}).get('product_id') == focus
@@ -198,6 +232,8 @@ class Responses:
         if different_quantity or per_piece:
             price_question = False  # A hypothetical quantity is not the current cart price.
         quote_turn = bool(quote and not state.get('order_id') and (bargaining or price_question))
+        if market['opportunity'] == 'price_hesitation' and market['matches'] and not bargaining:
+            quote_turn = False  # A cheaper option gets its own price, separate from the current cart quote.
         price_units = retail_price = None
         promotion = None
         product_free_delivery = False
@@ -281,7 +317,7 @@ class Responses:
                                  or re.search(r'اريد|اطلب|احجز|اخذ|اشتري|بدله|دشداش|هالموديل|هذا\s+الموديل', clean))
             already_requested_for_item = any(p.get('question_stage')=='product-detail' for p in photo_questions)
             policy_only = bool(requested and not needs_product)
-            question = ('product' if not policy_only and
+            question = ('product' if not market['matches'] and not policy_only and
                         (not photo_questions or needs_product and not already_requested_for_item) else None)
             if question:
                 photo_stage = 'product-detail' if needs_product else 'product-opening'
@@ -304,6 +340,8 @@ class Responses:
         if not feedback and set(requested).intersection({'sizes', 'colors'}) and not contact_turn:
             feedback = next((c for c in readiness['conditions'] if c.get('kind') == 'choice'), None)
         recommendations=choice_alternatives(catalog,feedback) if feedback else alternatives(catalog,focus,current)
+        if not feedback and (market['requested'] or market['opportunity']):
+            recommendations = dict(matches=market['matches'], searched=True)
         if feedback:
             question=('alternative.'+feedback['product_id']) if recommendations['matches'] else None
         stage = photo_stage
@@ -376,6 +414,12 @@ class Responses:
             stage = 'stock-alternatives'
         if only_same_day_question(current):
             question = None
+        if inventory_feedback:
+            alternatives_available = inventory_feedback['available']
+            if alternatives_available and inventory_feedback['product_id'] == focus:
+                question = 'inventory.alternative'
+            else:
+                question = None
         if outcome.get('separate_photo_product'):
             if question and not (question.startswith(f'product.{focus}.')
                                  or question in {'alternative.color', 'alternatives.photos'}):
@@ -398,6 +442,14 @@ class Responses:
                 question = None  # Choosing a color does not require quoting the same total in consecutive replies.
         if stage == 'checkout-confirmed' and accepted and accepted[-1].get('question_field') == question:
             question = None
+        if market['requested'] and market.get('requested_age_months') and not market['matches'] and not feedback and not quote_turn:
+            question = None
+        if (market['matches'] and not feedback and not quote_turn and not inventory_feedback
+                and not (market['opportunity'] and (contact_turn or purchase_turn or (question or '').startswith('contact.')))):
+            question = 'catalog.show_option' if self.product_photos else None
+            photo_product = catalog.get(market['matches'][0]['product_id'])
+            if question and not self.product_photos(photo_product, market['matches'][0]['colors'] or []):
+                question = None
         if (question and question != 'product' and question not in outcome.get('invalid_fields', [])
                 and not (outcome.get('waiting_for_color') and question.endswith('.color'))):
             previous = [p for p in question_records
@@ -462,6 +514,21 @@ class Responses:
         if price_question and not bargaining and free_delivery and 'delivery_fee' not in amounts and not any(
                 part.get('price_disclosure', {}).get('delivery_fee') == 0 for part in accepted):
             amounts['delivery_fee'] = 0
+        if market['matches'] and 'price' in requested and not quote_turn and (not market['opportunity'] or question == 'catalog.show_option'):
+            # The available alternative has its own price and delivery terms.
+            # Never substitute the active model's price into a recommendation.
+            top_match = market['matches'][0]
+            amounts = {'alternative_price': top_match['price_iqd']}
+            if 'delivery_fee' in requested:
+                if top_match['free_delivery_at_pieces'] and top_match['unit_pieces'] >= top_match['free_delivery_at_pieces']:
+                    amounts['delivery_fee'] = 0
+                elif top_match['delivery_fee_iqd'] is not None:
+                    amounts['delivery_fee'] = top_match['delivery_fee_iqd']
+                else:
+                    province = destination(current) or state['contact'].get('province')
+                    fees = policy.get('delivery_fee')
+                    if isinstance(fees, dict) and type(fees.get(province)) is int:
+                        amounts['delivery_fee'] = fees[province]
         product_facts = {}
         value_facts = {}
         if product:
@@ -489,6 +556,15 @@ class Responses:
         step_product = product
         if question and question.startswith(('cart.', 'product.')):
             step_product = catalog.get(question_key(question).split('.', 1)[1].rsplit('.', 1)[0])
+        step_options = [] if question == 'alternative.color' else next_options(step_product, question)
+        if stock_rows and question and question_key(question).startswith(f'product.{focus}.'):
+            if question.endswith('.color'):
+                step_options = list(dict.fromkeys(row['color'] for row in
+                    variant_inventory.choices(product, size=chosen_size) if row['color']))[:2]
+            elif question.endswith('.size'):
+                matching_sizes = list(dict.fromkeys(row['size'] for row in
+                    variant_inventory.choices(product, color=chosen_color) if row['size']))
+                step_options = matching_sizes if len(matching_sizes) <= 2 else []
         context = dict(
             mode=mode, state=state, facts=allowed_facts, product_facts=product_facts,
             **({'consultant_guidance': outcome['consultant_guidance']} if outcome.get('consultant_guidance') else {}),
@@ -497,12 +573,15 @@ class Responses:
             copy_budget=520 if len(requested) > 1 or quote_turn or recommendations else 230,
             quote=quote if quote_turn else None, amounts=amounts, business_feedback=feedback,
             recommendations=recommendations, value_facts=value_facts,
+            catalog_memory=dict(market, matches=[], opportunity=None) if market['opportunity'] and question != 'catalog.show_option' else market,
+            learned_sales_tactics=sales_intelligence.learned_tactics(
+                self.store.db, scope.store, current, bool(market['matches'])),
             promotion_quantity=promotion[0] if promotion else None,
             free_delivery_min_quantity=free_quantity if free_quantity and free_quantity > 1 else None,
             stock_conflict=stock_conflict,
             weight_only=bool(product and product.get('selection_mode') == 'weight' and not free_size),
             documented_size_labels=product_variants.size_data(product.get('sizes'))['labels'] if product else [],
-            next_step=dict(field=question, options=[] if question=='alternative.color' else next_options(step_product, question)),
+            next_step=dict(field=question, options=step_options),
             progress=dict(stage=stage, received=sorted(received), acknowledgment=acknowledgment,
                           checkout_confirmed=stage=='checkout-confirmed',
                           contact_turn=contact_turn, recap_selection=recap,
@@ -518,8 +597,20 @@ class Responses:
                                 discount_allowed=bool(quote_turn and quote.get('discount'))),
             recent_messages=messages, recent_replies=accepted, greeting=greeting,
         )
+        if market['opportunity'] and question != 'catalog.show_option':
+            context['recommendations'] = None
         if state.get('focus_source') == 'image' and focus:
             context['verified_photo_product_id'] = focus
+        if tracked:
+            matching = variant_inventory.choices(product, color=chosen_color, size=chosen_size) if stock_rows else []
+            context['variant_stock'] = dict(available=stock_rows, color=chosen_color, size=chosen_size,
+                selected_quantity=sum(row['quantity'] for row in matching),
+                requested_quantity=(inventory_feedback or {}).get('requested', {}).get('quantity')
+                                   or sales_playbook.requested_quantity(current))
+        if inventory_feedback:
+            context['variant_stock_feedback'] = inventory_feedback
+            if context.get('variant_stock') and inventory_feedback['product_id'] == focus:
+                context['variant_stock']['available'] = inventory_feedback['available']
         if (skirt_length_request(current) and not product_variants.weight_answer(current) and
                 (catalog_profile.effective_family(product) == 'skirts' or any(
                     catalog_profile.query_type(message.get('text')) == 'skirts'
@@ -559,17 +650,22 @@ class Responses:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:
                 text_parts[-1]['purpose']='checkout_contacts'
+        if market['opportunity'] and market['matches'] and question == 'catalog.show_option':
+            parts[-1]['proactive_offer'] = state.get('order_id') or 0
         if question:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:text_parts[-1].update(question_field=question,question_key=question_key(question),question_stage=stage)
             if question == 'alternatives.photos':
                 text_parts[-1]['photo_offer_product'] = focus
+            if question == 'catalog.show_option' and text_parts:
+                text_parts[-1]['catalog_photo_offer'] = dict(product_id=market['matches'][0]['product_id'],
+                    focus=focus, source_event=turn_id)
         if question == 'purchase_intent':
             text_parts[-1]['cart_key'] = digest(lines)
         if quote_turn:
             parts[-1]['quote_key'] = offer_key
         if question=='price.accept':text_parts[-1]['quote_total']=quote['total']
-        disclosure = price_disclosure(quote if quote_turn else None, amounts)
+        disclosure = {} if 'alternative_price' in amounts else price_disclosure(quote if quote_turn else None, amounts)
         if disclosure:
             parts[-1]['price_disclosure'] = disclosure
         if free_size:
@@ -707,6 +803,11 @@ class Responses:
         elif product_id:
             context['possible_photo_product'] = customer_copy.reply_category(product) or customer_copy.fact(
                 product.get('product_name'))[:70].strip()
+        if product.get('variant_stock'):
+            color, size = variant_inventory.target(current)
+            context['variant_stock'] = dict(color=variant_inventory.color_key(color),
+                size=variant_inventory.size_key(product, size) if size else '',
+                available=variant_inventory.choices(product) if product_albums.stock_state(product) == 'available' else [])
         parts = self.write(context, catalog, scope, turn_id, version)
         if any(part['type'] != 'text' for part in parts):
             return dict(action='photo_review')
@@ -866,6 +967,8 @@ class Responses:
                     raise ValueError('reply.stock: distinguish a compatible weight from confirmed availability')
         if strict and all(part['type'] == 'text' for part in parts):
             clean = checkout.normalized(text)
+            if variant_inventory.availability_error(text, context.get('variant_stock')):
+                raise ValueError('reply.variant_stock: confirm only a color and size available together')
             contact = context.get('state', {}).get('contact', {})
             echoes_contact = (contact.get('phone') and checkout.phone_number(text) == contact['phone']
                                or contact.get('address') and checkout.normalized(contact['address']) in clean)
@@ -875,7 +978,7 @@ class Responses:
                 raise ValueError('reply.style: go directly to the answer or the one missing detail')
             photo = context.get('verified_photo_choice')
             color_only = photo and not re.search(r'قياس|مقاس|سايز|عمر|وزن|كيلو|كمية', context['customer_message'])
-            if color_only and re.search(r'(?<!\w)(?:مو|ما|غير)\s*(?:متوفر\w*|موجود\w*)', clean
+            if color_only and not context.get('variant_stock') and re.search(r'(?<!\w)(?:مو|ما|غير)\s*(?:متوفر\w*|موجود\w*)', clean
                                        ) and not context.get('business_feedback'):
                 raise ValueError('reply.photo_color: this photographed catalog color is available')
             if len(reply_layout.compact(text)) > context.get('copy_budget', 520):
