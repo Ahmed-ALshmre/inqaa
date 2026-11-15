@@ -132,10 +132,31 @@ def offers_alternative_photos(text):
     return bool(re.search(r'(?:ادز|ارسل|اشوف|تشوف)\w*.{0,30}(?:بديل|بدائل|موديلات|خيارات|سوتات|اطقم)', clean))
 
 
+def additional_models_request(text):
+    clean = normalized(text).strip(' .!؟?،')
+    return bool(re.fullmatch(
+        r'(?:(?:شعد|ش\s+عد)(?:كم|ج|ك)|شنو\s+(?:بعد\s+)?عند(?:كم|ج|ك)|'
+        r'(?:اكو|عند(?:كم|ج|ك)))\s+(?:(?:بعد\s+)?(?:من\s+)?'
+        r'(?:ال)?(?:موديلات|ستايلات|خيارات)(?:\s+(?:بعد|ثاني[هة]?|اخر[ىه]?|غير))?)', clean))
+
+
+def clearance_addon_answer(text):
+    clean = normalized(text).strip(' .!،')
+    if re.fullmatch(r'(?:(?:اي|نعم|تمام)\s+)?(?:(?:ضيف|ضيفي|اضيف|اضيفي)(?:ها|ه|لي)?'
+                    r'(?:\s+(?:وياها|وياه|ويا\s+(?:ال)?اول[ىيهة]?))?|'
+                    r'(?:اخذ|اريد)\s+(?:(?:ال)?اثنين|(?:ال)?ثنين|(?:ال)?قطعتين))', clean):
+        return 'add'
+    if re.fullmatch(r'(?:لا[،,]?\s+)?(?:بس\s+(?:ال)?اول[ىيهة]?|(?:ما|لا)\s+اريد\s+(?:ال)?ثاني[هة]?)', clean):
+        return 'keep'
+    return None
+
+
 def alternative_photo_request(text, offered=False):
     clean = normalized(text).strip(' .!؟?،')
     if re.search(r'(?:ما|لا)\s*(?:اريد|تدز|ترسل)', clean):
         return False
+    if additional_models_request(clean):
+        return True
     if re.search(r'صور|وريني|اشوف|(?:دز|رسل)\w*', clean) and re.search(
             r'بدائل|بديل|موديلات\s+(?:ثاني[هة]|غير|اخر)|باقي\s+(?:ال)?موديلات', clean):
         return True

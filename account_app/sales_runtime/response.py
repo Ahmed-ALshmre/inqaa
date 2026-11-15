@@ -4,13 +4,14 @@ import os
 import re
 
 from .. import catalog_profile, checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_intelligence, sales_playbook, sales_strategy, sales_voice, variant_inventory
+from ..sales_recovery import additional_models_request
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
 from .copy_guard import ROOMY_FIT, validate_copy, validate_material
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives,only_same_day_question,weight_limit_question
-from .intent import constraint, purchase_selected
+from .intent import constraint, direct_clothing_size, direct_color, purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
 from .recovery import catalog_photo_request, clothing_size_label, skirt_length_request, weight_fit
 from .wording import checkout_question, mentions_free_size, natural_weight_wording, next_options, quote_amounts, render_amounts, validate_next_step
@@ -81,6 +82,9 @@ class Responses:
         if outcome.get('browsing_photos') and self.product_photos:
             parts = self.browsing_photos(catalog, outcome['browsing_photos'])
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+        if outcome.get('clearance_unavailable'):
+            parts = [dict(type='text', text='عرض القطعة الثانية تغيّر هسه، ونكدر نكمّل على الأولى اللي اخترتيها.')]
+            return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if outcome.get('photo_pending'):
             result = self.answer_pending_photo(scope, turn_id, outcome, catalog, policy, current, messages,
                                                accepted, greeting, snap['data']['contact'])
@@ -126,21 +130,65 @@ class Responses:
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
+        selected_size = direct_clothing_size(current)
+        if not selected_size and purchase_selected(current) and not re.search(r'[؟?]|موجود|متوفر|يناسب|يرهم', current):
+            sizes = product_variants.requested(current)['sizes']
+            selected_size = sizes[0] if len(sizes) == 1 else ''
+        if not selected_size and product and accepted and re.fullmatch(r'\d{2,3}(?:\.5)?|[2-6]xl|xl|xs|[sml]', clean):
+            last_question = accepted[-1].get('question_key', '')
+            if last_question == f'product.{focus}.size':
+                selected_size = clean.upper()
+        single_line = lines[0] if len(lines) == 1 else {}
+        selected_color = direct_color(current)
+        selection_completed = ((selected_size and single_line.get('size') == selected_size) or
+            (selected_color and single_line.get('color') == selected_color and single_line.get('size')))
+        clearance_fit_turn = bool(self.product_photos and selection_completed
+            and single_line['product_id'] == focus and single_line['quantity'] == 1
+            and state.get('purchase_event') and not state.get('order_id') and not state.get('conditions')
+            and not any(field.startswith('cart.') for field in readiness['missing_fields'])
+            and not outcome.get('staff_stock_conflict') and not outcome.get('business_feedback')
+            and not outcome.get('variant_stock_feedback')
+            and turn_id not in state.get('contact_events', {}).values())
+        repeat_offer = sales_intelligence.already_suggested(
+            self.store.db, scope, state.get('order_id'),
+            clearance_line=single_line['line_id'] if clearance_fit_turn else None)
         market = sales_intelligence.relevant(self.store.db, catalog, state, focus, current,
             order_confirmed=sales_intelligence.confirmation_accepted(self.store.db, scope, state),
             requested=bool(outcome.get('alternatives_requested')), history=messages[:-1],
-            already_suggested=sales_intelligence.already_suggested(self.store.db, scope, state.get('order_id')))
+            already_suggested=repeat_offer, offer_clearance=clearance_fit_turn)
         matched_photo_only = bool(product and state.get('focus_source') == 'image' and not current.strip()
                                   and messages[-1].get('media_kind') == 'image')
-        if outcome.get('alternatives_requested') and product and self.product_photos:
+        if outcome.get('alternatives_requested') and self.product_photos:
             matches = (alternatives(catalog, focus, current, requested=True)['matches']
-                       if not market['matches'] and accepted and accepted[-1].get('photo_offer_product') == focus
+                       if product and not market['matches'] and not additional_models_request(current)
+                       and not any(line.get('size') or line.get('age_months') or line.get('weight_kg') for line in lines)
+                       and accepted and accepted[-1].get('photo_offer_product') == focus
                        else market['matches'])
-            photos = []
+            pictured = []
             for match in matches:
-                photos.extend(self.product_photos(catalog.get(match['product_id']), [])[:1])
-            parts = photos[:5] or [self.no_photo([], 'الموديلات البديلة المتوفرة')]
+                photos = self.product_photos(catalog.get(match['product_id']), match.get('colors') or [])[:1]
+                if photos:
+                    pictured.append((match, photos[0]))
+            parts = [photo for _, photo in pictured[:3]]
+            if pictured and pictured[0][0].get('clearance'):
+                match, photo = pictured[0]
+                offer = self.addon_reference(catalog, state, match, photo) if len(pictured) == 1 else None
+                caption = self.clearance_caption(match, add_to_order=bool(offer))
+                if offer:
+                    caption['clearance_addon'] = offer
+                parts.insert(1, caption)
+            if len(pictured) > 1 and len(lines) == 1 and state.get('purchase_event') and not state.get('order_id'):
+                parts.append(dict(type='text', text='إذا عجبج واحد من هذني، گوليلي ياهو وأضيفه ويا الأول بنفس الطلب.'))
+            if not parts and not matches and additional_models_request(current):
+                parts = [dict(type='text', text='هسه ما لقيت موديل ثاني متوفر يناسب هالطلب.')]
+            parts = parts[:5] or [self.no_photo([], 'الموديلات البديلة المتوفرة')]
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+        addon = None
+        if market['opportunity'] == 'clearance_addon' and market['matches']:
+            match = market['matches'][0]
+            photos = self.product_photos(catalog.get(match['product_id']), match['colors'] or [])[:1]
+            if photos and (offer := self.addon_reference(catalog, state, match, photos[0])):
+                addon = (match, photos[0], offer)
         photo_choice = outcome.get('photo_choice')
         if photo_choice and photo_choice['product_id'] != focus:
             photo_choice = None
@@ -465,7 +513,8 @@ class Responses:
                 question = None
         if market['requested'] and market.get('requested_age_months') and not market['matches'] and not feedback and not quote_turn:
             question = None
-        if (market['matches'] and not feedback and not quote_turn and not inventory_feedback
+        if (market['matches'] and market['opportunity'] != 'clearance_addon'
+                and not feedback and not quote_turn and not inventory_feedback
                 and not (market['opportunity'] and (contact_turn or purchase_turn or (question or '').startswith('contact.')))):
             question = 'catalog.show_option' if self.product_photos else None
             photo_product = catalog.get(market['matches'][0]['product_id'])
@@ -667,7 +716,14 @@ class Responses:
                         raise
                     parts = [dict(type='text', text='باقي بس اللون اللي يعجبج حتى أثبتلج الحجز 🌷')]
         else:
-            parts = self.write(context, catalog, scope, turn_id, snap['version'])
+            try:
+                parts = self.write(context, catalog, scope, turn_id, snap['version'])
+            except (DecisionRejected, DecisionUnavailable):
+                if not addon or not (question or '').startswith('contact.'):
+                    raise
+                history = [dict(role='user', text=m.get('text')) for m in messages if m['actor'] == 'customer']
+                gender = owner_sales.address_gender('', text=current, history=history, store_id=scope.store)
+                parts = [dict(type='text', text=checkout_question(question, gender, final_detail=True))]
         if question in {'contact.phone','contact.address','contact.province','contact.details'}:
             text_parts=[p for p in parts if p['type']=='text']
             if text_parts:
@@ -684,6 +740,11 @@ class Responses:
                     focus=focus, source_event=turn_id)
         if question == 'purchase_intent':
             text_parts[-1]['cart_key'] = digest(lines)
+        if addon and len(parts) <= 3:
+            match, photo, offer = addon
+            photo = dict(photo, clearance_offer_line=offer['line_id'])
+            caption = self.clearance_caption(match, add_to_order=True)
+            parts = [*parts[:-1], photo, caption, dict(parts[-1], clearance_addon=offer)]
         if quote_turn:
             parts[-1]['quote_key'] = offer_key
         if question=='price.accept':text_parts[-1]['quote_total']=quote['total']
@@ -695,6 +756,24 @@ class Responses:
                 if part['type'] == 'text' and mentions_free_size(part['text']):
                     part['size_explained_for'] = focus
         return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+
+    @staticmethod
+    def addon_reference(catalog, state, match, photo):
+        if len(state['cart']) != 1 or not state.get('purchase_event') or not match.get('matched_size'):
+            return None
+        offer = dict(product_id=match['product_id'], line_id=state['cart'][0]['line_id'],
+                     size=match['matched_size'], color=photo.get('color'), price_iqd=match['price_iqd'])
+        return offer if sales_intelligence.clearance_addon_values(catalog, state, offer) else None
+
+    @staticmethod
+    def clearance_caption(match, *, add_to_order=False):
+        size = f" بقياس {match['matched_size']}" if match.get('matched_size') else ''
+        price = customer_copy.chat_amount(match['price_iqd'])
+        unit = f" للبكج ({match['unit_pieces']} قطع)" if match['unit_pieces'] > 1 else ''
+        text = f'هالموديل عليه تصفية{size}، سعره {price}{unit}.'
+        if add_to_order:
+            text += ' إذا يعجبج أضيفه ويا الأول بنفس الطلب.'
+        return dict(type='text', text=text)
 
     @staticmethod
     def no_photo(colors, label=''):

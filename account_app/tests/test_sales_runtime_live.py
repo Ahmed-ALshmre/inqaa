@@ -989,6 +989,133 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertFalse(live.Store(db).snapshot(scope)['data']['cart'])
             self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
+    def clearance_catalog(self):
+        self.start_patch(patch.object(m, 'PUBLIC_URL', 'https://catalog.test'))
+        self.start_patch(patch.object(m, 'product_image_variants', side_effect=lambda product: [
+            dict(url=product['image_url'], color='أزرق')] if product.get('image_url') else []))
+        products = m.load_products_from_file()
+        products[0].update(product_name='كيلوت قياس خاص', audience='women', size_system='clothing')
+        self.incoming(10, 'أريد أزرق قياس 44')
+        plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', color='أزرق', size='44'))])
+        wording = dict(parts=['حبيبتي دزيلي رقم الموبايل والعنوان حتى أثبتلج الحجز.'])
+        with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(plan), self.model_response(wording)]):
+            result = self.work()[1]
+        self.assertFalse(result.get('needs_human'), result)
+        self.transport.reset_mock()
+        for code, sizes, clearance in [('P2', '44 إلى 48', False), ('P3', '44 إلى 48', True),
+                                        ('P4', '38 إلى 42', True)]:
+            products.append(dict(products[0], product_id=code, sizes=sizes, ad_ids=[],
+                image_url=f'{m.PUBLIC_URL}/product_image/{code}.jpg',
+                clearance=clearance, discount_iqd=2000 if clearance else 0))
+        return products
+
+    def test_more_models_sends_clearance_photos_first_and_preserves_selection(self):
+        self.clearance_catalog()
+        self.incoming(11, 'شعدكم موديلات بعد')
+        with patch.object(m.ai_transport, 'post') as provider:
+            result = self.work()[1]
+            provider.assert_not_called()
+        self.assertFalse(result.get('needs_human'), result)
+        sent = [call.args[2][0] for call in self.transport.call_args_list]
+        self.assertEqual(['P3', 'P2'], [part['product_id'] for part in sent if part['type'] == 'image'])
+        self.assertIn('13 ألف', sent[1]['text'])
+        with m.app.app_context():
+            db = m.get_db()
+            scope = live.scope_for(live.route(db, self.sender))
+            cart = live.Store(db).snapshot(scope)['data']['cart']
+            self.assertEqual([('P1', 'أزرق', '44')], [(line['product_id'], line['color'], line['size']) for line in cart])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def select_size_for_clearance_offer(self):
+        self.incoming(11, 'اريد قياس 46')
+        plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', size='46'))])
+        wording = dict(parts=['تمام، قياس 46.'])
+        with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(plan), self.model_response(wording)]):
+            result = self.work()[1]
+        self.assertFalse(result.get('needs_human'), result)
+        sent = [call.args[2][0] for call in self.transport.call_args_list]
+        self.assertEqual(['P3'], [part['product_id'] for part in sent if part['type'] == 'image'])
+        self.assertTrue(any(part.get('clearance_addon', {}).get('size') == '46' for part in sent))
+
+    def test_clearance_photo_adds_second_matching_item_on_explicit_acceptance(self):
+        self.clearance_catalog()
+        self.select_size_for_clearance_offer()
+        self.incoming(12, 'اي ضيفيها وياها')
+        with patch.object(m.ai_transport, 'post', return_value=self.model_response(
+                dict(parts=['تمام، نخلي القطعتين ويا بعض.']))):
+            result = self.work()[1]
+        self.assertFalse(result.get('needs_human'), result)
+        with m.app.app_context():
+            db = m.get_db()
+            scope = live.scope_for(live.route(db, self.sender))
+            cart = live.Store(db).snapshot(scope)['data']['cart']
+            self.assertEqual([('P1', 'أزرق', '46'), ('P3', 'أزرق', '46')],
+                             [(line['product_id'], line['color'], line['size']) for line in cart])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.incoming(13, f'{self.phone}، {self.address}')
+        with patch.object(m.ai_transport, 'post') as provider:
+            self.assertEqual('booked', self.work()[1]['action'])
+            provider.assert_not_called()
+        with m.app.app_context():
+            order = m.get_db().execute('SELECT order_items, product_total FROM orders').fetchone()
+            self.assertEqual(['P1', 'P3'], [line['product_id'] for line in json.loads(order['order_items'])])
+            self.assertEqual(28000, order['product_total'])
+
+    def test_clearance_acceptance_and_contacts_in_same_turn_book_two_items(self):
+        self.clearance_catalog()
+        self.select_size_for_clearance_offer()
+        self.incoming(12, f'اي ضيفيها وياها\n{self.phone}، {self.address}')
+        with patch.object(m.ai_transport, 'post') as provider:
+            self.assertEqual('booked', self.work()[1]['action'])
+            provider.assert_not_called()
+        with m.app.app_context():
+            order = m.get_db().execute('SELECT order_items FROM orders').fetchone()
+            self.assertEqual(['P1', 'P3'], [line['product_id'] for line in json.loads(order[0])])
+
+    def test_clearance_acceptance_checks_current_stock_before_adding(self):
+        products = self.clearance_catalog()
+        self.select_size_for_clearance_offer()
+        products[2]['stock'] = 'نافد'
+        self.transport.reset_mock()
+        self.incoming(12, 'اي ضيفيها وياها')
+        with patch.object(m.ai_transport, 'post') as provider:
+            result = self.work()[1]
+            provider.assert_not_called()
+        self.assertFalse(result.get('needs_human'), result)
+        self.assertIn('تغيّر', self.transport.call_args.args[2][0]['text'])
+        with m.app.app_context():
+            db = m.get_db()
+            scope = live.scope_for(live.route(db, self.sender))
+            cart = live.Store(db).snapshot(scope)['data']['cart']
+            self.assertEqual(['P1'], [line['product_id'] for line in cart])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_clearance_waits_for_final_color_and_only_shows_once(self):
+        self.start_patch(patch.object(m, 'PUBLIC_URL', 'https://catalog.test'))
+        self.start_patch(patch.object(m, 'product_image_variants', side_effect=lambda product: [
+            dict(url=product['image_url'], color='أزرق')] if product.get('image_url') else []))
+        products = m.load_products_from_file()
+        products[0].update(product_type='tops', audience='women', size_system='clothing')
+        products.append(dict(products[0], product_id='P3', ad_ids=[],
+            image_url=f'{m.PUBLIC_URL}/product_image/clearance.jpg', clearance=True, discount_iqd=2000))
+        self.incoming(10, 'اريد قياس 46')
+        plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', size='46'))])
+        wording = dict(parts=['قياس 46 موجود. يا لون تحبين؟'])
+        with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(plan), self.model_response(wording)]):
+            result = self.work()[1]
+        self.assertFalse(result.get('needs_human'), result)
+        self.assertFalse(any(call.args[2][0]['type'] == 'image' for call in self.transport.call_args_list))
+        self.transport.reset_mock()
+        for mid, text, dimension in [(11, 'ازرق', {'color': 'أزرق'}), (12, 'قياس 46', {'size': '46'})]:
+            self.incoming(mid, text)
+            plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', **dimension))])
+            parts = ['دزيلي رقم الموبايل والعنوان حتى أثبتلج الحجز.'] if mid == 11 else ['إي عيني، قياس 46.']
+            with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(plan), self.model_response(dict(parts=parts))]):
+                result = self.work()[1]
+            self.assertFalse(result.get('needs_human'), result)
+        self.assertEqual(['P3'], [call.args[2][0]['product_id'] for call in self.transport.call_args_list
+                                 if call.args[2][0]['type'] == 'image'])
+
     def test_sol_guides_booking_and_uncertain_confirmation_is_never_resent(self):
         self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')
         self.transport.return_value = {'ok': False, 'status': 'transport_error', 'status_code': 0}

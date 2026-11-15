@@ -6,6 +6,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from . import ai_jobs, catalog_profile, checkout, customer_copy, delivery_state, pricing, product_albums, product_links, product_variants, reply_consultant, sales_answers, variant_inventory
+from .sales_recovery import additional_models_request
 
 BAGHDAD = ZoneInfo('Asia/Baghdad')
 JOB_KIND = 'nightly_sales_learning'
@@ -200,13 +201,14 @@ def age_covered(product, span):
     return any(round(low * 12) <= span[0] <= span[1] <= round(high * 12) for low, high in rows)
 
 
-def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, requested=False, history=(), already_suggested=False):
+def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, requested=False, history=(),
+             already_suggested=False, offer_clearance=False):
     memory = catalog_memory(db, catalog)
     focus = catalog.products.get(focus_id, {})
     clean = checkout.normalized(text)
     category = catalog_profile.query_type(text)
     wants_offers = bool(re.search(r'عروض|تصفي[هة]', clean))
-    requested = requested or bool(ALTERNATIVE_REQUEST.search(clean) or (not focus and category and
+    requested = requested or additional_models_request(clean) or bool(ALTERNATIVE_REQUEST.search(clean) or (not focus and category and
         re.search(r'عندكم|عندج|اكو|اشوف|وريني|اريد', clean)))
     proactive = None
     if not requested and focus and not already_suggested and not STOP_SELLING.search(clean):
@@ -217,6 +219,8 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
             proactive = 'price_hesitation'
         elif order_confirmed and POSITIVE_INTEREST.search(clean) and not sales_answers.topics(text):
             proactive = 'after_confirmation'
+        elif offer_clearance:
+            proactive = 'clearance_addon'
     result = {'focus_offer': memory.get(focus_id), 'matches': [], 'requested': requested, 'opportunity': proactive}
     if state.get('order_id') and not order_confirmed:
         return result
@@ -261,7 +265,10 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
     weight = (float(weight['value']) if weight.get('value') else selected.get('weight_kg') or
               (float(previous_weight) if selected.get('size_source_kind') == 'weight' and re.fullmatch(r'\d{1,3}(?:\.\d+)?', previous_weight) else None))
     audience = catalog_profile.query_audience(text) or product_links._audience(focus)
-    if not focus and not wants_offers and not (category and (audience or size or age is not None or weight)):
+    if not focus and not wants_offers and not additional_models_request(clean) and not (
+            category and (audience or size or age is not None or weight)):
+        return result
+    if proactive == 'clearance_addon' and not size:
         return result
     if order_confirmed and not (size or age is not None or weight or focus.get('selection_mode') == 'none'):
         return result
@@ -269,6 +276,10 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
     pool = []
     for product in products:
         if product['product_id'] == focus_id or any(row['product_id'] == product['product_id'] for row in state.get('cart', [])):
+            continue
+        if proactive == 'clearance_addon' and (not memory[product['product_id']]['clearance']
+                or memory[product['product_id']]['unit_pieces'] != 1
+                or product.get('selection_mode') != focus.get('selection_mode')):
             continue
         if wants_offers and not focus:
             details = memory[product['product_id']]
@@ -287,7 +298,7 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
                     size=variant_inventory.size_key(product, age_months=months)) for months in range(age_span[0], age_span[1] + 1)):
                 continue
         pool.append(product)
-    want_clearance = order_confirmed or bool(re.search(r'تصفي|عرض|ارخص|خصم', clean))
+    want_clearance = requested or order_confirmed or proactive == 'clearance_addon'
     pool.sort(key=lambda p: (want_clearance and memory[p['product_id']]['clearance'],
                             bool(memory[p['product_id']]['quantity_offers'] or p.get('discount_iqd')),
                             -memory[p['product_id']]['price_iqd'] if lower_price else 0,
@@ -335,9 +346,34 @@ def confirmation_accepted(db, scope, state):
         AND o.store_id=? AND o.status='new' ''', (scope.key, state['order_id'], scope.store)).fetchone())
 
 
-def already_suggested(db, scope, order_id):
+def already_suggested(db, scope, order_id, *, clearance_line=None):
+    if clearance_line:
+        return bool(db.execute("""SELECT 1 FROM sales_v2_outbox WHERE scope=? AND status='accepted'
+            AND json_extract(payload,'$.clearance_offer_line')=? LIMIT 1""", (scope.key, clearance_line)).fetchone())
     return bool(db.execute('''SELECT 1 FROM sales_v2_outbox WHERE scope=? AND status='accepted'
         AND json_extract(payload,'$.proactive_offer')=? LIMIT 1''', (scope.key, order_id or 0)).fetchone())
+
+
+def clearance_addon_values(catalog, state, offer):
+    lines = state['cart']
+    if state.get('order_id') or state.get('conditions') or len(lines) != 1:
+        return None
+    line = lines[0]
+    size = offer['size']
+    if line['line_id'] != offer['line_id'] or line.get('size') != size or line['quantity'] != 1:
+        return None
+    original = catalog.products.get(line['product_id'], {})
+    product = catalog.products.get(offer['product_id'], {})
+    details = profile(product)
+    color = offer.get('color') or ''
+    if (not original or not details or not details['clearance'] or details['unit_pieces'] != 1
+            or details['price_iqd'] != offer['price_iqd']
+            or product.get('selection_mode') != original.get('selection_mode')
+            or not product_links.catalog_alternatives(original, [product], size=size, color=color)
+            or product.get('variant_stock') and not variant_inventory.choices(product, size=size, color=color)):
+        return None
+    return dict(product_id=offer['product_id'], size=size, color=color, quantity=1,
+                **({'wearer_ref': line['wearer_ref']} if line.get('wearer_ref') else {}))
 
 
 def learned_tactics(db, store, text, has_matches):
