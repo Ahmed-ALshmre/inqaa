@@ -2,8 +2,10 @@
 import re
 
 try:
+    from . import catalog_profile
     from .checkout import PROVINCES, normalized, delivery_fee_inquiry
 except ImportError:
+    import catalog_profile
     from checkout import PROVINCES, normalized, delivery_fee_inquiry
 
 
@@ -134,10 +136,51 @@ def offers_alternative_photos(text):
 
 def additional_models_request(text):
     clean = normalized(text).strip(' .!؟?،')
+    if re.fullmatch(r'(?:ش\s*عد|شنو\s+عن?د)(?:كم|ج|ك)\s+بعد', clean):
+        return True
     return bool(re.fullmatch(
         r'(?:(?:شعد|ش\s+عد)(?:كم|ج|ك)|شنو\s+(?:بعد\s+)?عند(?:كم|ج|ك)|'
         r'(?:اكو|عند(?:كم|ج|ك)))\s+(?:(?:بعد\s+)?(?:من\s+)?'
         r'(?:ال)?(?:موديلات|ستايلات|خيارات)(?:\s+(?:بعد|ثاني[هة]?|اخر[ىه]?|غير))?)', clean))
+
+
+def catalog_offer_kind(text, history=()):
+    def direct(clean):
+        if re.search(r'(?<!\w)(?:هال\w+|هذا|هاي|هذي|نفس\s+(?:ال)?موديل|على\s+(?:ال)?قطعتين|'
+                     r'ما\s*اريد|لا\s*اريد|اريد\s+(?:احجز|اطلب))(?!\w)', clean):
+            return None
+        category = catalog_profile.query_type(clean)
+        browsing = re.search(r'(?<!\w)(?:عن?د(?:كم|ج|ك)|اكو|شنو|شعدكم|وريني|اشوف|اريد)(?!\w)', clean)
+        if not browsing and not re.fullmatch(r'(?:ال)?(?:عروض|تصفي[هة]|تخ[فق]يضات)', clean):
+            return None
+        if re.search(r'تصفي[هة]', clean):
+            return 'clearance'
+        if re.search(r'تخ[فق]يضات', clean):
+            return 'discount'
+        if re.search(r'تخ[فق]يض|مخفض|خصم', clean) and (category or re.search(r'موديلات|قطع|خيارات', clean)):
+            return 'discount'
+        if re.search(r'عروض|(?<!\w)عرض(?!\w)', clean) and (category or re.search(r'عروض|موديلات|خيارات', clean)):
+            return 'offer'
+        return None
+
+    def category_only(clean):
+        return bool(catalog_profile.query_type(clean) and re.fullmatch(
+            r'(?:و\s*)?[^\s،?؟]+(?:\s+(?:هم|بعد|عليها|عليه))?', clean))
+
+    clean = normalized(text).strip(' .!؟?،')
+    kind = direct(clean)
+    if kind or not category_only(clean):
+        return kind
+    for message in reversed(history[-12:]):
+        if message.get('actor') != 'customer':
+            continue
+        previous = normalized(message.get('text')).strip(' .!؟?،')
+        kind = direct(previous)
+        if kind:
+            return kind
+        if not category_only(previous):
+            break
+    return None
 
 
 def clearance_addon_answer(text):

@@ -89,6 +89,17 @@ def test_proactive_offer_needs_interest_and_live_fit(db):
     assert [row['product_id'] for row in search('عجبني الموديل', order_confirmed=True)['matches']] == ['B']
 
 
+def test_catalog_offer_context_carries_into_item_type_without_capturing_checkout():
+    history = [dict(actor='customer', text='عدكم موديلات مسوين عليه تخقيض شي'),
+               dict(actor='assistant', text='إي، أكو موديلات عليها تخفيض.')]
+    from account_app.sales_recovery import catalog_offer_kind
+    assert catalog_offer_kind('وتنوره', history) == 'discount'
+    assert catalog_offer_kind('وقميص', history + [dict(actor='customer', text='وتنوره')]) == 'discount'
+    assert catalog_offer_kind('وتنوره', history + [dict(actor='customer', text='شكد التوصيل؟')]) is None
+    assert catalog_offer_kind('عدكم خصم على قطعتين', history) is None
+    assert catalog_offer_kind('هالموديل عليه تخفيض؟', history) is None
+
+
 def test_alternative_keeps_infant_age_across_intervening_product_question(db):
     def dress(pid, sizes):
         return product(pid, size_system='age', audience='girls', sizes=sizes)

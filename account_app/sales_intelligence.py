@@ -6,7 +6,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from . import ai_jobs, catalog_profile, checkout, customer_copy, delivery_state, pricing, product_albums, product_links, product_variants, reply_consultant, sales_answers, variant_inventory
-from .sales_recovery import additional_models_request
+from .sales_recovery import additional_models_request, catalog_offer_kind
 
 BAGHDAD = ZoneInfo('Asia/Baghdad')
 JOB_KIND = 'nightly_sales_learning'
@@ -201,14 +201,29 @@ def age_covered(product, span):
     return any(round(low * 12) <= span[0] <= span[1] <= round(high * 12) for low, high in rows)
 
 
+def catalog_discount_tiers(item):
+    return [tier for tier in item['quantity_offers']
+            if tier['total_iqd'] * item['unit_pieces'] < item['price_iqd'] * tier['pieces']]
+
+
+def catalog_promotion(item, kind):
+    if item['clearance'] or kind == 'clearance':
+        return item['clearance']
+    discount = item['price_iqd'] < item['list_price_iqd'] or catalog_discount_tiers(item)
+    return bool(discount or kind == 'offer' and item['free_delivery_at_pieces'])
+
+
 def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, requested=False, history=(),
              already_suggested=False, offer_clearance=False):
     memory = catalog_memory(db, catalog)
     focus = catalog.products.get(focus_id, {})
     clean = checkout.normalized(text)
     category = catalog_profile.query_type(text)
-    wants_offers = bool(re.search(r'عروض|تصفي[هة]', clean))
-    requested = requested or additional_models_request(clean) or bool(ALTERNATIVE_REQUEST.search(clean) or (not focus and category and
+    offer_kind = catalog_offer_kind(clean, history)
+    browse_more = additional_models_request(clean)
+    browse = bool(offer_kind or browse_more)
+    wants_offers = bool(offer_kind or re.search(r'عروض|تصفي[هة]', clean))
+    requested = requested or browse or bool(ALTERNATIVE_REQUEST.search(clean) or (not focus and category and
         re.search(r'عندكم|عندج|اكو|اشوف|وريني|اريد', clean)))
     proactive = None
     if not requested and focus and not already_suggested and not STOP_SELLING.search(clean):
@@ -221,7 +236,8 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
             proactive = 'after_confirmation'
         elif offer_clearance:
             proactive = 'clearance_addon'
-    result = {'focus_offer': memory.get(focus_id), 'matches': [], 'requested': requested, 'opportunity': proactive}
+    result = {'focus_offer': memory.get(focus_id), 'matches': [], 'requested': requested, 'opportunity': proactive,
+              'browse': browse, 'offer_kind': offer_kind}
     if state.get('order_id') and not order_confirmed:
         return result
     if not (requested or proactive) or checkout.is_existing_order_followup(text):
@@ -265,7 +281,7 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
     weight = (float(weight['value']) if weight.get('value') else selected.get('weight_kg') or
               (float(previous_weight) if selected.get('size_source_kind') == 'weight' and re.fullmatch(r'\d{1,3}(?:\.\d+)?', previous_weight) else None))
     audience = catalog_profile.query_audience(text) or product_links._audience(focus)
-    if not focus and not wants_offers and not additional_models_request(clean) and not (
+    if not focus and not wants_offers and not browse_more and not (
             category and (audience or size or age is not None or weight)):
         return result
     if proactive == 'clearance_addon' and not size:
@@ -281,10 +297,12 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
                 or memory[product['product_id']]['unit_pieces'] != 1
                 or product.get('selection_mode') != focus.get('selection_mode')):
             continue
-        if wants_offers and not focus:
-            details = memory[product['product_id']]
-            if not (details['clearance'] or details['quantity_offers'] or details['free_delivery_at_pieces'] or product.get('discount_iqd')):
-                continue
+        if (offer_kind or wants_offers and not focus) and not catalog_promotion(
+                memory[product['product_id']], offer_kind or 'offer'):
+            continue
+        if browse and not category and selected and size and (
+                (focus.get('selection_mode') == 'shoe') != (product.get('selection_mode') == 'shoe')):
+            continue
         if age_span and not age_covered(product, age_span):
             continue
         if product.get('variant_stock'):
@@ -304,6 +322,8 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
                             -memory[p['product_id']]['price_iqd'] if lower_price else 0,
                             p.get('recommendation_priority') or 3), reverse=True)
     source = focus or dict(store_id=catalog.store, category=category, product_type=category, audience=audience)
+    if browse:
+        source = dict(source, occasions=[])
     search_request = text
     if proactive == 'price_hesitation':
         # An original product's occasion tags aren't a constraint declared by the customer.
@@ -312,7 +332,20 @@ def relevant(db, catalog, state, focus_id, text, *, order_confirmed=False, reque
             and m.get('text') and catalog_profile.query_type(m['text']) in ('', catalog_profile.effective_family(focus))
             and catalog_profile.query_occasions(m['text'])), '')
         search_request = f'{text}\n{occasion_message}'
-    if not (size or age is not None or weight or focus) or (wants_offers and not category and not focus):
+    if browse and not category and (size or age is not None or weight):
+        # The customer asked about the store's range. Compare each clothing family
+        # using the same stated measurements, not the current product's category.
+        matches = []
+        for item in pool:
+            family = product_links._category(item)
+            target = dict(source, category=family, product_type=family, product_family=family,
+                          audience=audience or product_links._audience(item))
+            if family and product_links.catalog_alternatives(target, [item], size=size,
+                    age_years=age / 12 if age is not None else None, color=color, request=text, weight=weight, limit=1):
+                matches.append(item)
+                if len(matches) == 3:
+                    break
+    elif not (size or age is not None or weight or focus and not browse) or (wants_offers and not category and not focus):
         # Browse the explicitly requested category without claiming a fit.
         matches = [p for p in pool if (not category or product_links._category(p) == category) and
                    (not audience or catalog_profile.compatible_audience(product_links._audience(p), audience))][:3]
@@ -366,10 +399,14 @@ def clearance_addon_values(catalog, state, offer):
     product = catalog.products.get(offer['product_id'], {})
     details = profile(product)
     color = offer.get('color') or ''
+    source = original
+    if details and offer.get('category') == details['category'] and details['category']:
+        category = details['category']
+        source = dict(original, category=category, product_type=category, product_family=category, occasions=[])
     if (not original or not details or not details['clearance'] or details['unit_pieces'] != 1
             or details['price_iqd'] != offer['price_iqd']
             or product.get('selection_mode') != original.get('selection_mode')
-            or not product_links.catalog_alternatives(original, [product], size=size, color=color)
+            or not product_links.catalog_alternatives(source, [product], size=size, color=color)
             or product.get('variant_stock') and not variant_inventory.choices(product, size=size, color=color)):
         return None
     return dict(product_id=offer['product_id'], size=size, color=color, quantity=1,
