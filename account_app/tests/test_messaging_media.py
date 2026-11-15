@@ -1,3 +1,5 @@
+import base64
+import io
 import json
 import os
 import tempfile
@@ -5,6 +7,8 @@ import unittest
 import uuid
 from pathlib import Path
 from unittest.mock import patch
+
+from PIL import Image, ImageDraw
 
 os.environ['ENABLE_BACKGROUND_JOBS']='0'
 os.environ['DISABLE_CLIP']='1'
@@ -82,6 +86,44 @@ class MessagingMediaTests(unittest.TestCase):
             matched, method, result = self.m.match_product(self.db,ev,[product])
         self.assertIsNone(matched)
         photos.assert_not_called()
+
+    def test_recompressed_catalog_photo_resolves_without_vision(self):
+        image = Image.new('RGB', (512, 512), '#e0bd9e')
+        drawing = ImageDraw.Draw(image)
+        drawing.polygon([(220, 100), (310, 100), (440, 430), (75, 416)], fill='#66727d')
+        for x in range(104, 440, 41):
+            drawing.line([(255, 110), (x, 405)], fill='#505961', width=6)
+        root = Path(self.temp.name)
+        image.save(root / 'gray.png')
+        drawing.ellipse((160, 165, 340, 345), fill='#be5b4d')
+        image.save(root / 'different.png')
+        processed = io.BytesIO()
+        with Image.open(root / 'gray.png') as original:
+            original.resize((384, 384), Image.Resampling.LANCZOS).save(processed, 'JPEG', quality=72)
+        incoming = 'data:image/jpeg;base64,' + base64.b64encode(processed.getvalue()).decode('ascii')
+        reference = '/product_image/gray.png'
+        product = dict(product_id='P007', status='active', image_url=[reference],
+                       image_colors={reference: 'رصاصي'})
+        other = dict(product_id='P013', status='active', image_url=['/product_image/different.png'])
+        token = self.m._current_store_id.set('khuyoot')
+        try:
+            with patch.object(self.m, 'PRODUCT_IMAGE_DIR', str(root)), \
+                 patch.object(self.m, 'is_store_feature_enabled', return_value=True) as feature, \
+                 patch.object(self.m, 'confirm_with_vision', return_value=dict(product_found=False)) as vision:
+                result = self.m.match_customer_image_with_catalog(incoming, [other, product])
+                self.assertEqual(('P007', 'رصاصي', 'catalog_photo_copy'),
+                                 (result['product_id'], result['observed_color'], result['reference_source']))
+                vision.assert_not_called()
+
+                for products in ([other], [product, dict(product, product_id='P008')]):
+                    self.assertFalse(self.m.match_customer_image_with_catalog(incoming, products)['product_found'])
+                self.assertEqual(2, vision.call_count)
+
+                feature.return_value = False
+                self.assertFalse(self.m.match_customer_image_with_catalog(incoming, [product])['product_found'])
+                self.assertEqual(2, vision.call_count)
+        finally:
+            self.m._current_store_id.reset(token)
 
     def test_missing_sizes_consults_once_then_hands_off_without_primary_generation(self):
         product = {'product_id':'P005','product_name':'سوت حوامل','stock':'متوفر','price':'18000','status':'active'}

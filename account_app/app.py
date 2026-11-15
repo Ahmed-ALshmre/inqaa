@@ -56,6 +56,7 @@ from flask import Flask, g, has_app_context, has_request_context, jsonify, redir
 if not __package__:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from account_app import sales_intelligence, variant_inventory
+from account_app import catalog_photo_match
 from account_app.sales_runtime import live as sales_runtime_live
 from account_app.sales_runtime.facts import only_same_day_question
 from account_app.sales_runtime.policies import APPROVED_DELIVERY_TIME
@@ -6398,30 +6399,56 @@ def match_customer_album_with_catalog(images, products):
     return confirm_with_vision(images[0], candidates, catalog_model=model, related_customer_images=images[1:])
 
 
+def _local_catalog_photo_references(products):
+    for product in products:
+        if not product.get('product_id') or product.get('status', 'active') != 'active':
+            continue
+        for variant in product_image_variants(product):
+            reference = urlparse(variant['url']).path
+            if not reference.startswith('/product_image/'):
+                continue
+            root = os.path.realpath(UPLOADS_DIR if reference.startswith('/product_image/uploads/')
+                                    else PRODUCT_IMAGE_DIR)
+            try:
+                path = os.path.realpath(_local_image_path_from_reference(reference))
+                if os.path.normcase(os.path.commonpath((root, path))) != os.path.normcase(root):
+                    continue
+            except (OSError, ValueError):
+                continue
+            yield str(product['product_id']), product_variants.single_color(variant['color']), path
+
+
 def _match_customer_image_with_catalog_once(customer_image_url, products):
     # Uploaded catalog sheets can contain numbers unrelated to database IDs.
-    # Other stores retain direct-photo matching because their sheet numbers may
-    # differ from product IDs. Lamsa compares only against all uploaded catalogue sheets.
+    # Lamsa uses uploaded catalog sheets for its primary comparison.
     direct_candidates = build_product_vision_candidates(products, limit=len(products or []))
-    if current_store_id() != DEFAULT_STORE_ID and direct_candidates and is_store_feature_enabled("vision_enabled", VISION_ENABLED):
-        result = confirm_with_vision(customer_image_url, direct_candidates)
-        return dict(result, reference_source="labelled_product_images")
+    direct_compare = current_store_id() != DEFAULT_STORE_ID and bool(direct_candidates)
+    vision_enabled = direct_compare and is_store_feature_enabled("vision_enabled", VISION_ENABLED)
+    catalog_enabled = is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED)
+    if direct_compare and (vision_enabled or catalog_enabled):
+        exact = catalog_photo_match.match_inline_photo(customer_image_url, _local_catalog_photo_references(products))
+        if exact:
+            product_id, color = exact
+            return dict(product_found=True, product_id=product_id, confidence=100,
+                        observed_color=color, reference_source="catalog_photo_copy")
+        if vision_enabled:
+            result = confirm_with_vision(customer_image_url, direct_candidates)
+            return dict(result, reference_source="labelled_product_images")
     catalog_model = get_ai_model(None, "catalog_match_model", CATALOG_MATCH_MODEL)
     # Catalogue matching is independently configurable from the legacy vision
     # feature. Labelled product photos need no separately uploaded contact sheet.
-    if (current_store_id() != DEFAULT_STORE_ID and direct_candidates
-            and is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED)):
+    if direct_compare and catalog_enabled:
         result = confirm_with_vision(customer_image_url, direct_candidates, catalog_model=catalog_model)
         return dict(result, reference_source="labelled_product_images")
     image_flow(
         "04_catalog_match_start",
         customer_image_url=customer_image_url,
         products_count=len(products or []),
-        enabled=is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED),
+        enabled=catalog_enabled,
         model=catalog_model,
         catalog_images_count=len(_resolve_catalog_image_paths()),
     )
-    if not is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED):
+    if not catalog_enabled:
         image_flow("04_catalog_match_skipped", reason="disabled")
         print("[CatalogVision] returned NONE, human review required", flush=True)
         return {
@@ -6981,7 +7008,9 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
                         if not rejected_image else None)
             catalog_result = verified or ai_efficiency.recognize_once(
                 db, current_store_id(), str(sender_id or ''), image_key,
-                {'recognition_schema': 'model-and-color-v2', 'products': products, 'sheets': [(os.path.basename(path), os.stat(path).st_mtime_ns,
+                {'recognition_schema': ('model-and-color-v2' if current_store_id() == DEFAULT_STORE_ID
+                                        else 'model-color-and-photo-copy-v3'),
+                 'products': products, 'sheets': [(os.path.basename(path), os.stat(path).st_mtime_ns,
                                                   os.stat(path).st_size) for path in _resolve_catalog_image_paths()]},
                 lambda: verified or match_customer_image_with_catalog(image_data, products))
         except Exception:
