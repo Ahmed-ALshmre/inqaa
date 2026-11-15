@@ -41,7 +41,7 @@ def query_type(text):
         'bags':r'حقيب|حقائب|جنط|شنط|\bbags?\b','tracksuits':r'تراك(?:ات)?|tracksuit',
         'dishdasha':r'دشداش|دشاديش','dresses':r'فستان|فساتين|فساتن|فصاطين|\bdress',
         'sets':r'سوت|طقم|اطقم|\bsets?\b','skirts':r'تنور|تنانير|\bskirt',
-        'trousers':r'بنطل|بنطر|شروال|\bpants?\b','tops':r'قميص|قمصان|بلوز|\bshirt',
+        'trousers':r'بنطل|بنطر|شروال|ك[يو]لوت|\bculottes?\b|\bpants?\b','tops':r'قميص|قمصان|بلوز|\bshirt',
         'abaya':r'عباي|عباء|\babaya','outerwear':r'جاكيت|معطف|ترانشكوت|\bcoat'}
     hits=[]
     for kind,pattern in patterns.items():

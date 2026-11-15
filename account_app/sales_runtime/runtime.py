@@ -9,7 +9,7 @@ import time
 from copy import deepcopy
 
 from .. import catalog_profile, checkout, product_albums, product_variants, sales_intelligence, variant_inventory
-from ..sales_recovery import alternative_photo_request
+from ..sales_recovery import additional_models_request, alternative_photo_request, clearance_addon_answer
 from .backup import BackupFailed, consult, failure_code
 from .cart import CartService
 from .contact import capture as capture_contact, contact_only, declined_phone
@@ -478,11 +478,23 @@ class Runtime:
                     return dict(action='continue', state_version=snap['version'], browsing_photos=browsing)
             last_reply = context['recent_replies'][-1] if context['recent_replies'] else {}
             offered_option = last_reply.get('catalog_photo_offer')
+            browsing_more = additional_models_request(text_now)
+            text_turn = evidence['payload'].get('media_kind', 'text') == 'text'
+            addon_offer = last_reply.get('clearance_addon')
+            addon_reply = clearance_addon_answer(text_now) if addon_offer and text_turn and not state.get('order_id') else None
+            if addon_offer and text_turn and not addon_reply and captured.get('fields') and not state.get('order_id'):
+                # Consecutive customer messages can be combined with their contact details.
+                first, _, details = text_now.partition('\n')
+                if details and contact_only(details):
+                    addon_reply = clearance_addon_answer(first)
+            addon_values = sales_intelligence.clearance_addon_values(catalog, state, addon_offer) if addon_reply == 'add' else None
+            if addon_reply == 'add' and not addon_values:
+                return dict(action='continue', state_version=snap['version'], clearance_unavailable=True)
             if (offered_option and evidence['payload'].get('media_kind') == 'text'
-                    and alternative_photo_request(text_now, True)):
+                    and not browsing_more and alternative_photo_request(text_now, True)):
                 return dict(action='continue', state_version=snap['version'], catalog_option_photo=offered_option)
-            alternatives_requested = bool(focus and evidence['payload'].get('media_kind', 'text') == 'text'
-                and alternative_photo_request(text_now, last_reply.get('photo_offer_product') == focus))
+            alternatives_requested = bool(text_turn and (browsing_more or focus and
+                alternative_photo_request(text_now, last_reply.get('photo_offer_product') == focus)))
             if alternatives_requested:
                 photo_request = True
             explicit_photo = photo_request and bool(focus)
@@ -495,7 +507,11 @@ class Runtime:
                               and not state.get('price_request') and not purchase_selected(text_now)
                               and not re.search(r'خصم|تخفيض|ميزاني|ارخص|غالي', text_now))
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
-            if decline:
+            if addon_values:
+                raw = dict(intent='buy', changes=[dict(new_line=True, values=addon_values)])
+            elif addon_reply == 'keep':
+                raw = dict(intent='continue')
+            elif decline:
                 raw = dict(intent='withdraw')
             elif contact_turn or alternatives_requested:
                 raw = dict(intent='continue')
@@ -699,9 +715,11 @@ class Runtime:
                                 price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
                             except ValueError:pass  # A partial package needs quantity clarification.
                         keep_draft = separate_product and not commands and not purchase_declined(text_now)
-                        withdrawn = False if keep_draft else apply_intent(
+                        withdrawn = False if keep_draft or addon_reply == 'keep' else apply_intent(
                             state,plan,event_id,evidence,price,last_reply,
                             confirmed_color_correction=confirmed_color_correction)
+                        if addon_values and commands:
+                            state['purchase_event'] = event_id
                         if state['cart'] and not keep_draft:
                             try:
                                 province=state['contact'].get('province') or state.get('quote_province')
