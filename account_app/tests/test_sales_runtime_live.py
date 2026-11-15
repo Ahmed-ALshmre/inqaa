@@ -989,14 +989,14 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertFalse(live.Store(db).snapshot(scope)['data']['cart'])
             self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
-    def clearance_catalog(self):
+    def clearance_catalog(self, size='44'):
         self.start_patch(patch.object(m, 'PUBLIC_URL', 'https://catalog.test'))
         self.start_patch(patch.object(m, 'product_image_variants', side_effect=lambda product: [
             dict(url=product['image_url'], color='أزرق')] if product.get('image_url') else []))
         products = m.load_products_from_file()
         products[0].update(product_name='كيلوت قياس خاص', audience='women', size_system='clothing')
-        self.incoming(10, 'أريد أزرق قياس 44')
-        plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', color='أزرق', size='44'))])
+        self.incoming(10, f'أريد أزرق قياس {size}')
+        plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', color='أزرق', size=size))])
         wording = dict(parts=['حبيبتي دزيلي رقم الموبايل والعنوان حتى أثبتلج الحجز.'])
         with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(plan), self.model_response(wording)]):
             result = self.work()[1]
@@ -1025,6 +1025,65 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             cart = live.Store(db).snapshot(scope)['data']['cart']
             self.assertEqual([('P1', 'أزرق', '44')], [(line['product_id'], line['color'], line['size']) for line in cart])
             self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_followup_for_skirt_uses_real_offer_and_size_across_categories(self):
+        from account_app import variant_inventory
+        products = self.clearance_catalog('46')
+        skirt_sizes = ('قياسات هذا المنتج من 38 إلى 48، وتناسب تقريباً الأوزان من 55 إلى 100 كيلو. '
+                       'اعتمد الجدول التالي عند الرد على الزبونة: وزن 79–84 كيلو = قياس 46')
+        skirt = dict(products[0], product_id='P007', product_name='تنورة تركي', product_type='skirts',
+                     size_system='legacy', sizes=skirt_sizes,
+                     price='16000', colors='رصاصي جوزي', discount_iqd=2000, clearance=True,
+                     recommendation_priority=5, ad_ids=[], image_url=f'{m.PUBLIC_URL}/product_image/skirt.jpg')
+        products.append(skirt)
+        gray_url = f'{m.PUBLIC_URL}/product_image/skirt-gray.jpg'
+        brown_url = f'{m.PUBLIC_URL}/product_image/skirt-brown.jpg'
+        photos = m.product_image_variants.side_effect
+        self.start_patch(patch.object(m, 'product_image_variants', side_effect=lambda product: [
+            dict(url=gray_url, color='رصاصي'), dict(url=brown_url, color='جوزي')
+        ] if product['product_id'] == 'P007' else photos(product)))
+        with m.app.app_context():
+            db = m.get_db()
+            variant_inventory.replace(db, 'khuyoot', 'P007', [
+                dict(color='رصاصي', size='38', quantity=1),
+                dict(color='جوزي', size='46', quantity=1)])
+            db.commit()
+
+        for mid, text, images in (
+            (11, 'شعدكم بعد', ['P007', 'P3', 'P2']),
+            (12, 'عدكم موديلات مسوين عليه تخقيض شي', ['P007', 'P3']),
+            (13, 'وتنوره', ['P007']),
+        ):
+            self.transport.reset_mock()
+            self.incoming(mid, text)
+            with patch.object(m.ai_transport, 'post') as provider:
+                result = self.work()[1]
+                provider.assert_not_called()
+            self.assertFalse(result.get('needs_human'), result)
+            sent = [call.args[2][0] for call in self.transport.call_args_list]
+            self.assertEqual(images, [part['product_id'] for part in sent if part['type'] == 'image'])
+            self.assertIn(brown_url, [part.get('url') for part in sent])
+            self.assertNotIn(gray_url, [part.get('url') for part in sent])
+        self.assertIn('قياس 46 باللون جوزي، 14 ألف بالتصفية', sent[1]['text'])
+        with m.app.app_context():
+            db = m.get_db()
+            scope = live.scope_for(live.route(db, self.sender))
+            state = live.Store(db).snapshot(scope)['data']
+            self.assertEqual([('P1', 'أزرق', '46')], [(p['product_id'], p['color'], p['size']) for p in state['cart']])
+            self.assertEqual('P1', state['focus_product_id'])
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+        self.incoming(14, f'اي ضيفيها وياها\n{self.phone}، {self.address}')
+        with patch.object(m.ai_transport, 'post') as provider:
+            self.assertEqual('booked', self.work()[1]['action'])
+            provider.assert_not_called()
+        with m.app.app_context():
+            db = m.get_db()
+            order = db.execute('SELECT order_items,product_total FROM orders').fetchone()
+            self.assertEqual(['P1', 'P007'], [line['product_id'] for line in json.loads(order[0])])
+            self.assertEqual(29000, order[1])
+            self.assertEqual(0, db.execute("""SELECT quantity FROM product_variant_stock
+                WHERE store_id='khuyoot' AND product_id='P007' AND size='46'""").fetchone()[0])
 
     def select_size_for_clearance_offer(self):
         self.incoming(11, 'اريد قياس 46')

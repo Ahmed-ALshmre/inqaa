@@ -4,7 +4,6 @@ import os
 import re
 
 from .. import catalog_profile, checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_intelligence, sales_playbook, sales_strategy, sales_voice, variant_inventory
-from ..sales_recovery import additional_models_request
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
@@ -159,8 +158,11 @@ class Responses:
         matched_photo_only = bool(product and state.get('focus_source') == 'image' and not current.strip()
                                   and messages[-1].get('media_kind') == 'image')
         if outcome.get('alternatives_requested') and self.product_photos:
+            if market['offer_kind']:
+                parts = self.catalog_offer_parts(catalog, state, market)
+                return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
             matches = (alternatives(catalog, focus, current, requested=True)['matches']
-                       if product and not market['matches'] and not additional_models_request(current)
+                       if product and not market['matches'] and not market['browse']
                        and not any(line.get('size') or line.get('age_months') or line.get('weight_kg') for line in lines)
                        and accepted and accepted[-1].get('photo_offer_product') == focus
                        else market['matches'])
@@ -179,7 +181,7 @@ class Responses:
                 parts.insert(1, caption)
             if len(pictured) > 1 and len(lines) == 1 and state.get('purchase_event') and not state.get('order_id'):
                 parts.append(dict(type='text', text='إذا عجبج واحد من هذني، گوليلي ياهو وأضيفه ويا الأول بنفس الطلب.'))
-            if not parts and not matches and additional_models_request(current):
+            if not parts and not matches and market['browse']:
                 parts = [dict(type='text', text='هسه ما لقيت موديل ثاني متوفر يناسب هالطلب.')]
             parts = parts[:5] or [self.no_photo([], 'الموديلات البديلة المتوفرة')]
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
@@ -758,12 +760,49 @@ class Responses:
         return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
 
     @staticmethod
-    def addon_reference(catalog, state, match, photo):
+    def addon_reference(catalog, state, match, photo, *, category=None):
         if len(state['cart']) != 1 or not state.get('purchase_event') or not match.get('matched_size'):
             return None
         offer = dict(product_id=match['product_id'], line_id=state['cart'][0]['line_id'],
                      size=match['matched_size'], color=photo.get('color'), price_iqd=match['price_iqd'])
+        if category:
+            offer['category'] = category
         return offer if sales_intelligence.clearance_addon_values(catalog, state, offer) else None
+
+    def catalog_offer_parts(self, catalog, state, market):
+        matches = market['matches'][:2]
+        if not matches:
+            return [dict(type='text', text='هسه ما لقيت عرض ثاني متوفر بهالاختيار.')]
+        parts = []
+        for match in matches:
+            photos = self.product_photos(catalog.get(match['product_id']), match['colors'] or [])
+            photo = photos[0] if photos else None
+            offer = (self.addon_reference(catalog, state, match, photo, category=match['category'])
+                     if photo and len(matches) == 1 else None)
+            label = match['label'] or 'هالموديل'
+            size = f" قياس {match['matched_size']}" if match['matched_size'] else ''
+            colors = match['colors'] or []
+            color = f' باللون {colors[0]}' if len(colors) == 1 else ''
+            unit = f" للبكج ({match['unit_pieces']} قطع)" if match['unit_pieces'] > 1 else ''
+            price = customer_copy.chat_amount(match['price_iqd'])
+            description = f'{label}{size}{color}، {price}{unit}'
+            if match['clearance']:
+                description += ' بالتصفية'
+            tiers = sales_intelligence.catalog_discount_tiers(match)
+            if tiers:
+                tier = min(tiers, key=lambda item: item['pieces'])
+                count = 'القطعتين' if tier['pieces'] == 2 else f"{tier['pieces']} قطع"
+                description += f"، و{count} بـ{customer_copy.chat_amount(tier['total_iqd'])}"
+            elif match['free_delivery_at_pieces'] and not match['clearance'] and market['offer_kind'] == 'offer':
+                free_at = match['free_delivery_at_pieces']
+                description += ' ويا توصيل مجاني' if free_at <= match['unit_pieces'] else f'، والتوصيل مجاني من {free_at} قطع'
+            if photo:
+                parts.append(photo)
+            caption = dict(type='text', text=description + '.')
+            if offer:
+                caption.update(text=caption['text'] + ' تحبين أضيفها ويا الأولى بنفس الطلب؟', clearance_addon=offer)
+            parts.append(caption)
+        return parts
 
     @staticmethod
     def clearance_caption(match, *, add_to_order=False):

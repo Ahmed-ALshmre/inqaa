@@ -9,7 +9,7 @@ import time
 from copy import deepcopy
 
 from .. import catalog_profile, checkout, product_albums, product_variants, sales_intelligence, variant_inventory
-from ..sales_recovery import additional_models_request, alternative_photo_request, clearance_addon_answer
+from ..sales_recovery import alternative_photo_request, clearance_addon_answer
 from .backup import BackupFailed, consult, failure_code
 from .cart import CartService
 from .contact import capture as capture_contact, contact_only, declined_phone
@@ -452,6 +452,11 @@ class Runtime:
             context['catalog_memory'] = market
             context['learned_sales_tactics'] = sales_intelligence.learned_tactics(
                 self.store.db, scope.store, text_now, bool(market['matches']))
+            text_turn = evidence['payload'].get('media_kind', 'text') == 'text'
+            if (text_turn and market['browse'] and not decline
+                    and not checkout.is_existing_order_followup(text_now)):
+                # Catalog browsing supplies a reply, never a different cart reference.
+                return dict(action='continue', state_version=snap['version'], alternatives_requested=True)
             if labels := product_variants.garment_labels(focus_product):
                 context['available_garment_labels'] = labels
             separate_product = bool(focus and state['cart'] and all(
@@ -478,8 +483,6 @@ class Runtime:
                     return dict(action='continue', state_version=snap['version'], browsing_photos=browsing)
             last_reply = context['recent_replies'][-1] if context['recent_replies'] else {}
             offered_option = last_reply.get('catalog_photo_offer')
-            browsing_more = additional_models_request(text_now)
-            text_turn = evidence['payload'].get('media_kind', 'text') == 'text'
             addon_offer = last_reply.get('clearance_addon')
             addon_reply = clearance_addon_answer(text_now) if addon_offer and text_turn and not state.get('order_id') else None
             if addon_offer and text_turn and not addon_reply and captured.get('fields') and not state.get('order_id'):
@@ -490,11 +493,10 @@ class Runtime:
             addon_values = sales_intelligence.clearance_addon_values(catalog, state, addon_offer) if addon_reply == 'add' else None
             if addon_reply == 'add' and not addon_values:
                 return dict(action='continue', state_version=snap['version'], clearance_unavailable=True)
-            if (offered_option and evidence['payload'].get('media_kind') == 'text'
-                    and not browsing_more and alternative_photo_request(text_now, True)):
+            if offered_option and text_turn and alternative_photo_request(text_now, True):
                 return dict(action='continue', state_version=snap['version'], catalog_option_photo=offered_option)
-            alternatives_requested = bool(text_turn and (browsing_more or focus and
-                alternative_photo_request(text_now, last_reply.get('photo_offer_product') == focus)))
+            alternatives_requested = bool(text_turn and focus and
+                alternative_photo_request(text_now, last_reply.get('photo_offer_product') == focus))
             if alternatives_requested:
                 photo_request = True
             explicit_photo = photo_request and bool(focus)
