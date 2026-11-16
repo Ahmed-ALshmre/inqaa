@@ -142,3 +142,141 @@ def checkout_question(field, gender, *, final_detail):
               'contact.province': 'المحافظة', 'contact.details': 'رقم الموبايل والعنوان'}
     request = 'باقي بس' if final_detail else 'دزّيلي' if gender == 'female' else 'دزلي'
     return f'{welcome}، {request} {labels[field]} حتى أثبت الحجز.'
+
+
+def fact_recovery_parts(context):
+    """Render independently verifiable answers when both writing attempts fail."""
+    from .. import sales_answers, variant_inventory
+
+    if context['mode'] != 'continue' or context.get('provisional_photo'):
+        return None
+    question = context['question_field']
+    photo = context.get('photo_clarification')
+    if photo:
+        if photo.get('possible_product'):
+            text = f"تقصدين {photo['possible_product']}؟"
+        elif photo.get('multiple'):
+            text = 'ممكن تدزين صورة القطعة اللي تقصدينها وحدها أو رابطها؟'
+        elif photo.get('unreadable'):
+            text = 'ممكن اسم القطعة أو رابطها حتى ألكالج الموديل؟'
+        else:
+            text = 'ممكن رابط القطعة أو صورة أوضح إلها؟'
+        return [dict(type='text', text=text)]
+
+    requested = set(context.get('requested_fields', ()))
+    facts = {fact['field']: fact['value'] for fact in context.get('facts', ())}
+    progress = context.get('progress', {})
+    amounts = context['amounts']
+    lines, covered = [], set()
+    labels = {
+        'fabric': 'قماشه', 'length': 'طوله', 'width': 'عرضه',
+        'sizes': 'القياسات', 'colors': 'الألوان', 'delivery_time': 'التوصيل عادةً',
+        'shop_address': 'عنوان المحل',
+    }
+    plain_facts = {'payment', 'inspection_policy', 'stretch', 'cut', 'lining', 'closure', 'care',
+                   'season', 'fabric_feel', 'composition', 'origin'}
+    fit = progress.get('fit')
+    fit_stock = context.get('value_facts', {}).get('fit_availability', {}).get('stock')
+    message = context['customer_message']
+    if fit and ('sizes' in requested or sales_answers.fit_question(message)):
+        if not fit['within_catalog_range']:
+            lines.append('هالقياس ما يرهمج بهالموديل.')
+        elif fit_stock == 'available' and not context.get('variant_stock_feedback'):
+            lines.append('إي عيني، القياس اللي يرهمج متوفر.')
+        else:
+            lines.append('وزنج ضمن القياس اللي يرهم بهالموديل.')
+        covered.add('sizes')
+    feedback = context.get('business_feedback') or {}
+    inventory = context.get('variant_stock')
+    selected = product_variants.requested(message)
+    selected_color = selected['colors'][0] if len(selected['colors']) == 1 else ''
+    selected_size = selected['sizes'][0] if len(selected['sizes']) == 1 else ''
+    if progress.get('selection_recorded') and selected_color and not feedback and not context.get('stock_conflict'):
+        if not requested:
+            lines.append(f'تمام، {selected_color}.')
+    if feedback and feedback.get('field') in {'color', 'size'} and feedback.get('requested'):
+        selected_value = customer_copy.fact(feedback['requested'])
+        if selected_value:
+            label = 'اللون' if feedback['field'] == 'color' else 'القياس'
+            lines.append(f'{label} {selected_value} ما متوفر بهالموديل.')
+            covered.add('colors' if feedback['field'] == 'color' else 'sizes')
+    if ('availability' in sales_answers.topics(message) and selected_color and selected_size
+            and not context.get('stock_conflict') and {'colors', 'sizes'}.issubset(requested)):
+        known = inventory is not None or context.get('catalog_stock') == 'out'
+        matching = False
+        if inventory:
+            matching = any(variant_inventory.color_key(row['color']) == variant_inventory.color_key(selected_color)
+                           and row['size'].casefold() == selected_size.casefold() for row in inventory['available'])
+        elif context.get('catalog_stock') == 'available':
+            colors = product_variants.colors(facts.get('colors'))
+            sizes = product_variants.size_data(facts.get('sizes'))
+            known = bool(colors and ((sizes['numbers'] or sizes['ranges']) if selected_size.isdigit() else sizes['labels']))
+            matching = known and selected_color in colors and not product_variants.order_choice_error(
+                {'sizes': facts['sizes']}, 'size', selected_size)
+        if known:
+            status = 'موجود' if matching and not feedback else 'ما متوفر'
+            lines.append(f'{selected_color} بقياس {selected_size} {status}.')
+            covered.update({'colors', 'sizes'})
+    for field in context.get('requested_fields', ()):
+        value = facts.get(field)
+        if field in covered or not isinstance(value, str) or len(value) > 215 or field == 'sizes' and value == 'none':
+            continue
+        if field in labels:
+            lines.append(f'{labels[field]} {value}.')
+        elif field in plain_facts:
+            lines.append(value.rstrip('.') + '.')
+        else:
+            continue
+        covered.add(field)
+
+    if amounts:
+        price_unit = progress.get('price_unit_quantity') or 1
+        piece_label = 'القطعة' if price_unit == 1 else f'البكج ({price_unit} قطع)'
+        offer_qty = context.get('promotion_quantity')
+        price_lines = {
+            'unit_price': f'{piece_label} بـ{{{{unit_price}}}}.',
+            'offer_total': f'عرض {offer_qty} قطع بـ{{{{offer_total}}}}.' if offer_qty != 2 else 'القطعتين بالعرض بـ{{offer_total}}.',
+            'subtotal': 'سعر القطع {{subtotal}}.',
+            'discount': 'الخصم {{discount}}.',
+            'delivery_fee': 'التوصيل {{delivery_fee}}.',
+            'total': 'المجموع ويا التوصيل {{total}}.',
+            'discounted_subtotal': 'سعر القطع بعد الخصم {{discounted_subtotal}}.',
+        }
+        if amounts.keys() - price_lines.keys():
+            return None
+        lines.extend(price_lines[field] for field in price_lines if field in amounts)
+        if amounts.keys() - {'delivery_fee'}:
+            covered.add('price')
+        if 'delivery_fee' in amounts:
+            covered.add('delivery_fee')
+
+    asks = {
+        'product': 'ممكن اسم الموديل أو صورته حتى ألكالج القطعة؟',
+        'quote.province': 'التوصيل لأي محافظة؟',
+        'price.accept': 'يناسبج هالحساب حتى نكمّل؟',
+        'offer.quantity': 'تفضلين قطعة لو عرض القطعتين؟',
+        'purchase_intent': 'تحبين أثبتلج الطلب؟',
+        'alternatives.photos': 'تحبين تشوفين صور الموديلات البديلة؟',
+        'catalog.show_option': 'تحبين أدزلج صورته؟',
+        'inventory.alternative': 'تحبين أشوفلج لون أو قياس ثاني؟',
+    }
+    by_field = {'color': 'يا لون يعجبج؟', 'size': 'شنو القياس اللي يناسبج؟',
+                'weight_kg': 'شكد الوزن تقريباً؟', 'age_months': 'شكد عمر الطفل؟'}
+    if question and question.startswith('contact.'):
+        ask = checkout_question(question, 'female', final_detail=question != 'contact.details')
+    else:
+        ask = asks.get(question) or by_field.get((question or '').rsplit('.', 1)[-1])
+        if not ask and (question or '').startswith('alternative.') and feedback:
+            ask = 'تحبين أراويج موديل ثاني يناسبج؟'
+    unanswered = requested - covered
+    if question == 'quote.province':
+        unanswered.discard('delivery_fee')
+    if question == 'product' and progress.get('product_unresolved'):
+        unanswered.intersection_update({'inspection_policy', 'delivery_time', 'delivery_fee', 'payment', 'shop_address'})
+    if unanswered or question and not ask or not (lines or ask and (
+            requested or context.get('verified_photo_product_id') or progress.get('contact_turn'))):
+        return None
+    if ask:
+        lines.append(ask)
+    # Keep the same layout and amount checks as normal output.
+    return [dict(type='text', text='\n\n'.join(lines))]

@@ -361,6 +361,66 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
             self.assertEqual(0, db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
+    def test_contacts_and_checkout_questions_book_verified_cart_without_models(self):
+        self.incoming(10, 'أريد أزرق قياس 44')
+        plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', size='44', color='أزرق'))])
+        wording = dict(parts=['باقي بس رقم الموبايل والعنوان حتى أثبتلج الحجز.'])
+        with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(plan), self.model_response(wording)]):
+            self.assertFalse(self.work()[1].get('needs_human'))
+
+        self.incoming(11, f'{self.phone}\n{self.address}\nدزيت الرقم والعنوان\n'
+                          'شكد الحساب مع التوصيل ٢٠\nباجر يوصل')
+        with patch.object(m.ai_transport, 'post') as provider:
+            outcome = self.work()[1]
+            provider.assert_not_called()
+        self.assertEqual('booked', outcome['action'], outcome)
+        self.assertEqual(CONFIRMATION, self.transport.call_args.args[2][0]['text'])
+        with m.app.app_context():
+            db = m.get_db()
+            self.assertEqual(1, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+            order = db.execute('SELECT order_items, total_amount FROM orders').fetchone()
+            self.assertEqual([('P1', 'أزرق', '44')], [(p['product_id'], p['color'], p['size'])
+                             for p in json.loads(order[0])])
+            self.assertEqual(20000, order[1])
+
+    def test_contacts_do_not_book_at_a_different_total_from_the_one_asked(self):
+        self.incoming(10, 'أريد أزرق قياس 44')
+        plan = dict(intent='buy', changes=[dict(values=dict(product_id='P1', size='44', color='أزرق'))])
+        wording = dict(parts=['باقي بس رقم الموبايل والعنوان حتى أثبتلج الحجز.'])
+        with patch.object(m.ai_transport, 'post', side_effect=[self.model_response(plan), self.model_response(wording)]):
+            self.assertFalse(self.work()[1].get('needs_human'))
+        self.transport.reset_mock()
+        self.incoming(11, f'{self.phone}\n{self.address}\nشكد الحساب مع التوصيل ٢٥')
+        with patch.object(m.ai_transport, 'post', side_effect=[
+                self.model_response(dict(intent='continue')),
+                self.model_response(dict(parts=['سعر القطعة {{subtotal}} والتوصيل {{delivery_fee}}. المجموع {{total}}.']))]):
+            outcome = self.work()[1]
+        self.assertNotEqual('booked', outcome.get('action'), outcome)
+        self.assertFalse(outcome.get('needs_human'), outcome)
+        with m.app.app_context():
+            db = m.get_db()
+            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
+    def test_verified_photo_answers_the_fabric_question_that_requested_it(self):
+        self.payload['conversation']['additional_attributes'] = {}
+        m.load_products_from_file()[0]['fabric'] = 'دبل إيطالي'
+        self.incoming(10, 'شنو نوع القماش؟')
+        with patch.object(m.ai_transport, 'post', side_effect=[
+                self.model_response(dict(intent='continue')),
+                self.model_response(dict(parts=['ممكن تدزيلي صورة القطعة؟']))]):
+            self.assertFalse(self.work()[1].get('needs_human'))
+        self.incoming(11, 'تمام', attachments=[dict(file_type='image', data_url='https://cdn.example/item.jpg')])
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='matched', product_ids=['P1'])), \
+             patch.object(m.ai_transport, 'post', side_effect=[
+                self.model_response(None, status=503),
+                self.model_response(dict(parts=['إي حبيبتي، قماشه دبل إيطالي. شنو قياسج؟']))]) as provider:
+            outcome = self.work()[1]
+        self.assertFalse(outcome.get('needs_human'), outcome)
+        context = json.loads(provider.call_args.kwargs['json']['messages'][-1]['content'])
+        self.assertEqual(['fabric'], context['requested_fields'])
+        sent = ' '.join(call.args[2][0]['text'] for call in self.transport.call_args_list)
+        self.assertIn('دبل إيطالي', sent)
+
     def test_missing_photo_for_requested_color_returns_an_honest_answer(self):
         self.incoming(10, 'دزيلي صور الأزرق')
         variants = [dict(url='https://catalog.test/product_image/red.jpg', color='ماروني')]
@@ -438,14 +498,15 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
             self.assertEqual(0, db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
-    def test_outage_after_verified_photo_does_not_send_saved_text(self):
+    def test_outage_after_verified_photo_uses_current_catalog_price(self):
         denied = self.model_response(None, status=402)
         self.incoming(10, '', attachments=[{'file_type': 'image', 'data_url': 'https://cdn.example/verified.jpg'}])
         with patch.object(live.ImageObserver, '__call__', return_value=dict(status='matched', product_ids=['P1'])), \
              patch.object(m.ai_transport, 'post', return_value=denied):
             result = self.work()[1]
-        self.assertTrue(result.get('needs_human'), result)
-        self.transport.assert_not_called()
+        self.assertEqual('continue', result.get('action'), result)
+        self.assertNotIn('needs_human', result)
+        self.assertIn('15 ألف', self.transport.call_args_list[0].args[2][0]['text'])
 
     def test_agreement_to_see_alternatives_sends_available_product_images(self):
         products = m.load_products_from_file()
@@ -667,22 +728,22 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.transport.assert_called_once()
         self.notify.assert_called_once()
 
-    def test_sol_fails_once_and_marks_the_incoming_message_without_sending(self):
+    def test_sol_fails_once_and_verified_price_still_reaches_the_customer(self):
         self.incoming(10, 'شكد سعره؟')
         failure = self.model_response(None, status=503)
         with patch.object(m.ai_transport, 'post', return_value=failure) as post:
             kind, result = self.work()
         self.assertEqual(live.JOB_KIND, kind)
-        self.assertTrue(result.get('needs_human'), result)
+        self.assertEqual('continue', result.get('action'), result)
         models = [call.kwargs['json']['model'] for call in post.call_args_list]
-        self.assertEqual([m.MAIN_MODEL, BACKUP_MODEL], models)
+        self.assertEqual([m.MAIN_MODEL, BACKUP_MODEL, m.MAIN_MODEL], models)
         self.assertTrue(all(call.kwargs['max_attempts'] == 1 for call in post.call_args_list))
-        self.transport.assert_not_called()
+        self.assertIn('15 ألف', self.transport.call_args_list[0].args[2][0]['text'])
         with m.app.app_context():
             db = m.get_db()
             incoming_id = m.latest_incoming_message(db, self.sender)['id']
-            self.assertFalse(m.is_customer_ai_enabled(db, self.sender))
-            self.assertEqual(1, db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
+            self.assertTrue(m.is_customer_ai_enabled(db, self.sender))
+            self.assertEqual(0, db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
         for suffix in ('', f'&after_id={incoming_id}'):
             response = self.client.get(f'/api/conversations/{self.sender}/messages?store_id=khuyoot{suffix}')
             self.assertEqual({str(incoming_id): 'failed'}, response.get_json()['consultations'])
@@ -710,31 +771,34 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         incoming_id = next(message['id'] for message in data['messages'] if message['direction'] == 'incoming')
         self.assertEqual({str(incoming_id): 'returned'}, data['consultations'])
 
-    def test_primary_outage_after_sol_advice_requires_review_without_booking(self):
+    def test_primary_outage_after_sol_advice_books_an_exact_validated_selection(self):
         self.incoming(10, f'أريد أزرق قياس 44، {self.phone}، {self.address}')
         unavailable = self.model_response(None, status=503)
         advice = self.model_response(dict(decision='assist', reason='purchase is clear',
                                           guidance='اعتمدي الأزرق قياس 44.', changes=self.model_plan()['changes']))
         with patch.object(m.ai_transport, 'post', side_effect=[unavailable, advice, unavailable]) as post:
-            self.assertTrue(self.work()[1]['needs_human'])
+            result = self.work()[1]
+            self.assertEqual('booked', result.get('action'), result)
         self.assertEqual([m.MAIN_MODEL, BACKUP_MODEL, m.MAIN_MODEL],
                          [call.kwargs['json']['model'] for call in post.call_args_list])
-        self.transport.assert_not_called()
-        self.notify.assert_not_called()
+        self.assertEqual(CONFIRMATION, self.transport.call_args.args[2][0]['text'])
+        self.notify.assert_called_once()
         with m.app.app_context():
             db = m.get_db()
             route = live.route(db, self.sender)
             state = live.Store(db).snapshot(live.scope_for(route))['data']
-            self.assertEqual([], state['cart'])
-            self.assertEqual(0, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
-            self.assertEqual(1, db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
+            self.assertEqual([('أزرق', '44')], [(line['color'], line['size']) for line in state['cart']])
+            self.assertEqual(1, db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+            self.assertEqual(0, db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
 
     def test_link_and_send_resumes_the_unanswered_caption_after_manual_image_binding(self):
         self.payload['conversation']['additional_attributes'] = {}
         self.incoming(10, 'شكد سعره؟', attachments=[dict(file_type='image', data_url='https://cdn.example/new.jpg')])
-        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='unavailable')):
-            self.assertTrue(self.work()[1]['needs_human'])
-        self.transport.assert_not_called()
+        clarification = self.model_response(dict(parts=[dict(type='text', text='ممكن تدزين صورة أوضح للموديل؟')]))
+        with patch.object(live.ImageObserver, '__call__', return_value=dict(status='unavailable')), \
+             patch.object(m.ai_transport, 'post', return_value=clarification):
+            self.assertEqual('media_unresolved', self.work()[1]['action'])
+        self.transport.assert_called_once()
         endpoint = f'/api/conversations/{self.sender}/link_product?store_id=khuyoot'
         response = self.client.post(endpoint, json={'product_id': 'P1', 'async': True},
                                     headers={'X-CSRF-Token': 'test-csrf'})
@@ -784,7 +848,8 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.incoming(10, 'اريد ماروني قياس 44')
         plan = self.model_response(dict(intent='buy', changes=[dict(values=dict(product_id='P1', size='44', color='ماروني'))]))
         failure = self.model_response(None, status=503)
-        with patch.object(m.ai_transport, 'post', side_effect=[plan, failure, failure]):
+        with patch.object(m.ai_transport, 'post', side_effect=[plan, failure, failure]), \
+             patch('account_app.sales_runtime.response.fact_recovery_parts', return_value=None):
             self.assertTrue(self.work()[1]['needs_human'])
         response = self.client.post(f'/api/conversations/{self.sender}/ai?store_id=khuyoot', json={'enabled': True},
                                     headers={'X-CSRF-Token': 'test-csrf'})

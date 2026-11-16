@@ -6425,15 +6425,15 @@ def _match_customer_image_with_catalog_once(customer_image_url, products):
     direct_compare = current_store_id() != DEFAULT_STORE_ID and bool(direct_candidates)
     vision_enabled = direct_compare and is_store_feature_enabled("vision_enabled", VISION_ENABLED)
     catalog_enabled = is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED)
-    if direct_compare and (vision_enabled or catalog_enabled):
+    if direct_candidates and (vision_enabled or catalog_enabled):
         exact = catalog_photo_match.match_inline_photo(customer_image_url, _local_catalog_photo_references(products))
         if exact:
             product_id, color = exact
             return dict(product_found=True, product_id=product_id, confidence=100,
                         observed_color=color, reference_source="catalog_photo_copy")
-        if vision_enabled:
-            result = confirm_with_vision(customer_image_url, direct_candidates)
-            return dict(result, reference_source="labelled_product_images")
+    if vision_enabled:
+        result = confirm_with_vision(customer_image_url, direct_candidates)
+        return dict(result, reference_source="labelled_product_images")
     catalog_model = get_ai_model(None, "catalog_match_model", CATALOG_MATCH_MODEL)
     # Catalogue matching is independently configurable from the legacy vision
     # feature. Labelled product photos need no separately uploaded contact sheet.
@@ -7008,8 +7008,7 @@ def _match_single_product(db, ev, products, resume_ai_on_link=True):
                         if not rejected_image else None)
             catalog_result = verified or ai_efficiency.recognize_once(
                 db, current_store_id(), str(sender_id or ''), image_key,
-                {'recognition_schema': ('model-and-color-v2' if current_store_id() == DEFAULT_STORE_ID
-                                        else 'model-color-and-photo-copy-v3'),
+                {'recognition_schema': 'model-color-catalog-screenshots-v4',
                  'products': products, 'sheets': [(os.path.basename(path), os.stat(path).st_mtime_ns,
                                                   os.stat(path).st_size) for path in _resolve_catalog_image_paths()]},
                 lambda: verified or match_customer_image_with_catalog(image_data, products))
@@ -9804,6 +9803,18 @@ def call_main_ai(ev, message_type, customer, history, products, matched_product,
                 result = dict(result, reply='', reply_parts=[], create_order=False, requires_human=True,
                               failure_reason=result.get('failure_reason') or ('consultant_' + state.reason if state.reason else 'consultation_unresolved'))
             result = dict(result, _reply_consultation=state.metadata())
+        product = state.data.get('matched_product') or matched_product
+        if (has_app_context() and product and not pending and not result.get('_deferred_product_id')
+                and _consulted_reply_failed(result)
+                and not ev.get('_post_order') and message_type == 'text' and not ev.get('image_url')
+                and not sales_playbook.human_requested(question)
+                and len(state.data.get('customer_products') or ()) <= 1
+                and re.search(r'(?<!\w)(?:شنو|يا|اي)\s+(?:ال)?الوان(?!\w)', sales_strategy.normalized(question))
+                and not set(sales_answers.topics(question)) - {'colors', 'availability'}
+                and not pending_product_choice(get_db(), ev.get('sender_id'))):
+            recovered = recover_factual_sales_reply(ev, product)
+            if recovered and not recovered.get('_needs_fact_review'):
+                return dict(recovered, _reply_consultation=result.get('_reply_consultation'))
         if result.get('_deferred_product_id'):
             pending = result
         if pending and _consulted_reply_failed(result):
@@ -16924,8 +16935,9 @@ def api_link_product(sender_id):
     db.commit()
     resolved_links = list(mappings)
     if len(linked_products) == 1:
-        image_rows = db.execute("""SELECT * FROM messages WHERE sender_id=? AND direction='incoming'
-            AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'),0)""",
+        image_rows = db.execute(f"""SELECT * FROM messages WHERE sender_id=? AND direction='incoming'
+            AND id>COALESCE((SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='outgoing'
+            AND {delivery_state.ANSWERED_SQL}),0)""",
             (sender_id, sender_id)).fetchall()
         image_ids = {media['url']: row['id'] for row in image_rows for media in message_media(dict(row))
                      if media.get('type') == 'image'}

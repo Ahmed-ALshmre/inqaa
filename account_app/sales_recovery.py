@@ -103,7 +103,7 @@ def color_photo_request(text):
 
 def simple_photo_request(text):
     clean = normalized(text).strip(' ؟?!.،,\n')
-    clean = re.sub(r'^(?:(?:تمام|اوكي|اوك|ماشي|زين|طيب|اي|نعم|عيني|حبيبتي|حبي|عمري|بلا\s*زحم[هة]|لو سمحتي)[\s،,]+)*(?:بس[\s،,]+)?', '', clean)
+    clean = re.sub(r'^(?:(?:تمام|اوكي|اوك|ماشي|زين|طيب|اي|نعم|عيني|حبيبتي|حبي|عمري|بلا\s*زحم[هة]|لو سمحتي|(?:ال)?سلام\s+عليكم)[\s،,]+)*(?:بس[\s،,]+)?', '', clean)
     clean = re.sub(r'\s+(?:بدون\s+(?:اي\s*)?حجز|بس\s+للمشاهد[هة]|(?:بس\s+)?ما\s*اريد\s*احجز)$', '', clean).strip(' ،')
     clean = re.sub(r'(?:\s+(?:حبيبتي|عيني|حبي|حياتي|بلا زحمة|لو سمحتي))+$', '', clean)
     if explicit_photo_followup(clean) or color_photo_request(clean):
@@ -114,6 +114,9 @@ def simple_photo_request(text):
     if re.fullmatch(rf'(?:اريد|ممكن|ادزي|دزيلي|ارسلي|وين|ما\s*وصل\w*)\s+{photo}(?:\s+(?:الالوان|الموديل))?|وين\s+اصور|'
                     rf'(?:شوكت|اشوكت|يمتى|متى)\s+(?:راح\s+)?{send}\s+(?:(?:هي|هيه|هاي)\s+)?{photo}',
                     words):
+        return True
+    if re.fullmatch(rf'(?:ممكن|اريد|دزيلي|ارسلي)\s+{photo}(?:\s+(?:ال)?(?:سوت|صوت|طقم|موديل|تنور[ةه]|فستان|روب))?'
+                    r'\s+(?:قياس|مقاس|سايز)\s+[\w ]{1,16}', words):
         return True
     # Color alternatives describe which pictures to inspect, not purchase
     # quantities. Mixed factual/booking requests still need the full answer.
@@ -136,6 +139,8 @@ def offers_alternative_photos(text):
 
 def additional_models_request(text):
     clean = normalized(text).strip(' .!؟?،')
+    if re.search(r'(?<!\w)(?:و?شنو\s+اكو|و?شنو\s+عدكم|و?شنو\s+عندكم)\s+(?:من\s+)?(?:موديلات|مديلات|ستايلات|خيارات)(?!\w)', clean):
+        return True
     if re.fullmatch(r'(?:ش\s*عد|شنو\s+عن?د)(?:كم|ج|ك)\s+بعد', clean):
         return True
     return bool(re.fullmatch(

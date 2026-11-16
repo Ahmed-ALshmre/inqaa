@@ -112,7 +112,7 @@ def topics(question):
         'width': product_variants.WIDTH_REQUEST_PATTERN,
         'length': r'طول(?:ه|ها|هة)|(?<!\w)الطول(?!\w)|طول (?:ال)?(?:قطعة|قطعه|فستان|قميص|موديل|بنطرون|بنطلون|كيلوت|اكيلوت|تنورة|تنوره|عباءة|عبايه)',
         'lining': r'بطان|مبطن',
-        'stretch': r'مطاط|ليكرا|يتمدد',
+        'stretch': r'مطاط|ليكرا|يتمدد|ينطي\s+(?:باللبس|باللبسه|ويا\s+اللبس)',
         'closure': r'ينفتح|سحاب|(?<!\w)(?:و?ال)?سح?اب(?!\w)|اغلاق|ازرار|زرار|كبس|لاستيك|استيك|(?<!\w)(?:و?ال)?(?:دگم|دكم)(?!\w)',
         'location': r'وين\s+(?:المحل|محلكم|موقعكم)|عنوان\s+المحل|موقع\s+المحل',
         'checkout_help': r'شلون\s+(?:اطلب|احجز)|كيف\s+(?:اطلب|احجز)|طريقة\s+(?:الطلب|الحجز)|'
@@ -303,7 +303,8 @@ def field_fact(product, key):
     value = customer_copy.fact((product or {}).get(key), key).strip()
     if value and not customer_copy.has_instructions(value):
         return value
-    patterns = {'stretch': r'ليكرا|مطاط|يتمدد', 'cut': r'كلوش|قص[هةت]|كص[هةت]',
+    patterns = {'stretch': r'ليكرا|مطاط|يتمدد|ينطي\s+(?:باللبس|باللبسه|ويا\s+اللبس)',
+                'cut': r'كلوش|قص[هةت]|كص[هةت]|راه[ييةه]+|(?:يجي|تجي)\s+(?:ضيق[هة]?|واسع[هة]?)',
                 'lining': r'بطان', 'closure': r'سحاب|ازرار|دكم|دگم|لاستيك|استيك'}
     if key not in patterns:
         return ''

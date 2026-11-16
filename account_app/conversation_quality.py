@@ -53,6 +53,8 @@ def booking_status_question(text):
     clean = normalized(text).strip(' ؟?!.،')
     clean=re.sub(r'(?<!\w)(?:بعيونج|بعيونك|حبيبتي|عيني|عمري)(?!\w)','',clean)
     clean=re.sub(r'\s+',' ',clean).strip()
+    if re.fullmatch(r'(?:(?:نعم|اي|تمام)\s+)?(?:ثبتي|ثبت)\s+(?:الطلب|الحجز)(?:\s+والقياس)?', clean):
+        return True
     return bool(re.fullmatch(r'(?:يعني\s+|زين\s+|هسه\s+|صار\s+)?(?:صار\s+الحجز|تم\s+الحجز|(?:ثبت|تثبت)\s+(?:الطلب|الحجز)|'
                              r'ثبتتوا\s+(?:الطلب|الحجز|طلبي)|سجلتوا\s+طلبي|طلبي\s+(?:ثبت|تثبت|مسجل))(?:\s+لو\s+بعد)?', clean))
 

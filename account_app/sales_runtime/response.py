@@ -9,11 +9,11 @@ from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
 from .copy_guard import ROOMY_FIT, validate_copy, validate_material
-from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives,only_same_day_question,weight_limit_question
+from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives,only_same_day_question,quoted_offer_quantity,weight_limit_question
 from .intent import constraint, direct_clothing_size, direct_color, purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
 from .recovery import catalog_photo_request, clothing_size_label, skirt_length_request, weight_fit
-from .wording import checkout_question, mentions_free_size, natural_weight_wording, next_options, quote_amounts, render_amounts, validate_next_step
+from .wording import checkout_question, fact_recovery_parts, mentions_free_size, natural_weight_wording, next_options, quote_amounts, render_amounts, validate_next_step
 
 
 class Responses:
@@ -27,7 +27,7 @@ class Responses:
 
     def prepare(self, scope, turn_id, outcome, *, retry_revision=None):
         mode = 'withdrawn' if outcome.get('withdrawn') else outcome['action']
-        if mode not in {'continue', 'withdrawn', 'cancelled', 'media_unresolved'}:
+        if mode not in {'continue', 'withdrawn', 'cancelled', 'media_unresolved', 'order_status'}:
             # Order confirmations use durable order tasks, never model rewriting.
             return dict(action=outcome['action'])
         reply_key = {
@@ -35,6 +35,7 @@ class Responses:
             'withdrawn': f'answer:{turn_id}',
             'cancelled': f'cancellation:{turn_id}',
             'media_unresolved': f'clarify-image:{turn_id}',
+            'order_status': f'order-status:{turn_id}',
         }[mode]
         key = reply_key if mode == 'media_unresolved' else f'writer-v3:{turn_id}'
         if retry_revision is not None:
@@ -53,6 +54,11 @@ class Responses:
         snap = self.store.snapshot(scope)
         if snap['version'] != outcome['state_version']:
             raise Conflict('response_superseded')
+        if mode == 'order_status':
+            status = (outcome['status'] or '').lower()
+            text = ('الحجز المسجل عدنا ملغي.' if status in {'cancelled', 'canceled', 'ملغي'}
+                    else 'الطلب اللي حجزتيه مسجل عدنا.')
+            return self.save(scope, key, reply_key, turn_id, snap['version'], [dict(type='text', text=text)])
         catalog = self.catalog_loader(scope.store)
         policy=self.policy_loader(scope.store)
         recent=self.store.db.execute("SELECT actor,payload FROM sales_v2_events WHERE scope=? AND kind='message' ORDER BY id DESC LIMIT 15",
@@ -76,7 +82,9 @@ class Responses:
         )
         if mode == 'media_unresolved':
             parts = self.ask_about_photo(scope, turn_id, snap['version'], catalog, current, messages, accepted,
-                                         greeting, 'product-detail', multiple=bool(outcome.get('multiple_images')))
+                                         greeting, outcome.get('photo_stage', 'product-detail'),
+                                         multiple=bool(outcome.get('multiple_images')),
+                                         unreadable=bool(outcome.get('unreadable_photo')))
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if outcome.get('browsing_photos') and self.product_photos:
             parts = self.browsing_photos(catalog, outcome['browsing_photos'])
@@ -114,6 +122,8 @@ class Responses:
                            action_results=dict(order_changed=mode == 'cancelled'))
             parts = self.write(context, catalog, scope, turn_id, snap['version'])
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+        if not current.strip() and messages and messages[-1].get('media_kind', 'text') == 'text':
+            return dict(action='skipped')
         readiness = CartService(self.store,catalog).readiness(scope)
         plan = outcome.get('answer_plan', {})
         question = plan.get('question_field')
@@ -155,8 +165,9 @@ class Responses:
             order_confirmed=sales_intelligence.confirmation_accepted(self.store.db, scope, state),
             requested=bool(outcome.get('alternatives_requested')), history=messages[:-1],
             already_suggested=repeat_offer, offer_clearance=clearance_fit_turn)
-        matched_photo_only = bool(product and state.get('focus_source') == 'image' and not current.strip()
-                                  and messages[-1].get('media_kind') == 'image')
+        matched_photo_only = bool(product and state.get('focus_source') == 'image'
+                                  and messages[-1].get('media_kind') == 'image'
+                                  and (not current.strip() or checkout.is_confirmation(current)))
         if outcome.get('alternatives_requested') and self.product_photos:
             if market['offer_kind']:
                 parts = self.catalog_offer_parts(catalog, state, market)
@@ -210,7 +221,26 @@ class Responses:
                                              question_key=color_key, question_stage='photos')]
             return self.save(scope, key, reply_key, turn_id, snap['version'], photos[:5])
         requested=requested_fields(current)
-        if matched_photo_only and not lines:
+        if (matched_photo_only and not requested and accepted
+                and accepted[-1].get('question_field') in {'product', 'photo.reference'}):
+            for message in reversed(messages[:-1][-8:]):
+                if message['actor'] != 'customer':
+                    if requested:
+                        break
+                    if re.search(r'صور[ةه]|سكرين', checkout.normalized(message.get('text', ''))):
+                        continue
+                    break
+                previous = message.get('text', '')
+                if message.get('media_kind') == 'image':
+                    break
+                if not previous.strip() or checkout.is_confirmation(previous):
+                    continue
+                fields = [field for field in requested_fields(previous)
+                          if field not in POLICY_FIELDS and field not in {'price', 'wholesale'}]
+                if not fields:
+                    break
+                requested = list(dict.fromkeys([*fields, *requested]))
+        if matched_photo_only and not requested and not lines:
             requested.append('price')
         offer_question = bool(re.fullmatch(r'(?:شنو|شني|ما هو|ماهو)\s+(?:ال)?عرض(?:كم|ه)?', clean))
         if offer_question and 'price' not in requested:
@@ -287,7 +317,7 @@ class Responses:
         bargaining = bool(requested_offer or state.get('price_request') and pushback(current) or
                           price_pending and (contact_turn or purchase_turn or confirmation or selected or
                                              'price' in requested or destination(current)))
-        quantity = sales_playbook.requested_quantity(current)
+        quantity = sales_playbook.requested_quantity(current) or quoted_offer_quantity(current)
         if not quantity and 'delivery_fee' in requested and re.search(r'قطعه?\s+وحد[هة]|القطع[ةه]\b', clean):
             quantity = 1
         price_question = 'price' in requested and set(requested) <= {'price', 'delivery_fee'}
@@ -509,6 +539,10 @@ class Responses:
             question = None
         if label_availability and question and question.startswith('product.') and question.endswith(('.size', '.weight_kg')):
             question = f'product.{focus}.color' if product.get('colors') and not wanted_colors and not chosen_color else None
+        if (question or '').endswith(('.color', '.size')) and 'availability' in sales_answers.topics(current):
+            enquiry = product_variants.requested(current)
+            if len(enquiry['colors'] if question.endswith('.color') else enquiry['sizes']) == 1:
+                question = None
         if label_availability and label_availability['weight_compatible'] is False and not quote_turn:
             # An alphabetical label cannot make an out-of-range garment fit.
             if question and (question.startswith(('contact.', 'cart.', 'product.')) or question == 'purchase_intent'):
@@ -650,7 +684,7 @@ class Responses:
                 self.store.db, scope.store, current, bool(market['matches'])),
             promotion_quantity=promotion[0] if promotion else None,
             free_delivery_min_quantity=free_quantity if free_quantity and free_quantity > 1 else None,
-            stock_conflict=stock_conflict,
+            stock_conflict=stock_conflict, catalog_stock=product_albums.stock_state(product) if product else 'unknown',
             weight_only=bool(product and product.get('selection_mode') == 'weight' and not free_size),
             documented_size_labels=labels,
             label_availability=label_availability,
@@ -660,6 +694,7 @@ class Responses:
                           contact_turn=contact_turn, recap_selection=recap,
                           product_unresolved=product_unresolved,
                           free_size=free_size,
+                          selection_recorded=selected,
                           quantity=sum(row['quantity'] for row in lines), fit=fit,
                           quantity_confirmed=one_piece or quantity_objection,
                           price_unit_quantity=price_units, negotiation=bargaining,
@@ -850,12 +885,22 @@ class Responses:
         wants_purchase = not wants_photos and purchase_selected(current)
         product_id = outcome.get('provisional_product')
         product = catalog.get(product_id) if product_id else {}
+        if not product_id and re.search(r'(?:تصويره[ام]|تصوريه[ام]|تصويرها|تصوريها).{0,45}(?:ارسال|ارسلي|دزي).{0,12}صور',
+                                        checkout.normalized(current)):
+            wants_photos = True
         if 'availability' in sales_answers.topics(current):
             requested.append('stock')
             if 'colors' not in requested and product_variants.requested(current)['colors']:
                 requested.append('colors')
             if 'sizes' not in requested and product_variants.requested(current)['sizes']:
                 requested.append('sizes')
+        if not product_id and self.product_photos:
+            from ..sales_recovery import alternative_photo_request
+            if alternative_photo_request(current):
+                market = sales_intelligence.relevant(self.store.db, catalog, self.store.snapshot(scope)['data'],
+                    None, current, requested=True, history=messages[:-1])
+                if market['matches']:
+                    return self.catalog_offer_parts(catalog, self.store.snapshot(scope)['data'], market)
         if not product_id and not wants_purchase and set(requested) <= {'price', 'sizes', 'colors', 'stock'}:
             if requested and accepted and accepted[-1].get('question_stage') == 'product-detail':
                 return self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
@@ -863,7 +908,13 @@ class Responses:
             if accepted and accepted[-1].get('question_stage') == 'image-choice':
                 return dict(action='skipped')
         if not product_id and (wants_photos or wants_purchase or any(field not in POLICY_FIELDS for field in requested)):
-            return dict(action='photo_review')
+            if accepted and accepted[-1].get('question_stage') in {'image-choice', 'photo-link'}:
+                return dict(action='skipped')
+            if accepted and accepted[-1].get('question_stage') == 'product-detail':
+                return self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
+                                            accepted, greeting, 'photo-link', unreadable=True)
+            return self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
+                                        accepted, greeting, 'product-detail')
         if wants_photos and product and self.product_photos:
             colors = product_variants.requested(current)['colors']
             photos = self.product_photos(product, colors)
@@ -954,13 +1005,15 @@ class Responses:
         return parts
 
     def ask_about_photo(self, scope, turn_id, version, catalog, current, messages, accepted, greeting,
-                        stage, *, multiple=False, label=''):
+                        stage, *, multiple=False, label='', unreadable=False):
         context = dict(mode='continue', customer_message=current, recent_messages=messages, recent_replies=accepted,
                        question_field='photo.reference', next_step=dict(field='photo.reference', options=[]),
                        copy_budget=145,
                        amounts={}, greeting=greeting, action_results={},
-                       photo_clarification=dict(multiple=multiple, possible_product=label))
+                       photo_clarification=dict(multiple=multiple, possible_product=label, unreadable=unreadable))
         parts = self.write(context, catalog, scope, turn_id, version)
+        for part in parts:
+            part['reference_clarification'] = True
         parts[-1].update(question_field='product', question_key='product', question_stage=stage)
         return parts
 
@@ -995,11 +1048,11 @@ class Responses:
                 except (ValueError, DecisionUnavailable) as exc:
                     raise BackupFailed('primary_reply_failed_after_consultation') from exc
         except BackupFailed:
-            recovered = self.same_day_recovery(context) or self.greeting_recovery(context)
+            recovered = self.recover_wording(context, catalog, strict)
             if recovered:
                 return recovered
             raise
-        recovered = self.same_day_recovery(context)
+        recovered = self.recover_wording(context, catalog, strict)
         if recovered:
             return recovered
         if isinstance(failure, DecisionUnavailable):
@@ -1007,6 +1060,18 @@ class Responses:
         if question == 'product' or context.get('progress', {}).get('product_unresolved'):
             raise DecisionUnavailable('product_reply_retryable') from failure
         raise DecisionRejected('writer_invalid_after_validation') from failure
+
+    def recover_wording(self, context, catalog, strict):
+        parts = self.same_day_recovery(context)
+        if parts:
+            return parts
+        parts = fact_recovery_parts(context)
+        if parts:
+            try:
+                return self.validate_parts(parts, context, catalog, strict)
+            except ValueError:
+                return None
+        return self.greeting_recovery(context)
 
     @staticmethod
     def same_day_recovery(context):
@@ -1114,6 +1179,8 @@ class Responses:
                     raise ValueError('reply.stock: distinguish a compatible weight from confirmed availability')
         if strict and all(part['type'] == 'text' for part in parts):
             clean = checkout.normalized(text)
+            if context.get('photo_clarification', {}).get('unreadable') and not re.search(r'رابط|اسم|وصف', clean):
+                raise ValueError('reply.photo: ask for a name or link after the photograph did not identify the item')
             if variant_inventory.availability_error(text, context.get('variant_stock')):
                 raise ValueError('reply.variant_stock: confirm only a color and size available together')
             contact = context.get('state', {}).get('contact', {})

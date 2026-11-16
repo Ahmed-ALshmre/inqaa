@@ -67,6 +67,9 @@ def requested_fields(text):
              'delivery_time':'delivery_time','delivery':'delivery_fee','location':'shop_address'}
     fields=[mapping[t] for t in sales_answers.topics(text) if t in mapping]
     clean=customer_copy.normalized(text)
+    if quoted_offer_quantity(clean) or re.search(r'(?:القطعتين|\d+\s+قطع)\s+\d+\s+(?:وي|ويا|مع)\s+التوصيل|'
+                                                r'اذا\s+على\s+(?:عشر[هة]|عشرين|\d+)', clean):
+        fields.append('price')
     if 'wholesale' in fields and 'price' in fields:
         fields.remove('price')
     if 'colors' in fields and refers_to_photo_colors(clean):
@@ -75,8 +78,11 @@ def requested_fields(text):
                         r'(?:\s+(?:هذا|هاذا|هاي|هذي|هذه|هالموديل|(?:ال)?سعر[هة]?))?[ .،؟?]*', line.strip())
            for line in clean.splitlines()):
         fields.append('price')
-    if weight_limit_question(clean):
+    if weight_limit_question(clean) or re.search(r'(?:يلبس|يناسب|يرهم).{0,12}(?:يا|أي|اي)\s*وزن', clean):
         fields.append('sizes')
+    if re.search(r'(?:شوي\s+|تجي|يجي|يكون|لو|باللبس).{0,14}(?:راه[ييةه]+|ض[يي]?ك[هة]?|ضيق[هة]?)|'
+                 r'(?:راه[ييةه]+|ضيق[هة]?)\s+(?:كلش|باللبس)', clean):
+        fields.append('cut')
     from .contact import checkout_inspection_question
     if any(checkout_inspection_question(line) for line in clean.splitlines()):
         fields.append('inspection_policy')
@@ -85,6 +91,13 @@ def requested_fields(text):
     if re.search(r'صناعته|صناعتها|منشا|صيني\s*لو\s*تركي|تركي\s*لو\s*صيني',clean):fields.append('origin')
     if re.search(r'بس\s*هو.{0,20}(?:جوار|جنط)|تجي.{0,20}(?:وياه|هديه)',clean):fields.append('composition')
     return list(dict.fromkeys(fields))
+
+
+def quoted_offer_quantity(text):
+    """Read «هي ٢ ب٢٥؟» as a quote question without using the stated price."""
+    match = re.search(r'^\s*(?:(?:هي|يعني|العرض)\s+)([2-9]|1\d|20)\s+بـ?\s*\d{2,6}(?:\s+الف)?\s*[؟?]?\s*$',
+                      customer_copy.normalized(text), re.M)
+    return int(match[1]) if match else None
 
 
 def refers_to_photo_colors(clean):

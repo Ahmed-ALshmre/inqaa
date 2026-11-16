@@ -12,7 +12,7 @@ from .. import catalog_profile, checkout, product_albums, product_variants, sale
 from ..sales_recovery import alternative_photo_request, clearance_addon_answer
 from .backup import BackupFailed, consult, failure_code
 from .cart import CartService
-from .contact import capture as capture_contact, contact_only, declined_phone
+from .contact import capture as capture_contact, checkout_followup, contact_only, declined_phone, stated_checkout_total
 from .references import References
 from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
@@ -21,7 +21,7 @@ from .intent import (apply_intent, color_availability, color_correction, direct_
                      explicit_cancellation, photo_replaces_selection, purchase_declined, purchase_selected,
                      referred_photo_color)
 from .orders import only_color_missing
-from .recovery import browsing_photo_request, catalog_photo_request, clothing_size_label, grounded_plan, skirt_length_request, weight_fit
+from .recovery import browsing_photo_request, catalog_photo_request, clothing_size_label, grounded_plan, recoverable_turn, skirt_length_request, weight_fit
 
 
 class TurnTools(Store):
@@ -213,18 +213,26 @@ class Runtime:
         return result
 
     def recover_decision(self, scope, event_id, version, context, failure, previous=None, reason=None):
-        advice = consult(self.store, scope, event_id, version, 'decision', self.backup,
-                         context, reason or str(failure), previous, history_loader=self.history_loader)
-        if advice is not None:
-            try:
-                alternate = clean_plan(self.decision_call(scope,event_id,context,advice=advice))
-            except (DecisionRejected, DecisionUnavailable, ValueError) as exc:
-                raise BackupFailed('primary_decision_failed_after_consultation') from exc
-            # The normal cart transaction validates every change. An explicit Sol
-            # correction takes precedence over the primary's suggested cart changes.
-            if advice['changes']:
-                alternate['changes'] = advice['changes']
-            return alternate, advice
+        try:
+            advice = consult(self.store, scope, event_id, version, 'decision', self.backup,
+                             context, reason or str(failure), previous, history_loader=self.history_loader)
+            if advice is not None:
+                try:
+                    alternate = clean_plan(self.decision_call(scope,event_id,context,advice=advice))
+                except (DecisionRejected, DecisionUnavailable, ValueError) as exc:
+                    raise BackupFailed('primary_decision_failed_after_consultation') from exc
+                # An explicit Sol correction still passes the normal cart transaction.
+                if advice['changes']:
+                    alternate['changes'] = advice['changes']
+                return alternate, advice
+        except BackupFailed:
+            plan = recoverable_turn(context)
+            if plan is None:
+                raise
+            return plan, None
+        plan = recoverable_turn(context)
+        if plan is not None:
+            return plan, None
         if isinstance(failure, DecisionRejected) and getattr(type(self.decide), 'fallback_allowed', False):
             return grounded_plan(context), None
         raise failure
@@ -367,6 +375,10 @@ class Runtime:
             raise Conflict('customer_turn_required')
         snap_now=self.store.snapshot(scope)
         text_now=checkout.normalized(evidence['payload'].get('text',''))
+        text_lines = [line for line in text_now.splitlines() if line.strip()]
+        stated_totals = {amount for line in text_lines if (amount := stated_checkout_total(line)) is not None}
+        image_only = evidence['payload'].get('media_kind') == 'image' and (
+            not text_lines or checkout.is_confirmation(text_now))
         photo_request = catalog_photo_request(text_now)
         if snap_now['data'].get('order_id') and explicit_cancellation(text_now):
             result=self.orders.cancel(scope,key+':cancel',snap_now['version'],event_id)['result']
@@ -439,9 +451,18 @@ class Runtime:
                                           (scope.key,)).fetchall()
             context['recent_replies']=[json.loads(row[0]) for row in reversed(replies)]
             recovered=False;used_backup=None;business_feedback=None
-            contact_turn = bool(captured.get('fields') and state['cart'] and not state.get('order_id')
-                                and (state.get('purchase_event') or state.get('checkout_prompt'))
-                                and contact_only(evidence['payload'].get('text', '')))
+            quoted_total = None
+            province = state['contact'].get('province')
+            if stated_totals and state['cart'] and province:
+                try:
+                    quoted_total = cart.quote(scope, self.orders.delivery_fee(scope.store, province))['total']
+                except (Conflict, ValueError):
+                    pass
+            contact_turn = bool(state['cart'] and not state.get('order_id')
+                and (state.get('purchase_event') or state.get('checkout_prompt'))
+                and (captured.get('fields') and contact_only(text_now, quoted_total=quoted_total)
+                     or initial_readiness['ready'] and text_lines
+                     and all(checkout_followup(line, quoted_total=quoted_total) for line in text_lines)))
             focus = reference.get('product_id') or state.get('focus_product_id') or (
                 state['cart'][0]['product_id'] if len({line['product_id'] for line in state['cart']}) == 1 else None)
             focus_product = catalog.products.get(focus) or {}
@@ -500,7 +521,6 @@ class Runtime:
             if alternatives_requested:
                 photo_request = True
             explicit_photo = photo_request and bool(focus)
-            image_only = evidence['payload'].get('media_kind') == 'image' and not text_now.strip()
             fields = set(requested_fields(text_now))
             verified_fit = (not separate_product and focus and state.get('focus_source') == 'image'
                             and weight_fit(focus_product, text_now)
@@ -812,7 +832,6 @@ class Runtime:
         for field in requested_fields(evidence['payload'].get('text','')):
             pid='@store' if field in POLICY_FIELDS else focus
             if pid and resolve_fact(catalog,pid,field,policy) is None:missing_fact=True
-        image_only = evidence['payload'].get('media_kind') == 'image' and not evidence['payload'].get('text', '').strip()
         new_contact = event_id in state.get('contact_events', {}).values()
         direct_purchase = purchase_selected(evidence['payload'].get('text', ''))
         hold_color = only_color_missing(ready) and (new_contact or direct_purchase)
@@ -838,7 +857,9 @@ class Runtime:
                 for payload in (json.loads(row[0]) for row in latest_choice))
             hold_color = not waiting_for_color and not tracked_cart
         booking_outcome = None
+        confirmed_total = not stated_totals or stated_totals == {(saved.get('quote') or {}).get('total')}
         if ((ready['ready'] or hold_color) and not image_only and not photo_request
+                and confirmed_total
                 and not saved.get('separate_photo_product')
                 and not (saved.get('photo_choice') or {}).get('availability_question')
                 and not missing_fact and not staff_stock_conflict and not unavailable_cart and not state.get('order_id')):

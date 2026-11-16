@@ -125,6 +125,42 @@ class MessagingMediaTests(unittest.TestCase):
         finally:
             self.m._current_store_id.reset(token)
 
+    def test_catalog_photo_inside_phone_screenshot_resolves_in_each_store(self):
+        original = Image.new('RGB', (512, 512), '#c6a78a')
+        draw = ImageDraw.Draw(original)
+        draw.polygon([(211, 86), (329, 120), (460, 415), (120, 447), (45, 294)], fill='#26313a')
+        for x in range(50, 460, 29):
+            draw.line(((247, 116), (x, 388)), fill='#495865', width=4)
+        root = Path(self.temp.name)
+        original.save(root / 'inset-product.png')
+        draw.ellipse((169, 140, 373, 355), fill='#ae6153')
+        original.save(root / 'different-inset.png')
+        with Image.open(root / 'inset-product.png') as reference:
+            screenshot = Image.new('RGB', (612, 1340), '#202126')
+            screenshot.paste(reference.resize((568, 568), Image.Resampling.LANCZOS), (21, 72))
+        overlay = ImageDraw.Draw(screenshot)
+        overlay.rectangle((280, 607, 331, 636), fill='#404144')
+        overlay.rounded_rectangle((35, 855, 500, 960), radius=26, fill='#36383c')
+        result = io.BytesIO()
+        screenshot.save(result, 'JPEG', quality=76)
+        incoming = 'data:image/jpeg;base64,' + base64.b64encode(result.getvalue()).decode('ascii')
+        reference = '/product_image/inset-product.png'
+        product = dict(product_id='P007', status='active', image_url=[reference], image_colors={reference: 'اسود'})
+        other = dict(product_id='P013', status='active', image_url=['/product_image/different-inset.png'])
+        with patch.object(self.m, 'PRODUCT_IMAGE_DIR', str(root)), \
+             patch.object(self.m, 'is_store_feature_enabled', return_value=True), \
+             patch.object(self.m, 'confirm_with_vision', return_value=dict(product_found=False)) as vision:
+            for store in ('khuyoot', self.m.DEFAULT_STORE_ID):
+                with patch.object(self.m, 'current_store_id', return_value=store):
+                    match = self.m.match_customer_image_with_catalog(incoming, [other, product])
+                    self.assertEqual(('P007', 'أسود'), (match['product_id'], match['observed_color']))
+            vision.assert_not_called()
+            with patch.object(self.m, 'current_store_id', return_value='khuyoot'):
+                self.assertFalse(self.m.match_customer_image_with_catalog(incoming, [other])['product_found'])
+                self.assertFalse(self.m.match_customer_image_with_catalog(
+                    incoming, [product, dict(product, product_id='duplicate')])['product_found'])
+            self.assertEqual(2, vision.call_count)
+
     def test_missing_sizes_consults_once_then_hands_off_without_primary_generation(self):
         product = {'product_id':'P005','product_name':'سوت حوامل','stock':'متوفر','price':'18000','status':'active'}
         ev = self.m.extract_facebook_event(self.body([{'type':'image','payload':{'url':'https://images.test/customer.jpg'}}], 'شنو سعره وقياساته؟'))

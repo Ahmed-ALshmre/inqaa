@@ -560,7 +560,8 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
     def test_second_unresolved_photo_stops_the_loop_and_keeps_declared_contact(self):
-        writer = Mock(return_value=[dict(type='text', text='حبيبتي، دزيلي صورة أوضح للموديل.')])
+        writer = Mock(side_effect=[[dict(type='text', text='حبيبتي، دزيلي صورة أوضح للموديل.')],
+                                   [dict(type='text', text='عندج اسم الموديل أو رابط القطعة؟')]])
         entry = Entrypoint(self.db, lambda sid: self.products, lambda s, p: 5000, self.decide,
                            writer=writer, media=lambda *args: dict(status='unknown', product_ids=[]))
         target = dict(store_id='khuyoot', channel='chatwoot', account_id='a', sender_id='unresolved')
@@ -572,9 +573,16 @@ class AuditFixTests(unittest.TestCase):
         entry.store.settle_reply(scope, part['id'], 'accepted', 'receipt')
         second = entry.receive(**target, message_id='image-2', media_kind='image', media_ref='image-2',
                                text='رقمي 07701234567')
-        self.assertEqual('product_image_unresolved_after_retry', second['reason'])
+        self.assertEqual('media_unresolved', second['action'])
+        part = entry.store.claim_reply(scope)
+        self.assertIn('رابط', part['payload']['text'])
+        entry.store.settle_reply(scope, part['id'], 'accepted', 'different-evidence')
+        third = entry.receive(**target, message_id='image-3', media_kind='image', media_ref='image-3')
+        self.assertEqual('media_unresolved', third['action'])
+        self.assertIsNone(entry.store.claim_reply(scope))
         self.assertEqual('07701234567', entry.store.snapshot(scope)['data']['contact']['phone'])
-        writer.assert_called_once()
+        self.assertEqual('active', entry.store.snapshot(scope)['data']['control_mode'])
+        self.assertEqual(2, writer.call_count)
         self.decide.assert_not_called()
 
     def test_clothing_size_is_not_a_weight_and_a_later_weight_is_remembered(self):
