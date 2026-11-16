@@ -10,6 +10,7 @@ from .backup import BackupFailed, BackupSuperseded, failure_code
 from .contact import capture as capture_contact, declarations
 from .facts import only_same_day_question
 from .intent import explicit_cancellation
+from .photo_orders import requests_two_photos
 from .orders import Orders, migrate_tasks, CONFIRMATION
 from .runtime import Runtime
 from .store import Store, Scope, Conflict
@@ -104,13 +105,16 @@ class Entrypoint:
 
     def _receive(self, *, store_id, channel, account_id, sender_id, message_id,
                 text='', ad=None, media_kind='text', actor='customer', ai_enabled=True, media_ref=None,
-                staff_sold_out_product=None, staff_verified_product=None):
+                staff_sold_out_product=None, staff_verified_product=None, photo_sizes=None):
         if channel not in {'chatwoot', 'zernio'}:
             raise ValueError('unsupported_channel')
         if media_kind not in {'text', 'image', 'sticker', 'video', 'audio', 'file'}:
             raise ValueError('unsupported_media')
         scope = Scope(store_id, channel, account_id, sender_id)
         payload = dict(text=text, ad=ad or {}, media_kind=media_kind, media_ref=media_ref)
+        if media_kind == 'image' and photo_sizes:
+            from .photo_orders import caption_size
+            payload['photo_sizes'] = [caption_size(label) for label in photo_sizes[:8]]
         if staff_sold_out_product:
             payload['staff_sold_out_product'] = staff_sold_out_product
         if staff_verified_product:
@@ -197,6 +201,15 @@ class Entrypoint:
                 if status == 'unsupported' and media_kind in {'file', 'video'}:
                     status = 'unknown'
                 clean = dict(status=status, product_ids=candidates)
+                positions = observed.get('positions')
+                if (isinstance(positions, list) and isinstance(media_ref, list)
+                        and len(positions) == len(media_ref) <= 8 and all(isinstance(item, dict) for item in positions)):
+                    clean['positions'] = [
+                        dict(sticker=True) if position.get('sticker') else dict(
+                            product_id=position.get('product_id'), color=product_variants.single_color(position.get('color')),
+                            fingerprint=position.get('fingerprint')) if position.get('product_id') in candidates else {}
+                        for position in positions
+                    ]
                 if observed.get('verified_pair') is True and clean['status'] == 'ambiguous' and len(set(candidates)) == 2:
                     clean['verified_pair'] = True
                 if clean['status'] == 'ambiguous' and candidates == [observed.get('latest_match')] and candidates[0]:
@@ -220,6 +233,9 @@ class Entrypoint:
                                                        dict(text=text, ad=ad, media_kind=media_kind, observation=observed))
                 if media_kind == 'image' and only_same_day_question(text):
                     return self.finish_turn(scope, event['id'])
+                if (media_kind == 'image' and observed.get('positions')
+                        and (requests_two_photos(text) or sum(bool(size) for size in photo_sizes or ()) >= 2)):
+                    return self.finish_turn(scope, event['id'])
                 if observed.get('verified_pair') and not current.get('order_id') and self.runtime.requested_photo_pair(
                         scope, event['id'], current, checkout.normalized(text)):
                     return self.finish_turn(scope, event['id'])
@@ -231,7 +247,8 @@ class Entrypoint:
                     JOIN sales_v2_events AS prior ON prior.scope=reply.scope AND prior.id=?
                     JOIN sales_v2_events AS current ON current.scope=reply.scope AND current.id=?
                     WHERE reply.scope=? AND reply.status='accepted' AND reply.reply_key=?
-                    AND current.received_at-prior.received_at<=1800 LIMIT 1""",
+                    AND current.received_at-prior.received_at<=1800
+                    AND json_extract(reply.payload,'$.question_stage') IS NOT NULL ORDER BY reply.id DESC LIMIT 1""",
                     (previous_image, event['id'], scope.key, f'clarify-image:{previous_image}')).fetchone()
                 if asked:
                     if json.loads(asked[0]).get('question_stage') == 'photo-link':

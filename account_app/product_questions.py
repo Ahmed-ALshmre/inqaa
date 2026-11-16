@@ -123,12 +123,12 @@ def dashboard_questions(db, rows, products):
 
 def dashboard_gap(row, product):
     """Keep only question clauses for actionable, currently missing product facts."""
+    from account_app.sales_runtime.facts import product_fact, refers_to_photo_colors, requested_fields
+
     try:
-        from . import checkout, product_albums, pricing
-        from .sales_runtime.facts import product_fact, refers_to_photo_colors, requested_fields
+        from . import catalog_profile, checkout, product_albums, pricing
     except ImportError:
-        import checkout, product_albums, pricing
-        from sales_runtime.facts import product_fact, refers_to_photo_colors, requested_fields
+        import catalog_profile, checkout, product_albums, pricing
 
     topic = row['topic']
     if topic not in DASHBOARD_FACTS and topic != 'details':
@@ -161,6 +161,7 @@ def dashboard_gap(row, product):
         return None
 
     excerpts, gaps = [], []
+    product_family = catalog_profile.effective_family(product)
     for excerpt in re.split(r'[\r\n،؛]+|(?<=[؟?])|\s+و(?=(?:شنو|شكد|هل|شلون|كم|بيه|بيها)\b)', question):
         clause = excerpt.strip()
         clean = customer_copy.normalized(clause)
@@ -168,6 +169,10 @@ def dashboard_gap(row, product):
                 or checkout.is_existing_order_followup(clause)
                 or re.search(r'(?<!\w)(?:العنوان|عنواني|عنوان البيت|رقم الهاتف|رقم الموبايل)\b', clean)):
             continue
+        asked_family = catalog_profile.query_type(clean)
+        if (product_family not in {'', 'other'} and asked_family and product_family != asked_family
+                and re.search(r'(?<!\w)(?:عدكم|عندكم|عدج|عندج|اكو)(?!\w)', clean)):
+            continue  # A request for another category cannot teach a fact about this product.
         candidates = list(dict.fromkeys(requested_fields(clause) + sales_answers.topics(clause)))
         if not re.search(QUESTION_CUE, clause) and not re.search(QUESTION_CUE, clean):
             candidates = [field for field in candidates

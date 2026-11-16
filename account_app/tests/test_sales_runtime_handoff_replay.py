@@ -1,4 +1,5 @@
 """Redacted replays of the 30 open reviews in Khuyoot and Lamsa, 2026-11-16."""
+import json
 import unittest
 from unittest.mock import Mock
 
@@ -67,6 +68,84 @@ class HandoffReplayTests(unittest.TestCase):
         result, _ = self.send('أريد ماروني قياس 44\n07701234567\nبغداد حي التجربة قرب المدرسة')
         self.assertEqual('booked', result['action'], result)
         return result['order_id']
+
+    def photo_checkout_models(self):
+        self.decide.side_effect = None
+        self.decide.return_value = dict(intent='continue')
+        self.entry.responses.writer = lambda context: [dict(type='text', text=(
+            'المجموع {total} دينار، يناسبج هالحساب؟' if context['question_field'] == 'price.accept'
+            else 'من عيوني، أكمل وياج على القطع اللي اخترتيها.'
+        ))]
+
+    def test_four_photos_of_one_product_keep_their_own_sizes_until_booking(self):
+        self.replay(facts=dict(sizes='من 60 إلى 130 كيلو', colors='أسود، ماروني، أزرق، رصاصي'))
+        self.photo_checkout_models()
+        self.entry.media = lambda *_: dict(status='matched', product_ids=['P1'], positions=[
+            dict(product_id='P1', color=color, fingerprint=str(index))
+            for index, color in enumerate(('أسود', 'ماروني', 'أزرق', 'رصاصي'))
+        ])
+        self.send('هذا 5x\n3x\n3x\nوهذا 5x', kind='image', refs=['one', 'two', 'three', 'four'],
+                  photo_sizes=['5x', '3x', '3x', '5x'])
+        self.send('مو دزيت الك صوره للالوان والقياس')
+        self.send('رقمي 07701234567')
+        result, _ = self.send('بغداد حي التجربة قرب المدرسة')
+        self.assertEqual('booked', result['action'], result)
+        items = json.loads(self.db.execute('SELECT order_items FROM orders').fetchone()[0])
+        self.assertEqual([('أسود', '5XL'), ('ماروني', '3XL'), ('أزرق', '3XL'), ('رصاصي', '5XL')],
+                         [(item['color'], item['size']) for item in items])
+        self.assertEqual(1, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.active()
+
+    def test_mismatched_photo_offer_waits_for_an_accurate_quote(self):
+        self.replay(facts=dict(sizes='3XL 5XL'))
+        self.photo_checkout_models()
+        self.entry.media = lambda *_: dict(status='matched', product_ids=['P1'], positions=[
+            dict(product_id='P1', color='أسود'), dict(product_id='P1', color='ماروني'),
+        ])
+        self.send('3x\n5x', kind='image', refs=['one', 'two'], photo_sizes=['3x', '5x'])
+        self.send('يعني هسه فلوسهن ٣٠ الف والتوصيل مجانا مو حسب كلامكم')
+        self.send('اريد هاية القطعتين')
+        self.send('رقمي 07701234567')
+        _, out = self.send('بغداد حي التجربة قرب المدرسة')
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.assertEqual(35000, next(part['quote_total'] for part in out if part.get('question_field') == 'price.accept'))
+        result, _ = self.send('اي تمام')
+        self.assertEqual('booked', result['action'], result)
+        self.active()
+
+    def test_photo_fabric_question_uses_saved_staff_specification(self):
+        self.replay(facts=dict(product_type='sets', fabric='فرو', sizes='من 60 إلى 130 كيلو',
+                               _staff_guidance=[dict(topic='fabric_feel', guidance='ثخين ملمسه ناعم')]))
+        self.entry.media = lambda *_: dict(status='ambiguous', product_ids=['P1'], latest_match='P1')
+        _, out = self.send('بس سؤال\nالقماش ثخين لو خفيف؟', kind='image', refs=['other', 'identified'], ad=False)
+        self.assertIn('ثخين ملمسه ناعم', self.text(out))
+        self.active()
+        result, _ = self.send('شكد عرضه بالسنتيم؟', ad=False)
+        self.assertEqual('human', result['action'])
+        self.assertEqual('width', self.db.execute('SELECT topic FROM product_questions').fetchone()[0])
+
+    def test_photo_pair_asks_only_for_missing_size_and_resumes_after_contact(self):
+        self.replay(facts=dict(sizes='3XL 5XL'))
+        self.photo_checkout_models()
+        self.entry.media = lambda *_: dict(status='matched', product_ids=['P1'], positions=[
+            dict(product_id='P1', color='أسود'), dict(product_id='P1', color='ماروني'),
+        ])
+        def write(context):
+            if context.get('photo_order_gap'):
+                self.assertEqual('photo.selection.size', context['question_field'])
+                self.assertEqual('ماروني', context['photo_order_gap']['color'])
+                return [dict(type='text', text='باقي بس قياس الماروني، شنو تحبين؟')]
+            return [dict(type='text', text='صار عيوني.')]
+        self.entry.responses.writer = write
+        _, out = self.send('اريد هاية القطعتين', kind='image', refs=['one', 'two'], photo_sizes=['3x', ''])
+        self.assertEqual('size', out[-1]['photo_order_gap']['field'])
+        _, out = self.send('رقمي 07701234567\nبغداد حي التجربة قرب المدرسة')
+        self.assertEqual([], out)
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        result, _ = self.send('5x')
+        self.assertEqual('booked', result['action'], result)
+        items = json.loads(self.db.execute('SELECT order_items FROM orders').fetchone()[0])
+        self.assertEqual([('أسود', '3XL'), ('ماروني', '5XL')], [(item['color'], item['size']) for item in items])
 
     def test_k01_skirt_photo_and_fabric_question(self):
         self.replay()

@@ -271,11 +271,14 @@ def staff_product(db, sender_id, product_id, resolved_urls=()):
 
 
 def pending_input(module, db, row, incoming_id, staff_reply_id):
+    from .photo_orders import caption_size
+
     rows = db.execute('''SELECT * FROM messages WHERE sender_id=? AND store_id=? AND direction='incoming'
         AND id>=? AND id>? AND id<=? ORDER BY id''',
         (row['sender_id'], row['store_id'], row['first_incoming_id'],
          max(row['handled_id'], staff_reply_id), incoming_id)).fetchall()
     texts, attachments, seen = [], [], set()
+    image_sizes, adjacent_image = {}, None
     ad = {}
     audio_pending = False
     for message in rows:
@@ -285,7 +288,21 @@ def pending_input(module, db, row, incoming_id, staff_reply_id):
         if text and text != message['image_url'] and not shared_post_caption:
             texts.append(text)
         ad = ad_attribution.extract(delivery_state.metadata(message['raw_payload'])) or ad
-        for item in module.message_media(message):
+        incoming_media = module.message_media(message)
+        photos = [item['url'] for item in incoming_media if item['type'] == 'image']
+        if photos:
+            adjacent_image = photos[0] if len(photos) == 1 else None
+            if adjacent_image and (label := caption_size(text)):
+                image_sizes[adjacent_image] = label
+            elif len(photos) > 1:
+                labels = [caption_size(line) for line in text.splitlines() if line.strip()]
+                if len(labels) == len(photos) and all(labels):
+                    image_sizes.update(zip(photos, labels))
+        elif text or incoming_media:
+            if adjacent_image and (label := caption_size(text)):
+                image_sizes[adjacent_image] = label
+            adjacent_image = None
+        for item in incoming_media:
             if item['type'] == 'audio':
                 interpreted = db.execute('SELECT 1 FROM voice_interpretations WHERE message_id=? AND store_id=?',
                                          (message['id'], row['store_id'])).fetchone()
@@ -309,7 +326,10 @@ def pending_input(module, db, row, incoming_id, staff_reply_id):
     text = '\n'.join(texts)
     if any(sales_playbook.human_requested(part) for part in texts):
         text = next(part for part in texts if sales_playbook.human_requested(part))
-    return dict(text=text, ad=ad, media_kind=kind, media_ref=reference), audio_pending
+    payload = dict(text=text, ad=ad, media_kind=kind, media_ref=reference)
+    if kind == 'image' and image_sizes:
+        payload['photo_sizes'] = [image_sizes.get(url, '') for url in reference]
+    return payload, audio_pending
 
 
 def recent_staff_stock_conflict(module, db, scope, incoming_id, staff_reply_id):

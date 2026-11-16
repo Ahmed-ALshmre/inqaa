@@ -10,6 +10,21 @@ PRODUCT_FACT_FIELDS=('fabric','description','notes','colors','sizes','price','of
 POLICY_FIELDS=('inspection_policy','delivery_time','delivery_fee','payment','shop_address')
 
 
+def staff_fabric_feel(product):
+    """Recognize an explicit staff specification when it was saved in the guidance field."""
+    notes = [row['guidance'] for row in product.get('_staff_guidance', ()) if row.get('topic') == 'fabric_feel']
+    if not notes:
+        return None
+    value = customer_copy.fact(notes[-1]).strip(' .،')
+    thickness = r'ثخين[هة]?|ثقيل[هة]?|سميك[هة]?|خفيف[هة]?'
+    texture = r'ناعم[هة]?|خشن[هة]?'
+    if re.fullmatch(rf'(?:(?:القماش|قماشه|قماشها)\s+)?(?:{thickness}|{texture})'
+                    rf'(?:\s*[،,]?\s*(?:و\s*)?(?:ملمسه|ملمسها)\s+(?:{texture}))?',
+                    customer_copy.normalized(value)):
+        return value
+    return None
+
+
 def product_fact(product,field):
     if product.get('discount_iqd') and field == 'price':
         from .. import pricing
@@ -35,7 +50,7 @@ def product_fact(product,field):
     if field=='fabric':value=customer_copy.fact(product.get('fabric'))
     elif field in {'length','width'}:value=sales_strategy.measurement_fact(product,field)
     elif field=='season':value=sales_answers.season_fact(product)
-    elif field=='fabric_feel':value=sales_answers.fabric_feel_fact(product)
+    elif field=='fabric_feel':value=sales_answers.fabric_feel_fact(product) or staff_fabric_feel(product)
     elif field=='care':value=sales_answers.care_fact(product)
     elif field=='wholesale':
         value = sales_answers.field_fact(product, 'wholesale_terms') or ' '.join(sales_answers.wholesale_lines(product))
@@ -67,6 +82,9 @@ def requested_fields(text):
              'delivery_time':'delivery_time','delivery':'delivery_fee','location':'shop_address'}
     fields=[mapping[t] for t in sales_answers.topics(text) if t in mapping]
     clean=customer_copy.normalized(text)
+    from .photo_orders import refers_to_sent_choices
+    if refers_to_sent_choices(clean):
+        fields = [field for field in fields if field not in {'colors', 'sizes'}]
     if quoted_offer_quantity(clean) or re.search(r'(?:القطعتين|\d+\s+قطع)\s+\d+\s+(?:وي|ويا|مع)\s+التوصيل|'
                                                 r'اذا\s+على\s+(?:عشر[هة]|عشرين|\d+)', clean):
         fields.append('price')

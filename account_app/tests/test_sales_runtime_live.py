@@ -71,6 +71,22 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         response.json.return_value = {'choices': [{'message': {'parsed': plan}}]}
         return response
 
+    def test_queue_keeps_each_size_caption_next_to_its_photo(self):
+        first = 'https://cdn.example/first.jpg'
+        second = 'https://cdn.example/second.jpg'
+        self.incoming(10, '', attachments=[dict(file_type='image', data_url=first)])
+        self.incoming(11, 'هذا 5x')
+        self.incoming(12, 'قياس ٣ اكس', attachments=[dict(file_type='image', data_url=second)])
+        self.incoming(13, 'اريد هاية القطعتين')
+        with m.app.app_context():
+            db = m.get_db()
+            row = live.route(db, self.sender)
+            latest = db.execute("SELECT MAX(id) FROM messages WHERE sender_id=? AND direction='incoming'",
+                                (self.sender,)).fetchone()[0]
+            payload, _ = live.pending_input(m, db, row, latest, 0)
+        self.assertEqual([first, second], payload['media_ref'])
+        self.assertEqual(['5XL', '3XL'], payload['photo_sizes'])
+
     def test_stock_editor_and_manual_order_share_the_same_inventory(self):
         products = m.load_products_from_file()
         endpoint = '/api/products/manage/P1/stock?store_id=khuyoot'
