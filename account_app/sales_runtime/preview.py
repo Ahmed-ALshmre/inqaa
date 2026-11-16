@@ -40,9 +40,10 @@ class ImageObserver:
         unavailable = False
         verified = {}
         album_images = []
+        positions = [{} for _ in urls]
         skipped_file = False
         latest_match = None
-        for url in urls:
+        for index, url in enumerate(urls):
             if not inbound_media.trusted_source(url, base):
                 unresolved = True
                 skipped_file = True
@@ -62,10 +63,12 @@ class ImageObserver:
                 data, _, _, mime = attachment
                 image = f'data:{mime};base64,{base64.b64encode(data).decode("ascii")}'
             if media.known_sticker(data):
+                positions[index] = dict(sticker=True)
                 continue
             fingerprint = sha256(data).digest()
             if fingerprint in inspected:
-                latest_match = verified.get(fingerprint)
+                positions[index] = verified.get(fingerprint, {})
+                latest_match = positions[index].get('product_id')
                 continue
             inspected.add(fingerprint)
             album_images.append(image)
@@ -77,23 +80,28 @@ class ImageObserver:
             if not result.get('product_found') or not result.get('product_id'):
                 unresolved = True
                 continue
-            matches.add(result['product_id'])
-            colors.add(product_variants.single_color(result.get('observed_color')))
-            latest_match = verified[fingerprint] = result['product_id']
+            product_id = result['product_id']
+            color = product_variants.single_color(result.get('observed_color'))
+            matches.add(product_id)
+            colors.add(color)
+            latest_match = product_id
+            positions[index] = verified[fingerprint] = dict(product_id=product_id, color=color,
+                                                             fingerprint=fingerprint.hex())
         if unavailable or unresolved:
             status = 'ambiguous' if matches else 'unavailable' if unavailable else 'unknown'
-            observation = dict(status=status, product_ids=sorted(matches))
+            observation = dict(status=status, product_ids=sorted(matches), positions=positions)
             if self.match_album and not unavailable and not skipped_file and len(matches) <= 1 and 2 <= len(album_images) <= 4:
                 album = self.match_album(album_images, products)
                 product_id = album.get('product_id') if isinstance(album, dict) and album.get('product_found') else None
                 if product_id and not matches.difference({product_id}):
-                    return dict(status='matched', product_ids=[product_id])
+                    return dict(status='matched', product_ids=[product_id], positions=positions)
             if len(matches) == 1 and latest_match:
                 observation['latest_match'] = latest_match
             return observation
         if not matches:
             return dict(status='sticker')
-        observation = dict(status='matched' if len(matches) == 1 else 'ambiguous', product_ids=sorted(matches))
+        observation = dict(status='matched' if len(matches) == 1 else 'ambiguous',
+                           product_ids=sorted(matches), positions=positions)
         if len(matches) == 2:
             observation['verified_pair'] = True
         if len(matches) == 1 and len(colors) == 1 and '' not in colors:

@@ -323,7 +323,9 @@ class LinkingTests(unittest.TestCase):
         observer = ImageObserver(fetch, match, archived)
         with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
             result = observer(self.scope, 'image', [url], self.products)
-        self.assertEqual(dict(status='matched', product_ids=['P1']), result)
+        self.assertEqual('matched', result['status'])
+        self.assertEqual(['P1'], result['product_ids'])
+        self.assertEqual('P1', result['positions'][0]['product_id'])
         archived.assert_called_once_with(self.scope, url)
         match.assert_called_once_with(image, self.products)
         fetch.assert_not_called()
@@ -337,12 +339,18 @@ class LinkingTests(unittest.TestCase):
         match = Mock(return_value=dict(product_found=True, product_id='P1'))
         observer = ImageObserver(fetch, match)
         with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
-            self.assertEqual(dict(status='matched', product_ids=['P1']), observer(self.scope, 'image', urls, self.products))
-            self.assertEqual(2, match.call_count)
-            fetch.side_effect = [image, different]
-            match.side_effect = [dict(product_found=True, product_id='P1'), dict(product_found=True, product_id='B1')]
-            self.assertEqual(dict(status='ambiguous', product_ids=['B1', 'P1'], verified_pair=True),
-                             observer(self.scope, 'image', urls[:2], self.products))
+            result = observer(self.scope, 'image', urls, self.products)
+        self.assertEqual(('matched', ['P1']), (result['status'], result['product_ids']))
+        fingerprints = [image['fingerprint'] for image in result['positions']]
+        self.assertEqual([fingerprints[0], fingerprints[0], fingerprints[2], fingerprints[0], fingerprints[0]], fingerprints)
+        self.assertNotEqual(fingerprints[0], fingerprints[2])
+        self.assertEqual(2, match.call_count)
+        fetch.side_effect = [image, different]
+        match.side_effect = [dict(product_found=True, product_id='P1'), dict(product_found=True, product_id='B1')]
+        with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
+            pair = observer(self.scope, 'image', urls[:2], self.products)
+        self.assertEqual(('ambiguous', ['B1', 'P1'], True), (pair['status'], pair['product_ids'], pair['verified_pair']))
+        self.assertEqual(['P1', 'B1'], [item['product_id'] for item in pair['positions']])
 
     def test_a_failed_attachment_does_not_hide_the_verified_image_in_the_batch(self):
         from account_app.sales_runtime.preview import ImageObserver, media_input
@@ -355,7 +363,8 @@ class LinkingTests(unittest.TestCase):
         observer = ImageObserver(fetch, match)
         with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
             result = observer(self.scope, 'image', ['https://cdn.example/failed.png', url], self.products)
-        self.assertEqual(dict(status='ambiguous', product_ids=['P1'], latest_match='P1'), result)
+        self.assertEqual(('ambiguous', ['P1'], 'P1'), (result['status'], result['product_ids'], result['latest_match']))
+        self.assertEqual([None, 'P1'], [image.get('product_id') for image in result['positions']])
         match.assert_called_once()
 
     def test_album_comparison_recognizes_one_product_across_distinct_colors(self):
@@ -367,7 +376,9 @@ class LinkingTests(unittest.TestCase):
         album = Mock(return_value=dict(product_found=True, product_id='P1'))
         observer = ImageObserver(fetch, match, match_album=album)
         with patch('account_app.sales_runtime.preview.inbound_media.trusted_source', return_value=True):
-            self.assertEqual(dict(status='matched', product_ids=['P1']), observer(self.scope, 'image', urls, self.products))
+            result = observer(self.scope, 'image', urls, self.products)
+        self.assertEqual(('matched', ['P1']), (result['status'], result['product_ids']))
+        self.assertEqual([None, 'P1', None, None], [image.get('product_id') for image in result['positions']])
         images, products = album.call_args.args
         self.assertEqual(4, len(images))
         self.assertEqual(self.products, products)

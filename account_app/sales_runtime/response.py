@@ -92,6 +92,18 @@ class Responses:
         if outcome.get('clearance_unavailable'):
             parts = [dict(type='text', text='عرض القطعة الثانية تغيّر هسه، ونكدر نكمّل على الأولى اللي اخترتيها.')]
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+        if gap := outcome.get('photo_order_gap'):
+            if accepted and accepted[-1].get('photo_order_gap') == gap:
+                return dict(action='skipped')
+            question = {'photo': 'photo.reference', 'size': 'photo.selection.size' if not gap.get('size') else None,
+                        'cart': 'purchase_intent'}.get(gap['field'])
+            context = dict(mode='continue', customer_message=current, recent_messages=messages,
+                           recent_replies=accepted, question_field=question, next_step=dict(field=question, options=[]),
+                           copy_budget=145, amounts={}, greeting=greeting, action_results={},
+                           photo_order_gap={name: value for name, value in gap.items() if name != 'source_event'})
+            parts = self.write(context, catalog, scope, turn_id, snap['version'])
+            parts[-1]['photo_order_gap'] = gap
+            return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if outcome.get('photo_pending'):
             result = self.answer_pending_photo(scope, turn_id, outcome, catalog, policy, current, messages,
                                                accepted, greeting, snap['data']['contact'])
@@ -311,10 +323,11 @@ class Responses:
                             and state.get('stated_clothing_size', {}).get('product_id') == focus
                             and not any(line.get('product_id') == focus and (
                                 line.get('weight_kg') or line.get('size_source_kind') == 'weight') for line in lines))
-        price_pending = any(condition.get('kind') == 'price' for condition in readiness['conditions'])
+        photo_quote_pending = any(condition.get('kind') == 'photo_quote' for condition in readiness['conditions'])
+        price_pending = photo_quote_pending or any(condition.get('kind') == 'price' for condition in readiness['conditions'])
         requested_offer = price_request(current)
         quantity_objection = bool(state.get('price_request') and quantity_pushback(current))
-        bargaining = bool(requested_offer or state.get('price_request') and pushback(current) or
+        bargaining = bool(photo_quote_pending or requested_offer or state.get('price_request') and pushback(current) or
                           price_pending and (contact_turn or purchase_turn or confirmation or selected or
                                              'price' in requested or destination(current)))
         quantity = sales_playbook.requested_quantity(current) or quoted_offer_quantity(current)
@@ -951,7 +964,8 @@ class Responses:
                 stock = product_albums.stock_state(product)
                 fact = dict(field='stock', value=stock) if stock != 'unknown' else None
             if fact is None:
-                if pid and field == 'wholesale':
+                if pid and (field == 'wholesale' or outcome.get('latest_verified_image')
+                            and field in {'fabric', 'fabric_feel', 'cut', 'width', 'length', 'stretch'}):
                     return dict(action='missing_fact', product_id=pid, field=field)
                 return dict(action='photo_review')
             facts.append(dict(product_id=pid, **fact))
@@ -990,7 +1004,8 @@ class Responses:
             fit = weight_fit(product, current)
             context.update(verified_photo_product_id=product_id,
                            progress=dict(fit=fit, price_unit_quantity=price_units),
-                           value_facts=dict(fit_availability=dict(stock=product_albums.stock_state(product))))
+                           value_facts=dict(fit_availability=dict(stock=product_albums.stock_state(product),
+                               roomy_cut=False, limited_stock=False)))
         elif product_id:
             context['possible_photo_product'] = customer_copy.reply_category(product) or customer_copy.fact(
                 product.get('product_name'))[:70].strip()
@@ -1113,7 +1128,7 @@ class Responses:
                 raise ValueError('image_not_in_catalog')
         if strict:
             text = '\n\n'.join(part['text'] for part in parts if part['type'] == 'text')
-            gaps = sales_answers.current_question_gaps(
+            gaps = [] if context.get('photo_order_gap') else sales_answers.current_question_gaps(
                 text, context['customer_message'], fit=context.get('progress', {}).get('fit'),
                 delivery_window=context.get('policies', {}).get('delivery_time', ''))
             if gaps:

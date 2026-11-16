@@ -1,6 +1,9 @@
 """Staff explanations, isolated reply routing, and the first-visit question queue."""
+import importlib.util
 import json
+from pathlib import Path
 import sqlite3
+import sys
 import unittest
 from unittest.mock import patch
 import requests
@@ -230,6 +233,26 @@ class QuestionGuidanceTests(unittest.TestCase):
         self.assertIn('product_question_editor.js', page)
         self.assertIn('اشرح المعلومة', page)
         self.assertNotIn('productQuestionsDialog', page)
+
+    def test_dashboard_question_api_works_with_gunicorn_top_level_imports(self):
+        source = Path(questions.__file__)
+        spec = importlib.util.spec_from_file_location('product_questions', source)
+        gunicorn_questions = importlib.util.module_from_spec(spec)
+        product = dict(self.product, store_id='baraah-kids', product_type='sets', care_instructions='', closure='')
+        pending = self.capture('care', 'يشيل لونه بالغسل؟', product=product)
+        self.capture('closure', 'دشاديش بيها دكم من كدام عدكم هيج شي؟', product=product)
+        client, _ = self.owner()
+
+        with patch.object(sys, 'path', [str(source.parent), *sys.path]):
+            spec.loader.exec_module(gunicorn_questions)
+            with patch.object(self.m, 'product_questions', gunicorn_questions), \
+                 patch.object(self.m, 'load_products_from_file', return_value=[product]):
+                result = client.get('/api/product-questions?needs_attention=1&store_id=baraah-kids')
+
+        self.assertEqual(200, result.status_code)
+        self.assertEqual(1, result.json['pending'])
+        self.assertEqual(pending, result.json['questions'][0]['id'])
+        self.assertEqual('الغسل والعناية', result.json['questions'][0]['gap_label'])
 
     def test_dashboard_only_lists_current_product_gaps_with_filtered_pagination(self):
         self.m.ensure_store(self.db, 'khuyoot', 'خيوط')

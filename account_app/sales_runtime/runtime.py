@@ -22,6 +22,7 @@ from .intent import (apply_intent, color_availability, color_correction, direct_
                      referred_photo_color)
 from .orders import only_color_missing
 from .recovery import browsing_photo_request, catalog_photo_request, clothing_size_label, grounded_plan, recoverable_turn, skirt_length_request, weight_fit
+from . import photo_orders
 
 
 class TurnTools(Store):
@@ -306,7 +307,8 @@ class Runtime:
         refers_to_other_image = re.search(r'(?<!\w)(?:الاول[ىيهة]?|قبلها|السابق[هة]?)(?!\w)',
                                           checkout.normalized(text))
         safe_fields = (fields and fields <= {'price', 'sizes', 'wholesale', 'delivery_fee', 'delivery_time',
-                                             'payment', 'inspection_policy'})
+                                             'payment', 'inspection_policy', 'fabric', 'fabric_feel',
+                                             'cut', 'width', 'length', 'stretch'})
         if (latest_match and not refers_to_other_image and not purchase_selected(text) and not catalog_photo_request(text)
                 and (safe_fields or not fields and product_variants.weight_answer(text))):
             catalog.get(latest_match)
@@ -399,7 +401,49 @@ class Runtime:
                 raise Conflict('turn_superseded')
             state = snap['data']
             media = state.get('media_observations', {}).get(str(event_id))
-            pair = self.requested_photo_pair(scope, event_id, state, text_now) if not state.get('order_id') else ()
+            album_changes, album_ids, album_offer = None, set(), None
+            album_purchase = False
+            if not state.get('order_id') and not purchase_declined(text_now):
+                wants_pair = photo_orders.requests_two_photos(text_now)
+                reminds_choices = photo_orders.refers_to_sent_choices(text_now)
+                labeled_batch = sum(bool(label) for label in evidence['payload'].get('photo_sizes', ())) >= 2
+                pending_order = next((c for c in state['conditions'] if c.get('kind') == 'photo_selection'), None)
+                if wants_pair or reminds_choices or labeled_batch or pending_order:
+                    photos = photo_orders.recent_choices(self.store, scope, event_id, state, catalog)
+                    replace_cart = False
+                    if labeled_batch:
+                        ordered = [photo for photo in photos if photo['event'] == event_id]
+                    elif wants_pair:
+                        ordered = photos[-2:]
+                    elif reminds_choices:
+                        ordered = [photo for photo in photos if photo['size']]
+                    else:
+                        last_reply = self.store.db.execute("""SELECT payload FROM sales_v2_outbox
+                            WHERE scope=? AND status='accepted' ORDER BY id DESC LIMIT 1""", (scope.key,)).fetchone()
+                        marker = json.loads(last_reply[0]).get('photo_order_gap') if last_reply else None
+                        ordered, replace_cart = photo_orders.followup(
+                            pending_order, photos, event_id, text_now, marker, digest(state['cart']))
+                        if not ordered and contact_only(evidence['payload'].get('text', '')):
+                            return dict(action='continue', state_version=snap['version'],
+                                        photo_order_gap=pending_order['gap'])
+                    if len(ordered) >= 2 and any(photo['evidence'] for photo in ordered):
+                        lines, gaps = photo_orders.checkout_lines(ordered, catalog)
+                        album_purchase = wants_pair or bool(pending_order and pending_order['purchase'])
+                        if gaps or (album_changes := photo_orders.cart_changes(lines, state['cart'],
+                                                                              replace=replace_cart)) is None:
+                            gap = (gaps or [dict(field='cart', number=1)])[0]
+                            gap['source_event'] = ordered[gap['number'] - 1]['event']
+                            def remember_selection(values):
+                                values['conditions'] = [c for c in values['conditions'] if c['kind'] != 'photo_selection']
+                                values['conditions'].append(dict(kind='photo_selection', status='pending', choices=ordered,
+                                    gap=gap, purchase=album_purchase, cart_key=digest(state['cart'])))
+                                return dict(photo_order_gap=gap)
+                            saved_selection = self.store.apply(scope, f'photo-selection:{event_id}', snap['version'],
+                                dict(event_id=event_id), remember_selection)['result']
+                            return dict(action='continue', **saved_selection)
+                        album_ids = {line['product_id'] for line in lines}
+                        album_offer = photo_orders.stated_offer(self.store, scope, ordered, event_id)
+            pair = self.requested_photo_pair(scope, event_id, state, text_now) if not state.get('order_id') and not album_ids else ()
             if pair == (None,):
                 return dict(action='media_unresolved', state_version=snap['version'], multiple_images=True)
             pending_id, pending = self.pending_photo(state)
@@ -415,7 +459,7 @@ class Runtime:
                     and contact_only(evidence['payload'].get('text', ''))):
                 reference = dict(status='known', source='checkout', product_id=state['cart'][0]['product_id'])
             decline = bool(pending and purchase_declined(text_now))
-            if pending and reference['status'] != 'known' and len(pair) != 2 and not decline:
+            if pending and reference['status'] != 'known' and len(pair) != 2 and not album_ids and not decline:
                 return dict(action='continue', state_version=snap['version'], photo_pending=pending_id,
                             provisional_product=reference.get('product_id') if reference['status']=='provisional' else None,
                             latest_verified_image=reference.get('source') == 'latest_verified_image',
@@ -489,6 +533,8 @@ class Runtime:
                 context['separate_photo_product'] = focus
             if len(pair) == 2:
                 context['requested_photo_products'] = list(pair)
+            if album_ids:
+                context['requested_photo_products'] = sorted(album_ids)
             skirt_context = (catalog_profile.effective_family(focus_product) == 'skirts' or
                              any(catalog_profile.query_type(message.get('text')) == 'skirts'
                                  for message in context['recent_messages'][-8:] if message['actor'] == 'customer'))
@@ -529,7 +575,9 @@ class Runtime:
                               and not state.get('price_request') and not purchase_selected(text_now)
                               and not re.search(r'خصم|تخفيض|ميزاني|ارخص|غالي', text_now))
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
-            if addon_values:
+            if album_ids:
+                raw = dict(intent='buy' if photo_orders.requests_two_photos(text_now) else 'continue', changes=album_changes)
+            elif addon_values:
                 raw = dict(intent='buy', changes=[dict(new_line=True, values=addon_values)])
             elif addon_reply == 'keep':
                 raw = dict(intent='continue')
@@ -604,6 +652,13 @@ class Runtime:
             for attempt in range(45):  # Bounded local stripping of unavailable choices, never 45 model calls.
                 try:
                     plan=clean_plan(raw)
+                    if album_ids:
+                        # Per-image evidence already built the lines. Single-item heuristics
+                        # and model guesses must not overwrite their sizes or colors.
+                        allocation = []
+                        photo_choice = None
+                        explicit_size = chosen_color = size_label_for = weight = None
+                        separate_product = False
                     if order_confirmed and (market['requested'] or market['opportunity']):
                         # An enquiry about another model cannot rewrite a confirmed cart.
                         plan = dict(intent='continue', contact={}, answer={})
@@ -626,7 +681,7 @@ class Runtime:
                         changes = plan.get('changes', []) if purchase_selected(text_now) else []
                         plan['changes'] = [dict(change, new_line=True) for change in changes if not change.get('line_ref')
                                            and not change.get('remove') and change['values'].get('product_id') == focus]
-                    photo_products = set(pair) if len(pair) == 2 else {focus}
+                    photo_products = album_ids or (set(pair) if len(pair) == 2 else {focus})
                     if (verified_image or len(pair) == 2) and any(change['values'].get('product_id') is not None
                                               and change['values']['product_id'] not in photo_products
                                               for change in plan.get('changes', [])):
@@ -724,7 +779,7 @@ class Runtime:
                         for fact in plan.get('answer',{}).get('facts',[]):
                             if fact['product_id']!='@store':catalog.get(fact['product_id'])
                         price=None
-                        from .negotiation import destination,settle
+                        from .negotiation import destination,offer_signature,settle
                         province_hint=destination(evidence['payload'].get('text',''))
                         if province_hint:state['quote_province']=province_hint
                         recent_replies = [json.loads(row[0]) for row in self.store.db.execute(
@@ -742,12 +797,28 @@ class Runtime:
                             confirmed_color_correction=confirmed_color_correction)
                         if addon_values and commands:
                             state['purchase_event'] = event_id
+                        if album_ids:
+                            state['conditions'] = [c for c in state['conditions'] if c['kind'] != 'photo_selection']
+                            if album_purchase and not withdrawn:
+                                state['purchase_event'] = event_id
                         if state['cart'] and not keep_draft:
                             try:
                                 province=state['contact'].get('province') or state.get('quote_province')
                                 price=session_cart.quote(scope,self.orders.delivery_fee(scope.store,province) if province else None)
                                 settle(state,price,recent_replies,evidence['payload'].get('text',''),event_id)
                             except ValueError:pass
+                        if album_offer:
+                            state['conditions'] = [c for c in state['conditions'] if c['kind'] != 'photo_quote']
+                            state['conditions'].append(dict(kind='photo_quote', status='pending', **album_offer))
+                        expected_offer = next((c for c in state['conditions'] if c['kind'] == 'photo_quote'), None)
+                        if expected_offer and price and price.get('total') is not None:
+                            matches_offer = (expected_offer['total'] in (None, price['total'])
+                                             and (not expected_offer['free'] or price['delivery_fee'] == 0))
+                            accepts_quote = (checkout.is_confirmation(text_now)
+                                             and last_reply.get('question_field') == 'price.accept'
+                                             and last_reply.get('quote_key') == offer_signature(price))
+                            if matches_offer or accepts_quote:
+                                state['conditions'].remove(expected_offer)
                         if business_feedback and state['cart']:
                             state['conditions']=[c for c in state['conditions'] if c.get('kind')!='choice']+[dict(kind='choice',status='pending',event_id=event_id,**business_feedback)]
                         elif plan.get('changes'):
@@ -760,7 +831,7 @@ class Runtime:
                             state['focus_product_id'] = reference['product_id']
                             if not same_verified_focus:
                                 state['focus_source'] = reference['source']
-                        if pending_id and (reference['status'] == 'known' or len(pair) == 2):
+                        if pending_id and (reference['status'] == 'known' or len(pair) == 2 or album_ids):
                             state['resolved_photo_event'] = pending_id
                         if size_label_for:
                             state['stated_clothing_size'] = dict(product_id=size_label_for, label=label)
