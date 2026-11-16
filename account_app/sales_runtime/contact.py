@@ -8,6 +8,8 @@ from .store import Conflict
 INSPECTION_QUESTION = re.compile(
     r'(?:و?اذا|لو|في حال)\s+.{0,55}(?:ارجع\w*|يرجع\w*|ترجع\w*|استبدل\w*)')
 LOCAL_MOBILE = re.compile(r'(?:(?:رقمي|رقم(?: الموبايل| الهاتف)?|موبايل)\s*[:،,-]?\s*)?(7(?:[ \t-]*\d){9})')
+TOTAL_QUESTION = (r'(?:و\s*)?(?:شكد|كم)\s+(?:يطلع\s+)?(?:ال)?(?:حساب|مجموع)'
+                  r'(?:\s+(?:مع|ويا|وي)\s+(?:ال)?توصيل)?')
 
 
 def checkout_inspection_question(text):
@@ -19,6 +21,29 @@ def checkout_inspection_question(text):
 
 def declined_phone(text):
     return bool(re.search(r'رقم(?:كم| المندوب| المتجر)|مو رقمي|ما اريد استخدم هالرقم', checkout.normalized(text)))
+
+
+def stated_checkout_total(line):
+    text = checkout.normalized(line).strip(' .،,:؟?')
+    match = re.fullmatch(TOTAL_QUESTION + r'\s+(\d{1,7})(?:\s*(الف|دينار))?', text)
+    if not match:
+        return None
+    amount = int(match[1])
+    return amount * 1000 if match[2] == 'الف' or match[2] is None and amount < 1000 else amount
+
+
+def checkout_followup(line, *, quoted_total=None):
+    """A checkout question or acknowledgement that does not change the selection."""
+    clean = checkout.normalized(line).strip(' .،,:؟?')
+    stated = stated_checkout_total(clean)
+    if stated is not None:
+        return stated == quoted_total
+    return bool(re.fullmatch(
+        r'(?:(?:دزيت|ارسلت|بعثت)\s+(?:(?:ال)?رقم\s+و\s*(?:ال)?عنوان|(?:ال)?بيانات)'
+        r'|' + TOTAL_QUESTION +
+        r'|(?:و\s*)?(?:باجر|باچر|اليوم|غدا|شوكت|اشوكت|متى)\s+'
+        r'(?:يوصل|توصل|تجي|يجي)(?:\s+(?:الطلب|المندوب))?'
+        r'|(?:يوصل|توصل)\s+(?:باجر|باچر|اليوم|غدا))', clean))
 
 
 def _zone_unit(line, address):
@@ -53,7 +78,7 @@ def declarations(text, previous):
     return fields
 
 
-def contact_only(text):
+def contact_only(text, *, quoted_total=None):
     """Allow local checkout for plain phone and address declarations."""
     address = ''
     contact_found = False
@@ -62,6 +87,8 @@ def contact_only(text):
         if not clean:
             continue
         if checkout_inspection_question(clean) and not checkout.phone_number(clean):
+            continue
+        if checkout_followup(clean, quoted_total=quoted_total) or checkout.is_confirmation(clean):
             continue
         if LOCAL_MOBILE.fullmatch(clean):
             contact_found = True

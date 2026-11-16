@@ -3,7 +3,7 @@ import re
 from .. import catalog_profile,checkout,product_variants,sales_playbook
 from ..sales_recovery import simple_photo_request as catalog_photo_request
 from .facts import requested_fields,POLICY_FIELDS
-from .intent import purchase_selected
+from .intent import constraint, direct_color, direct_clothing_size, purchase_selected
 
 
 def grounded_plan(context):
@@ -33,6 +33,43 @@ def grounded_plan(context):
     contact={k:v for k,v in fields.items() if k in {'phone','address'}}
     return dict(intent='buy' if purchase_selected(text) else 'continue',changes=changes,contact=contact,
                 answer=dict(facts=facts,question_field=None,goal='answer_and_advance'))
+
+
+def recoverable_turn(context):
+    """Continue with server tools when the provider cannot interpret a simple turn."""
+    event = context['event']
+    text = event.get('text', '')
+    reference = context.get('reference', {})
+    focus = reference.get('product_id') if reference.get('status') == 'known' else None
+    state = context['state']
+    focus = focus or state.get('focus_product_id')
+    fields = set(requested_fields(text))
+    wanted = product_variants.requested(text)
+    if (focus and not state.get('order_id') and not constraint(text) and purchase_selected(text)
+            and fields <= {'colors', 'sizes'}
+            and not re.search(r'[؟?]|(?<!\w)(?:لو|موجود|متوفر|خصم|تخفيض|بدلي|غيري)(?!\w)', text)
+            and len(wanted['colors']) == len(wanted['sizes']) == 1
+            and len(state['cart']) <= 1 and all(line['product_id'] == focus for line in state['cart'])):
+        plan = grounded_plan(context)
+        if plan['changes']:
+            return plan
+    if fields and not purchase_selected(text):
+        plan = grounded_plan(context)
+        # A question about stock or price is not a request to change an order.
+        plan['changes'] = []
+        return plan
+    if focus and 'price' in fields and re.search(r'اذا|لو|خصم|تخفيض', checkout.normalized(text)):
+        return dict(intent='continue')
+    if (focus and not state.get('order_id') and len(state['cart']) <= 1
+            and all(line['product_id'] == focus for line in state['cart'])
+            and (direct_color(text) or direct_clothing_size(text))):
+        return grounded_plan(context)
+    product = next((product for product in context['products'] if product['product_id'] == focus), None)
+    if not purchase_selected(text) and weight_fit(product, text):
+        return grounded_plan(context)
+    if not text.strip() and event.get('media_kind') in {'text', 'file'}:
+        return dict(intent='continue')
+    return None
 
 
 def clothing_size_label(text):

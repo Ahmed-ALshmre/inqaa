@@ -190,7 +190,7 @@ class RecoveryTests(unittest.TestCase):
         from account_app.sales_runtime.contracts import DecisionUnavailable
         writer=Mock(side_effect=[DecisionUnavailable('writer_provider_http_402'),[dict(type='text',text='هلا بيج')]])
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,writer=writer)
-        kwargs=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='writer-fault',message_id='m',text='هلا')
+        kwargs=dict(store_id='khuyoot',channel='chatwoot',account_id='a',sender_id='writer-fault',message_id='m',text='ممكن تساعديني')
         self.assertEqual('service_failure',entry.receive(**kwargs)['action'])
         self.assertEqual('queued',entry.receive(**kwargs)['reply']['action'])
         self.decide.assert_called_once()

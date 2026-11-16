@@ -3,6 +3,8 @@
 Channel adapters determine actor/account/store from trusted routing metadata,
 never from customer text. Existing webhook processing is not enabled by import.
 """
+import json
+
 from .cart import Catalog
 from .backup import BackupFailed, BackupSuperseded, failure_code
 from .contact import capture as capture_contact, declarations
@@ -128,7 +130,7 @@ class Entrypoint:
         state = self.store.snapshot(scope)['data']
         if state['control_mode'] != 'active':
             return dict(action='human', event_id=event['id'])
-        from .. import sales_playbook,checkout,product_variants
+        from .. import conversation_quality,sales_answers,sales_playbook,checkout,product_variants
         import re
         clean=checkout.normalized(text)
         identity_typo=(re.search(r'ذكاء\s*(?:ا?صطناع\w*|صناعي)',clean) and
@@ -140,7 +142,8 @@ class Entrypoint:
             r'(?:طلبت|وصيت|حجزت|طلب\s+قبل).{0,35}(?:قبل|يومين|ايام|البارحه|البارحة|بعده)|'
             r'صار.{0,15}(?:يوم|اسبوع).{0,30}(?:ال)?طلب|من\s+(?:طلبن[ا]ها|طلبته|طلبتها)|'
             r'(?:الطلب|الطلبيه|الطلبية)\s+القديم[هة]?|(?:من\s+)?نستونه\s+كل\s+يوم', clean))
-        tracking = checkout.is_existing_order_followup(text) or bool(re.search(
+        tracking = checkout.is_existing_order_followup(text) or bool(state.get('order_id') and
+            sales_answers.same_day_delivery(text)) or bool(re.search(
             r'(?:شوكت|يمتى|متى)\s+(?:راح\s+)?(?:يوصل|توصل)\s+(?:ال)?طلب(?!\w)', clean))
         sending_checkout = (state['cart'] and not state.get('order_id') and not prior_order
                              and (state.get('purchase_event') or state.get('checkout_prompt')
@@ -150,7 +153,7 @@ class Entrypoint:
         looking_for_order = bool(state.get('order_id') or re.search(r'(?<!\w)(?:طلبي|حجزي)(?!\w)', clean))
         delay_complaint = bool(re.search(
             r'(?:مو\s+)?صار(?:لي|\s+لي)?\s+(?:.{0,20}\s+)?(?:يومين|يوم(?:ا|اً)?|ايام|اسبوع|اسبوعين)(?!\w)'
-            r'|كل\s+مر[هة]\s+(?:ت)?عيدولي\s+نفس\s+الكلام', clean))
+            r'|كل\s+مر[هة]\s+(?:ت)?عيدولي\s+نفس\s+الكلام|(?:خوم|معقول)\s+(?:ا)?ضل\s+انتظر', clean))
         if delay_complaint and not sending_checkout and not looking_for_order:
             looking_for_order = self.store.db.execute("""SELECT 1 FROM orders
                 WHERE store_id=? AND sender_id=? AND julianday(created_at)>=julianday('now','-30 days')
@@ -159,6 +162,15 @@ class Entrypoint:
         if prior_order or ((tracking or delay_complaint) and looking_for_order and not sending_checkout
                            and not explicit_cancellation(text)):
             return self.handoff_service(scope,event['id'],'order_tracking')
+        if state.get('order_id') and media_kind == 'text' and conversation_quality.booking_status_question(text):
+            row = self.store.db.execute('SELECT status FROM orders WHERE id=? AND store_id=? AND sender_id=?',
+                                        (state['order_id'], store_id, sender_id)).fetchone()
+            if row and self.responses:
+                outcome = dict(action='order_status', state_version=self.store.snapshot(scope)['version'],
+                               status=row[0])
+                return dict(action='order_status', reply=self.responses.prepare(scope, event['id'], outcome))
+        if not text.strip() and media_kind == 'text':
+            return dict(action='skipped', event_id=event['id'])
         # A sticker is social context, never a request for product recognition.
         # Image/video interpretation must be supplied by an explicit media adapter.
         if media_kind in {'image', 'video', 'audio', 'file'}:
@@ -181,7 +193,10 @@ class Entrypoint:
                     catalog.get(product_id)
                 if observed['status']=='matched' and len(candidates)!=1:
                     raise ValueError('media_match_requires_one_product')
-                clean = dict(status=observed['status'], product_ids=candidates)
+                status = observed['status']
+                if status == 'unsupported' and media_kind in {'file', 'video'}:
+                    status = 'unknown'
+                clean = dict(status=status, product_ids=candidates)
                 if observed.get('verified_pair') is True and clean['status'] == 'ambiguous' and len(set(candidates)) == 2:
                     clean['verified_pair'] = True
                 if clean['status'] == 'ambiguous' and candidates == [observed.get('latest_match')] and candidates[0]:
@@ -210,18 +225,20 @@ class Entrypoint:
                     return self.finish_turn(scope, event['id'])
                 if reference['status'] in {'known', 'provisional'}:
                     return self.finish_turn(scope, event['id'])
-                if observed['status'] == 'unavailable':
-                    return self.handoff_service(scope, event['id'], 'product_image_service_unavailable')
                 previous_image = max((int(key) for key in saved['data'].get('media_observations', {})
                                       if int(key) < event['id']), default=0)
-                asked = self.store.db.execute("""SELECT 1 FROM sales_v2_outbox AS reply
+                asked = self.store.db.execute("""SELECT reply.payload FROM sales_v2_outbox AS reply
                     JOIN sales_v2_events AS prior ON prior.scope=reply.scope AND prior.id=?
                     JOIN sales_v2_events AS current ON current.scope=reply.scope AND current.id=?
                     WHERE reply.scope=? AND reply.status='accepted' AND reply.reply_key=?
                     AND current.received_at-prior.received_at<=1800 LIMIT 1""",
                     (previous_image, event['id'], scope.key, f'clarify-image:{previous_image}')).fetchone()
                 if asked:
-                    return self.handoff_service(scope, event['id'], 'product_image_unresolved_after_retry')
+                    if json.loads(asked[0]).get('question_stage') == 'photo-link':
+                        return dict(action='media_unresolved', event_id=event['id'])
+                    return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
+                if media_kind in {'file', 'video'}:
+                    return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
                 return self.clarify_image(scope, event['id'], multiple=isinstance(media_ref, list) and len(media_ref)>1)
         return self.finish_turn(scope, event['id'])
 
@@ -238,13 +255,13 @@ class Entrypoint:
             return dict(outcome,reply=reply)
         return outcome
 
-    def clarify_image(self, scope, event_id, *, multiple=False):
+    def clarify_image(self, scope, event_id, *, multiple=False, stage='product-detail', unreadable=False):
         """Keep an unresolved picture out of the checkout tools."""
         if not self.responses:
             return dict(action='media_unresolved', event_id=event_id)
         version = self.store.snapshot(scope)['version']
         self.responses.prepare(scope, event_id, dict(action='media_unresolved', state_version=version,
-                                                     multiple_images=multiple))
+                                                     multiple_images=multiple, photo_stage=stage, unreadable_photo=unreadable))
         return dict(action='media_unresolved', event_id=event_id)
 
     def handoff_fact(self, scope, event_id, version, missing):

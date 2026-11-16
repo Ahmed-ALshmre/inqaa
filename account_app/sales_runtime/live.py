@@ -510,6 +510,8 @@ def delivery_callbacks(module, db, scope, incoming_id, enabled):
         text, image_url = payload.get('text'), payload.get('url') if kind == 'image' else None
         meta = dict(sender_type='ai', sales_runtime='v2', provider_id=provider_id,
                     _delivery_status='accepted', _reply_to_message_id=incoming_id)
+        if payload.get('reference_clarification'):
+            meta['_partial_delivery_reply'] = True
         if order_id is not None:
             meta['_order_confirmation_id'] = order_id
         module.save_message(db, scope.sender, 'outgoing', kind, text, image_url, raw_payload=meta, commit=False)
