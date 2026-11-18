@@ -2,6 +2,7 @@
 import re
 
 from .. import checkout
+from .. import product_variants
 from .store import Conflict
 
 
@@ -10,6 +11,26 @@ INSPECTION_QUESTION = re.compile(
 LOCAL_MOBILE = re.compile(r'(?:(?:رقمي|رقم(?: الموبايل| الهاتف)?|موبايل)\s*[:،,-]?\s*)?(7(?:[ \t-]*\d){9})')
 TOTAL_QUESTION = (r'(?:و\s*)?(?:شكد|كم)\s+(?:يطلع\s+)?(?:ال)?(?:حساب|مجموع)'
                   r'(?:\s+(?:مع|ويا|وي)\s+(?:ال)?توصيل)?')
+PHONE_LABEL = re.compile(r'(?<!\w)(?:رقمي|رقم(?:\s+(?:الهاتف|الموبايل|التلفون))?|موبايل)\s*[:،,-]?\s*'
+                         rf'(?={checkout.PHONE.pattern})')
+NOTE = re.compile(
+    r'(?:^|(?<=[\n،,؛]))\s*(?:رجاء[ااً]?\s+)?'
+    r'(?:(?:اكتبوا|اكتبي|اكتب|سجلوا|سجلي|حطوا|حطي)\s+)?ملاحظ[هة]'
+    r'(?:\s+(?:على|بال|في)\s*(?:ال)?(?:وصل|طلب))?\s*[:：،,-]?\s*(?P<note>[^\n]{1,400})')
+
+
+def delivery_note(text):
+    """Extract a courier preference without turning a purchase condition into a note."""
+    match = NOTE.search(text)
+    if not match:
+        return text, ''
+    note = match['note'].strip(' .،')
+    clean = checkout.normalized(note)
+    if (not re.search(r'توصيل|استلام|مندوب|اتصل|اتصال', clean)
+            or re.search(r'(?<!\w)(?:بشرط|لازم|ضروري|اذا|لو|الا)(?!\w)|[؟?]', clean)
+            or checkout.phone_number(note)):
+        return text, ''
+    return text[:match.start()].rstrip(' ،,؛') + text[match.end():], note
 
 
 def checkout_inspection_question(text):
@@ -41,8 +62,8 @@ def checkout_followup(line, *, quoted_total=None):
     return bool(re.fullmatch(
         r'(?:(?:دزيت|ارسلت|بعثت)\s+(?:(?:ال)?رقم\s+و\s*(?:ال)?عنوان|(?:ال)?بيانات)'
         r'|' + TOTAL_QUESTION +
-        r'|(?:و\s*)?(?:باجر|باچر|اليوم|غدا|شوكت|اشوكت|متى)\s+'
-        r'(?:يوصل|توصل|تجي|يجي)(?:\s+(?:الطلب|المندوب))?'
+        r'|(?:و\s*)?(?:باجر|باچر|اليوم|غدا|شوكت|اشوكت|متى|كم\s+يوم|شكد\s+يوم)\s+'
+        r'(?:يوصل(?:ني|نا)?|توصل|تجي|يجي)(?:\s+(?:الطلب|المندوب))?'
         r'|(?:يوصل|توصل)\s+(?:باجر|باچر|اليوم|غدا))', clean))
 
 
@@ -52,11 +73,30 @@ def _zone_unit(line, address):
                 and re.fullmatch(r'[a-z]\d{2,5}', checkout.normalized(line).strip()))
 
 
+def shipping_selection(line):
+    """Separate a declared color and size from inline delivery details."""
+    clean = checkout.normalized(line)
+    match = re.match(r'^\s*(?:اريد\s+)?(?:ال)?لون\s+(.{2,22}?)\s+'
+                     r'(?:قياس|مقاس|سايز)\s*([a-z\d]{1,4})\s*[،,]?\s+(\S.*)$', clean)
+    if match and (color := product_variants.single_color(match[1])):
+        remainder = line[match.start(3):] if len(clean) == len(line) else clean[match.start(3):]
+        return dict(color=color, size=product_variants.normalize_size_words(match[2]).upper()), remainder
+    return {}, line
+
+
+def delivery_line(line):
+    """A trailing delivery-time question is independent of the address."""
+    parts = re.split(r'\s+(?=(?:و?كم\s+يوم|و?شكد\s+يوم|و?شوكت|و?يمتى|و?متى)\s+)', line, maxsplit=1)
+    return parts[0] if len(parts) == 2 and checkout_followup(parts[1]) else line
+
+
 def declarations(text, previous):
     fields = {}
-    for line in text.splitlines():
+    address_text, _ = delivery_note(text)
+    for line in address_text.splitlines():
         current = {**previous, **fields}
-        parsed = checkout.contact_fields(line, current)
+        line = delivery_line(shipping_selection(line)[1])
+        parsed = checkout.contact_fields(PHONE_LABEL.sub('', line.translate(checkout.DIGITS)), current)
         # A standalone Iraqi mobile can arrive without its initial zero.
         local_mobile = LOCAL_MOBILE.fullmatch(checkout.normalized(line).strip(' .،,:'))
         if local_mobile:
@@ -82,8 +122,9 @@ def contact_only(text, *, quoted_total=None):
     """Allow local checkout for plain phone and address declarations."""
     address = ''
     contact_found = False
-    for line in text.splitlines():
-        clean = checkout.normalized(line).strip(' .،,:')
+    address_text, _ = delivery_note(text)
+    for line in address_text.splitlines():
+        clean = checkout.normalized(delivery_line(shipping_selection(line)[1])).strip(' .،,:')
         if not clean:
             continue
         if checkout_inspection_question(clean) and not checkout.phone_number(clean):
@@ -93,7 +134,7 @@ def contact_only(text, *, quoted_total=None):
         if LOCAL_MOBILE.fullmatch(clean):
             contact_found = True
             continue
-        remainder = checkout.PHONE.sub('', clean).strip(' .،,:')
+        remainder = checkout.PHONE.sub('', PHONE_LABEL.sub('', clean)).strip(' .،,:')
         remainder = re.sub(r'^(?:(?:هذا|هاي)\s+)?(?:رقمي|رقم(?: الموبايل| الهاتف)?|موبايل)\s*[:،,]?\s*',
                            '', remainder).strip(' .،,:')
         if not remainder and checkout.phone_number(clean):
@@ -116,8 +157,10 @@ def capture(store, scope, event_id, allow_write):
     if evidence['actor'] != 'customer':
         return {}
     snapshot = store.snapshot(scope)
-    fields = declarations(evidence['payload'].get('text', ''), snapshot['data']['contact'])
-    if not fields:
+    text = evidence['payload'].get('text', '')
+    fields = declarations(text, snapshot['data']['contact'])
+    _, note = delivery_note(text)
+    if not fields and not note:
         return {}
 
     def save(state):
@@ -127,6 +170,8 @@ def capture(store, scope, event_id, allow_write):
             raise Conflict('turn_superseded')
         if state.get('order_id'):
             return dict(fields=[])
+        if note:
+            state['delivery_note'] = note
         events = state.setdefault('contact_events', {})
         for field, value in fields.items():
             if value:

@@ -2,12 +2,12 @@
 import re
 
 try:
-    from . import customer_copy, sales_strategy, product_variants
+    from . import catalog_profile, customer_copy, sales_strategy, product_variants
     from .checkout import normalized
     from .pricing import terms, offer_tiers, quote, money
     from .sales_playbook import requested_quantity
 except ImportError:
-    import customer_copy, sales_strategy, product_variants
+    import catalog_profile, customer_copy, sales_strategy, product_variants
     from checkout import normalized
     from pricing import terms, offer_tiers, quote, money
     from sales_playbook import requested_quantity
@@ -290,13 +290,19 @@ def care_fact(product):
 
 
 def season_fact(product):
-    if field_fact(product, 'season'):
-        return field_fact(product, 'season')
+    if saved := field_fact(product, 'season'):
+        return saved
     recorded = '\n'.join(customer_copy.fact((product or {}).get(key), key)
                         for key in ('fabric', 'description', 'fit_notes', 'notes', 'faq'))
-    return '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
-                     if len(part) <= 220 and re.search(r'(?<!\w)(?:شتوي[هة]?|صيفي[هة]?|بهاري[هة]?|خريفي[هة]?)(?!\w)', part)
-                     and not customer_copy.has_instructions(part))
+    described = '، '.join(part.strip() for part in re.split(r'[.\n،]+', recorded)
+                          if len(part) <= 220 and re.search(r'(?<!\w)(?:شتوي[هة]?|صيفي[هة]?|بهاري[هة]?|خريفي[هة]?)(?!\w)', part)
+                          and not customer_copy.has_instructions(part))
+    if described:
+        return described
+    tags = (product or {}).get('occasions')
+    if isinstance(tags, (list, tuple)):
+        return '، '.join(catalog_profile.OCCASIONS[key] for key in ('winter', 'summer') if key in tags)
+    return ''
 
 
 def field_fact(product, key):

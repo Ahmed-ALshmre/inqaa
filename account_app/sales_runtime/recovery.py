@@ -127,3 +127,19 @@ def skirt_length_request(text):
     clean = checkout.normalized(text)
     matches = list(re.finditer(r'(?<!\w)تسعين[يهة](?!\w)|(?:طولها|طوله|طول|الطول)\s*(\d{2,3})(?!\d)', clean))
     return int(matches[-1][1] or 90) if matches else None
+
+
+def split_color_photo_request(text):
+    """Keep a direct request for a color photo when the burst adds another question."""
+    photo_lines, other_lines = [], []
+    for line in text.splitlines():
+        clean = checkout.normalized(line).strip(' .،,؟?!')
+        if (product_variants.requested(clean)['colors']
+                and re.search(r'(?<!\w)(?:تدز(?:يلي|لي|ين)|دزي(?:لي)?|دزلي|ترسل(?:يلي|ي|ين)|ارسلي|وريني)\s+(?:ال)?صور(?:[هة]|ته|تها|هن|هم)?(?!\w)', clean)
+                and not re.search(r'(?:ما|لا)\s*(?:اريد|تدز|ترسل)|احجز|ثبتي|شكد|بكم|دفع|قماش|بطان|سعر|عرض|طول|قياس', clean)):
+            photo_lines.append(line)
+        elif photo_lines and re.fullmatch(r'حتى\s+اشوف\s+(?:درج[هة]|لون)\s+\w+', clean):
+            photo_lines.append(line)
+        elif clean:
+            other_lines.append(line)
+    return '\n'.join(photo_lines), '\n'.join(other_lines)

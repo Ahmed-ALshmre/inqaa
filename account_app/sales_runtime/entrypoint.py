@@ -144,6 +144,9 @@ class Entrypoint:
         prior_order = bool(re.search(
             r'عندي\s+طلب|وين\s+(?:صار|طلبي)|طلع\s+طلب|متابع[ةه]\s+طلب|ما\s*وصل\s+(?:ال)?طلب|تاخر\s+(?:ال)?طلب|'
             r'(?:طلبت|وصيت|حجزت|طلب\s+قبل).{0,35}(?:قبل|يومين|ايام|البارحه|البارحة|بعده)|'
+            r'(?:من|يوم)\s+(?:يوم\s+)?(?:السبت|الاحد|الاثنين|الثلاثاء|الاربعاء|الخميس|الجمع[هة])\s+(?:وصيت|حجزت|طلبت)|'
+            r'(?:حجزت|طلبت|وصيت)\s+(?:يوم\s+)?(?:السبت|الاحد|الاثنين|الثلاثاء|الاربعاء|الخميس|الجمع[هة])|'
+            r'(?:دزيت(?:ي|وا)?|شحنت(?:ي|وا)?|بعثت(?:ي|وا)?)\s+(?:(?:ال)?طلب(?:ي|ج)?|الطلبي[هة])|'
             r'صار.{0,15}(?:يوم|اسبوع).{0,30}(?:ال)?طلب|من\s+(?:طلبن[ا]ها|طلبته|طلبتها)|'
             r'(?:الطلب|الطلبيه|الطلبية)\s+القديم[هة]?|(?:من\s+)?نستونه\s+كل\s+يوم', clean))
         tracking = checkout.is_existing_order_followup(text) or bool(state.get('order_id') and
@@ -158,12 +161,15 @@ class Entrypoint:
         delay_complaint = bool(re.search(
             r'(?:مو\s+)?صار(?:لي|\s+لي)?\s+(?:.{0,20}\s+)?(?:يومين|يوم(?:ا|اً)?|ايام|اسبوع|اسبوعين)(?!\w)'
             r'|كل\s+مر[هة]\s+(?:ت)?عيدولي\s+نفس\s+الكلام|(?:خوم|معقول)\s+(?:ا)?ضل\s+انتظر', clean))
-        if delay_complaint and not sending_checkout and not looking_for_order:
+        carrier_request = bool(re.search(
+            r'(?:اتصل(?:ي|و|وا)?|بلغ(?:ي|و|وا)?|تواصل(?:ي|و|وا)?)\s+(?:وي[هةا]?|مع|على|ع|ب)?\s*(?:ال)?مندوب|'
+            r'(?:لا+[،,]?\s+)?خلي\s+(?:يدز\w*|يوصل\w*|يسلم\w*)\s+ل', clean))
+        if (delay_complaint or tracking or carrier_request) and not sending_checkout and not looking_for_order:
             looking_for_order = self.store.db.execute("""SELECT 1 FROM orders
                 WHERE store_id=? AND sender_id=? AND julianday(created_at)>=julianday('now','-30 days')
                   AND LOWER(COALESCE(status,'new')) NOT IN ('cancelled','canceled','ملغي','delivered','returned')
                 LIMIT 1""", (store_id, sender_id)).fetchone() is not None
-        if prior_order or ((tracking or delay_complaint) and looking_for_order and not sending_checkout
+        if prior_order or ((tracking or delay_complaint or carrier_request) and looking_for_order and not sending_checkout
                            and not explicit_cancellation(text)):
             return self.handoff_service(scope,event['id'],'order_tracking')
         if state.get('order_id') and media_kind == 'text' and conversation_quality.booking_status_question(text):

@@ -109,6 +109,9 @@ def simple_photo_request(text):
     if explicit_photo_followup(clean) or color_photo_request(clean):
         return True
     words = re.sub(r'[؟?!.،,\s]+', ' ', clean).strip()
+    if re.fullmatch(r'(?:(?:ممكن|اريد|دزيلي|ارسلي|ماكو)\s+)?صور[هة]?\s+(?:الالوان|للالوان)'
+                    r'(?:\s+(?:يعني|حتى|لان).+)?', words):
+        return True
     photo = r'(?:ال)?صور(?:[هة]|ها|هن|هم)?'
     send = r'ت(?:دز|رسل|نزل|رفق)\w*'
     if re.fullmatch(rf'(?:اريد|ممكن|ادزي|دزيلي|ارسلي|وين|ما\s*وصل\w*)\s+{photo}(?:\s+(?:الالوان|الموديل))?|وين\s+اصور|'

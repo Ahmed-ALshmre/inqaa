@@ -134,7 +134,7 @@ def start_new_purchase(db, scope, incoming_id, text, allowed):
             raise Conflict('turn_superseded')
         state.update(initial_state())
         for key in ('order_id', 'order_status', 'checkout_prompt', 'contact_events', 'price_request', 'quote_province',
-                    'stated_clothing_size', 'focus_source'):
+                    'stated_clothing_size', 'focus_source', 'delivery_note'):
             state.pop(key, None)
         return dict(previous_order_id=order_id)
 

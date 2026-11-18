@@ -32,6 +32,26 @@ def validate_material(text, recorded, requested=False):
             raise ValueError('reply.fabric: use only the verified material for the current product')
 
 
+def validate_fulfillment(parts, proof):
+    text = normalized('\n'.join(part.get('text', '') for part in parts if part.get('type') == 'text'))
+    if not proof.get('carrier_contacted') and re.search(
+            r'(?:اتصل|نتصل|تواصل|نتواصل|نسق|اتابع|تتابع|نتابع|ديتابع|ابلغ|نبلغ|بلغت|نحاول|احرص|خاطب)'
+            r'[^.؟!\n]{0,40}(?:مندوب|شرك[هة]\s*التوصيل)', text):
+        raise ValueError('reply.action: carrier coordination requires an executed operation')
+    if not proof.get('order_dispatched') and re.search(
+            r'(?:طلبج|طلبك|الطلب)\s*(?:تجهز|طلع|انشحن|بالطريق)|'
+            r'(?:اليوم|باجر)\s+(?:ال)?مندوب.{0,20}(?:يسلم|يوصل)', text):
+        raise ValueError('reply.action: shipping status requires executed fulfillment evidence')
+    if not proof.get('order_saved') and re.search(
+            r'(?:يوصل[جچك]|توصل[جچك]|راح\s+يجي[جچك])\s+(?:ال)?'
+            r'(?:كيلوت|قميص|سوت|تراك|فستان|تنور[هة]|قطع[هة]|طلبج|طلبك)', text):
+        raise ValueError('reply.action: shipment of a selected item requires a saved order')
+    window = normalized(proof.get('delivery_time'))
+    if re.search(r'24\s*ساع[هة].{0,25}يومين', window) and re.search(
+            r'(?:[3-9]|ثلاث[هة]?|اربع[هة]?|خمس[هة]?)\s*(?:ايام|يوم)|(?:اسبوع|اسبوعين)', text):
+        raise ValueError('reply.delivery_time: use the approved 24-hour to two-day window')
+
+
 def validate_copy(parts,question,action_results=None):
     proof=action_results or {}
     if not isinstance(parts,list) or not 1<=len(parts)<=5:
@@ -45,6 +65,7 @@ def validate_copy(parts,question,action_results=None):
                 raise ValueError('reply.text: expected nonempty text')
             texts.append(part['text'])
     text=normalized('\n'.join(texts))
+    validate_fulfillment(parts, proof)
     if proof.get('omit_color_list'):
         from ..product_variants import colors
         if len(colors(text)) > 1:
@@ -79,12 +100,8 @@ def validate_copy(parts,question,action_results=None):
              r'سجل(?:ت|نا)(?:لج|لك)?\s*(?:طلبج|الطلب|الحجز)')
     if re.search(booking,text) and not proof.get('order_saved'):
         raise ValueError('reply.booking: do not claim order creation before committed confirmation')
-    if re.search(r'(?:طلبج|طلبك|الطلب)\s*(?:تجهز|طلع|انشحن|بالطريق)',text) and not proof.get('order_dispatched'):
-        raise ValueError('reply.action: shipping status requires executed fulfillment evidence')
     if re.search(r'(?:يجي|يجيلج|راح\s*يجي).{0,10}مضبوط|يرهم\s*(?:بكل\s*راحه|100)|كلش\s*مناسب',text) and not proof.get('fit_guaranteed'):
         raise ValueError('reply.fit: do not guarantee an inferred fit')
-    if re.search(r'(?:نسق|اتواصل|نتواصل|ابلغ|نبلغ|بلغت|نحاول|احرص|خاطب).{0,40}(?:مندوب|شركة\s*التوصيل)',text) and not proof.get('carrier_contacted'):
-        raise ValueError('reply.action: carrier coordination requires an executed operation')
     if re.search(r'تم\s*(?:الغاء|تعديل)|الغيت|غيرنا\s*الطلب',text) and not proof.get('order_changed'):
         raise ValueError('reply.action: order change requires a committed operation')
     if re.search(r'خصمتلج|نزلتلج.{0,24}خصم|بعد\s+(?:ال)?خصم', text) and not proof.get('discount_allowed'):
@@ -103,5 +120,3 @@ def validate_copy(parts,question,action_results=None):
         raise ValueError('reply.media: do not announce photos without an attachment')
     if re.search(r'مو\s*(?:محدد|موضح|متوفر).{0,15}(?:معلومات|بيانات)|البيانات\s*(?:غير|مو)|منشا\s*الصنع\s*مو\s*محدد',text):
         raise ValueError('reply.missing_fact: genuine missing facts require silent handoff')
-    if proof.get('delivery_time')=='من 24 ساعة إلى يومين' and re.search(r'(?:[3-9]|ثلاث[هة]?|اربع[هة]?)\s*(?:ايام|يوم)',text):
-        raise ValueError('reply.delivery_time: use the approved 24-hour to two-day window')

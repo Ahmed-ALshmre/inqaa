@@ -8,11 +8,11 @@ from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
 from .contracts import DecisionRejected, DecisionUnavailable, FACT_FIELDS, message_context
-from .copy_guard import ROOMY_FIT, validate_copy, validate_material
+from .copy_guard import ROOMY_FIT, validate_copy, validate_fulfillment, validate_material
 from .facts import resolve as resolve_fact,requested_fields,POLICY_FIELDS,alternatives,choice_alternatives,only_same_day_question,quoted_offer_quantity,weight_limit_question
 from .intent import constraint, direct_clothing_size, direct_color, purchase_selected
 from .negotiation import destination, offer_signature, price_disclosure, pushback, quantity_pushback, request as price_request
-from .recovery import catalog_photo_request, clothing_size_label, skirt_length_request, weight_fit
+from .recovery import catalog_photo_request, clothing_size_label, skirt_length_request, split_color_photo_request, weight_fit
 from .wording import checkout_question, fact_recovery_parts, mentions_free_size, natural_weight_wording, next_options, quote_amounts, render_amounts, validate_next_step
 
 
@@ -27,7 +27,15 @@ class Responses:
 
     def prepare(self, scope, turn_id, outcome, *, retry_revision=None):
         mode = 'withdrawn' if outcome.get('withdrawn') else outcome['action']
-        if mode not in {'continue', 'withdrawn', 'cancelled', 'media_unresolved', 'order_status'}:
+        booking_eta = None
+        if mode == 'booked' and not outcome.get('held_for_color'):
+            message = self.store.evidence(scope, turn_id)['payload'].get('text', '')
+            if 'delivery_time' in requested_fields(message):
+                window = self.policy_loader(scope.store).get('delivery_time')
+                if window:
+                    booking_eta = (sales_answers.same_day_reply(window) if sales_answers.same_day_delivery(message)
+                                   else f'التوصيل عادةً {window}.')
+        if not booking_eta and mode not in {'continue', 'withdrawn', 'cancelled', 'media_unresolved', 'order_status'}:
             # Order confirmations use durable order tasks, never model rewriting.
             return dict(action=outcome['action'])
         reply_key = {
@@ -36,6 +44,7 @@ class Responses:
             'cancelled': f'cancellation:{turn_id}',
             'media_unresolved': f'clarify-image:{turn_id}',
             'order_status': f'order-status:{turn_id}',
+            'booked': f'booking-eta:{turn_id}',
         }[mode]
         key = reply_key if mode == 'media_unresolved' else f'writer-v3:{turn_id}'
         if retry_revision is not None:
@@ -54,6 +63,8 @@ class Responses:
         snap = self.store.snapshot(scope)
         if snap['version'] != outcome['state_version']:
             raise Conflict('response_superseded')
+        if booking_eta:
+            return self.save(scope, key, reply_key, turn_id, snap['version'], [dict(type='text', text=booking_eta)])
         if mode == 'order_status':
             status = (outcome['status'] or '').lower()
             text = ('الحجز المسجل عدنا ملغي.' if status in {'cancelled', 'canceled', 'ملغي'}
@@ -151,6 +162,13 @@ class Responses:
         focus=state.get('focus_product_id')
         if not focus and len({r['product_id'] for r in lines})==1:focus=lines[0]['product_id']
         product = catalog.get(focus) if focus else None
+        photo_text, other_text = split_color_photo_request(current)
+        photo_prefix = []
+        if self.product_photos and product and photo_text and other_text:
+            colors = product_variants.requested(photo_text)['colors']
+            photo_prefix = self.product_photos(product, colors)[:1] or [self.no_photo(colors)]
+            current = other_text
+            clean = checkout.normalized(current).strip(' .،!؟?')
         selected_size = direct_clothing_size(current)
         if not selected_size and purchase_selected(current) and not re.search(r'[؟?]|موجود|متوفر|يناسب|يرهم', current):
             sizes = product_variants.requested(current)['sizes']
@@ -218,8 +236,8 @@ class Responses:
         if photo_choice and photo_choice['product_id'] != focus:
             photo_choice = None
         product_unresolved = not focus and not lines
-        if self.product_photos and product and (plan.get('catalog_photos') or catalog_photo_request(current)):
-            colors = product_variants.requested(current)['colors']
+        if self.product_photos and product and not photo_prefix and (photo_text or plan.get('catalog_photos') or catalog_photo_request(current)):
+            colors = product_variants.requested(photo_text or current)['colors']
             photos = self.product_photos(product, colors)
             color_key = f'product.{focus}.color'
             if not photos:
@@ -339,7 +357,8 @@ class Responses:
                          re.search(r'سعر\s*(?:القطع[ةه]|الوحد[ةه])|للقطع[ةه]|للواحد[ةه]', clean))
         if different_quantity or per_piece:
             price_question = False  # A hypothetical quantity is not the current cart price.
-        quote_turn = bool(quote and not state.get('order_id') and (bargaining or price_question))
+        quantity_enquiry = bool(quantity and 'price' in requested and not bargaining)
+        quote_turn = bool(quote and not state.get('order_id') and (bargaining or price_question and not quantity_enquiry))
         if market['opportunity'] == 'price_hesitation' and market['matches'] and not bargaining:
             quote_turn = False  # A cheaper option gets its own price, separate from the current cart quote.
         price_units = retail_price = None
@@ -618,7 +637,7 @@ class Responses:
                 if quantity and quantity != price_units:
                     requested_quote = pricing.quote([dict(product_id=focus, quantity=quantity)], [product],
                                                     amounts.get('delivery_fee'))
-                    amounts['subtotal'] = requested_quote['product_total']
+                    amounts = quote_amounts(requested_quote)
                 else:
                     amounts['unit_price'] = price
             except ValueError:
@@ -805,7 +824,7 @@ class Responses:
             for part in parts:
                 if part['type'] == 'text' and mentions_free_size(part['text']):
                     part['size_explained_for'] = focus
-        return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
+        return self.save(scope, key, reply_key, turn_id, snap['version'], [*photo_prefix, *parts][:5])
 
     @staticmethod
     def addon_reference(catalog, state, match, photo, *, category=None):
@@ -895,7 +914,7 @@ class Responses:
         """Discuss a possible campaign product without applying it to the cart."""
         requested = requested_fields(current)
         wants_photos = catalog_photo_request(current)
-        wants_purchase = not wants_photos and purchase_selected(current)
+        wants_purchase = not wants_photos and 'price' not in requested and purchase_selected(current)
         product_id = outcome.get('provisional_product')
         product = catalog.get(product_id) if product_id else {}
         if not product_id and re.search(r'(?:تصويره[ام]|تصوريه[ام]|تصويرها|تصوريها).{0,45}(?:ارسال|ارسلي|دزي).{0,12}صور',
@@ -914,6 +933,23 @@ class Responses:
                     None, current, requested=True, history=messages[:-1])
                 if market['matches']:
                     return self.catalog_offer_parts(catalog, self.store.snapshot(scope)['data'], market)
+        if not product_id and 'price' in requested and sales_playbook.requested_quantity(current):
+            fees = policy.get('delivery_fee') or {}
+            province = destination(current) or contact.get('province')
+            fee = fees.get(province) if isinstance(fees, dict) else None
+            if fee is None and isinstance(fees, dict) and fees and len(set(fees.values())) == 1:
+                fee = next(iter(fees.values()))
+            if accepted and accepted[-1].get('question_stage') == 'photo-quantity':
+                return dict(action='skipped')
+            return self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
+                                        accepted, greeting, 'photo-quantity', multiple=True,
+                                        amounts={'delivery_fee': fee} if 'delivery_fee' in requested and type(fee) is int else {})
+        if not product_id and wants_photos:
+            if accepted and accepted[-1].get('question_stage') == 'palette-product':
+                return dict(action='skipped')
+            return self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
+                                        accepted, greeting, 'palette-product', multiple=bool(
+                                            accepted and accepted[-1].get('question_stage') == 'image-choice'))
         if not product_id and not wants_purchase and set(requested) <= {'price', 'sizes', 'colors', 'stock'}:
             if requested and accepted and accepted[-1].get('question_stage') == 'product-detail':
                 return self.ask_about_photo(scope, turn_id, outcome['state_version'], catalog, current, messages,
@@ -992,12 +1028,23 @@ class Responses:
                     fee = next(iter(fees.values()))
             if type(fee) is int:
                 amounts['delivery_fee'] = fee
+        quantity = sales_playbook.requested_quantity(current)
+        if quantity and 'price' in requested and product and outcome.get('latest_verified_image'):
+            try:
+                quote = pricing.quote([dict(product_id=product_id, quantity=quantity)], [product],
+                                      amounts.get('delivery_fee'))
+            except ValueError:
+                pass
+            else:
+                amounts = quote_amounts(quote)
+                promotion = None
         version = outcome['state_version']
         context = dict(mode='continue', state={'contact': contact}, facts=facts, policies=policy, amounts=amounts,
                        product_facts={fact['field']: fact['value'] for fact in facts if fact['product_id']==product_id},
                        question_field=None, next_step=dict(field=None, options=[]), copy_budget=220,
                        customer_message=current, requested_fields=requested, recent_messages=messages,
-                       recent_replies=accepted, greeting=greeting, action_results={},
+                       recent_replies=accepted, greeting=greeting,
+                       action_results=dict(delivery_time=policy.get('delivery_time')),
                        provisional_photo=not outcome.get('latest_verified_image'),
                        promotion_quantity=promotion[0] if promotion else None)
         if outcome.get('latest_verified_image'):
@@ -1020,12 +1067,13 @@ class Responses:
         return parts
 
     def ask_about_photo(self, scope, turn_id, version, catalog, current, messages, accepted, greeting,
-                        stage, *, multiple=False, label='', unreadable=False):
+                        stage, *, multiple=False, label='', unreadable=False, amounts=None):
         context = dict(mode='continue', customer_message=current, recent_messages=messages, recent_replies=accepted,
                        question_field='photo.reference', next_step=dict(field='photo.reference', options=[]),
                        copy_budget=145,
-                       amounts={}, greeting=greeting, action_results={},
-                       photo_clarification=dict(multiple=multiple, possible_product=label, unreadable=unreadable))
+                       amounts=amounts or {}, greeting=greeting, action_results={},
+                       photo_clarification=dict(multiple=multiple, possible_product=label, unreadable=unreadable,
+                                                quantity_quote=stage == 'photo-quantity'))
         parts = self.write(context, catalog, scope, turn_id, version)
         for part in parts:
             part['reference_clarification'] = True
@@ -1137,6 +1185,12 @@ class Responses:
             fabric = value_facts.get('fabric') or context.get('product_facts', {}).get('fabric')
             validate_material(text, fabric, 'fabric' in context.get('requested_fields', ()))
             clean_copy = checkout.normalized(text)
+            if not context.get('progress', {}).get('fit') and re.search(
+                    r'(?:يناسب|يرهم|ي(?:لبس|جي)(?:لج|لچ)?|تلبسينه)[^؟?.،\n]{0,27}'
+                    r'\d{2,3}\s*(?:كيلو|كغم)[^؟?.،\n]{0,14}(?:تمام|مضبوط|بكل راح[هة])',
+                    clean_copy) and not re.search(
+                        r'(?:من|حدود|تقريبا)\s+\d{2,3}\s*(?:كيلو|كغم)?\s+(?:الى|لحد|لـ?)\s*\d{2,3}', clean_copy):
+                raise ValueError('reply.fit: do not infer a fit from a clothing size without weight evidence')
             label_availability = context.get('label_availability')
             if label_availability and not label_availability['weight_was_asked'] and re.search(
                     r'\d{2,3}\s*(?:كيلو|كغم)|شكد\s+وزن|مو\s+بنظام', clean_copy):
@@ -1219,8 +1273,13 @@ class Responses:
             if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > bubble_limit for part in layout['reply_parts']):
                 raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
             parts = [dict(type='text', text=part) for part in layout['reply_parts']]
+            if len(parts) > 1:
+                for part in parts:
+                    part['text'] = re.sub(r'[،,]\s*$', '.', part['text'])
         if copy_guard_enabled:
             validate_copy(parts, question, context['action_results'])
+        else:
+            validate_fulfillment(parts, context['action_results'])
         if strict:
             validate_next_step(parts, context['next_step'])
         return parts
