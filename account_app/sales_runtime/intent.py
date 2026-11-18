@@ -2,6 +2,7 @@
 import re
 from .. import product_variants
 from ..checkout import normalized,explicit_purchase,is_confirmation
+from .contact import contact_only, delivery_note, shipping_selection
 from .store import digest
 
 
@@ -53,6 +54,13 @@ def direct_clothing_size(text):
     match = re.fullmatch(r'(?:(?:لا|اقصد|اني|انا|اريد|البس|خلي)\s+)?'
                          r'(?:قياس(?:ي)?|مقاس(?:ي)?|سايز)\s*[:=]?\s*(\d{2,3}(?:\.5)?|[2-6]xl|xl|xs|s|m|l|xxl)', value)
     return match[1].upper() if match else ''
+
+
+def preferred_clothing_size(text):
+    """Protect the customer's latest requested size from an older proposal."""
+    match = re.search(r'(?<!\w)(?:خلي(?:ها|ه|لي)?|بدليها\s+الى|لو)\s+(?:قياس\s+)?'
+                      r'(\d{2})(?=\s+(?:احسن|افضل|اريدها|احجز)|[،,!.\n]|\s*$)', normalized(text))
+    return match[1] if match else ''
 
 
 def explicit_color_order(text, *, accept_pair=False):
@@ -121,6 +129,10 @@ def constraint(text):
         return dict(kind='delivery_deadline',text=text,status='pending')
     if re.search(r'(?:لازم|بشرط|ضروري|اذا|لو)\s+.{0,24}(?:يوصل\w*|توصل\w*|التوصيل)\s+اليوم(?!\w)', value):
         return dict(kind='delivery_deadline',text=text,status='pending')
+    if re.search(r'(?<!\w)(?:لازم|بشرط|ضروري|اذا|لو)(?!\w).{0,30}'
+                 r'(?:يوصل\w*|توصل\w*|التوصيل|الاستلام)'
+                 r'\s+(?:قبل|بعد)\s*(?:الساع[هة]\s*)?(?:ال)?\s*\d', value):
+        return dict(kind='delivery_deadline',text=text,status='pending')
     if (re.search(r'(?:اذا|لو|بشرط|بس\s+ب).{0,35}(?:ب\s*\d|بعشرين|بثلاثين)',value)
             and re.search(r'احجز|ثبت|اشتري|اطلب|اريد',value)):
         return dict(kind='price',text=text,status='pending')
@@ -138,7 +150,7 @@ def purchase_selected(text):
         re.search(r'(?<!\w)(?:ممكن\s+)?(?:ترسلي|ارسلي|دزي|اخذ)(?!\w)', value)) or bool(
         re.search(r'(?<!\w)اريد(?:ه|ها|هم|هن)?(?!\w)',value)) and not bool(
         re.search(r'اريد\s+(?:اعرف|استفسر|اسال|اشوف|خصم|تخفيض|تخيض|(?:ال)?(?:سعر|صور|فيديو|تفاصيل|قياسات|الوان))'
-                  r'|شلون|بشكد|شكد\s*(?:سعر|واص)',value))
+                  r'|شلون|بشكد|شكد\s*(?:سعر|واص|(?:راح\s+)?يسو[يى])',value))
 
 
 def purchase_declined(text):
@@ -147,15 +159,19 @@ def purchase_declined(text):
                 re.search(r'ما\s*اريد|لا\s*اريد', value) and not color_correction(value))
 
 
+def accepts_purchase_prompt(state, reply):
+    return (reply.get('question_field') == 'purchase_intent'
+            and bool(state['cart']) and reply.get('cart_key') == digest(state['cart']))
+
+
 def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, confirmed_color_correction=False):
     from .negotiation import pushback, request
     text=evidence['payload'].get('text','');value=normalized(text)
     bargaining = bool(state.get('price_request') and pushback(text))
     reply = last_reply or {}
+    purchase_prompt = accepts_purchase_prompt(state, reply)
     confirmed_purchase = bool(is_confirmation(text) and state['cart'] and (
-        state.get('purchase_event') or
-        reply.get('question_field') == 'purchase_intent'
-        and reply.get('cart_key') == digest(state['cart'])))
+        state.get('purchase_event') or purchase_prompt))
     corrected = color_correction(value)
     fit_preference = re.search(r'(?<!\w)(?:خلي|اريد(?:ه|ها)?)\s+(?:(?:ال)?قياس\s+)?(?:كبير|اكبر|راهي|واسع)', value)
     weight_question = reply.get('text', '') if reply.get('question_field', '').endswith('.weight_kg') else ''
@@ -167,10 +183,11 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, con
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
         state.pop('price_request',None)
+        state.pop('delivery_note',None)
         return True
     # Remove legacy arbitrary "if" barriers. Real typed constraints remain.
     state['conditions']=[c for c in state['conditions'] if c.get('kind') and c.get('status')=='pending']
-    pending=constraint(text)
+    pending=constraint(delivery_note(text)[0])
     price_request=request(text)
     if price_request and (state['cart'] or state.get('purchase_event')):
         if not price_request.get('discretionary') or not state.get('price_request'):
@@ -189,6 +206,11 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, con
     declared=(bool(state['cart']) and all(state['contact'].get(f) for f in ('phone','address','province'))
               and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address']
               and event_id in (contacts['phone'],contacts['address'],contacts.get('province')))
-    if confirmed_color_correction or purchase_selected(text) or contextual or declared or confirmed_purchase:
+    explicit_shipping_choice = any(shipping_selection(line)[0] for line in text.splitlines())
+    answered_with_details = bool((purchase_prompt or explicit_shipping_choice)
+        and contacts.get('phone') == event_id == contacts.get('address')
+        and state['contact'].get('province')
+        and contact_only(text, quoted_total=(quote or {}).get('total')))
+    if confirmed_color_correction or purchase_selected(text) or contextual or declared or confirmed_purchase or answered_with_details:
         state['purchase_event']=event_id
     return False

@@ -29,11 +29,14 @@ def mentions_free_size(text):
 def quote_amounts(quote, compact=False):
     discount = quote.get('discount', 0)
     total = quote.get('total')
+    fee = quote.get('delivery_fee')
+    if 'total' not in quote and fee is not None:
+        total = quote['product_total'] + fee
     if compact and total is not None:
         return {'total': total, **({'discount': discount} if discount else {})}
     amounts = {'subtotal': quote.get('base_product_total', quote['product_total'])}
-    if quote.get('delivery_fee') is not None:
-        amounts['delivery_fee'] = quote['delivery_fee']
+    if fee is not None:
+        amounts['delivery_fee'] = fee
     if discount:
         amounts['discount'] = discount
     if total is not None:
@@ -161,7 +164,10 @@ def fact_recovery_parts(context):
             text = 'ممكن اسم القطعة أو رابطها حتى ألكالج الموديل؟'
         else:
             text = 'ممكن رابط القطعة أو صورة أوضح إلها؟'
-        return [dict(type='text', text=text)]
+        parts = [dict(type='text', text=text)]
+        if photo.get('quantity_quote') and 'delivery_fee' in context['amounts']:
+            parts.insert(0, dict(type='text', text='التوصيل {{delivery_fee}}.'))
+        return parts
 
     requested = set(context.get('requested_fields', ()))
     facts = {fact['field']: fact['value'] for fact in context.get('facts', ())}

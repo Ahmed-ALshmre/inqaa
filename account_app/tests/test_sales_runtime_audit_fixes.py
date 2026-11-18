@@ -92,6 +92,15 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual('delivery_deadline', outcome['readiness']['conditions'][0]['kind'])
         self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
 
+    def test_required_delivery_hour_is_not_saved_as_a_courier_preference(self):
+        self.select()
+        _, outcome = self.run_turn('بغداد حي الاختبار قرب المدرسة 07701234567\n'
+                                   'رجاء اكتبوا ملاحظة على الوصل لازم التوصيل بعد ال٣')
+        self.assertEqual('continue', outcome['action'])
+        self.assertEqual('delivery_deadline', outcome['readiness']['conditions'][0]['kind'])
+        self.assertIsNone(self.store.snapshot(self.scope)['data'].get('delivery_note'))
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+
     def test_question_guard_rejects_same_day_promise_and_generic_weight_range(self):
         from account_app.sales_answers import current_question_gaps
         for reply in ('اي يوصل اليوم، التوصيل من 24 ساعة إلى يومين.',

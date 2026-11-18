@@ -254,6 +254,11 @@ def _sales_units(reply, *, short_bubbles=False):
                 or (len(compact(previous)) <= 70 and re.match(r'^(?:بس\s+)?حتى\s', previous))))
             soft_intro = (len(compact(previous)) <= 24 and not topic(previous)
                           and not re.search(r'[؟?]', previous))
+            topic_intro = bool(re.fullmatch(
+                r'(?:و\s*)?(?:بالنسب[هة]|بخصوص|[أا]ما)\s+[^.!؟?؛]{1,54}[،,:]', previous))
+            if topic_intro:
+                atomic[-1] = previous + ' ' + piece
+                continue
             if is_greeting(previous) or soft_intro or costs or contact_fields or fit_explanation or continuation or unfinished or dependent_intro:
                 atomic[-1] = previous + '\n\n' + piece
                 continue

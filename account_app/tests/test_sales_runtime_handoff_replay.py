@@ -3,9 +3,10 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from account_app import conversation_quality, inbound_voice, variant_inventory
+from account_app import conversation_quality, inbound_voice, reply_layout, variant_inventory
 from account_app.sales_runtime import Scope
 from account_app.sales_runtime.contracts import DecisionUnavailable
+from account_app.sales_runtime.copy_guard import validate_fulfillment
 from account_app.sales_runtime.entrypoint import Entrypoint
 from account_app.tests import test_sales_runtime_linking as linking
 
@@ -76,6 +77,113 @@ class HandoffReplayTests(unittest.TestCase):
             'المجموع {total} دينار، يناسبج هالحساب؟' if context['question_field'] == 'price.accept'
             else 'من عيوني، أكمل وياج على القطع اللي اخترتيها.'
         ))]
+
+    def test_khuyoot_one_line_checkout_with_eta(self):
+        self.replay(facts=dict(sizes='38 إلى 52'))
+        policies = lambda _: {'delivery_time': 'من 24 ساعة إلى يومين', 'delivery_fee': {'صلاح الدين': 5000}}
+        self.entry.runtime.policy_loader = self.entry.responses.policy_loader = policies
+        self.send('بيش الكيلوت؟')
+        result, parts = self.send('لون اسود قياس 46 صلاح الدين حي التجربة قرب المدرسة 07701234567 كم يوم يوصل الطلب')
+        self.assertEqual('booked', result['action'], result)
+        self.assertIn('24 ساعة إلى يومين', self.text(parts))
+        items = json.loads(self.db.execute('SELECT order_items FROM orders').fetchone()[0])
+        self.assertEqual(('أسود', '46'), (items[0]['color'], items[0]['size']))
+        state = self.entry.store.snapshot(self.scope)['data']
+        self.assertEqual('صلاح الدين حي التجربة قرب المدرسة', state['contact']['address'])
+        self.active()
+
+    def test_khuyoot_checkout_prefers_corrected_size_over_old_draft(self):
+        self.replay(facts=dict(sizes='38 إلى 52'))
+        self.send('اريد اسود قياس 46')
+        self.decide.side_effect = None
+        self.decide.return_value = dict(intent='continue', changes=[dict(values=dict(product_id='P1', size='46'))])
+        result, _ = self.send('تمام افحص بس لو 48 احسن\n07701234567\nبغداد حي التجربة قرب المدرسة')
+        self.assertEqual('booked', result['action'], result)
+        items = json.loads(self.db.execute('SELECT order_items FROM orders').fetchone()[0])
+        self.assertEqual('48', items[0]['size'])
+
+    def test_khuyoot_customer_asks_for_color_photos_by_noun(self):
+        self.replay()
+        self.send('شنو ألوانه؟')
+        _, parts = self.send('زين ممكن صورة للألوان يعني حتى اعرف فاتح لو طوخ')
+        self.assertEqual('image', parts[0]['type'], parts)
+        self.assertEqual('P1', parts[0]['product_id'])
+        self.active()
+
+    def test_khuyoot_late_order_tracking_is_not_an_eta_promise(self):
+        self.replay()
+        self.booked()
+        result, parts = self.send('من الاحد وصيت وماكو يوصلني اليوم لو لا')
+        self.assertEqual('order_tracking', result['reason'])
+        self.assertEqual([], parts)
+
+    def test_khuyoot_unknown_photo_answers_freight_without_using_the_old_product_price(self):
+        self.replay()
+        policies = lambda _: {'delivery_time': 'من 24 ساعة إلى يومين', 'delivery_fee': {'بغداد': 5000}}
+        self.entry.runtime.policy_loader = self.entry.responses.policy_loader = policies
+        self.send('بيش الكيلوت؟')
+        self.send(kind='image', refs=['unknown-item'], ad=False)
+        result, parts = self.send('اخذ ثلاث قطع منكم اشكد يسوي ويه توصيل هم؟', ad=False)
+        self.assertNotEqual('human', result['action'], result)
+        self.assertEqual('photo-quantity', parts[-1]['question_stage'])
+        self.assertIn('5 آلاف', self.text(parts))
+        self.assertNotIn('15 ألف', self.text(parts))
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.active()
+
+    def test_khuyoot_quantity_enquiry_uses_tier_and_flat_shipping_without_booking(self):
+        self.replay(facts=dict(product_type='trousers'))
+        self.entry.responses.policy_loader = lambda _: {'delivery_fee': {'بغداد': 5000, 'صلاح الدين': 5000}}
+        self.send('How men denar')
+        self.decide.side_effect = None
+        self.decide.return_value = dict(intent='continue', changes=[dict(values=dict(product_id='P1', quantity=3))])
+        result, parts = self.send('اخذ ثلاث قطع منكم اشكد يسوي ويه توصيل هم؟')
+        self.assertNotEqual('booked', result['action'], result)
+        self.assertIn('50 ألف', self.text(parts))
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        self.active()
+
+    def test_khuyoot_contact_without_a_selected_color_does_not_choose_black(self):
+        self.replay(facts=dict(sizes='38 إلى 52'))
+        self.decide.side_effect = None
+        self.decide.return_value = dict(intent='continue', changes=[dict(values=dict(product_id='P1', size='52'))])
+        self.send('يوجد قياس 52؟')
+        self.decide.side_effect = DecisionUnavailable('decision_provider_http_402')
+        result, parts = self.send('07701234567\nبغداد حي التجربة قرب المدرسة')
+        self.assertNotEqual('booked', result['action'], result)
+        self.assertNotIn('يوصلج الكيلوت', self.text(parts))
+        self.assertTrue(any(part.get('question_field', '').endswith('.color') for part in parts), parts)
+        self.assertEqual(0, self.db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
+        result, _ = self.send('الماروني')
+        self.assertEqual('booked', result['action'], result)
+        item = json.loads(self.db.execute('SELECT order_items FROM orders').fetchone()[0])[0]
+        self.assertEqual(('ماروني', '52'), (item['color'], item['size']))
+        self.active()
+
+    def test_khuyoot_switch_back_to_named_shirt_after_uncertain_skirt_photo(self):
+        self.replay(facts=dict(product_type='tops', product_name='قميص التجربة',
+                               sizes='38 إلى 52', colors='سماوي فاتح، أسود'))
+        self.send('بيش القميص؟')
+        self.send(kind='image', refs=['unknown-skirt'], ad=False)
+        result, parts = self.send('ثبت لي حجز على القميص واريد القياس 50 واللون السماوي الفاتح', ad=False)
+        self.assertNotEqual('human', result['action'], result)
+        state = self.entry.store.snapshot(self.scope)['data']
+        self.assertEqual('P1', state['cart'][0]['product_id'])
+        self.assertEqual('50', state['cart'][0]['size'])
+        self.assertTrue(any(part.get('question_field') == 'contact.details' for part in parts), parts)
+        self.active()
+
+    def test_khuyoot_reply_keeps_delivery_intro_with_answer(self):
+        layout = reply_layout.plan_sales_bubbles({'_human_sales_voice': True, '_short_sales_bubbles': True},
+            'وبالنسبة للتوصيل لتكريت، يوصلج خلال 24 ساعة إلى يومين. تحبين تشوفين الألوان؟')
+        self.assertIn('وبالنسبة للتوصيل لتكريت، يوصلج', layout['reply_parts'][0])
+        for reply, proof in (
+            ('دا أتابع ويه شركة التوصيل', {}),
+            ('يوصلج الكيلوت الأسود قياس 52', {}),
+            ('التوصيل يومين لـ3 أيام', {'delivery_time': 'من 24 ساعة إلى يومين'}),
+        ):
+            with self.subTest(reply=reply), self.assertRaises(ValueError):
+                validate_fulfillment([dict(type='text', text=reply)], proof)
 
     def test_four_photos_of_one_product_keep_their_own_sizes_until_booking(self):
         self.replay(facts=dict(sizes='من 60 إلى 130 كيلو', colors='أسود، ماروني، أزرق، رصاصي'))
@@ -159,6 +267,14 @@ class HandoffReplayTests(unittest.TestCase):
         result, _ = self.send('هذا بهاري', kind='image', refs=['catalog-image'])
         self.assertEqual('human', result['action'])
         self.assertEqual('season', self.db.execute('SELECT topic FROM product_questions').fetchone()[0])
+
+    def test_photo_season_question_uses_the_saved_winter_checkbox(self):
+        self.replay(facts=dict(product_type='trousers', fabric='دبل ايطالي', description='',
+                               occasions=['everyday', 'outing', 'winter']))
+        result, out = self.send('هذا الكيلوت شتوي', kind='image', refs=['catalog-image'], ad=False)
+        self.assertEqual('continue', result['action'], result)
+        self.assertIn('شتوي', self.text(out))
+        self.active()
 
     def test_k03_today_for_an_existing_order_is_not_a_general_delivery_quote(self):
         self.replay()

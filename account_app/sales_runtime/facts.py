@@ -98,6 +98,8 @@ def requested_fields(text):
         fields.append('price')
     if weight_limit_question(clean) or re.search(r'(?:يلبس|يناسب|يرهم).{0,12}(?:يا|أي|اي)\s*وزن', clean):
         fields.append('sizes')
+    if re.search(r'\bhow\s+(?:much|many|men(?:y)?)\b|(?<!\w)(?:شكد|اشكد|جكد)\s+(?:راح\s+)?يسو[يى](?!\w)', clean):
+        fields.append('price')
     if re.search(r'(?:شوي\s+|تجي|يجي|يكون|لو|باللبس).{0,14}(?:راه[ييةه]+|ض[يي]?ك[هة]?|ضيق[هة]?)|'
                  r'(?:راه[ييةه]+|ضيق[هة]?)\s+(?:كلش|باللبس)', clean):
         fields.append('cut')

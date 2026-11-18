@@ -120,6 +120,7 @@ class Orders:
             now = datetime.now(ZoneInfo('Asia/Baghdad')).isoformat()
             names = '، '.join(i['product_name'] for i in items)
             status = COLOR_REVIEW_STATUS if held_for_color else 'new'
+            notes = '\n'.join(filter(None, (COLOR_REVIEW_STATUS if held_for_color else '', state.get('delivery_note'))))
             cursor = self.store.db.execute('''INSERT INTO orders
                 (sender_id,store_id,customer_name,phone,province,address,product_id,product_name,
                  color,size,notes,status,order_items,created_at,product_total,delivery_fee,total_amount)
@@ -128,13 +129,13 @@ class Orders:
                  contact['province'], contact['address'], ', '.join(i['product_id'] for i in items), names,
                  items[0].get('color', '') if len(items) == 1 else 'متعدد',
                  items[0].get('size', '') if len(items) == 1 else 'متعدد',
-                 COLOR_REVIEW_STATUS if held_for_color else '', status, encode(items), now,
+                 notes, status, encode(items), now,
                  quote['product_total'], quote['delivery_fee'], quote['total']))
             order_id = cursor.lastrowid
             variant_inventory.allocate(self.store.db, order_id, scope.store, items,
                                        catalog.products.values())
             booking = dict(id=order_id, sender_id=scope.sender, store_id=scope.store,
-                           created_at=now, items=items, **contact,
+                           created_at=now, items=items, notes=notes, **contact,
                            product_total=quote['product_total'], delivery_fee=quote['delivery_fee'],
                            total_amount=quote['total'], _booking_actor='ai')
             # Durable tasks survive later state versions, unlike a disposable reply draft.

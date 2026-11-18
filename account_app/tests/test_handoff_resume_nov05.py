@@ -14,6 +14,14 @@ class HandoffFacts(TestCase):
         self.assertIn('شتوي',sales_answers.season_fact(product))
         self.assertEqual(customer_copy.fact('قل للزبون قماش دبل ايطالي','fabric'),'')
 
+    def test_season_checkbox_is_used_when_no_explicit_season_is_written(self):
+        product = dict(fabric='دبل ايطالي', occasions=['outing', 'winter'])
+        self.assertEqual('شتوي', sales_answers.season_fact(product))
+        self.assertEqual([], product_questions.missing('هذا الكيلوت شتوي', product))
+        self.assertEqual('صيفي خفيف', sales_answers.season_fact(dict(product, season='صيفي خفيف')))
+        self.assertEqual('القماش بهاري لا شتوي ولا صيفي', sales_answers.season_fact(
+            dict(product, notes='القماش بهاري لا شتوي ولا صيفي')))
+
     def test_fabric_typos_and_catalogue_request_are_not_unknown_questions(self):
         product=dict(fabric='قماش تركي شتوي')
         for text in ('هاي شنو نوعيت القوماش','شنو قناش التنوره'):

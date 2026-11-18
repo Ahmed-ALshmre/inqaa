@@ -221,6 +221,10 @@ def size_range_question(product):
 
 def requested_quantity(text):
     text = sales_strategy.normalized(text)
+    words = {'ثلاث': 3, 'اربع': 4, 'أربع': 4, 'خمس': 5}
+    match = re.search(r'(?<!\w)(ثلاث[هة]?|[اأ]ربع[هة]?|خمس[هة]?)\s+قطع(?!\w)', text)
+    if match:
+        return words.get(match[1].rstrip('هة'))
     if re.search(r'قطعتين|قطعتان|ثنين', text):
         return 2
     match = re.search(r'(?<!\d)(\d+)\s*قطع', text)

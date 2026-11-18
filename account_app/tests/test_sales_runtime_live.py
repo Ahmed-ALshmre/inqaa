@@ -271,6 +271,62 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.assertEqual(('07701234567', 'بغداد', 'بغداد حي الاختبار'), tuple(order))
         self.assertEqual(CONFIRMATION, self.transport.call_args.args[2][0]['text'])
 
+    def test_shipping_details_accept_purchase_prompt_and_booking_keeps_courier_note(self):
+        m.load_products_from_file()[0].update(colors='أسود، جوزي', sizes='38 إلى 54')
+        self.incoming(10, 'الاسود قياس ٥٢')
+        decision = self.model_response(dict(intent='continue', changes=[
+            dict(values=dict(product_id='P1', color='أسود', size='52'))]))
+        wording = self.model_response(dict(parts=[
+            dict(type='text', text='تحبين نثبتلج الطلب عليه؟')]))
+        with patch.object(m.ai_transport, 'post', side_effect=[decision, wording]):
+            result = self.work()[1]
+        self.assertEqual('continue', result['action'], result)
+        self.assertIn('نثبت', self.transport.call_args.args[2][0]['text'])
+        self.transport.reset_mock()
+
+        address = 'كربلاء حي التجربة مقابل مدرسة الاختبار'
+        note = 'التوصيل بعد ال٣الظهر لان عندي دوام وماكو احد يستلم الطلب'
+        self.incoming(11, f'{address} رقم الهاتف {self.phone}\nرجاءا اكتبوا ملاحظه على الوصل {note}')
+        with patch.object(m.ai_transport, 'post') as model:
+            result = self.work()[1]
+        self.assertEqual('booked', result['action'], result)
+        model.assert_not_called()
+        self.assertEqual(CONFIRMATION, self.transport.call_args.args[2][0]['text'])
+        with m.app.app_context():
+            order = m.get_db().execute('SELECT phone,province,address,color,size,notes FROM orders').fetchone()
+            self.assertEqual((self.phone, 'كربلاء', address, 'أسود', '52', note), tuple(order))
+            task = m.get_db().execute("SELECT payload FROM sales_v2_order_tasks WHERE kind='notification'").fetchone()
+            self.assertEqual(note, json.loads(task[0])['notes'])
+
+    def test_named_color_photo_is_sent_alongside_a_separate_inspection_question(self):
+        m.load_products_from_file()[0].update(colors='أسود، جوزي')
+        variants = [dict(url=f'https://catalog.test/product_image/{name}.jpg', color=color)
+                    for name, color in [('black', 'أسود'), ('brown', 'جوزي')]]
+        request = 'بلا زحمه بس اللون الجوزي اذا موجود بلكن تدزيلي صورته\nحتى اشوف درجه الجوزي'
+        with patch.object(m, 'PUBLIC_URL', 'https://catalog.test'), \
+             patch.object(m, 'product_image_variants', return_value=variants):
+            with patch.object(m.ai_transport, 'post', return_value=self.model_response(dict(intent='continue'))):
+                self.incoming(10, request)
+                self.assertEqual('continue', self.work()[1]['action'])
+            parts = [call.args[2][0] for call in self.transport.call_args_list]
+            self.assertEqual([('image', variants[1]['url'])], [(part['type'], part.get('url')) for part in parts])
+
+            self.transport.reset_mock()
+            self.incoming(11, request)
+            self.incoming(12, 'اذا القياس مايرهم ارجعه؟')
+            explanation = self.model_response(dict(parts=[
+                dict(type='text', text='إلج حق الفحص بحضور المندوب. إذا القياس ما طابق طلبج يرجع بدون دفع. شنو قياسج؟')]))
+            with patch.object(m.ai_transport, 'post', return_value=explanation) as model:
+                self.assertEqual('conversation_changed', self.work()[1]['reason'])
+                outcome = self.work()[1]
+            self.assertFalse(outcome.get('needs_human'), outcome)
+            model.assert_called_once()
+            context = json.loads(model.call_args.kwargs['json']['messages'][-1]['content'])
+            self.assertEqual('اذا القياس مايرهم ارجعه؟', context['customer_message'])
+            parts = [call.args[2][0] for call in self.transport.call_args_list]
+            self.assertEqual(('image', variants[1]['url']), (parts[0]['type'], parts[0]['url']))
+            self.assertTrue(any('يرجع' in part.get('text', '') for part in parts[1:]))
+
     def test_photo_followup_waits_for_the_attachment_to_be_accepted(self):
         self.incoming(10, 'إي، أريد صورة')
         self.transport.return_value = {'ok': False, 'status_code': 422}
