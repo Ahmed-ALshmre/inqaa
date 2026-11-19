@@ -54,11 +54,18 @@ def enqueue(db, store, sender, kind, payload, key, delay=0, *, commit=True):
         # partial deliveries still require review instead of replaying work.
         db.execute("UPDATE ai_jobs SET status='queued',result=NULL,available_at=?,owner=NULL,started_at=NULL,finished_at=NULL WHERE id=? AND status='failed'",
                    (now + delay, old['id']))
-    db.execute('''INSERT OR IGNORE INTO ai_jobs
+    inserted = db.execute('''INSERT OR IGNORE INTO ai_jobs
         (id,store_id,sender_id,kind,dedupe_key,payload,created_at,available_at)
         VALUES(?,?,?,?,?,?,?,?)''',
         (uuid.uuid4().hex, store, sender, kind, identity,
-         json.dumps(payload, ensure_ascii=False), now, now + delay))
+         json.dumps(payload, ensure_ascii=False), now, now + delay)).rowcount
+    if inserted and kind in {'webhook', 'sales_runtime'}:
+        # Intake has already stored every message/media before enqueueing.
+        # Only the newest inbound job may run after the quiet window; an old
+        # queued job must not start inference while newer messages accumulate.
+        db.execute("""UPDATE ai_jobs SET status='done',finished_at=?,result=?
+            WHERE store_id=? AND sender_id=? AND kind=? AND status='queued' AND dedupe_key<>?""",
+            (now, json.dumps(dict(ok=True, reason='superseded_by_newer_message')), store, sender, kind, identity))
     if commit:
         db.commit()
     return dict(db.execute('SELECT * FROM ai_jobs WHERE dedupe_key=?', (identity,)).fetchone())

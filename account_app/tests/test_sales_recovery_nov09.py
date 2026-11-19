@@ -85,11 +85,11 @@ class SalesFactsNov09Tests(unittest.TestCase):
         self.assertNotIn('إذا',repaired);self.assertIn('الفحص',repaired);self.assertIn('شنو القياس',repaired)
 
     def test_bounded_debounce_keeps_a_burst_window(self):
-        for q,kind,expected in [('07700000001','text',4),('اريد النيلي قياس 44','text',4),
-                                ('شنو قماشها','text',6),('','image',8)]:
+        for q,kind,expected in [('07700000001','text',20),('اريد النيلي قياس 44','text',20),
+                                ('شنو قماشها','text',20),('','image',20)]:
             self.assertEqual(sales_progress.debounce_seconds(q,kind,35),expected)
             self.assertEqual(sales_progress.debounce_seconds(q,kind,0),0)
-            self.assertEqual(sales_progress.debounce_seconds(q,kind,1),1)
+            self.assertEqual(sales_progress.debounce_seconds(q,kind,1),20)
 
     def test_natural_warmth_is_not_removed_by_turn_counter(self):
         h=[dict(direction='outgoing',text='حبيبتي قياسج متوفر')]

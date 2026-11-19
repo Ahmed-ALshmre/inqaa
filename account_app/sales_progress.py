@@ -107,13 +107,7 @@ def unique_category_product(text, products, store_id):
 
 
 def debounce_seconds(text, message_type, configured):
-    """Keep a burst collection window without a legacy 35-second sales pause."""
+    """Collect the entire customer burst for twenty seconds after its last event."""
     if configured <= 0:
         return 0
-    if message_type != 'text':
-        return min(configured, 8)
-    # Even contact/variant messages wait briefly for the other half of a burst.
-    short_choice = (phone_number(text) or contact_fields(text)
-                    or product_variants.requested(text)['sizes']
-                    or product_variants.requested(text)['colors'])
-    return min(configured, 4 if short_choice else 6)
+    return 20

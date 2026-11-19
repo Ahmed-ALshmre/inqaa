@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import requests
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from account_app.tests.test_sales_runtime_linking import LinkingTests
@@ -21,7 +22,7 @@ def main():
         raise SystemExit('QA_OPENROUTER_API_KEY required')
     model=os.environ.get('QA_DECISION_MODEL','google/gemini-3.8-flash')
     writer_model=os.environ.get('QA_WRITER_MODEL','google/gemini-3.8-flash')
-    output=Path('outputs/sales-runtime-linking-live');output.mkdir(parents=True,exist_ok=True)
+    output=Path(os.environ.get('QA_OUTPUT_DIR', 'outputs/sales-runtime-linking-live'));output.mkdir(parents=True,exist_ok=True)
     scenarios=[('تصحيح اللون وبيانات متفرقة',[
         'هلا حبيبتي هذا شنو قماشه؟',
         'قياس 44 موجود؟',
@@ -40,13 +41,49 @@ def main():
         'اريد الازرق قياس 44 قطعة وحدة',
         '07701234567',
         'بغداد حي الاختبار قرب مدرسة التجربة'])]
+    if os.environ.get('QA_EXTENDED') == '1':
+        scenarios = [
+            ('اختيار ثم بيانات برسالة واحدة وعلامات اتجاه', [
+                'سلام عليكم', 'شنو قماشه؟', 'قياس 44 موجود؟', 'اريد الماروني قياس 44',
+                'لا خلي ازرق نفس القياس', '\u202d0770 123 4567\u202c بغداد حي الاختبار قرب المدرسة']),
+            ('استفسار السعر ليس شراء ثم حجز حقيبة', [
+                'الحقيبة السوداء شكد سعرها؟', 'اريد حقيبة سوداء وحدة', 'تحتاجين وزني لو قياسي؟',
+                'هذا رقمي 07701234567', 'البصرة حي الاختبار قرب مدرسة التجربة ثبتيلي']),
+            ('حوار طويل مع أسئلة جانبية ورقم قبل العنوان', [
+                'السلام عليكم', 'شنو خامته؟', 'قياس 44 موجود؟', 'شنو ألوانه؟',
+                'شكد سعره؟', 'شلون الدفع؟', 'التوصيل لبغداد شكد؟', 'وشوكت يوصل؟',
+                'إذا ما عجبني أكدر أفحصه؟', 'أريد الماروني قياس 44 قطعة وحدة',
+                'لا بدلي الأزرق ونفس القياس', '07701234567', 'تمام',
+                'شلون الدفع؟', 'بغداد حي الاختبار قرب المدرسة']),
+            ('عنوان قبل الرقم وأسئلة بينهما', [
+                'هلا', 'أريد الأزرق قياس 44', 'بغداد حي الاختبار قرب المدرسة',
+                'شكد التوصيل؟', 'الدفع عند الاستلام؟', '\u202d0770 123 4567\u202c']),
+        ]
     reports=[]
+    selected_cases = set(os.environ.get('QA_CASES', '').split(',')) - {''}
     for index,(name,messages) in enumerate(scenarios):
+        if selected_cases and str(index + 1) not in selected_cases:
+            continue
         fixture=LinkingTests();fixture.setUp()
         fixture.products[0].update(fabric='قديفة شتوي',description='قميص شتوي')
         fixture.products[1].update(description='حقيبة نسائية',ad_ids=['bag-ad'])
+        wire = []
+        def transport(stage):
+            def post(url, **kwargs):
+                try:
+                    response = requests.post(url, **kwargs)
+                except requests.RequestException as exc:
+                    wire.append(dict(stage=stage, error=type(exc).__name__))
+                    raise
+                wire.append(dict(stage=stage, status=response.status_code))
+                return response
+            return post
         entry=Entrypoint(fixture.db,lambda sid:fixture.products,lambda sid,p:5000,
-                         DecisionGateway(model,key),writer=WriterGateway(writer_model,key))
+                         DecisionGateway(model,key, post=transport('decision')),
+                         writer=WriterGateway(writer_model,key, post=transport('writer')),
+                         policy_loader=lambda sid: dict(payment='الدفع عند الاستلام', delivery_time='24 ساعة إلى يومين',
+                             delivery_fee={'بغداد':5000,'البصرة':5000},
+                             inspection_policy='فحص الطلب بحضور المندوب قبل الدفع؛ إذا لم يطابق يرجع بدون دفع'))
         entry.migrate()
         scope=Scope('khuyoot','chatwoot','qa-account',f'qa-customer-{index}')
         report=dict(name=name,turns=[],model=model,writer=writer_model)
@@ -83,13 +120,16 @@ def main():
             orders=report['orders']
             checks=dict(completed=len(report['turns'])==len(messages) and not any(t.get('error') for t in report['turns']),
                         exactly_one_order=len(orders)==1,
-                        product_correct=len(orders)==1 and orders[0]['product_id']==expected)
+                        product_correct=len(orders)==1 and orders[0]['product_id']==expected,
+                        decision_provider_reached=any(c.get('status') == 200 and c['stage'] == 'decision' for c in wire),
+                        writer_provider_reached=any(c.get('status') == 200 and c['stage'] == 'writer' for c in wire))
             if len(orders)==1:
                 lines=json.loads(orders[0]['order_items'])
                 checks['choice_correct']=(len(lines)==1 and lines[0]['quantity']==1 and
                     (lines[0]['size']=='' if index==1 else lines[0]['size']=='44' and lines[0]['color']=='أزرق'))
             report['checks']=checks
             report['passed']=all(checks.values())
+            report['provider_calls']=wire
             report['contract_diagnostics']=entry.runtime.decide.failures
             report['model_attempts']=[dict(stage=r[0],status=r[1],error_code=r[2]) for r in fixture.db.execute(
                 'SELECT stage,status,error_code FROM sales_v2_model_attempts ORDER BY id')]
@@ -107,6 +147,7 @@ def main():
         lines.extend([f'الطلبات المحفوظة: {len(report.get("orders",[]))}',''])
         lines.extend([f'اجتياز حالة السلة والحجز: {report.get("passed",False)}',''])
     (output/'المحادثات.md').write_text('\n'.join(lines),encoding='utf8')
+    return 0 if reports and all(report['passed'] for report in reports) else 1
 
 
-if __name__=='__main__':main()
+if __name__=='__main__':raise SystemExit(main())

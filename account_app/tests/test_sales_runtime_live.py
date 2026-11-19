@@ -61,6 +61,11 @@ class LiveSalesRuntimeTests(unittest.TestCase):
                 return job['kind'], result
         return None
 
+    def assert_one_pending_burst(self):
+        with m.app.app_context():
+            self.assertEqual(1, m.get_db().execute(
+                "SELECT COUNT(*) FROM ai_jobs WHERE sender_id=? AND status='queued'", (self.sender,)).fetchone()[0])
+
     def model_plan(self, *, intent='buy', color='أزرق'):
         return dict(intent=intent, changes=[dict(values=dict(product_id='P1', size='44', color=color))],
                     contact={'phone': self.phone, 'address': self.address})
@@ -222,7 +227,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.incoming(11, 'حي التجربة')
         self.incoming(12, 'الموصل')
         with patch.object(m.ai_transport, 'post') as model:
-            self.assertEqual('conversation_changed', self.work()[1]['reason'])
+            self.assert_one_pending_burst()
             self.assertEqual('continue', self.work()[1]['action'])
             self.transport.assert_called_once()
             self.assertEqual('حبيبتي، باقي بس رقم الموبايل حتى أثبت الحجز.',
@@ -277,11 +282,11 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         decision = self.model_response(dict(intent='continue', changes=[
             dict(values=dict(product_id='P1', color='أسود', size='52'))]))
         wording = self.model_response(dict(parts=[
-            dict(type='text', text='تحبين نثبتلج الطلب عليه؟')]))
+            dict(type='text', text='دزيلي رقم الموبايل والعنوان حتى أثبت الحجز.')]))
         with patch.object(m.ai_transport, 'post', side_effect=[decision, wording]):
             result = self.work()[1]
         self.assertEqual('continue', result['action'], result)
-        self.assertIn('نثبت', self.transport.call_args.args[2][0]['text'])
+        self.assertIn('رقم الموبايل', self.transport.call_args.args[2][0]['text'])
         self.transport.reset_mock()
 
         address = 'كربلاء حي التجربة مقابل مدرسة الاختبار'
@@ -317,7 +322,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             explanation = self.model_response(dict(parts=[
                 dict(type='text', text='إلج حق الفحص بحضور المندوب. إذا القياس ما طابق طلبج يرجع بدون دفع. شنو قياسج؟')]))
             with patch.object(m.ai_transport, 'post', return_value=explanation) as model:
-                self.assertEqual('conversation_changed', self.work()[1]['reason'])
+                self.assert_one_pending_burst()
                 outcome = self.work()[1]
             self.assertFalse(outcome.get('needs_human'), outcome)
             model.assert_called_once()
@@ -420,8 +425,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             text='ما أگدر أضمن الوصول اليوم. عادةً التوصيل من 24 ساعة إلى يومين.')]))
         with patch.object(live.ImageObserver, '__call__', return_value=dict(status='unavailable')), \
              patch.object(m.ai_transport, 'post', side_effect=[price, timing]) as model:
-            self.assertEqual('conversation_changed', self.work()[1]['reason'])
-            self.assertEqual('conversation_changed', self.work()[1]['reason'])
+            self.assert_one_pending_burst()
             self.assertEqual('continue', self.work()[1]['action'])
         first_input = json.loads(model.call_args_list[0].kwargs['json']['messages'][-1]['content'])
         self.assertEqual('يوصلن اليوم عنواني بغداد', first_input['customer_message'])
@@ -759,7 +763,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         plan = self.model_response(dict(intent='continue'))
         wording = self.model_response(dict(parts=[dict(type='text', text='سعره {{unit_price}}. شكد قياس تلبسين؟')]))
         with patch.object(m.ai_transport, 'post', side_effect=[plan, wording]) as model:
-            self.assertEqual('conversation_changed', self.work()[1]['reason'])
+            self.assert_one_pending_burst()
             self.assertEqual('continue', self.work()[1]['action'])
         context = json.loads(model.call_args_list[0].kwargs['json']['messages'][-1]['content'])
         self.assertEqual('شكد سعره؟', context['event']['text'])
@@ -771,8 +775,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
             self.incoming(mid, text)
         self.incoming(13, self.address)
         with patch.object(m.ai_transport, 'post', return_value=self.model_response(self.model_plan())) as model:
-            for _ in range(3):
-                self.assertEqual((live.JOB_KIND, {'ok': True, 'reason': 'conversation_changed'}), self.work())
+            self.assert_one_pending_burst()
             kind, result = self.work()
         self.assertEqual((live.JOB_KIND, 'booked'), (kind, result.get('action')), result)
         self.assertEqual(1, model.call_count)
@@ -959,8 +962,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
              patch.object(m, 'product_image_variants', side_effect=variants), \
              patch.object(m, 'select_product_image_urls', side_effect=color_urls), \
              patch.object(m.ai_transport, 'post') as post:
-            for _ in range(7):
-                self.assertEqual('conversation_changed', self.work()[1]['reason'])
+            self.assert_one_pending_burst()
             self.assertEqual('continue', self.work()[1]['action'])
         post.assert_not_called()
         parts = [call.args[2][0] for call in self.transport.call_args_list]
@@ -1360,7 +1362,7 @@ class LiveSalesRuntimeTests(unittest.TestCase):
         self.incoming(10, 'إنتِ AI؟')
         self.incoming(11, 'زين شكد سعره؟')
         with patch.object(m.ai_transport, 'post') as post:
-            self.work()
+            self.assert_one_pending_burst()
             self.assertTrue(self.work()[1]['needs_human'])
             self.incoming(12, 'متوفر؟')
             self.assertEqual('ai_disabled', self.work()[1]['reason'])

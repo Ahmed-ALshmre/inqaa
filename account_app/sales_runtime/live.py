@@ -436,6 +436,8 @@ def make_entry(module, db, scope, allow_write):
         binding = module.get_active_product_binding(db, current.sender)
         if binding:
             product = next((item for item in active if item['product_id'] == binding['product_id']), None)
+            if not product and binding['product_id'] in catalog.products:
+                return dict(source='conversation', product_id=binding['product_id'])
             if product and module.select_customer_context_product(text, [product]):
                 return dict(source='conversation', product_id=product['product_id'])
             return None

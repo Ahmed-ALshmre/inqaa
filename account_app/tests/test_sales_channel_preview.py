@@ -227,15 +227,17 @@ class ChannelPreviewTests(unittest.TestCase):
             self.assertEqual(1,db.execute('SELECT COUNT(*) FROM orders').fetchone()[0])
             self.assertEqual('unknown',db.execute("SELECT status FROM sales_v2_order_tasks WHERE kind='confirmation'").fetchone()[0])
 
-    def test_different_photo_leaves_existing_cart_for_staff(self):
+    def test_different_photo_preserves_existing_cart_while_discussing_the_new_product(self):
         self.incoming('chatwoot', 1, photo=self.photo_url)
         self.incoming('chatwoot', 2, 'أريد عنابي قياس 44')
         before = self.post.call_count
         result = self.incoming('chatwoot', 3, photo=self.alternate_url).get_json()
-        self.assertEqual('human',result['action'])
-        self.assertEqual(before,self.post.call_count)
+        self.assertEqual('continue',result['action'])
+        self.assertGreater(self.post.call_count,before)
         with app_module.app.app_context():
             scope = Scope('default','chatwoot','1','default::cw-1-3')
             state = self.preview.entry().store.snapshot(scope)['data']
             self.assertEqual(['P1'],[row['product_id'] for row in state['cart']])
-            self.assertEqual('image_changes_existing_cart',state['handoff_reason'])
+            self.assertEqual('P2',state['focus_product_id'])
+            self.assertEqual('active',state['control_mode'])
+            self.assertEqual(0,app_module.get_db().execute('SELECT COUNT(*) FROM orders').fetchone()[0])

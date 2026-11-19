@@ -16,6 +16,22 @@ from .recovery import catalog_photo_request, clothing_size_label, skirt_length_r
 from .wording import checkout_question, fact_recovery_parts, mentions_free_size, natural_weight_wording, next_options, quote_amounts, render_amounts, validate_next_step
 
 
+def question_before_photo(messages):
+    """Recover the question a new photo answers, stopping at a real prior answer."""
+    for message in reversed(messages[:-1][-8:]):
+        previous = message.get('text', '')
+        if message['actor'] != 'customer':
+            if re.search(r'صور[ةه]|سكرين|اسم\s+(?:الموديل|القطع[ةه])', checkout.normalized(previous)):
+                continue
+            break
+        if message.get('media_kind') == 'image':
+            break
+        if not previous.strip() or checkout.is_confirmation(previous):
+            continue
+        return previous if requested_fields(previous) or 'availability' in sales_answers.topics(previous) else ''
+    return ''
+
+
 class Responses:
     def __init__(self, store, catalog_loader, writer,policy_loader=None, *, backup=None, product_photos=None,
                  history_loader=None):
@@ -54,7 +70,7 @@ class Responses:
                                      (scope.key,key)).fetchone()
         if saved:
             record=json.loads(saved[0])
-            self.store.enqueue_reply(scope,reply_key,record['state_version'],record['parts'])
+            self.enqueue_parts(scope, reply_key, record['state_version'], record['parts'])
             return dict(action='queued',parts=len(record['parts']))
         if mode == 'cancelled' and self.store.db.execute(
             'SELECT 1 FROM sales_v2_outbox WHERE scope=? AND reply_key=?', (scope.key, reply_key),
@@ -82,6 +98,9 @@ class Responses:
                                       (scope.key,)).fetchall()
         accepted=[json.loads(row[0]) for row in reversed(replies)]
         current=messages[-1].get('text','') if messages else ''
+        if (not current.strip() and messages and messages[-1].get('media_kind') == 'image'
+                and snap['data'].get('media_observations', {}).get(str(turn_id), {}).get('status') == 'matched'):
+            current = question_before_photo(messages)
         clean = checkout.normalized(current).strip(' .،!؟?')
         new_salam = bool(re.match(r'(?:ال)?سلام\s+عليكم(?!\w)|(?:و\s*)?عليكم\s+السلام(?!\w)', clean))
         new_welcome = bool(re.match(r'(?:هلو|هلا|اهلا|مرحبا|صباح الخير|مساء الخير)(?!\w)', clean))
@@ -147,6 +166,22 @@ class Responses:
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if not current.strip() and messages and messages[-1].get('media_kind', 'text') == 'text':
             return dict(action='skipped')
+        if unavailable_id := outcome.get('unavailable_product'):
+            source = catalog.products[unavailable_id]
+            family = catalog_profile.effective_family(source)
+            candidates = [p for p in catalog.products.values() if p.get('status', 'active') == 'active'
+                          and product_albums.stock_state(p) == 'available'
+                          and family and catalog_profile.effective_family(p) == family]
+            photos = [photo for p in candidates for photo in
+                      (self.product_photos(p, [])[:1] if self.product_photos else [])]
+            context = dict(mode='continue', customer_message=current, recent_messages=messages,
+                recent_replies=accepted, question_field='product' if photos else None,
+                next_step=dict(field='product' if photos else None, options=[]), greeting=greeting,
+                amounts={}, action_results=dict(photos_attached=bool(photos)), copy_budget=230,
+                unavailable_product=dict(product_id=unavailable_id, available=False),
+                available_alternative_photos=len(photos))
+            parts = self.write(context, catalog, scope, turn_id, snap['version'])
+            return self.save(scope, key, reply_key, turn_id, snap['version'], [*photos, *parts])
         readiness = CartService(self.store,catalog).readiness(scope)
         plan = outcome.get('answer_plan', {})
         question = plan.get('question_field')
@@ -199,6 +234,18 @@ class Responses:
                                   and messages[-1].get('media_kind') == 'image'
                                   and (not current.strip() or checkout.is_confirmation(current)))
         if outcome.get('alternatives_requested') and self.product_photos:
+            if outcome.get('all_models_requested'):
+                search = current + '\n' + '\n'.join(m.get('text', '') for m in messages[-8:])
+                matches = alternatives(catalog, focus, search, requested=True, limit=None)['matches']
+                photos = [photo for match in matches for photo in
+                          self.product_photos(catalog.get(match['product_id']), [])[:1]]
+                context = dict(mode='continue', customer_message=current, recent_messages=messages,
+                    recent_replies=accepted, question_field='product' if photos else None,
+                    next_step=dict(field='product' if photos else None, options=[]), greeting=greeting,
+                    amounts={}, action_results=dict(photos_attached=bool(photos)), copy_budget=145,
+                    available_alternative_photos=len(photos))
+                parts = self.write(context, catalog, scope, turn_id, snap['version'])
+                return self.save(scope, key, reply_key, turn_id, snap['version'], [*photos, *parts])
             if market['offer_kind']:
                 parts = self.catalog_offer_parts(catalog, state, market)
                 return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
@@ -494,7 +541,12 @@ class Responses:
                         and not state.get('purchase_event')):
                     question = 'purchase_intent'
             elif selected and not cart_missing and not readiness['conditions'] and not state.get('purchase_event'):
-                question = 'purchase_intent'
+                pending_purchase = any(p.get('question_field') == 'purchase_intent' and p.get('cart_key') == digest(lines)
+                                       for p in accepted)
+                question = ('purchase_intent' if pending_purchase else
+                            'contact.details' if {'contact.phone', 'contact.address'} <= set(missing) else
+                            next((f for f in ('contact.phone', 'contact.address', 'contact.province') if f in missing),
+                                 'purchase_intent'))
         if acknowledgment and not quote_turn:
             # An acknowledgment alone did not answer a pending color or size question.
             # A new purchase confirmation can move directly to the contact step.
@@ -912,6 +964,10 @@ class Responses:
 
     def answer_pending_photo(self, scope, turn_id, outcome, catalog, policy, current, messages, accepted, greeting, contact):
         """Discuss a possible campaign product without applying it to the cart."""
+        if outcome.get('latest_verified_image') and not current.strip():
+            # A photo can be the answer to our request for a product reference.
+            # Keep the customer's pending question instead of starting a price pitch.
+            current = question_before_photo(messages)
         requested = requested_fields(current)
         wants_photos = catalog_photo_request(current)
         wants_purchase = not wants_photos and 'price' not in requested and purchase_selected(current)
@@ -1158,6 +1214,7 @@ class Responses:
         from ..customer_copy import public_product_wording
         question = context['question_field']
         copy_guard_enabled = os.getenv('SALES_VALIDATE_COPY', '1') != '0'
+        validate_fulfillment(parts, context['action_results'])
         if copy_guard_enabled:
             validate_copy(parts, question, context['action_results'])
         advice = (context.get('consultant_guidance') or {}).get('guidance', '')
@@ -1269,7 +1326,7 @@ class Responses:
             sales_turn = context.get('mode') == 'continue' and not context['action_results'].get('order_saved')
             layout = reply_layout.plan_sales_bubbles(
                 {'_human_sales_voice': True, '_short_sales_bubbles': sales_turn}, text)
-            bubble_limit = 240 if sales_turn and not layout['exception'] else 270
+            bubble_limit = 165 if sales_turn and not layout['exception'] else 270
             if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > bubble_limit for part in layout['reply_parts']):
                 raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
             parts = [dict(type='text', text=part) for part in layout['reply_parts']]
@@ -1300,5 +1357,12 @@ class Responses:
 
     def save(self, scope, key, reply_key, turn_id, version, parts):
         record = self.store.apply(scope, key, version, dict(turn_id=turn_id), lambda state: dict(parts=parts))['result']
-        self.store.enqueue_reply(scope, reply_key, record['state_version'], record['parts'])
+        self.enqueue_parts(scope, reply_key, record['state_version'], record['parts'])
         return dict(action='queued',parts=len(parts))
+
+    def enqueue_parts(self, scope, key, version, parts):
+        # Each transport batch keeps the existing five-part contract. Persist
+        # every batch atomically so a restart never leaves half an album queued.
+        batches = [(key if len(parts) <= 5 else f'{key}:batch:{start // 5}', parts[start:start + 5])
+                   for start in range(0, len(parts), 5)]
+        self.store.enqueue_reply_batches(scope, version, batches)

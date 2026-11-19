@@ -125,7 +125,7 @@ class MessagingMediaTests(unittest.TestCase):
         finally:
             self.m._current_store_id.reset(token)
 
-    def test_catalog_photo_inside_phone_screenshot_resolves_in_each_store(self):
+    def test_catalog_photo_inside_phone_screenshot_with_carousel_badge_resolves_in_each_store(self):
         original = Image.new('RGB', (512, 512), '#c6a78a')
         draw = ImageDraw.Draw(original)
         draw.polygon([(211, 86), (329, 120), (460, 415), (120, 447), (45, 294)], fill='#26313a')
@@ -139,6 +139,8 @@ class MessagingMediaTests(unittest.TestCase):
             screenshot = Image.new('RGB', (612, 1340), '#202126')
             screenshot.paste(reference.resize((568, 568), Image.Resampling.LANCZOS), (21, 72))
         overlay = ImageDraw.Draw(screenshot)
+        overlay.rounded_rectangle((530, 111, 570, 138), radius=12, fill='#9a8470')
+        overlay.text((538, 117), '1/4', fill='#ded3c7')
         overlay.rectangle((280, 607, 331, 636), fill='#404144')
         overlay.rounded_rectangle((35, 855, 500, 960), radius=26, fill='#36383c')
         result = io.BytesIO()
@@ -179,7 +181,8 @@ class MessagingMediaTests(unittest.TestCase):
         self.assertFalse(result['create_order'])
 
     def test_both_catalog_sheets_are_sent_for_lamsa(self):
-        products = [{'product_id':'P005','product_name':'Suit','image_url':'https://images.test/suit.jpg'}]
+        # Uploaded sheets remain a fallback only when products have no current labelled photos.
+        products = [{'product_id':'P005','product_name':'Suit'}]
         import base64, io
         from PIL import Image
         references = []
@@ -193,6 +196,22 @@ class MessagingMediaTests(unittest.TestCase):
         content = post.call_args.kwargs['json']['messages'][0]['content']
         images = [item['image_url']['url'] for item in content if item['type']=='image_url']
         self.assertEqual(images, ['https://images.test/customer.jpg'] + references)
+
+    def test_lamsa_uses_labelled_photos_including_unavailable_identity_not_stale_sheets(self):
+        products = [dict(product_id='P007',status='active',image_url='https://images.test/active.jpg'),
+                    dict(product_id='P013',status='hidden',image_url='https://images.test/hidden.jpg')]
+        token = self.m._current_store_id.set('default')
+        try:
+            with patch.object(self.m,'is_store_feature_enabled',side_effect=lambda key,*_: key=='catalog_match_enabled'), \
+                 patch.object(self.m,'confirm_with_vision',return_value=dict(product_found=True,product_id='P007')) as compare, \
+                 patch.object(self.m,'_resolve_catalog_image_paths') as old_sheets:
+                result = self.m.match_customer_image_with_catalog('https://images.test/customer.jpg',products)
+            self.assertEqual('P007',result['product_id'])
+            self.assertEqual('labelled_product_images',result['reference_source'])
+            self.assertEqual(['P007','P013'],[p['product_id'] for p in compare.call_args.args[1]])
+            old_sheets.assert_not_called()
+        finally:
+            self.m._current_store_id.reset(token)
 
     def test_all_images_survive_extraction_storage_and_api(self):
         body=self.body([{'type':'image','payload':{'url':f'https://images.test/{i}.jpg'}} for i in range(3)])

@@ -104,6 +104,8 @@ class ImageObserver:
                            product_ids=sorted(matches), positions=positions)
         if len(matches) == 2:
             observation['verified_pair'] = True
+        if len(matches) > 1 and latest_match:
+            observation['latest_match'] = latest_match
         if len(matches) == 1 and len(colors) == 1 and '' not in colors:
             observation['observed_color'] = next(iter(colors))
         return observation

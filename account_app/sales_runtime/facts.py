@@ -6,7 +6,7 @@ except ImportError:
     import sales_answers,sales_strategy,customer_copy
 
 PRODUCT_FACT_FIELDS=('fabric','description','notes','colors','sizes','price','offer','product_type','size_system','stock','wholesale',
-                     'length','width','stretch','lining','closure','cut','care','season','fabric_feel','origin','composition','faq')
+                     'length','width','thigh_width','stretch','lining','closure','cut','care','season','fabric_feel','origin','composition','faq')
 POLICY_FIELDS=('inspection_policy','delivery_time','delivery_fee','payment','shop_address')
 
 
@@ -48,7 +48,7 @@ def product_fact(product,field):
         return dict(field=field, value='، '.join(options) if options else 'ماكو خيارات متوفرة حالياً')
     if field=='sizes' and product.get('size_system')=='none':return dict(field='size_system',value='none')
     if field=='fabric':value=customer_copy.fact(product.get('fabric'))
-    elif field in {'length','width'}:value=sales_strategy.measurement_fact(product,field)
+    elif field in {'length','width','thigh_width'}:value=sales_strategy.measurement_fact(product,field)
     elif field=='season':value=sales_answers.season_fact(product)
     elif field=='fabric_feel':value=sales_answers.fabric_feel_fact(product) or staff_fabric_feel(product)
     elif field=='care':value=sales_answers.care_fact(product)
@@ -82,6 +82,8 @@ def requested_fields(text):
              'delivery_time':'delivery_time','delivery':'delivery_fee','location':'shop_address'}
     fields=[mapping[t] for t in sales_answers.topics(text) if t in mapping]
     clean=customer_copy.normalized(text)
+    if re.search(r'عرض\s*(?:ال)?فخذ|فخذ.{0,12}(?:شكد|كم|عرض)', clean):
+        fields = [field for field in fields if field != 'width'] + ['thigh_width']
     from .photo_orders import refers_to_sent_choices
     if refers_to_sent_choices(clean):
         fields = [field for field in fields if field not in {'colors', 'sizes'}]
@@ -138,13 +140,14 @@ def only_same_day_question(text):
             and set(requested_fields(text)) <= {'delivery_time'})
 
 
-def alternatives(catalog,focus,text, *, requested=False):
+def alternatives(catalog,focus,text, *, requested=False, limit=5):
     clean=customer_copy.normalized(text)
     if not requested and not re.search(r'بديل|موديل\s*ثاني|موديلات\s*اخر|غير\s*موديل',clean):return None
     from ..product_albums import stock_state
     from ..product_links import _category
     source=catalog.get(focus) if focus else {}
-    category = _category(source) if source else None
+    from ..catalog_profile import query_type
+    category = _category(source) if source else query_type(text)
     wanted='صيف' if 'صيف' in clean else 'شتو' if 'شتو' in clean else None
     length=product_fact(source,'length') if 'الطول' in clean else None
     matches=[]
@@ -157,7 +160,7 @@ def alternatives(catalog,focus,text, *, requested=False):
         candidate_length=product_fact(product,'length')
         if length and (not candidate_length or candidate_length['value']!=length['value']):continue
         matches.append({k:product.get(k) for k in ('product_id','reply_category','product_type_label','colors','sizes','price','offer')})
-    return dict(matches=matches[:5],searched=True,requested_season=wanted,same_length=bool(length))
+    return dict(matches=matches if limit is None else matches[:limit],searched=True,requested_season=wanted,same_length=bool(length))
 
 
 def choice_alternatives(catalog,feedback):

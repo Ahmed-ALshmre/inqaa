@@ -162,10 +162,11 @@ class LinkingTests(unittest.TestCase):
 
     def test_catalog_reloaded_before_commit(self):
         self.select()
-        def change_catalog(context):
+        original_fee = self.orders.delivery_fee
+        def change_catalog(store, province):
             self.products[0]['stock'] = 'نفذ'
-            return dict(intent='buy', contact=dict(phone='07701234567',address='بغداد حي المنصور قرب المدرسة'))
-        self.runtime.decide = change_catalog
+            return original_fee(store, province)
+        self.orders.delivery_fee = change_catalog
         with self.assertRaisesRegex(Conflict, 'checkout_stock_not_confirmed'):
             self.runtime.turn(self.scope, self.event('حجزيلي 07701234567 بغداد حي المنصور قرب المدرسة'))
 
@@ -307,9 +308,10 @@ class LinkingTests(unittest.TestCase):
                   message_id='image',media_kind='image',media_ref='catalog-test-image')
         result=entry.receive(**args)
         self.assertEqual('continue',result['action'])
-        context=self.decide.call_args.args[0]
-        self.assertEqual(['P1'],next(iter(context['state']['media_observations'].values()))['product_ids'])
-        self.assertEqual([],context['state']['cart'])
+        state=entry.store.snapshot(Scope('khuyoot','zernio','a','test-photo'))['data']
+        self.assertEqual(['P1'],next(iter(state['media_observations'].values()))['product_ids'])
+        self.assertEqual([],state['cart'])
+        self.decide.assert_not_called()
         entry.receive(**args)
         media.assert_called_once()
 

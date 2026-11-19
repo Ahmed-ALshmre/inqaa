@@ -36,6 +36,10 @@ class References:
             return dict(status='known', source='presentation', **choice)
         if media and media.get('status') == 'matched':
             product_id, = media['product_ids']
+            # Recognizing an old catalogue photo must not make a hidden item
+            # available, nor force it onto a different currently active item.
+            if self.catalog.products.get(product_id, {}).get('status', 'active') != 'active':
+                return dict(status='unavailable', source='image', product_id=product_id)
             product = self.catalog.get(product_id)
             reference = dict(status='known', source='image', product_id=product_id)
             observed = product_variants.single_color(media.get('observed_color'))

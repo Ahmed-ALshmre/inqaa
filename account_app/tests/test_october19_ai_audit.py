@@ -98,7 +98,7 @@ class October19AuditTests(unittest.TestCase):
             self.assertFalse(sales_recovery.simple_photo_request(text),text)
             self.assertIsNone(self.m.offered_product_photo_reply({'text':text},CATALOG,CATALOG[0]))
 
-    def test_policy_queue_has_no_collection_delay_while_orders_keep_it(self):
+    def test_policy_and_order_messages_share_the_twenty_second_collection_window(self):
         self.customer('fast-faq')
         with patch.object(self.m,'DEBOUNCE_DELAY',35), patch.object(self.m.zernio,'enabled_for_store',return_value=False):
             for text in ['شكد التوصيل؟','اريد قطعتين اسود قياس 44']:
@@ -107,8 +107,8 @@ class October19AuditTests(unittest.TestCase):
                 self.m._process_manychat_webhook_async(body,'fast-faq','facebook',background_after_intake=True)
         jobs=self.db.execute('SELECT created_at,available_at FROM ai_jobs ORDER BY rowid').fetchall()
         self.assertEqual(len(jobs),2)
-        self.assertAlmostEqual(jobs[0]['available_at']-jobs[0]['created_at'],0)
-        self.assertAlmostEqual(jobs[1]['available_at']-jobs[1]['created_at'],4)
+        self.assertAlmostEqual(jobs[0]['available_at']-jobs[0]['created_at'],20)
+        self.assertAlmostEqual(jobs[1]['available_at']-jobs[1]['created_at'],20)
 
     def test_claim_to_have_sent_models_is_detected_even_without_word_photo(self):
         text='تدللين عيني، شوفي الخاص دزيتلج الموديلات الشرعية السادة المتوفرة عدنا، كليلي يا قياس يناسبج؟'

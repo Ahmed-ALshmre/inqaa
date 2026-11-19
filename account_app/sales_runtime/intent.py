@@ -164,6 +164,13 @@ def accepts_purchase_prompt(state, reply):
             and bool(state['cart']) and reply.get('cart_key') == digest(state['cart']))
 
 
+def complete_choice(state):
+    return bool(state['cart']) and all(
+        line.get('color') and (line.get('size_system') == 'none' or line.get('size')
+                              or line.get('age_months') is not None or line.get('weight_kg') is not None)
+        for line in state['cart'])
+
+
 def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, confirmed_color_correction=False):
     from .negotiation import pushback, request
     text=evidence['payload'].get('text','');value=normalized(text)
@@ -184,7 +191,7 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, con
     selection = bool(confirmed_color_correction or purchase_selected(text) or direct_color(text) or direct_clothing_size(text)
                      or explicit_color_order(text, accept_pair=bool(state.get('purchase_event')))
                      or product_variants.weight_answer(text, weight_question) or fit_preference)
-    if (purchase_declined(value) and not confirmed_color_correction and not variant_inquiry) or (
+    if explicit_cancellation(value) or (purchase_declined(value) and not confirmed_color_correction and not variant_inquiry) or (
         not corrected and plan['intent']=='withdraw' and not bargaining
         and not confirmed_purchase and not selection and not variant_inquiry):
         state.update(purchase_event=None,conditions=[])
@@ -214,7 +221,7 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, con
               and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address']
               and event_id in (contacts['phone'],contacts['address'],contacts.get('province')))
     explicit_shipping_choice = any(shipping_selection(line)[0] for line in text.splitlines())
-    answered_with_details = bool((purchase_prompt or explicit_shipping_choice)
+    answered_with_details = bool((purchase_prompt or explicit_shipping_choice or complete_choice(state))
         and contacts.get('phone') == event_id == contacts.get('address')
         and state['contact'].get('province')
         and contact_only(text, quoted_total=(quote or {}).get('total')))
