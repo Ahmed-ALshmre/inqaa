@@ -708,7 +708,7 @@ class Responses:
             **({'consultant_guidance': outcome['consultant_guidance']} if outcome.get('consultant_guidance') else {}),
             question_field=question, goal=plan.get('goal',''), policies=policy,
             customer_message=current, requested_fields=requested,
-            copy_budget=520 if len(requested) > 1 or quote_turn or recommendations else 230,
+            copy_budget=600 if len(requested) > 1 or quote_turn or recommendations else 380,
             quote=quote if quote_turn else None, amounts=amounts, business_feedback=feedback,
             recommendations=recommendations, value_facts=value_facts,
             catalog_memory=dict(market, matches=[], opportunity=None) if market['opportunity'] and question != 'catalog.show_option' else market,
@@ -1146,9 +1146,9 @@ class Responses:
 
     @staticmethod
     def greeting_recovery(context):
-        clean = checkout.normalized(context.get('customer_message', '')).strip(' .!؟?،🌷')
+        clean = checkout.normalized(context.get('customer_message', '')).strip(' .!؟?،🌷').lower()
         if (context.get('progress', {}).get('product_unresolved') and context.get('mode') == 'continue'
-                and re.fullmatch(r'(?:(?:السلام|سلام)\s+عليكم(?:\s+ورحمة\s+الله)?|مرحبا|هلا|هلو|صباح الخير|مساء الخير)', clean)):
+                and re.fullmatch(r'(?:(?:السلام|سلام)\s+عليكم(?:\s+ورحمة\s+الله(?:\s+وبركاته)?)?|مرحبا|هلاو?|هلو+|صباح الخير|مساء الخير|شلونكم|شخباركم|hi|hello|hey)', clean)):
             greeting = ('وعليكم السلام، يا هلا بيج 🌷' if clean.startswith(('السلام', 'سلام')) else
                         'صباح النور 🌷' if clean == 'صباح الخير' else
                         'مساء النور 🌷' if clean == 'مساء الخير' else 'يا هلا بيج 🌷')
@@ -1269,7 +1269,7 @@ class Responses:
             sales_turn = context.get('mode') == 'continue' and not context['action_results'].get('order_saved')
             layout = reply_layout.plan_sales_bubbles(
                 {'_human_sales_voice': True, '_short_sales_bubbles': sales_turn}, text)
-            bubble_limit = 145 if sales_turn and not layout['exception'] else 270
+            bubble_limit = 240 if sales_turn and not layout['exception'] else 270
             if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > bubble_limit for part in layout['reply_parts']):
                 raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
             parts = [dict(type='text', text=part) for part in layout['reply_parts']]
