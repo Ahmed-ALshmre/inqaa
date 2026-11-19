@@ -175,11 +175,18 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, con
     corrected = color_correction(value)
     fit_preference = re.search(r'(?<!\w)(?:خلي|اريد(?:ه|ها)?)\s+(?:(?:ال)?قياس\s+)?(?:كبير|اكبر|راهي|واسع)', value)
     weight_question = reply.get('text', '') if reply.get('question_field', '').endswith('.weight_kg') else ''
+    requested_variants = product_variants.requested(text)
+    variant_inquiry = bool(
+        requested_variants.get('colors')
+        or requested_variants.get('sizes')
+        or re.search(r'(?:غير\s+موديل|بديل|موديل\s+ثان[يى]|متوفر[هة]?|موجود[هة]?|اكو|يا\s*(?:قياس|لون|مقاس))', value)
+    )
     selection = bool(confirmed_color_correction or purchase_selected(text) or direct_color(text) or direct_clothing_size(text)
                      or explicit_color_order(text, accept_pair=bool(state.get('purchase_event')))
                      or product_variants.weight_answer(text, weight_question) or fit_preference)
-    if (purchase_declined(value) and not confirmed_color_correction) or (not corrected and plan['intent']=='withdraw' and not bargaining
-                                    and not confirmed_purchase and not selection):
+    if (purchase_declined(value) and not confirmed_color_correction and not variant_inquiry) or (
+        not corrected and plan['intent']=='withdraw' and not bargaining
+        and not confirmed_purchase and not selection and not variant_inquiry):
         state.update(purchase_event=None,conditions=[])
         state.pop('checkout_prompt',None)
         state.pop('price_request',None)

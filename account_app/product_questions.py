@@ -176,7 +176,8 @@ def dashboard_gap(row, product):
         candidates = list(dict.fromkeys(requested_fields(clause) + sales_answers.topics(clause)))
         if not re.search(QUESTION_CUE, clause) and not re.search(QUESTION_CUE, clean):
             candidates = [field for field in candidates
-                          if field in YES_NO_SPECIFICATIONS and re.search(YES_NO_SPECIFICATIONS[field], clean)]
+                          if (topic != 'details' and field == topic)
+                          or (field in YES_NO_SPECIFICATIONS and re.search(YES_NO_SPECIFICATIONS[field], clean))]
         if refers_to_photo_colors(clean):
             candidates = [field for field in candidates if field not in {'colors', 'availability'}]
         if re.search(r'خصم|تخفيض|ميزاني|ارخص|غالي', clean):
