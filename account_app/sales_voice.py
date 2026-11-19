@@ -10,7 +10,7 @@ except ImportError:
     from pricing import terms, offer_tiers, quote
 
 
-WELCOME = r'[اأ]هلاً?(?:\s+وسهلاً?)?|يا\s+هلا|هلا|مرحباً?|مراحب'
+WELCOME = r'[اأ]هلاً?(?:\s+وسهلاً?)?|كل\s+(?:ال)?هلا|يا\s+هلا|هلا|مرحباً?|مراحب'
 RETURN_SALAM = (r'(?:و\s*)?عليكم\s+الس[َّ]*لام'
                 r'(?:\s+و\s*(?:ال)?رحم[ةه](?:\s+الله)?(?:\s+و\s*بركاته)?)?')
 GREETING_TRAILING = r'(?:\s+(?:بيج|بيچ|بيك|بيكم|حبيبتي|عمري|عيوني|عيني|روحي|نورتينا|نورتي)(?!\w))*[،,.!🌷🌸\s]*'
@@ -24,7 +24,8 @@ def trim_opening_greetings(reply, *, omit_welcome, omit_return_salam):
         unwanted.append(RETURN_SALAM)
     if not unwanted:
         return reply
-    prefix = r'(?:(?:' + '|'.join(unwanted) + r')(?!\w)' + GREETING_TRAILING + r')+'
+    affection = r'(?:(?:حبيبتي|عمري|عيوني|عيني|روحي)(?!\w)[،, \t]+){0,2}'
+    prefix = r'(?:' + affection + r'(?:' + '|'.join(unwanted) + r')(?!\w)' + GREETING_TRAILING + r')+'
     return re.sub(r'(?m)^[ \t]*' + prefix, '', reply).strip()
 
 

@@ -33,7 +33,20 @@ def validate_material(text, recorded, requested=False):
 
 
 def validate_fulfillment(parts, proof):
+    if not isinstance(parts, list) or not 1 <= len(parts) <= 5 or any(
+            not isinstance(part, dict) or part.get('type') not in {'text', 'image'}
+            or part['type'] == 'text' and not isinstance(part.get('text'), str) for part in parts):
+        raise ValueError('reply.parts: expected valid text/image parts')
     text = normalized('\n'.join(part.get('text', '') for part in parts if part.get('type') == 'text'))
+    if not proof.get('order_saved') and re.search(
+            r'(?<!\w)تم\s+(?:تثبيت|تسجيل|تاكيد)\s+(?:الطلب|الحجز)|'
+            r'(?:طلب[جچك]|حجز[جچك]|الطلب|الحجز)\s+(?:مثبت|محجوز|مسجل|تثبت)|'
+            r'ثبتت\s+(?:الطلب|الحجز)|'
+            r'(?:ثبتت|ثبتنا|حجزت|حجزنا)\s*(?:ال?ج|لچ|لك|لكم)(?!\w)|'
+            r'(?:راح|هسه)\s+(?:نجهز|نرتب|نشحن)\w*\s+(?:ال?ج|لچ|لك)(?!\w)|'
+            r'اعتمدت(?:لج|لچ|لك)?\s+(?:الطلب|الحجز)|'
+            r'(?:يوصلج|يوصلچ|يوصلك)\s+نفس\s+الموديل', text):
+        raise ValueError('reply.booking: saving a selection is not a committed order')
     if not proof.get('carrier_contacted') and re.search(
             r'(?:اتصل|نتصل|تواصل|نتواصل|نسق|اتابع|تتابع|نتابع|ديتابع|ابلغ|نبلغ|بلغت|نحاول|احرص|خاطب)'
             r'[^.؟!\n]{0,40}(?:مندوب|شرك[هة]\s*التوصيل)', text):
@@ -114,7 +127,7 @@ def validate_copy(parts,question,action_results=None):
                    r'|(?:ممكن|احتاج|ابعثي).{0,8}(?:صور|سكرين)')
     if re.search(image_request,text) and question not in {'product', 'photo.reference', 'alternatives.photos', 'catalog.show_option'}:
         raise ValueError('reply.question: do not repeat product identification outside the selected step')
-    if not any(part['type'] == 'image' for part in parts) and (
+    if not any(part['type'] == 'image' for part in parts) and not proof.get('photos_attached') and (
             claims_sent_models(text) or promises_photo_attachment(text) or
             re.search(r'(?:هاي|هذني|تلكين|هسه توصل\w*|راح توصل\w*)\s+(?:ال)?(?:صور|موديلات|بدائل)', text)):
         raise ValueError('reply.media: do not announce photos without an attachment')

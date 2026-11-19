@@ -18,7 +18,7 @@ from .references import References
 from .store import Conflict, Store, digest
 from .contracts import clean_plan, validate_plan, DecisionRejected, DecisionUnavailable, BusinessChoice,ServiceRequired,message_context
 from .facts import resolve as resolve_fact,PRODUCT_FACT_FIELDS,POLICY_FIELDS,requested_fields,only_same_day_question
-from .intent import (accepts_purchase_prompt, apply_intent, color_availability, color_correction, direct_clothing_size, direct_color, explicit_color_order,
+from .intent import (accepts_purchase_prompt, apply_intent, color_availability, color_correction, complete_choice, direct_clothing_size, direct_color, explicit_color_order,
                      explicit_cancellation, photo_replaces_selection, preferred_clothing_size, purchase_declined, purchase_selected,
                      referred_photo_color)
 from .orders import only_color_missing
@@ -273,6 +273,8 @@ class Runtime:
             reference = refs.resolve(scope, ad=ad, media=payload.get('observation'), text=text)
         else:
             reference = refs.resolve(scope, media=payload.get('observation'), text=text)
+        if reference['status'] == 'unavailable':
+            return reference
         if reference['status'] == 'known':
             if (state.get('focus_source') == 'image' and reference['source'] == 'ad'
                     and reference['product_id'] != state.get('focus_product_id')):
@@ -288,6 +290,8 @@ class Runtime:
             old_context = state['cart'][0]['product_id']
         if state.get('order_id'):
             return dict(status='none') if pending else reference
+        if not pending and old_context and catalog.products.get(old_context, {}).get('status', 'active') != 'active':
+            return dict(status='unavailable', source='conversation', product_id=old_context)
         if not pending and (old_context or state['cart'] or payload.get('media_kind') != 'text'):
             return reference
         if (reference.get('source') == 'product_link' and reference['status'] != 'known'
@@ -302,6 +306,9 @@ class Runtime:
 
         hint = (self.text_reference(scope, text, catalog, preferred=old_context if pending else None)
                 if self.text_reference else None)
+        unavailable = catalog.products.get(old_context) or (catalog.products.get(hint['product_id']) if hint else None)
+        if not pending and unavailable and unavailable.get('status', 'active') != 'active':
+            return dict(status='unavailable', source='conversation', product_id=unavailable['product_id'])
         if hint and hint['source'] == 'text':
             catalog.get(hint['product_id'])
             return dict(hint, status='known')
@@ -317,8 +324,13 @@ class Runtime:
         safe_fields = (fields and fields <= {'price', 'sizes', 'wholesale', 'delivery_fee', 'delivery_time',
                                              'payment', 'inspection_policy', 'fabric', 'fabric_feel',
                                              'cut', 'width', 'length', 'stretch', 'season'})
-        if (latest_match and not refers_to_other_image and not purchase_selected(text) and not catalog_photo_request(text)
-                and (safe_fields or not fields and product_variants.weight_answer(text))):
+        plural_reference = re.search(r'ثنتين|ثنين|صورتين|هذني|كلهن|كلهم|كل\s+(?:صور[ةه]|وحد[ةه])', checkout.normalized(text))
+        new_photo_only = payload.get('media_kind') == 'image' and not text.strip()
+        if (latest_match and not refers_to_other_image and not plural_reference
+                and not purchase_selected(text) and not catalog_photo_request(text)
+                and (safe_fields or new_photo_only or not fields and product_variants.weight_answer(text))):
+            if catalog.products.get(latest_match, {}).get('status', 'active') != 'active':
+                return dict(status='unavailable', source='latest_verified_image', product_id=latest_match)
             catalog.get(latest_match)
             return dict(status='provisional', source='latest_verified_image', product_id=latest_match,
                         photo_event=pending_id)
@@ -458,6 +470,10 @@ class Runtime:
                 return dict(action='media_unresolved', state_version=snap['version'], multiple_images=True)
             pending_id, pending = self.pending_photo(state)
             reference = self.reference_for(scope, catalog, state, dict(evidence['payload'], observation=media))
+            if reference.get('status') == 'unavailable':
+                if state['cart']:
+                    raise ServiceRequired('cart_catalog_changed')
+                return dict(action='continue', state_version=snap['version'], unavailable_product=reference['product_id'])
             if len(pair) == 2 and pending:
                 reference = dict(status='multiple', source='image', product_ids=list(pair))
             # An address/phone can finish the explicitly selected order even
@@ -515,7 +531,8 @@ class Runtime:
                     pass
             contact_turn = bool(state['cart'] and not state.get('order_id')
                 and (state.get('purchase_event') or state.get('checkout_prompt')
-                     or accepts_purchase_prompt(state, last_reply) and {'phone', 'address'} <= set(captured.get('fields', ())))
+                     or (accepts_purchase_prompt(state, last_reply) or complete_choice(state))
+                        and all(state['contact'].get(field) for field in ('phone', 'address', 'province')))
                 and (captured.get('fields') and contact_only(text_now, quoted_total=quoted_total)
                      or initial_readiness['ready'] and text_lines
                      and all(checkout_followup(line, quoted_total=quoted_total) for line in text_lines)))
@@ -549,6 +566,15 @@ class Runtime:
             context['learned_sales_tactics'] = sales_intelligence.learned_tactics(
                 self.store.db, scope.store, text_now, bool(market['matches']))
             text_turn = evidence['payload'].get('media_kind', 'text') == 'text'
+            last_staff = next((m.get('text', '') for m in reversed(context['recent_messages'][:-1])
+                               if m['actor'] in {'assistant', 'staff'}), '')
+            accepted_alternatives = bool(text_turn and checkout.is_confirmation(text_now) and re.search(
+                r'(?:اقترح|أقترح|دز|ارسل|أرسل|اور[يی]|أور[يی]).{0,45}(?:موديل|بديل)|'
+                r'(?:موديل|موديلات).{0,18}(?:ثاني|بديل|مشابه)', last_staff))
+            all_models = bool(text_turn and re.search(r'(?<!\w)(?:كل|جميع)(?!\w).{0,20}(?:موديل|تناني|تنانير)', text_now))
+            if accepted_alternatives or all_models:
+                return dict(action='continue', state_version=snap['version'], alternatives_requested=True,
+                            all_models_requested=True)
             if (text_turn and market['browse'] and not decline
                     and not checkout.is_existing_order_followup(text_now)):
                 # Catalog browsing supplies a reply, never a different cart reference.
@@ -607,6 +633,9 @@ class Runtime:
                               and not state.get('price_request') and not purchase_selected(text_now)
                               and not re.search(r'خصم|تخفيض|ميزاني|ارخص|غالي', text_now))
             points_to_item = re.search(r'(?<!\w)(?:هذا|هاي|هذي)\s+(?:ال)?(?:موديل|قطع[هة]|اعلان)(?!\w)', text_now)
+            pending_choice = bool(image_only and any(
+                message.get('text', '').strip()
+                for message in context['recent_messages'][:-1] if message['actor'] == 'customer'))
             if album_ids:
                 raw = dict(intent='buy' if photo_orders.requests_two_photos(text_now) else 'continue', changes=album_changes)
             elif addon_values:
@@ -621,6 +650,11 @@ class Runtime:
                 raw = dict(intent='continue', changes=[dict(values=dict(product_id=focus, size=discussed_size))]
                            if discussed_size else [])
             elif contact_turn or alternatives_requested or photo_and_inspection:
+                raw = dict(intent='continue')
+            elif verified_image and image_only and not pending_choice:
+                # No preceding customer text needs interpreting. If there is
+                # prior text, the decision model must preserve its choices,
+                # including colloquial quantities not covered by a regex.
                 raw = dict(intent='continue')
             elif only_same_day_question(evidence['payload'].get('text', '')):
                 raw = dict(intent='continue', answer=dict(facts=[dict(product_id='@store', field='delivery_time')]))

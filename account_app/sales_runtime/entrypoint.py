@@ -200,7 +200,8 @@ class Entrypoint:
                 if not isinstance(candidates,list) or len(candidates)>10:
                     raise ValueError('invalid_media_candidates')
                 for product_id in candidates:
-                    catalog.get(product_id)
+                    if product_id not in catalog.products:
+                        raise Conflict('product_not_available_in_store')
                 if observed['status']=='matched' and len(candidates)!=1:
                     raise ValueError('media_match_requires_one_product')
                 status = observed['status']
@@ -218,8 +219,11 @@ class Entrypoint:
                     ]
                 if observed.get('verified_pair') is True and clean['status'] == 'ambiguous' and len(set(candidates)) == 2:
                     clean['verified_pair'] = True
-                if clean['status'] == 'ambiguous' and candidates == [observed.get('latest_match')] and candidates[0]:
-                    clean['latest_match'] = candidates[0]
+                latest = observed.get('latest_match')
+                last_position = next((p for p in reversed(clean.get('positions', [])) if not p.get('sticker')), {})
+                if clean['status'] == 'ambiguous' and latest in candidates and (
+                        candidates == [latest] or last_position.get('product_id') == latest):
+                    clean['latest_match'] = latest
                 color = product_variants.single_color(observed.get('observed_color'))
                 if clean['status'] == 'matched' and color:
                     clean['observed_color'] = color
@@ -245,7 +249,7 @@ class Entrypoint:
                 if observed.get('verified_pair') and not current.get('order_id') and self.runtime.requested_photo_pair(
                         scope, event['id'], current, checkout.normalized(text)):
                     return self.finish_turn(scope, event['id'])
-                if reference['status'] in {'known', 'provisional'}:
+                if reference['status'] in {'known', 'provisional', 'unavailable'}:
                     return self.finish_turn(scope, event['id'])
                 previous_image = max((int(key) for key in saved['data'].get('media_observations', {})
                                       if int(key) < event['id']), default=0)
@@ -258,7 +262,7 @@ class Entrypoint:
                     (previous_image, event['id'], scope.key, f'clarify-image:{previous_image}')).fetchone()
                 if asked:
                     if json.loads(asked[0]).get('question_stage') == 'photo-link':
-                        return dict(action='media_unresolved', event_id=event['id'])
+                        return self.handoff_service(scope, event['id'], 'product_image_unresolved')
                     return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
                 if media_kind in {'file', 'video'}:
                     return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
@@ -275,6 +279,12 @@ class Entrypoint:
                 return self.handoff_fact(scope,event_id,outcome['state_version'],reply)
             if reply['action'] == 'photo_review':
                 return self.handoff_service(scope, event_id, 'product_image_unresolved')
+            if reply['action'] == 'skipped' and outcome.get('photo_pending'):
+                from .. import checkout
+                from .contact import contact_only
+                text = self.store.evidence(scope, event_id)['payload'].get('text', '')
+                if text.strip() and not checkout.is_confirmation(text) and not contact_only(text):
+                    return self.handoff_service(scope, event_id, 'product_image_unresolved')
             return dict(outcome,reply=reply)
         return outcome
 

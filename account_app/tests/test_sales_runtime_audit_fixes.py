@@ -587,10 +587,10 @@ class AuditFixTests(unittest.TestCase):
         self.assertIn('رابط', part['payload']['text'])
         entry.store.settle_reply(scope, part['id'], 'accepted', 'different-evidence')
         third = entry.receive(**target, message_id='image-3', media_kind='image', media_ref='image-3')
-        self.assertEqual('media_unresolved', third['action'])
+        self.assertEqual('human', third['action'])
         self.assertIsNone(entry.store.claim_reply(scope))
         self.assertEqual('07701234567', entry.store.snapshot(scope)['data']['contact']['phone'])
-        self.assertEqual('active', entry.store.snapshot(scope)['data']['control_mode'])
+        self.assertEqual('human', entry.store.snapshot(scope)['data']['control_mode'])
         self.assertEqual(2, writer.call_count)
         self.decide.assert_not_called()
 
@@ -1037,11 +1037,9 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(dict(weight_kg=130,within_catalog_range=True),
                              writer.call_args.args[0]['progress']['fit'])
         event,out = self.run_turn('ماروني',changes=[dict(values=dict(product_id='P1',color='ماروني'))])
-        self.assertEqual('purchase_intent',self.reply(event,out,writer)[-1]['question_field'])
-        self.plan = dict(intent='withdraw')
-        event = self.event('يلا تمام')
-        out = self.runtime.turn(self.scope,event)
         self.assertEqual('contact.details',self.reply(event,out,writer)[-1]['question_field'])
+        _, out = self.run_turn('07701234567 بغداد حي التجربة قرب المدرسة')
+        self.assertEqual('booked', out['action'])
 
     def test_fit_writer_repairs_unsupported_stock_and_roomy_claims(self):
         self.products[0].update(sizes='من وزن 55 إلى 95 كيلو', stock='')

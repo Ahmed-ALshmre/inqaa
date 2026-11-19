@@ -19,6 +19,10 @@ def natural_weight_wording(text):
     """Use the spoken unit once per range, without changing the numbers."""
     text = WEIGHT_UNIT.sub(lambda match: (' ' if match.start() and text[match.start() - 1].isdigit() else '') + 'كيلو', text)
     text = WEIGHT_RANGE.sub(r'\1 \2 \3 كيلو', text)
+    text = re.sub(r'((?:قماش(?:ه|ها)?|القماش)(?:\s+(?:ال)?(?:تنور[ةه]|فستان|قميص|بنطرون|بنطلون))?)'
+                  r'\s+(?:ال)?خام(?:ة)?\s+', r'\1 ', text)
+    text = re.sub(r'(?<!\w)(النمر|نمر|نمرة|نمره)(?=\s*(?:\d|من|متوفر))',
+                  lambda match: 'القياسات' if match[1] == 'النمر' else 'قياسات' if match[1] == 'نمر' else 'قياس', text)
     return re.sub(r'(?<!\w)كيلو(?:[ \t]+كيلو)+(?!\w)', 'كيلو', text)
 
 

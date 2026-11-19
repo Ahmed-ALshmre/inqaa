@@ -103,7 +103,7 @@ for _k, _v in {
     "CHECKER_ENABLED":         "0",
     "VISION_ENABLED":          "0",
     "DISABLE_CLIP":            "1",
-    "DEBOUNCE_DELAY":          "15",
+    "DEBOUNCE_DELAY":          "20",
     "HUMAN_REVIEW_ALL_IMAGES": "1",
 
 # IMAGE_AI_PATCH_NOTES:
@@ -354,7 +354,7 @@ if PUBLIC_URL:
 else:
     print("[Config] ⚠️  PUBLIC_URL not set — image URLs may resolve to localhost", flush=True)
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
-DEBOUNCE_DELAY     = max(0, int(os.environ.get("DEBOUNCE_DELAY", "15")))
+DEBOUNCE_DELAY     = max(0, int(os.environ.get("DEBOUNCE_DELAY", "20")))
 ASYNC_WEBHOOK      = os.environ.get("ASYNC_WEBHOOK", "1") == "1"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -6009,6 +6009,8 @@ def build_product_vision_candidates(products, limit=10):
     """بناء قائمة منتجات مرئية كاملة عندما لا تكفي ترشيحات CLIP."""
     candidates = []
     for p in products:
+        if not p.get('product_id'):
+            continue
         image_urls = product_image_urls(p)
         if not image_urls:
             continue
@@ -6401,7 +6403,7 @@ def match_customer_album_with_catalog(images, products):
 
 def _local_catalog_photo_references(products):
     for product in products:
-        if not product.get('product_id') or product.get('status', 'active') != 'active':
+        if not product.get('product_id'):
             continue
         for variant in product_image_variants(product):
             reference = urlparse(variant['url']).path
@@ -6419,10 +6421,10 @@ def _local_catalog_photo_references(products):
 
 
 def _match_customer_image_with_catalog_once(customer_image_url, products):
-    # Uploaded catalog sheets can contain numbers unrelated to database IDs.
-    # Lamsa uses uploaded catalog sheets for its primary comparison.
+    # Current product photos carry authoritative IDs in every store. Older
+    # uploaded contact sheets can have stale/independent printed numbering.
     direct_candidates = build_product_vision_candidates(products, limit=len(products or []))
-    direct_compare = current_store_id() != DEFAULT_STORE_ID and bool(direct_candidates)
+    direct_compare = bool(direct_candidates)
     vision_enabled = direct_compare and is_store_feature_enabled("vision_enabled", VISION_ENABLED)
     catalog_enabled = is_store_feature_enabled("catalog_match_enabled", CATALOG_MATCH_ENABLED)
     if direct_candidates and (vision_enabled or catalog_enabled):
@@ -12535,7 +12537,7 @@ def process_webhook(db, body, use_debounce: bool = True, send_direct_facebook_im
     # ── STEP 05.5: Debounce — انتظر حتى ينتهي الزبون من إرسال رسائله ────────
     # نهدف إلى جمع كل ما يرسله الزبون (نص + صورة + رسائل متفرقة) قبل تشغيل الموديل
     # حتى يفهم السياق كاملاً ويعطي رداً واحداً دقيقاً بدلاً من ردود مكررة.
-    if use_debounce and DEBOUNCE_DELAY > 0 and message_type != "image":
+    if use_debounce and DEBOUNCE_DELAY > 0:
         saved_at = now_baghdad_iso()
         delay = sales_progress.debounce_seconds(ev.get('text'), message_type, DEBOUNCE_DELAY)
         log(5, "DEBOUNCE", f"Waiting {delay}s to collect customer messages before AI...")
@@ -13933,7 +13935,6 @@ def _process_manychat_webhook_async(fake_body, subscriber_id, platform, outbound
                 sys.modules[__name__], db, current_store_id(), subscriber_id, *signed_channel, saved_id)
             if background_after_intake:
                 delay = (0 if sales_playbook.human_requested(ev.get('text'))
-                         or detect_message_type(ev) == 'text' and sales_recovery.policy_question(ev.get('text'))
                          else sales_progress.debounce_seconds(ev.get('text'), detect_message_type(ev), DEBOUNCE_DELAY))
                 payload = dict(fake_body=fake_body, subscriber_id=subscriber_id, platform=platform,
                                outbound_subscriber_id=outbound_subscriber_id, saved_id=saved_id)

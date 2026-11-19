@@ -10,7 +10,7 @@ except ImportError:
 
 LABELS = {'fabric': 'نوع القماش', 'fabric_feel': 'سمك القماش وملمسه', 'season': 'الموسم',
           'stretch': 'الليكرا والمطاطية', 'cut': 'قصة القطعة', 'lining': 'البطانة',
-          'closure': 'الإغلاق', 'care': 'الغسل والعناية', 'length': 'الطول', 'width': 'العرض',
+          'closure': 'الإغلاق', 'care': 'الغسل والعناية', 'length': 'الطول', 'width': 'العرض', 'thigh_width': 'عرض الفخذ',
           'photo_source': 'مصدر الصورة', 'price': 'السعر', 'location':'عنوان المحل', 'details': 'تفصيل المنتج', 'service':'متابعة خاصة بهذه المحادثة — لا تُعمّم',
           'origin':'بلد الصنع','composition':'محتويات القطعة وملحقاتها','delivery_time':'مدة التوصيل',
           'inspection_policy':'سياسة الفحص','payment':'طريقة الدفع','delivery_fee':'أجور التوصيل',
@@ -22,10 +22,10 @@ FIELDS = {'fabric': 'fabric', 'fabric_feel': 'fabric_feel', 'season': 'season', 
 
 DASHBOARD_FACTS = frozenset({
     'fabric', 'fabric_feel', 'season', 'stretch', 'cut', 'lining', 'closure',
-    'care', 'length', 'width', 'photo_source', 'price', 'origin', 'composition',
+    'care', 'length', 'width', 'thigh_width', 'photo_source', 'price', 'origin', 'composition',
     'colors', 'sizes', 'availability', 'wholesale',
 })
-DASHBOARD_ANSWER_TOPICS = ((FIELDS.keys() | {'length', 'width'}) & DASHBOARD_FACTS) - {'price'}
+DASHBOARD_ANSWER_TOPICS = ((FIELDS.keys() | {'length', 'width', 'thigh_width'}) & DASHBOARD_FACTS) - {'price'}
 QUESTION_CUE = r'[؟?]|(?<!\w)(?:شنو|شو|ايش|شكد|اشكد|جكد|بشكد|كم|كيف|شلون|هل|بيش|بكم|لو)(?!\w)'
 YES_NO_SPECIFICATIONS = {
     'lining': r'^(?:يعني\s+)?(?:مبطن[هة]?|بيه[ا]?\s+بطان[هة])(?:\s|$)',
@@ -272,7 +272,7 @@ def apply_fact(product, topic, answer):
     field = FIELDS.get(topic)
     if field:
         product[field] = answer
-    elif topic in {'length', 'width'}:
+    elif topic in {'length', 'width', 'thigh_width'}:
         product['measurements'] = str(product.get('measurements') or '') + '\n' + LABELS[topic] + ': ' + answer
 
 

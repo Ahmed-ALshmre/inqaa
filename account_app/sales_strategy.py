@@ -625,6 +625,7 @@ def _declared_size(question):
 def measurement_fact(product, kind):
     """A labelled numerical garment measurement, never a staff instruction."""
     labels = {'width': r'عرض(?:ه|ها)?|تحت الابط|محيط الصدر',
+              'thigh_width': r'عرض\s*(?:ال)?فخذ|محيط\s*(?:ال)?فخذ',
               'length': r'طول(?:ه|ها)?|الطول'}
     if kind not in labels:
         return ''

@@ -48,7 +48,7 @@ def fixture_image(url):
     return 'data:image/png;base64,' + base64.b64encode(output.getvalue()).decode()
 
 
-def main():
+def main(test_names=None):
     with tempfile.TemporaryDirectory() as directory:
         os.environ.update(
             DATA_DIR=directory,
@@ -65,11 +65,13 @@ def main():
             TELEGRAM_CHAT_ID="-10000000001",
         )
         with patch("requests.sessions.Session.request", side_effect=offline_request):
-            suite = unittest.defaultTestLoader.discover(str(Path(__file__).parent))
+            suite = (unittest.defaultTestLoader.loadTestsFromNames(test_names) if test_names else
+                     unittest.defaultTestLoader.discover(str(Path(__file__).parent)))
             with patch('account_app.app._download_image_to_data_url', side_effect=fixture_image):
                 result = unittest.TextTestRunner(verbosity=1).run(suite)
         return 0 if result.wasSuccessful() else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import sys
+    raise SystemExit(main(sys.argv[1:]))

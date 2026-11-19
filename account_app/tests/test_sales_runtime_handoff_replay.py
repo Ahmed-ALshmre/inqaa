@@ -402,14 +402,15 @@ class HandoffReplayTests(unittest.TestCase):
         self.assertEqual([], self.entry.store.snapshot(self.scope)['data']['cart'])
         self.active()
 
-    def test_l11_multiple_image_retries_do_not_pause_or_loop(self):
+    def test_l11_multiple_image_retries_stop_silently_with_a_visible_review(self):
         self.replay('default')
         for index in range(3):
             _, out = self.send('هاي شنو قياساته' if index == 0 else 'ً',
                                kind='image', refs=[f'foreign-{index}'], ad=False)
             if index == 2:
                 self.assertEqual([], out)
-        self.active()
+        self.assertEqual('human', self.entry.store.snapshot(self.scope)['data']['control_mode'])
+        self.assertEqual(1, self.db.execute("SELECT COUNT(*) FROM human_reviews WHERE status='pending'").fetchone()[0])
 
     def test_l12_corrected_photo_unlocks_the_size_question(self):
         self.replay('default', facts=dict(sizes='من 65 إلى 115 كيلو'))

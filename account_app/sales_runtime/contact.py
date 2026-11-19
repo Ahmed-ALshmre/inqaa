@@ -91,6 +91,8 @@ def delivery_line(line):
 
 
 def declarations(text, previous):
+    # Messaging apps wrap pasted phone numbers in bidi formatting characters.
+    text = re.sub(r'[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]', '', text)
     fields = {}
     address_text, _ = delivery_note(text)
     for line in address_text.splitlines():
@@ -120,6 +122,7 @@ def declarations(text, previous):
 
 def contact_only(text, *, quoted_total=None):
     """Allow local checkout for plain phone and address declarations."""
+    text = re.sub(r'[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]', '', text)
     address = ''
     contact_found = False
     address_text, _ = delivery_note(text)

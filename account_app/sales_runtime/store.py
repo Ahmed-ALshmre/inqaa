@@ -181,22 +181,26 @@ class Store:
             return dict(result=result, replayed=False)
 
     def enqueue_reply(self, scope, reply_key, version, parts):
-        if not reply_key or not parts or len(parts) > 5:
+        return self.enqueue_reply_batches(scope, version, [(reply_key, parts)])
+
+    def enqueue_reply_batches(self, scope, version, batches):
+        if not batches or any(not key or not parts or len(parts) > 5 for key, parts in batches):
             raise ValueError('invalid_reply')
         with self.transaction():
-            old = self.db.execute('''SELECT payload,state_version FROM sales_v2_outbox
-                WHERE scope=? AND reply_key=? ORDER BY part_index''', (scope.key, reply_key)).fetchall()
-            wire = [encode(part) for part in parts]
-            if old:
-                if [(r[0], r[1]) for r in old] != [(p, version) for p in wire]:
-                    raise Conflict('reply_key_reused_with_different_content')
-                return
-            snap = self.snapshot(scope)
-            if snap['version'] != version or snap['data']['control_mode'] != 'active':
-                raise Conflict('reply_superseded_or_paused')
-            self.db.executemany('''INSERT INTO sales_v2_outbox
-                (scope,reply_key,part_index,state_version,payload) VALUES(?,?,?,?,?)''',
-                [(scope.key, reply_key, i, version, part) for i, part in enumerate(wire)])
+            for reply_key, parts in batches:
+                old = self.db.execute('''SELECT payload,state_version FROM sales_v2_outbox
+                    WHERE scope=? AND reply_key=? ORDER BY part_index''', (scope.key, reply_key)).fetchall()
+                wire = [encode(part) for part in parts]
+                if old:
+                    if [(r[0], r[1]) for r in old] != [(p, version) for p in wire]:
+                        raise Conflict('reply_key_reused_with_different_content')
+                    continue
+                snap = self.snapshot(scope)
+                if snap['version'] != version or snap['data']['control_mode'] != 'active':
+                    raise Conflict('reply_superseded_or_paused')
+                self.db.executemany('''INSERT INTO sales_v2_outbox
+                    (scope,reply_key,part_index,state_version,payload) VALUES(?,?,?,?,?)''',
+                    [(scope.key, reply_key, i, version, part) for i, part in enumerate(wire)])
 
     def claim_reply(self, scope):
         """Persist sending BEFORE external I/O. Unknown sends block later parts."""

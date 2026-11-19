@@ -3,7 +3,7 @@ import base64
 import binascii
 import io
 from functools import lru_cache
-from heapq import nsmallest
+from heapq import nsmallest, nlargest
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageOps, ImageStat
@@ -51,7 +51,7 @@ def _same_photo(customer, catalog):
 
 
 def _screenshot_match(picture, screen, catalog):
-    """Locate a near full-width photo inside a portrait messaging screenshot."""
+    """Locate a catalog photo in a post, including two-column color collages."""
     ratio, reference = catalog
     if max(ImageStat.Stat(reference).stddev) < 16:
         return False
@@ -68,13 +68,19 @@ def _screenshot_match(picture, screen, catalog):
         return total
 
     def windows():
-        for w in range(width, int(width * .84), -3):
+        widths = list(range(width, int(width * .84), -3))
+        widths += [round(width * factor) for factor in (.50, .48, .46, .44, .42, .40, .38)]
+        for w in dict.fromkeys(widths):
             h = round(w / ratio)
-            if not width * .40 <= h <= height * .90:
+            if not width * .18 <= h <= height * .90:
                 continue
-            left = (width - w) // 2
-            for top in range(0, height - h + 1, 4):
-                yield score(left, top, w, h), left, top, w
+            lefts = {(width - w) // 2} if w > width * .6 else {
+                0, width // 2, (width - 2 * w) // 2, width // 2 - w,
+                round(width * .08), round(width * .12), round(width * .54),
+            }
+            for left in sorted(x for x in lefts if 0 <= x <= width - w):
+                for top in range(0, height - h + 1, 4):
+                    yield score(left, top, w, h), left, top, w
 
     def refined(coarse):
         for _, left, top, w in coarse:
@@ -114,6 +120,23 @@ def _screenshot_match(picture, screen, catalog):
                 boundary(r, y, b, horizontal=False), boundary(b, x, r, horizontal=True))
 
     coarse = nsmallest(6, windows())
+    # App chrome can look closer at twelve sample points than the actual
+    # garment. Also seed full-width photos from strong horizontal post edges;
+    # the same strict interior pixel verification below still decides a match.
+    edges = nlargest(18, ((sum(sum(abs(a - b) for a, b in zip(pixels[x, y - 1], pixels[x, y + 1]))
+                              for x in range(8, width - 8, 8)), y) for y in range(1, height - 1)))
+    edge_windows = []
+    for _, edge in edges:
+        for w in range(width, int(width * .84), -3):
+            h = round(w / ratio)
+            if not width * .18 <= h <= height * .90:
+                continue
+            left = (width - w) // 2
+            for top in (edge, edge - h):
+                if 0 <= top <= height - h:
+                    edge_windows.append((score(left, top, w, h), left, top, w))
+    coarse += nsmallest(6, edge_windows)
+    coarse.sort()
     if not coarse or coarse[0][0] > len(points) * 3 * 24:
         return False
     for cost, x, y, w, h in nsmallest(12, set(refined(coarse))):
@@ -127,11 +150,15 @@ def _screenshot_match(picture, screen, catalog):
                 continue
             actual = picture.resize((SIDE, SIDE), Image.Resampling.LANCZOS, box=box).crop(interior)
             diff = ImageChops.difference(actual, expected)
+            regional = diff.copy()
+            # Instagram overlays its small 1/4 carousel badge in this corner.
+            # Keep the full-image RMS cap and every other regional check.
+            regional.paste((0, 0, 0), (regional.width - 10, 0, regional.width, 10))
             if max(ImageStat.Stat(diff).rms) <= 5.5 and all(
-                max(ImageStat.Stat(diff.crop((a, b, min(a + TILE, diff.width), min(b + TILE, diff.height)))).rms) <= 11
+                max(ImageStat.Stat(regional.crop((a, b, min(a + TILE, diff.width), min(b + TILE, diff.height)))).rms) <= 11
                 for b in range(0, diff.height, TILE) for a in range(0, diff.width, TILE)
             ):
-                return True
+                return 'collage' if w <= width * .6 else 'single'
     return False
 
 
@@ -172,9 +199,18 @@ def match_inline_photo(image, references):
             if len(matches) > 1:
                 return None
     if not matches and screen:
+        assets = {}
+        for pid, _, catalog in candidates:
+            assets.setdefault((catalog[0], catalog[1].tobytes()), set()).add(pid)
+        ambiguous_products = set().union(*(ids for ids in assets.values() if len(ids) > 1))
         for product_id, color, catalog in candidates:
-            if _screenshot_match(picture, screen, catalog):
-                matches.setdefault(product_id, set()).add(color)
+            scene = _screenshot_match(picture, screen, catalog)
+            if scene:
+                # One tile identifies the model, not which tile the customer
+                # means. Shared catalog photos make that collage ambiguous.
+                if scene == 'collage' and product_id in ambiguous_products:
+                    return None
+                matches.setdefault(product_id, set()).add('' if scene == 'collage' else color)
                 if len(matches) > 1:
                     return None
     if not matches:
