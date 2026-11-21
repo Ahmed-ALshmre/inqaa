@@ -8,11 +8,11 @@ import re
 try:
     from . import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from .pricing import terms, quote, offer_tiers
-    from .checkout import is_confirmation, delivered_total_inquiry, accepts_inspection_offer, unresolved_purchase_terms
+    from .checkout import is_confirmation, delivered_total_inquiry, accepts_inspection_offer, unresolved_purchase_terms, declared_variant_purchase
 except ImportError:
     import sales_strategy, customer_copy, product_variants, conversation_quality, sales_recovery
     from pricing import terms, quote, offer_tiers
-    from checkout import is_confirmation, delivered_total_inquiry, accepts_inspection_offer, unresolved_purchase_terms
+    from checkout import is_confirmation, delivered_total_inquiry, accepts_inspection_offer, unresolved_purchase_terms, declared_variant_purchase
 
 REVIEWED_LESSONS = {
     'cost': (
@@ -270,7 +270,7 @@ def checkout_consent(context):
         if item.get('photo_choice') or sales_strategy.purchase_block_reason(text):
             accepted = False
             continue
-        if sales_strategy._explicit_purchase(text) and not unresolved_purchase_terms(text):
+        if (sales_strategy._explicit_purchase(text) or declared_variant_purchase(text)) and not unresolved_purchase_terms(text):
             accepted = True
         elif is_confirmation(text) or accepts_inspection_offer(text):
             question = item.get('in_reply_to') or ''

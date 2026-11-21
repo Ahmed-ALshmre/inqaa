@@ -755,7 +755,7 @@ class AuditFixTests(unittest.TestCase):
                   'الدفع عند الاستلام بعد الفحص، والتوصيل {{delivery_fee}}.',
                   'حتى أحسبلج الدشداشتين، دزيلي صورة الموديل.',
                   'التوصيل {{delivery_fee}}، وحساب القطعتين يعتمد على الموديل بالصورة.',
-                  'إي هالموديل متوفر، أي لون تحبين؟')
+                  'سعر القطعتين {{subtotal}} والتوصيل {{delivery_fee}}، أي لون تحبين؟')
         writer=Mock(side_effect=[[dict(type='text',text=text)] for text in drafts])
         entry=Entrypoint(self.db,lambda sid:self.products,lambda s,p:5000,self.decide,
                          writer=writer,media=lambda *args: dict(status='matched',product_ids=['P1']))
@@ -784,6 +784,8 @@ class AuditFixTests(unittest.TestCase):
         state=entry.store.snapshot(scope)['data']
         self.assertEqual('P1',state['focus_product_id'])
         self.assertEqual(2,state['cart'][0]['quantity'])
+        self.assertEqual({'subtotal':24000,'delivery_fee':5000},writer.call_args.args[0]['amounts'])
+        self.assertEqual('شكد سعرهن وي التوصيل',writer.call_args.args[0]['customer_message'])
         self.assertEqual('active',state['control_mode'])
         self.assertEqual(0,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 

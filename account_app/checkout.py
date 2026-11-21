@@ -30,6 +30,19 @@ def explicit_purchase(value):
     return bool(re.search(direct + '|' + requested + r'|(?<!\w)ثبت\s+(?:الطلب|الحجز)(?!\w)', text))
 
 
+def declared_variant_purchase(value):
+    """A stated variant choice is buying intent; enquiries and conditions are not."""
+    text = normalized(value)
+    if not re.match(r'^اريد(?:ه|ها|هم|هن)?\s+', text):
+        return False
+    if re.search(r'[؟?]|(?<!\w)(?:اذا|لو|او|لا|ما|مو|اعرف|استفسر|اسال|اشوف|'
+                 r'شنو|شكد|كم|شلون|متوفر|موجود|خصم|تخفيض|سعر|اقارن|افكر|بعدين|'
+                 r'محتار[هة]?|متردد[هة]?|بشرط)(?!\w)|صور|فيديو', text):
+        return False
+    choices = product_variants.requested(value)
+    return bool((choices['colors'] or choices['sizes']) and not unresolved_purchase_terms(value))
+
+
 _PHONE_SEPARATOR = r"[ \t\u00a0\u200e\u200f\u202f\u2066-\u2069()\-]"
 PHONE = re.compile(rf"(?<!\d)(?:(?:\+?964|00964){_PHONE_SEPARATOR}*7|0{_PHONE_SEPARATOR}*7)"
                    rf"(?:{_PHONE_SEPARATOR}*\d){{9}}(?!\d)")
@@ -45,7 +58,7 @@ PROVINCES = {
     "صلاح الدين": ("صلاح الدين", "تكريت"), "ديالى": ("ديالى",),
 }
 DISTRICT_PROVINCES = {
-    "بغداد": ("الكرادة", "كرادة", "الدورة", "دوره ميكانيك", "ميكانيك الدورة",
+    "بغداد": ("الكرادة", "كرادة", "الدورة", "دوره ميكانيك", "ميكانيك الدورة", "دورة زراعي", "دورة الزراعي",
               "الاعظمية", "الكاظمية", "الزعفرانية", "البنوك", "العامرية", "الغزالية",
               "الحارثية", "البياع", "السيدية", "زيونة", "مدينة الصدر", "الشعلة", "المنصور",
               "ابو غريب", "المحمودية", "اليوسفية", "اللطيفية", "المدائن", "النهروان", "التاجي", "الطارمية"),
