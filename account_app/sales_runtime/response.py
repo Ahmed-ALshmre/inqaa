@@ -669,7 +669,7 @@ class Responses:
                 amounts = quote_amounts(quote, compact=shown and not price_question)
             elif re.match(r'^(?:مع|ويا)\s+التوصيل', clean) and quote.get('total') is not None:
                 amounts = quote_amounts(quote, compact=True)
-        elif 'delivery_fee' in requested:
+        if 'delivery_fee' in requested and 'delivery_fee' not in amounts and 'total' not in amounts:
             fee = (quote or {}).get('delivery_fee') if not different_quantity else None
             if fee is None and product_free_delivery:
                 fee = 0
