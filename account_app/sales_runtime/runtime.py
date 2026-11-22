@@ -472,7 +472,20 @@ class Runtime:
             reference = self.reference_for(scope, catalog, state, dict(evidence['payload'], observation=media))
             if reference.get('status') == 'unavailable':
                 if state['cart']:
-                    raise ServiceRequired('cart_catalog_changed')
+                    has_complete_selection = any(
+                        line.get('color') and (line.get('size') or line.get('weight_kg') or line.get('age_months'))
+                        for line in state['cart']
+                    )
+                    if state.get('order_id') or state.get('purchase_event') or has_complete_selection:
+                        raise ServiceRequired('cart_catalog_changed')
+                    def prune_unavailable(cur_state):
+                        cur_state['cart'] = []
+                        cur_state['purchase_event'] = None
+                        cur_state.pop('checkout_prompt', None)
+                        return dict(pruned=True)
+                    self.store.apply(scope, f'prune-unavailable-cart:{event_id}', snap['version'],
+                                     dict(event_id=event_id), prune_unavailable)
+                    snap = self.store.snapshot(scope)
                 return dict(action='continue', state_version=snap['version'], unavailable_product=reference['product_id'])
             if len(pair) == 2 and pending:
                 reference = dict(status='multiple', source='image', product_ids=list(pair))
@@ -501,8 +514,45 @@ class Runtime:
             try:initial_readiness=cart.readiness(scope)
             except Conflict as exc:
                 if isinstance(exc,BusinessChoice) or str(exc)=='product_not_available_in_store':
-                    raise ServiceRequired('cart_catalog_changed') from None
-                raise
+                    switched_product = bool(
+                        verified_image
+                        or (reference.get('status') == 'known' and reference.get('product_id')
+                            and all(line.get('product_id') != reference.get('product_id')
+                                    for line in (state.get('cart') or [])))
+                    )
+                    has_complete_selection = any(
+                        line.get('color') and (line.get('size') or line.get('weight_kg') or line.get('age_months'))
+                        for line in (state.get('cart') or [])
+                    )
+                    if not state.get('order_id') and (
+                        switched_product or isinstance(exc, BusinessChoice)
+                        or (not state.get('purchase_event') and not has_complete_selection)
+                    ):
+                        def prune_stale_cart(cur_state):
+                            kept = []
+                            for line in cur_state.get('cart') or []:
+                                pid = line.get('product_id')
+                                prod = catalog.products.get(pid) if pid else None
+                                if prod and prod.get('status', 'active') == 'active':
+                                    try:
+                                        catalog.validate(line)
+                                        kept.append(line)
+                                    except Conflict:
+                                        pass
+                            cur_state['cart'] = kept
+                            if not kept:
+                                cur_state['purchase_event'] = None
+                                cur_state.pop('checkout_prompt', None)
+                            return dict(pruned=True)
+                        self.store.apply(scope, f'prune-stale-cart:{event_id}', snap['version'],
+                                         dict(event_id=event_id), prune_stale_cart)
+                        snap = self.store.snapshot(scope)
+                        state = snap['data']
+                        initial_readiness = cart.readiness(scope)
+                    else:
+                        raise ServiceRequired('cart_catalog_changed') from None
+                else:
+                    raise
             active_products=[p for p in catalog.products.values() if p.get('status','active')=='active']
             image_fields = {'image_url', 'image_urls', 'images', 'photos', 'attachments'}
             text_products = [{key: value for key, value in product.items() if key not in image_fields} for product in active_products]

@@ -556,6 +556,36 @@ def staff_confirmation(module, db, row, task_id):
     return deliver_confirmation(Store(db), scope, task_id, send, allowed, record=record, staff_override=True)
 
 
+def schedule_live_followup(module, db, scope, entry, action):
+    if action in {'withdrawn', 'cancelled', 'human', 'needs_review', 'service_failure'}:
+        return None
+    scheduler = getattr(module, 'schedule_followup_if_needed', None)
+    if not callable(scheduler):
+        return None
+    try:
+        state = entry.store.snapshot(scope)['data']
+        if state.get('order_id') and state.get('order_status') != 'cancelled':
+            return None
+        focus_id = state.get('focus_product_id')
+        product = None
+        if focus_id:
+            try:
+                catalog = entry.catalog(scope.store)
+                product = catalog.products.get(focus_id)
+            except Exception:
+                product = None
+        if state.get('purchase_event') or (state.get('cart') and state.get('checkout_prompt')):
+            stage = 'checkout'
+        elif state.get('cart') or focus_id:
+            stage = 'selection'
+        else:
+            stage = 'conversation'
+        return scheduler(db, scope.sender, stage=stage, product=product,
+                         meta={'source': 'sales_runtime_v2', 'store_id': scope.store})
+    except Exception:
+        return None
+
+
 def drain(module, db, entry, scope, incoming_id, enabled):
     send, record = delivery_callbacks(module, db, scope, incoming_id, enabled)
     pending = db.execute('''SELECT id FROM sales_v2_order_tasks WHERE scope=? AND kind='confirmation'
@@ -739,6 +769,8 @@ def process(module, db, row, incoming_id, *, staff_retry=False):
                         if any(status in {'sending','unknown','rejected'} for status in deliveries) else
                         dict(ok=True, action=result['action'], deliveries=deliveries))
         notify_orders(module, db, scope)
+        if response.get('ok') and not response.get('needs_human') and response.get('deliveries'):
+            schedule_live_followup(module, db, scope, entry, result.get('action'))
         with db:
             mark_handled()
         return response

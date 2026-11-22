@@ -1190,7 +1190,19 @@ class Responses:
                 return self.validate_parts(parts, context, catalog, strict)
             except ValueError:
                 return None
-        return self.greeting_recovery(context)
+        return self.greeting_recovery(context) or self.courtesy_recovery(context)
+
+    @staticmethod
+    def courtesy_recovery(context):
+        if context.get('mode') != 'continue' or context.get('question_field') is not None:
+            return None
+        clean = checkout.normalized(context.get('customer_message', '')).strip(' .!؟?،🌷🌹❤🌸')
+        if re.fullmatch(
+            r'(?:تمام|اوكي|اوك|ماشي|حسنا|شكرا|مشكور[هة]?|تسلم(?:ين|ون)?|عاشت\s+ايد[جچك]|يسلمو|بارك\s+الله\s+بي[جچك]|رحم\s+الله\s+والدي[جچك]|الله\s+يحفظ[جچك])(?:\s+(?:عيني|حبيبتي|حبي|عمري|حياتي|جزيلا|كلش|هوايه))?',
+            clean,
+        ):
+            return [dict(type='text', text='تدللين عيوني، بأي وقت بالخدمة 🌷')]
+        return None
 
     @staticmethod
     def same_day_recovery(context):
@@ -1329,7 +1341,10 @@ class Responses:
             bubble_limit = 165 if sales_turn and not layout['exception'] else 270
             if layout['needs_rewrite'] or any(len(reply_layout.compact(part)) > bubble_limit for part in layout['reply_parts']):
                 raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
-            parts = [dict(type='text', text=part) for part in layout['reply_parts']]
+            raw_parts = list(layout['reply_parts'])
+            if sales_turn and not layout['exception']:
+                raw_parts = self.split_short_bubbles(raw_parts, max_len=135, max_parts=4)
+            parts = [dict(type='text', text=part) for part in raw_parts]
             if len(parts) > 1:
                 for part in parts:
                     part['text'] = re.sub(r'[،,]\s*$', '.', part['text'])
@@ -1340,6 +1355,34 @@ class Responses:
         if strict:
             validate_next_step(parts, context['next_step'])
         return parts
+
+    @staticmethod
+    def split_short_bubbles(parts, *, max_len=135, max_parts=4):
+        result = []
+        for idx, part in enumerate(parts):
+            remaining = len(parts) - idx - 1
+            text = part.strip()
+            if (len(reply_layout.compact(text)) <= max_len
+                    or len(result) + 1 + remaining >= max_parts
+                    or re.search(r'المجموع|الإجمالي|الاجمالي', text)):
+                result.append(text)
+                continue
+            pieces = [p.strip() for p in re.split(r'(?<=[.!؟?])\s+', text) if p.strip()]
+            if len(pieces) == 1:
+                clauses = [p.strip() for p in re.split(r'(?<=،)\s+', text) if p.strip()]
+                if len(clauses) > 1:
+                    pieces = clauses
+            if len(pieces) <= 1:
+                result.append(text)
+                continue
+            mid = max(1, len(pieces) // 2)
+            left = ' '.join(pieces[:mid]).strip()
+            right = ' '.join(pieces[mid:]).strip()
+            if len(reply_layout.compact(left)) >= 25 and len(reply_layout.compact(right)) >= 20:
+                result.extend([left, right])
+            else:
+                result.append(text)
+        return result
 
     @staticmethod
     def remove_stale_greetings(parts, greeting):

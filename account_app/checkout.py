@@ -43,7 +43,7 @@ def declared_variant_purchase(value):
     return bool((choices['colors'] or choices['sizes']) and not unresolved_purchase_terms(value))
 
 
-_PHONE_SEPARATOR = r"[ \t\u00a0\u200e\u200f\u202f\u2066-\u2069()\-]"
+_PHONE_SEPARATOR = r"[ \t\u00a0\u200e\u200f\u202a-\u202f\u2066-\u2069()\-]"
 PHONE = re.compile(rf"(?<!\d)(?:(?:\+?964|00964){_PHONE_SEPARATOR}*7|0{_PHONE_SEPARATOR}*7)"
                    rf"(?:{_PHONE_SEPARATOR}*\d){{9}}(?!\d)")
 PROVINCES = {
@@ -203,8 +203,11 @@ def contact_fields(text, previous=None):
 def is_confirmation(text):
     # Only affirmative words and courtesy fillers; corrections, questions and
     # negations must still invalidate a pending cart, including mixed bursts.
+    raw = str(text or "").strip()
+    if re.fullmatch(r"(?:👍|👌|✅)[\U0001f3fb-\U0001f3ff\ufe0f\s]*", raw):
+        return True
     affirmative = r"(?:اي+|يي+|نعم|تمام|موافق|موافقة|اوكي|اوك|نكمل|كملي|ثبتي|ثبت|ثبتيه|ثبتوا|اعتمدي|اعتمديه|اعتمدها)"
-    filler = r"(?:عيني|حياتي|حبيبتي|حبي|عمري|يمعوده|يمعودة|الطلب|الحجز|هسه|رجاء|شكرا|والله|اكيد|بسرعه|بسرعة|زاد|فدوه|فدوة|بلا زحمه|بلا زحمة|ياريت|يا ريت|عادي|ماشي)"
+    filler = r"(?:عيني|حياتي|حبيبتي|حبي|عمري|يمعوده|يمعودة|عفيه|عفية|الطلب|الحجز|هسه|رجاء|شكرا|والله|اكيد|بسرعه|بسرعة|زاد|فدوه|فدوة|بلا زحمه|بلا زحمة|ياريت|يا ريت|عادي|ماشي)"
     lead = r"(?:(?:يلا|يله|يالله)(?:\s+|\s*[,،]\s*))?"
     return bool(re.fullmatch(lead + affirmative + r"(?:\s+(?:" + affirmative + "|" + filler + r"))*[.!،\s]*",
                              normalized(text).strip()))

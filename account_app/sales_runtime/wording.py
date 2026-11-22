@@ -251,6 +251,7 @@ def fact_recovery_parts(context):
             'delivery_fee': 'التوصيل {{delivery_fee}}.',
             'total': 'المجموع ويا التوصيل {{total}}.',
             'discounted_subtotal': 'سعر القطع بعد الخصم {{discounted_subtotal}}.',
+            'alternative_price': 'وسعر البديل {{alternative_price}}.',
         }
         if amounts.keys() - price_lines.keys():
             return None
@@ -269,6 +270,7 @@ def fact_recovery_parts(context):
         'alternatives.photos': 'تحبين تشوفين صور الموديلات البديلة؟',
         'catalog.show_option': 'تحبين أدزلج صورته؟',
         'inventory.alternative': 'تحبين أشوفلج لون أو قياس ثاني؟',
+        'alternative.color': 'شنو اللون اللي ببالج حتى أشوفلج خيار قريب؟',
     }
     by_field = {'color': 'يا لون يعجبج؟', 'size': 'شنو القياس اللي يناسبج؟',
                 'weight_kg': 'شكد الوزن تقريباً؟', 'age_months': 'شكد عمر الطفل؟'}
