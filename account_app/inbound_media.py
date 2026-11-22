@@ -48,7 +48,7 @@ def trusted_source(url, chatwoot_base=''):
     if not host:
         return False
     known = ('lookaside.fbsbx.com', 'fbcdn.net', 'fbsbx.com',
-             'cdninstagram.com', 'app.chatwoot.com')
+             'cdninstagram.com', 'app.chatwoot.com', 'tiktokcdn.com')
     configured = _host(chatwoot_base)
     return any(_suffix(host, domain) for domain in known) or bool(configured and host == configured)
 

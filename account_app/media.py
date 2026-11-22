@@ -34,7 +34,7 @@ def sticker_attachment(attachment, metadata=None):
         if node.get('is_sticker') is True or node.get('isSticker') is True:
             return True
         if any(str(node.get(key) or '').lower() in types for key in (
-                'type', 'file_type', 'attachment_type', 'image_type', 'mime_type', 'content_type')):
+                'type', 'file_type', 'attachment_type', 'image_type', 'mime_type', 'content_type', 'tiktokMessageType')):
             return True
     return False
 

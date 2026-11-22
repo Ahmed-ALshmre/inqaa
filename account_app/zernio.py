@@ -13,17 +13,19 @@ from urllib.parse import quote, urlparse
 import requests
 from flask import jsonify, request
 try:
-    from . import ad_attribution, media
+    from . import ad_attribution, media, zernio_tiktok
     from .delivery_state import ANSWERED_SQL
 except ImportError:
     import ad_attribution
     import media
+    import zernio_tiktok
     from delivery_state import ANSWERED_SQL
 
 STORE_ID = 'al-fatena'
 STORE_FLAGS = {'al-fatena': 'ZERNIO_AL_FATENA_ENABLED',
                'baraah-kids': 'ZERNIO_BARAAH_KIDS_ENABLED'}
 API_URL = 'https://zernio.com/api/v1'
+PLATFORMS = ('facebook', 'instagram', 'tiktok')
 
 
 def account_bindings():
@@ -31,10 +33,17 @@ def account_bindings():
         entries = json.loads(os.environ.get('ZERNIO_ACCOUNTS', '{}'))
         if not isinstance(entries, dict):
             return {}
+        tiktok = os.environ.get('ZERNIO_TIKTOK_ACCOUNT_ID', '').strip()
+        if tiktok:
+            expected = {'store_id': 'baraah-kids', 'platform': 'tiktok'}
+            if tiktok in entries and entries[tiktok] != expected:
+                return {}  # Conflicting ownership must never send from another account.
+            entries[tiktok] = expected
         return {key: value for key, value in entries.items()
                 if re.fullmatch(r'[a-fA-F0-9]{24}', key)
                 and isinstance(value, dict) and value.get('store_id') in STORE_FLAGS
-                and value.get('platform') in ('facebook', 'instagram')}
+                and value.get('platform') in PLATFORMS
+                and (value['platform'] != 'tiktok' or value['store_id'] == 'baraah-kids')}
     except (ValueError, TypeError):
         return {}
 
@@ -64,6 +73,7 @@ def configuration(store=STORE_ID):
 
 
 def init_db(db):
+    zernio_tiktok.init_db(db)
     db.executescript('''
         CREATE TABLE IF NOT EXISTS zernio_conversations (
             sender_id TEXT PRIMARY KEY, account_id TEXT NOT NULL,
@@ -344,6 +354,12 @@ def send(module, sender_id, messages, *, post=None, operation_key=None):
         return dict(result, status='wrong_account', message='Zernio account is not mapped to this store')
     if not messages:
         return dict(result, status='empty_messages')
+    tiktok = row['platform'] == 'tiktok'
+    if tiktok:
+        try:
+            messages = zernio_tiktok.prepare(messages)
+        except ValueError as exc:
+            return dict(result, status='unsupported_message', message=str(exc))
     # Per-job retries share keys; deliberate manual sends without a job remain distinct.
     batch = operation_key or module.ai_jobs.active_job.get() or uuid.uuid4().hex
     for index, message in enumerate(messages):
@@ -373,6 +389,8 @@ def send(module, sender_id, messages, *, post=None, operation_key=None):
                         return dict(result, status='invalid_image')
                 if not any(path.is_relative_to(root) for root in roots) or not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
                     return dict(result, status='invalid_audio' if audio else 'invalid_image', message='Attachment missing or exceeds 8 MB')
+                if tiktok:
+                    reference = zernio_tiktok.image_reference(module, path, reference)
             except (ValueError, TypeError, OSError):
                 return dict(result, status='invalid_audio' if message.get('type') == 'audio' else 'invalid_image', message='Invalid attachment path')
             payload.update(attachmentUrl=reference, attachmentType='audio' if audio else 'image')
@@ -381,24 +399,43 @@ def send(module, sender_id, messages, *, post=None, operation_key=None):
         else:
             return dict(result, status='unsupported_message')
         key = hashlib.sha256(json.dumps([batch, sender_id, index, payload], sort_keys=True).encode()).hexdigest()
+        if tiktok:
+            reservation = zernio_tiktok.reserve(module.get_db(), sender_id, key)
+            if not reservation['ok']:
+                return dict(result, status=reservation['status'], message='TikTok reply unavailable; check the customer window or prior delivery.')
+            if reservation['cached']:
+                result['provider_id'] = reservation['provider_id']
+                continue
+            result.pop('provider_id', None)
         try:
             response = post(API_URL + '/inbox/conversations/' + quote(row['conversation_id'], safe='') + '/messages',
                 json=payload, headers={'Authorization': 'Bearer ' + token, 'Idempotency-Key': key},
                 timeout=30, allow_redirects=False)
             result['status_code'] = response.status_code
             if not 200 <= response.status_code < 300:
+                if tiktok:
+                    zernio_tiktok.finish(module.get_db(), key, rejected=400 <= response.status_code < 500 and response.status_code != 408)
                 return dict(result, status='rejected', message=f'Zernio HTTP {response.status_code}')
             body = response.json()
             data = (body.get('data') or {}) if isinstance(body, dict) else {}
             if (not isinstance(body, dict) or body.get('success') is not True or not isinstance(data, dict)
                     or not (data.get('messageId') or data.get('messageIds')) or data.get('partialFailure')):
+                if tiktok:
+                    zernio_tiktok.finish(module.get_db(), key)
                 return dict(result, status='unconfirmed', message='Zernio did not confirm the complete message')
             ids = data.get('messageIds')
             if data.get('messageId'):
                 result['provider_id'] = str(data['messageId'])
             elif isinstance(ids, list) and len(ids) == 1 and ids[0]:
                 result['provider_id'] = str(ids[0])
+            if tiktok:
+                if not result.get('provider_id'):
+                    zernio_tiktok.finish(module.get_db(), key)
+                    return dict(result, status='unconfirmed')
+                zernio_tiktok.finish(module.get_db(), key, provider_id=result['provider_id'])
         except (requests.RequestException, ValueError, OSError):
+            if tiktok:
+                zernio_tiktok.finish(module.get_db(), key)
             return dict(result, status='transport_error', message='Zernio delivery could not be confirmed')
     return dict(result, ok=True, status='success')
 
@@ -437,7 +474,7 @@ def install(module):
             if data['event'] == 'message.received':
                 if message.get('direction') != 'incoming':
                     return jsonify(ok=True, ignored=True)
-                if message.get('platform') not in ('facebook', 'instagram'):
+                if message.get('platform') not in PLATFORMS:
                     raise ValueError('Unsupported message platform')
                 if message.get('platform') != (data.get('account') or {}).get('platform'):
                     raise ValueError('Message platform does not match account')
@@ -452,6 +489,9 @@ def install(module):
         _save_ad(module, sender_id, data, occurred_at)
         if data['event'] == 'referral.received':
             return jsonify(ok=True, referral=True)
+        if platform == 'tiktok':
+            zernio_tiktok.record_incoming(module.get_db(), sender_id,
+                str(message.get('platformMessageId') or message['id']), event_time(message.get('sentAt') or data['timestamp']))
         # Preserve referrals while another app owns a thread; never auto-take control.
         if metadata.get('standby') is True:
             return jsonify(ok=True, standby=True)
@@ -487,7 +527,11 @@ def install(module):
     @module.app.get('/api/zernio/diag')
     @module._dash_require
     def zernio_diag():
-        return jsonify(dict(configuration(), stores={store: configuration(store) for store in STORE_FLAGS}))
+        activity = module.get_db().execute('''SELECT COUNT(*) received_messages,MAX(i.sent_at) last_incoming_at
+            FROM zernio_tiktok_inbound i JOIN zernio_conversations c ON c.sender_id=i.sender_id
+            WHERE c.platform='tiktok' AND c.store_id='baraah-kids' ''').fetchone()
+        return jsonify(dict(configuration(), stores={store: configuration(store) for store in STORE_FLAGS},
+                            tiktok_activity=dict(activity)))
 
     @module.app.post('/api/zernio/kids-bindings')
     @module._dash_require

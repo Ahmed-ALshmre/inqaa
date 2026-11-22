@@ -155,7 +155,7 @@
       <div class="advanced-status-filters"><button type="button" data-filter="booked" onclick="setFilter('booked',this)"><i class="bi bi-bag-check"></i> تم الطلب</button><button type="button" data-filter="system_issues" onclick="setFilter('system_issues',this)"><i class="bi bi-exclamation-circle"></i> مشاكل النظام</button></div>
       <div class="inbox-filter-grid">
         <label>مرحلة الزبون<select id="filterStage" onchange="refreshInboxFilters()"><option value="all">كل المراحل</option><option value="new">جديد</option><option value="warm">مهتم</option><option value="hot">جاد</option><option value="booked">تم الحجز</option></select></label>
-        <label>المنصة<select id="filterPlatform" onchange="refreshInboxFilters()"><option value="all">كل المنصات</option><option value="facebook">فيسبوك</option><option value="instagram">إنستغرام</option></select></label>
+        <label>المنصة<select id="filterPlatform" onchange="refreshInboxFilters()"><option value="all">كل المنصات</option><option value="facebook">فيسبوك</option><option value="instagram">إنستغرام</option><option value="tiktok">تيك توك</option></select></label>
         <label>المحافظة<input id="filterProvince" placeholder="اسم المحافظة" oninput="scheduleInboxSearch()"></label>
         <label>الذكاء الاصطناعي<select id="filterAI" onchange="refreshInboxFilters()"><option value="all">الكل</option><option value="1">يعمل</option><option value="0">متوقف</option></select></label>
         <label>من تاريخ<input type="date" id="filterFrom" onchange="refreshInboxFilters()"></label>
@@ -634,7 +634,7 @@
 <script src="/static/js/dashboard.js?v=51"></script>
 <script src="/static/js/image_composer.js?v=1"></script>
 <script src="/static/js/voice_composer.js?v=1"></script>
-<script src="/static/js/conversation_tools.js?v=5"></script>
+<script src="/static/js/conversation_tools.js?v=6"></script>
 {% include "_product_questions_dialog.html" %}
 {% include "_mobile_install.html" %}
 </body>
