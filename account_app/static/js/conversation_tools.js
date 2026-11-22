@@ -1,5 +1,5 @@
 function platformBadge(platform) {
-  const names = {instagram:['instagram','إنستغرام'], facebook:['messenger','ماسنجر'], messenger:['messenger','ماسنجر'], whatsapp:['whatsapp','واتساب']};
+  const names = {instagram:['instagram','إنستغرام'], facebook:['messenger','ماسنجر'], messenger:['messenger','ماسنجر'], whatsapp:['whatsapp','واتساب'], tiktok:['tiktok','تيك توك']};
   const item = names[String(platform || '').toLowerCase()] || ['chat-dots','مصدر غير محدد'];
   return `<span class="platform-badge platform-${item[0]}" title="${item[1]}" aria-label="${item[1]}"><i class="bi bi-${item[0]}" aria-hidden="true"></i></span>`;
 }

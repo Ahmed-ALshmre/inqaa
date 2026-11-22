@@ -5181,6 +5181,8 @@ def extract_referral(event):
 
 def detect_message_platform(body):
     obj = str((body or {}).get("object") or "").strip().lower()
+    if obj == "tiktok":
+        return "tiktok"
     if "whatsapp" in obj:
         return "whatsapp"
     if "instagram" in obj:
@@ -15690,6 +15692,8 @@ def _delete_conversation_records(db, sender_id):
         "conversation_ad_context",
         "zernio_ad_events",
         "zernio_conversations",
+        "zernio_tiktok_inbound",
+        "zernio_tiktok_sends",
         "messages",
         "conversation_memory",
         "human_reviews",
@@ -15872,7 +15876,7 @@ def api_send_message(sender_id):
     platform = customer["platform"] if customer else "facebook"
     requested_platform = str(data.get("platform") or "").strip().lower()
     if requested_platform:
-        if requested_platform not in ("facebook", "instagram", "whatsapp"):
+        if requested_platform not in ("facebook", "instagram", "whatsapp", "tiktok"):
             return jsonify({"error": "Unsupported platform"}), 400
         platform = requested_platform
     owner_store = (customer["store_id"] if customer else None) or current_store_id()

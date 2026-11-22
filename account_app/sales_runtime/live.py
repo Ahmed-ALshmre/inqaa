@@ -523,7 +523,8 @@ def delivery_callbacks(module, db, scope, incoming_id, enabled):
             response = module.chatwoot.send(module, scope.sender, [part])
         if response.get('ok') and response.get('provider_id'):
             return dict(accepted=True, provider_id=response['provider_id'])
-        if response.get('status_code') in {400, 401, 403, 404, 422}:
+        if response.get('status_code') in {400, 401, 403, 404, 422} or response.get('status') in {
+                'tiktok_reply_limit', 'tiktok_reply_window_closed', 'tiktok_no_customer_message'}:
             return dict(accepted=False)
         return {}
 

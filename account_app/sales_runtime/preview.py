@@ -185,7 +185,8 @@ def install(module, *, products, delivery_fee, decide, writer, fetch_image, matc
         if result['ok'] and result.get('provider_id'):
             return dict(accepted=True, provider_id=result['provider_id'])
         # Rejections with transport uncertainty are left for reconciliation.
-        if result['status'] == 'rejected' and result['status_code'] in {400, 401, 403, 404, 422}:
+        if (result['status'] == 'rejected' and result['status_code'] in {400, 401, 403, 404, 422}) or result['status'] in {
+                'tiktok_reply_limit', 'tiktok_reply_window_closed', 'tiktok_no_customer_message'}:
             return dict(accepted=False)
         return {}
 
