@@ -44,7 +44,9 @@ def validate_fulfillment(parts, proof):
         raise ValueError('reply.action: shipping status requires executed fulfillment evidence')
     if not proof.get('order_saved') and re.search(
             r'(?:يوصل[جچك]|توصل[جچك]|راح\s+يجي[جچك])\s+(?:ال)?'
-            r'(?:كيلوت|قميص|سوت|تراك|فستان|تنور[هة]|قطع[هة]|طلبج|طلبك)', text):
+            r'(?:كيلوت|قميص|سوت|تراك|فستان|تنور[هة]|قطع[هة]|طلبج|طلبك|نفس\s+(?:ال)?موديل)|'
+            r'راح\s+نجهز[ها]?\s+(?:الج|الك|لج|لك|الچ)|'
+            r'(?:تتهنين\s+بي[ها]?|تلبسين[ها]?\s+بالف\s+عافي[هة]|ملبوس\s+(?:العافي[هة]|الهنا))', text):
         raise ValueError('reply.action: shipment of a selected item requires a saved order')
     window = normalized(proof.get('delivery_time'))
     if re.search(r'24\s*ساع[هة].{0,25}يومين', window) and re.search(
