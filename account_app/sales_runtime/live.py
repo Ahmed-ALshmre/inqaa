@@ -570,7 +570,7 @@ def schedule_live_followup(module, db, scope, entry, action):
         product = None
         if focus_id:
             try:
-                catalog = entry.catalog(scope.store)
+                catalog = entry.load_catalog(scope.store)
                 product = catalog.products.get(focus_id)
             except Exception:
                 product = None
@@ -580,6 +580,14 @@ def schedule_live_followup(module, db, scope, entry, action):
             stage = 'selection'
         else:
             stage = 'conversation'
+        if stage in {'checkout', 'selection'}:
+            try:
+                db.execute(
+                    "UPDATE customers SET lead_score=MAX(COALESCE(lead_score,0), ?) WHERE sender_id=?",
+                    (80 if stage == 'checkout' else 60, scope.sender),
+                )
+            except Exception:
+                pass
         return scheduler(db, scope.sender, stage=stage, product=product,
                          meta={'source': 'sales_runtime_v2', 'store_id': scope.store})
     except Exception:
@@ -765,9 +773,14 @@ def process(module, db, row, incoming_id, *, staff_retry=False):
             response = review('محرك البيع يحتاج مراجعة الموظف', result)
         else:
             deliveries = drain(module, db, entry, scope, incoming_id, allowed)
-            response = (review('تحقق من قبول الرسالة لدى مزود الإرسال قبل إعادة المحاولة')
-                        if any(status in {'sending','unknown','rejected'} for status in deliveries) else
-                        dict(ok=True, action=result['action'], deliveries=deliveries))
+            if any(status in {'sending', 'unknown', 'rejected'} for status in deliveries):
+                response = review('تحقق من قبول الرسالة لدى مزود الإرسال قبل إعادة المحاولة')
+            elif (not deliveries and result.get('action') not in {'already_handled', 'superseded'}
+                  and (result.get('reply') or {}).get('action') != 'skipped'
+                  and not delivery_state.answered_turn(db, scope.store, scope.sender, incoming_id)):
+                response = review('تعذر إرسال رد تلقائي؛ تحويل فوري للموظف: empty_delivery', result)
+            else:
+                response = dict(ok=True, action=result['action'], deliveries=deliveries)
         notify_orders(module, db, scope)
         if response.get('ok') and not response.get('needs_human') and response.get('deliveries'):
             schedule_live_followup(module, db, scope, entry, result.get('action'))

@@ -2042,8 +2042,6 @@ def _followup_block_reason(db, sender_id):
     owner = db.execute("SELECT store_id,lead_score FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
     if not owner or (owner['store_id'] or DEFAULT_STORE_ID) != current_store_id():
         return "wrong_store"
-    if sales_runtime_live.route(db, sender_id):
-        return "sales_runtime_owns_conversation"
     if not is_ai_enabled(db):
         return "store_ai_disabled"
     if int(owner["lead_score"] or 0) < get_followup_settings(db)["min_interest_score"]:

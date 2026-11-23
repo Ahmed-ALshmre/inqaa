@@ -62,7 +62,7 @@ class SalesBeastV2UnitTests(unittest.TestCase):
         def make_entry(state_data):
             entry = Mock()
             entry.store.snapshot.return_value = {'data': state_data}
-            entry.catalog.return_value = SimpleNamespace(products={'P012': {'product_id': 'P012', 'product_name': 'كيلوت'}})
+            entry.load_catalog.return_value = SimpleNamespace(products={'P012': {'product_id': 'P012', 'product_name': 'كيلوت'}})
             return entry
 
         # Checkout stage
@@ -93,6 +93,13 @@ class SalesBeastV2UnitTests(unittest.TestCase):
             'question_field': 'product.P1.color',
             'customer_message': 'تمام',
         }))
+
+    def test_iraqi_color_typos_and_alternative_photo_approval(self):
+        from account_app import sales_recovery
+        from account_app.sales_runtime.facts import requested_fields
+        self.assertIn('colors', requested_fields('بي لاوات\nكيلوت\nاكو لاوان'))
+        self.assertTrue(sales_recovery.alternative_photo_request('دزيلي بالله اشوف', offered=True))
+        self.assertTrue(sales_recovery.alternative_photo_request('اي دزيلي عفيه اشوفهن', offered=True))
 
 
 class SalesBeastV2RuntimeTests(unittest.TestCase):
