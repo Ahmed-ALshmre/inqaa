@@ -249,6 +249,31 @@ class SmartReviewer12hTests(unittest.TestCase):
         tag = self.db.execute("SELECT tag FROM customer_tags WHERE sender_id='s-unbooked-contact'").fetchone()
         self.assertEqual('بيانات حجز بدون طلب', tag['tag'])
 
+    def test_send_due_followups_resolves_sales_runtime_product_without_legacy_interest(self):
+        # Reproduces #8015/#8024: sales_runtime_v2 scheduled followup with product_id='P011'
+        # while legacy customer_product_interests is empty.
+        self._seed_sender('s-runtime-fup', [
+            ('incoming', 'شكد سعر الدشداشة؟', 2.2, None),
+            ('outgoing', 'سعرها 12 ألف حبيبتي، يا لون يعجبج؟', 2.0, {'sender_type': 'ai'}),
+        ])
+        past = (datetime.now(app_module.BAGHDAD_TZ) - timedelta(minutes=5)).isoformat()
+        meta = json.dumps({
+            'source': 'sales_runtime_v2', 'store_id': 'default',
+            'regenerate_at_send': True, 'product_id': 'P011',
+        }, ensure_ascii=False)
+        self.db.execute(
+            "INSERT INTO followups(sender_id,stage,message_text,status,scheduled_at,created_at,meta_json) VALUES(?,'selection','','pending',?,?,?)",
+            ('s-runtime-fup', past, past, meta),
+        )
+        self.db.commit()
+        fake_prod = [{'product_id': 'P011', 'product_name': 'دشداشة قديفة', 'status': 'active', 'availability': 'متوفر'}]
+        with patch.object(app_module, 'load_active_products', return_value=fake_prod), \
+             patch.object(app_module, 'send_reply_via_manychat', return_value=True), \
+             patch.object(app_module, 'build_followup_message', return_value='هلا حبيبتي، بعدج حابة تختارين لون للدشداشة؟ 🌷') as build_mock:
+            res = app_module.send_due_followups(self.db)
+        self.assertEqual(1, res['sent'])
+        self.assertEqual('P011', build_mock.call_args.args[3]['product_id'])
+
 
 if __name__ == '__main__':
     unittest.main()
