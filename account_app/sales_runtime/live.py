@@ -287,7 +287,10 @@ def pending_input(module, db, row, incoming_id, staff_reply_id):
                                and text.casefold() == 'shared post')
         if text and text != message['image_url'] and not shared_post_caption:
             texts.append(text)
-        ad = ad_attribution.extract(delivery_state.metadata(message['raw_payload'])) or ad
+        extracted_ad = ad_attribution.extract(delivery_state.metadata(message['raw_payload']))
+        if not extracted_ad and message['ad_id'] and str(message['ad_id']).strip():
+            extracted_ad = {'ad_id': str(message['ad_id']).strip()}
+        ad = extracted_ad or ad
         incoming_media = module.message_media(message)
         photos = [item['url'] for item in incoming_media if item['type'] == 'image']
         if photos:
