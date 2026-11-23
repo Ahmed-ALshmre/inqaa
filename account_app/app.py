@@ -2271,6 +2271,11 @@ def send_due_followups(db=None, limit=25):
                 if metadata.get('regenerate_at_send'):
                     products = load_customer_products(db, sender_id, limit=20)
                     product = next((p for p in products if p.get('product_id') == metadata.get('product_id')), None)
+                    if metadata.get('product_id') and not product:
+                        product = next(
+                            (p for p in load_active_products(db) if p.get('product_id') == metadata.get('product_id')),
+                            None,
+                        )
                     product = product or (products[0] if len(products) == 1 else None)
                     if metadata.get('product_id') and (not product or product.get('product_id') != metadata['product_id'] or _is_out_of_stock(product)):
                         message = None
@@ -3604,7 +3609,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
         f"Photo order with current stock: {ai_efficiency.dumps(product_albums.current_positions(customer_image_positions(db, sender_id), load_active_products(db)))}\n"
         f"Lessons from detected mistakes: {sales_learning.guidance(db, current_store_id())}\n"
         f"Current store: {json.dumps(get_store_settings(db), ensure_ascii=False)}\n"
-        "Identify an evidenced unresolved need; silence alone does not reveal a reason. Return an empty reply if no useful follow-up exists."
+        "If the customer stopped replying after an AI reply on an available product and did not refuse or book, write a short warm Iraqi reminder (1-2 sentences) with one easy next-step question. Return an empty reply only if they refused, booked, or an unresolved staff question is pending."
     )
 
     try:
