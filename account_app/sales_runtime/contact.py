@@ -126,13 +126,31 @@ def contact_only(text, *, quoted_total=None):
     address = ''
     contact_found = False
     address_text, _ = delivery_note(text)
-    for line in address_text.splitlines():
+    raw_lines = [line for line in address_text.splitlines() if line.strip()]
+    lines = []
+    idx = 0
+    while idx < len(raw_lines):
+        if idx + 1 < len(raw_lines):
+            a = checkout.normalized(raw_lines[idx]).strip(' .،,:')
+            b = checkout.normalized(raw_lines[idx + 1]).strip(' .،,:')
+            if len(a) <= 4 and len(b) <= 4 and checkout.is_confirmation(a + b):
+                idx += 2
+                continue
+        lines.append(raw_lines[idx])
+        idx += 1
+    for line in lines:
         clean = checkout.normalized(delivery_line(shipping_selection(line)[1])).strip(' .،,:')
         if not clean:
             continue
         if checkout_inspection_question(clean) and not checkout.phone_number(clean):
             continue
-        if checkout_followup(clean, quoted_total=quoted_total) or checkout.is_confirmation(clean):
+        if (checkout_followup(clean, quoted_total=quoted_total)
+                or checkout.is_confirmation(clean)
+                or re.fullmatch(
+                    r'(?:راح\s+)?(?:ادز|ارسل|انطي(?:ج|ك)?|ابعت)(?:لج|لك)?\s+(?:ال)?(?:عنوان|رقم|موبايل|تفاصيل|بيانات)(?:\s+و(?:ال)?(?:رقم|عنوان))?|'
+                    r'(?:هذا|هاي)\s+(?:ال)?(?:عنوان|رقمي|عنواني)|(?:ال)?عنوان\s+و(?:ال)?رقم',
+                    clean,
+                )):
             continue
         if LOCAL_MOBILE.fullmatch(clean):
             contact_found = True
