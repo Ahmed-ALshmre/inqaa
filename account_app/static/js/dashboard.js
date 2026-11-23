@@ -528,13 +528,37 @@ function renderConversations({resetScroll = false} = {}) {
     const knownStoreNames = {default: 'لمسة ستور', khuyoot: 'خيوط', 'golden-threads': 'خيوط الذهب جملة', 'al-fatena': 'الفاتنة', 'baraah-kids': 'عالم البراءة'};
     const storeName = c.store_name || knownStoreNames[storeId] || storeId;
     const storeBadgeClass = {'khuyoot':'store-khuyoot', 'golden-threads':'store-golden-threads', 'al-fatena':'store-fatena', 'baraah-kids':'store-baraah'}[storeId] || 'store-lamsa';
+    let followupBadge = '';
+    if (c.pending_followup_at || c.latest_followup_status === 'pending' || c.latest_followup_status === 'sending') {
+      let whenText = 'قيد العمل';
+      if (c.pending_followup_at) {
+        const dt = new Date(c.pending_followup_at);
+        if (!Number.isNaN(dt.getTime())) {
+          const diffMin = Math.round((dt.getTime() - Date.now()) / 60000);
+          const hhmm = dt.toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit', hour12: false});
+          whenText = diffMin > 0 && diffMin < 180 ? `بعد ${diffMin} د (${hhmm})` : hhmm;
+        }
+      }
+      followupBadge = `<span class="cust-status cust-status-followup-pending" title="موعد المتابعة: ${esc(c.pending_followup_at || '')}"><i class="bi bi-clock"></i> متابعة ${esc(whenText)}</span>`;
+    } else if (c.ai_followup_sent || c.has_sent_followup) {
+      let sentLabel = '';
+      if (c.sent_followup_at) {
+        const dt = new Date(c.sent_followup_at);
+        if (!Number.isNaN(dt.getTime())) {
+          sentLabel = ' ' + dt.toLocaleTimeString('ar-IQ', {hour: '2-digit', minute: '2-digit', hour12: false});
+        }
+      }
+      followupBadge = `<span class="cust-status cust-status-followup" title="تمت المتابعة: ${esc(c.sent_followup_at || '')}"><i class="bi bi-check2-circle"></i> تمت المتابعة${esc(sentLabel)}</span>`;
+    } else if (c.latest_followup_status === 'cancelled' || c.latest_followup_status === 'uncertain') {
+      followupBadge = '<span class="cust-status cust-status-followup-stopped" title="المتابعة متوقفة"><i class="bi bi-pause-circle"></i> متابعة متوقفة</span>';
+    }
     const markup = `
         <div class="cust-avatar">${esc(init)}${platformBadge(c.platform)}</div>
         <div class="cust-info">
           <div class="cust-row-heading"><div class="cust-name">${esc(c.name || c.sender_id)} ${adBadge}${c.manual_followup ? '<span class="manual-followup-badge">★ متابعة</span>' : ''}</div><span class="cust-time">${time}</span></div>
           <div><span class="conversation-store-badge ${storeBadgeClass}"><i class="bi bi-shop"></i> ${esc(storeName)}</span></div>
           <div class="cust-preview" dir="auto">${preview}</div>
-          <div class="cust-statuses">${leadMeta}${badge}${(c.ai_followup_sent || c.has_sent_followup) ? '<span class="cust-status cust-status-followup" title="تمت متابعة الزبون تلقائياً"><i class="bi bi-check2-circle"></i> تمت المتابعة</span>' : ''}${problemBadge}${c.system_issue_count > 0 ? '<span class="cust-status cust-status-issue" title="خطأ تقني أو تكرار خطوات الحجز؛ يحتاج مراجعة">مشكلة نظام</span>' : ''}</div>
+          <div class="cust-statuses">${leadMeta}${badge}${followupBadge}${problemBadge}${c.system_issue_count > 0 ? '<span class="cust-status cust-status-issue" title="خطأ تقني أو تكرار خطوات الحجز؛ يحتاج مراجعة">مشكلة نظام</span>' : ''}</div>
           ${sourceMeta ? `<div class="cust-source">${sourceMeta}</div>` : ''}
         </div>`;
     let node = nodes.get(c.sender_id);
