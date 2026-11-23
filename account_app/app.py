@@ -18668,6 +18668,55 @@ def run_smart_reviewer_cycle(db):
             ).fetchone()
             if recent_order:
                 continue
+
+            # If the customer already sent phone + address but no order was saved,
+            # escalate immediately to human_reviews instead of sending a confusing follow-up.
+            cust_contact = db.execute(
+                "SELECT phone, address FROM customers WHERE sender_id=?",
+                (sender_id,),
+            ).fetchone()
+            cust_msgs_12h = db.execute(
+                "SELECT text FROM messages WHERE sender_id=? AND direction='incoming' AND created_at>=? ORDER BY id ASC",
+                (sender_id, conversation_cutoff),
+            ).fetchall()
+            joined_incoming = "\n".join((r["text"] or "") for r in cust_msgs_12h)
+            has_phone = bool((cust_contact and cust_contact["phone"]) or phone_number(joined_incoming))
+            has_addr = bool(
+                (cust_contact and cust_contact["address"] and not invalid_shipping_address(cust_contact["address"]))
+                or any(
+                    contact_fields(line).get("address")
+                    for r in cust_msgs_12h
+                    for line in (r["text"] or "").splitlines()
+                    if line.strip()
+                )
+            )
+            if has_phone and has_addr:
+                reason_txt = "مراجعة حجز عاجلة: الزبون أرسل الرقم والعنوان ولم يُثبّت الطلب"
+                if not db.execute(
+                    "SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending' AND reason=? LIMIT 1",
+                    (sender_id, reason_txt),
+                ).fetchone():
+                    latest_msg_row = latest_incoming or {"sender_id": sender_id, "text": joined_incoming[:300]}
+                    create_human_review(
+                        db,
+                        dict(latest_msg_row, sender_id=sender_id),
+                        reason_txt,
+                        notify_telegram=False,
+                        commit=False,
+                    )
+                db.execute(
+                    """INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)
+                       VALUES (?, 'بيانات حجز بدون طلب', ?, 0, '', 0, ?)
+                       ON CONFLICT(sender_id) DO UPDATE SET
+                         tag=excluded.tag,
+                         last_review_time=excluded.last_review_time,
+                         needs_followup=0,
+                         followup_message='',
+                         updated_at=excluded.updated_at""",
+                    (sender_id, now.isoformat(), now.isoformat()),
+                )
+                db.commit()
+                continue
                 
             msgs = db.execute("""
                 SELECT id, direction, message_type, text, raw_payload

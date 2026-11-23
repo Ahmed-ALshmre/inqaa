@@ -230,6 +230,25 @@ class SmartReviewer12hTests(unittest.TestCase):
         event, _ = sales_live.pending_input(app_module, db, row, inc_id, staff_id)
         self.assertEqual('120252058171770095', event['ad'].get('ad_id'))
 
+    def test_customer_with_phone_and_address_without_order_escalates_to_human_review(self):
+        self._seed_sender('s-unbooked-contact', [
+            ('incoming', 'اريد اسود قياس 44\nبغداد المنصور قرب المول\n07712345678', 2.2, None),
+            ('outgoing', 'تمام عيوني', 2.0, {'sender_type': 'ai'}),
+        ])
+        with patch.object(app_module.ai_transport, 'post') as post_mock, \
+             patch.object(app_module, 'OPENROUTER_KEY', 'test-key'):
+            app_module.run_smart_reviewer_cycle(self.db)
+
+        self.assertEqual(0, post_mock.call_count)
+        rev = self.db.execute(
+            "SELECT reason, status FROM human_reviews WHERE sender_id='s-unbooked-contact' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        self.assertIsNotNone(rev)
+        self.assertEqual('pending', rev['status'])
+        self.assertIn('لم يُثبّت الطلب', rev['reason'])
+        tag = self.db.execute("SELECT tag FROM customer_tags WHERE sender_id='s-unbooked-contact'").fetchone()
+        self.assertEqual('بيانات حجز بدون طلب', tag['tag'])
+
 
 if __name__ == '__main__':
     unittest.main()
