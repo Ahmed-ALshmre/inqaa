@@ -101,6 +101,12 @@ class SalesBeastV2UnitTests(unittest.TestCase):
         self.assertTrue(sales_recovery.alternative_photo_request('دزيلي بالله اشوف', offered=True))
         self.assertTrue(sales_recovery.alternative_photo_request('اي دزيلي عفيه اشوفهن', offered=True))
 
+    def test_contact_only_accepts_split_tamam_typo_and_shipping_intro_line(self):
+        from account_app.sales_runtime.contact import contact_only
+        self.assertTrue(contact_only('تما\nم\nصلاح الدين الضلوعية الجبور\n07710528398'))
+        self.assertTrue(contact_only('راح ادز العنوان\nالديوانيه العروبه الثانيه قرب مياه العطشان\n٠٧٨٣٤١٦٦٨١٠'))
+        self.assertFalse(contact_only('شكد سعره\nصلاح الدين الضلوعية الجبور\n07710528398'))
+
 
 class SalesBeastV2RuntimeTests(unittest.TestCase):
     setUp = linking.LinkingTests.setUp
