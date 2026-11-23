@@ -2312,6 +2312,17 @@ def send_due_followups(db=None, limit=25):
                     save_message(db,sender_id,'outgoing','text',message,None,None,None,{'followup_id':row['id'],'automatic_followup':True})
                     save_conversation_message(db,sender_id,'assistant',message)
                     db.execute("UPDATE followups SET status='sent',sent_at=? WHERE id=?", (delivered_at,row['id']))
+                    db.execute(
+                        """INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)
+                           VALUES (?, 'تمت المتابعة', ?, 0, ?, 1, ?)
+                           ON CONFLICT(sender_id) DO UPDATE SET
+                             last_review_time=excluded.last_review_time,
+                             followup_sent=1,
+                             followup_message=excluded.followup_message,
+                             needs_followup=0,
+                             updated_at=excluded.updated_at""",
+                        (sender_id, delivered_at, message, delivered_at),
+                    )
                     sent += 1
                 else:
                     # A timeout may have delivered: never retry automatically.
@@ -6096,7 +6107,7 @@ def vision_service_failure(exc):
 
 
 def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_model=None,
-                        related_customer_images=()) -> dict:
+                        related_customer_images=(), _tiebreaker=False) -> dict:
     """إرجاع product_id فقط من Vision بعد مقارنة صورة الزبون بصور المنتجات."""
     if catalog_model is None and not is_store_feature_enabled("vision_enabled", VISION_ENABLED):
         return {
@@ -6136,7 +6147,7 @@ def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_mo
                 "text": "PRODUCT_CANDIDATE:\n" + json.dumps(product_info, ensure_ascii=False, indent=2),
             }
             for reference in c.get("image_urls") or ([c["image_url"]] if c.get("image_url") else []):
-                groups.append([label, {"type": "image_url", "image_url": {"url": vision_payload.image_url(_image_ref_for_openrouter(reference)), "detail": "high"}}])
+                groups.append([label, {"type": "image_url", "image_url": {"url": vision_payload.image_url(_image_ref_for_openrouter(reference), catalog_ref=True), "detail": "high"}}])
 
         suffix = [{
             "type": "text",
@@ -6167,8 +6178,9 @@ def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_mo
             "max_tokens": max(1200, get_ai_max_tokens(None, "vision", 20)),
             "temperature": get_ai_temperature(None, "vision", 0),
         }
+        batches = vision_payload.request_batches(payload, prefix, groups, suffix)
         results = []
-        for request_body in vision_payload.request_batches(payload, prefix, groups, suffix):
+        for request_body in batches:
             resp = ai_transport.post(OPENROUTER_URL,
                 headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json"},
                 json=request_body, timeout=45)
@@ -6179,7 +6191,20 @@ def confirm_with_vision(customer_image_url: str, candidates: list, *, catalog_mo
                 for part in request_body['messages'][-1]['content']
                 if part.get('type') == 'text' and part.get('text', '').startswith('PRODUCT_CANDIDATE:\n')]
             results.append(ai_efficiency.vision_choice(response_data, batch_candidates))
-        return vision_payload.consensus(results)
+        final = vision_payload.consensus(results)
+        if (not _tiebreaker and len(batches) > 1 and not final.get('product_found')
+                and final.get('reason') == 'Conflicting vision matches'):
+            matched_ids = {r['product_id'] for r in results if r.get('product_found') and r.get('product_id')}
+            tie_candidates = [c for c in candidates if c.get('product_id') in matched_ids]
+            if 2 <= len(tie_candidates) < len(candidates):
+                return confirm_with_vision(
+                    customer_image_url,
+                    tie_candidates,
+                    catalog_model=catalog_model,
+                    related_customer_images=related_customer_images,
+                    _tiebreaker=True,
+                )
+        return final
     except Exception as exc:
         return vision_service_failure(exc)
 
@@ -15354,6 +15379,9 @@ def api_conversations():
             COALESCE(c.lead_stage, 'new') AS lead_stage,
             c.inbox_reviewed_message_id,
             c.manual_followup,
+            (SELECT COALESCE(ct.followup_sent, 0) FROM customer_tags ct WHERE ct.sender_id = c.sender_id LIMIT 1) AS ai_followup_sent,
+            (SELECT CASE WHEN EXISTS(SELECT 1 FROM followups f WHERE f.sender_id = c.sender_id AND f.status = 'sent') THEN 1 ELSE 0 END) AS has_sent_followup,
+            (SELECT ct.tag FROM customer_tags ct WHERE ct.sender_id = c.sender_id LIMIT 1) AS ai_review_tag,
             m.text       AS last_message,
             m.direction  AS last_direction,
             COALESCE(m.created_at, c.last_seen_at, '') AS last_time,
@@ -18572,12 +18600,12 @@ def run_smart_reviewer_cycle(db):
     try:
         settings = get_smart_reviewer_settings(db)
         followup_settings = get_followup_settings(db)
-        if not settings.get("enabled") or not followup_settings.get("enabled"):
+        if not settings.get("enabled") or not followup_settings.get("enabled") or not is_ai_enabled(db):
             return
             
         interval_minutes = settings.get("interval_minutes", 60)
         now = datetime.now(BAGHDAD_TZ)
-        conversation_cutoff = (now - timedelta(hours=23)).isoformat()
+        conversation_cutoff = (now - timedelta(hours=12)).isoformat()
         active_cutoff_time = (now - timedelta(minutes=interval_minutes)).isoformat()
         
         min_interest_score = int(followup_settings.get("min_interest_score", 50))
@@ -18603,7 +18631,11 @@ def run_smart_reviewer_cycle(db):
         last_message_map = {row["sender_id"]: str(row["last_msg_time"] or "") for row in rows}
         
         for sender_id in sender_ids:
+            if not is_customer_ai_enabled(db, sender_id):
+                continue
             if _followup_block_reason(db, sender_id):
+                continue
+            if db.execute("SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending' LIMIT 1", (sender_id,)).fetchone():
                 continue
             if db.execute("SELECT 1 FROM followups WHERE sender_id=? AND status IN ('pending','sending','uncertain') LIMIT 1", (sender_id,)).fetchone():
                 continue
@@ -18611,6 +18643,11 @@ def run_smart_reviewer_cycle(db):
             if last_review and str(last_review) >= last_message_map.get(sender_id, ""):
                 continue
             latest_incoming = _latest_incoming_message(db, sender_id)
+            if latest_incoming and db.execute(
+                "SELECT 1 FROM followups WHERE sender_id=? AND status='sent' AND sent_at>=? LIMIT 1",
+                (sender_id, latest_incoming["created_at"]),
+            ).fetchone():
+                continue
             if latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
                 db.execute(
                     """INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)
@@ -18631,32 +18668,100 @@ def run_smart_reviewer_cycle(db):
             ).fetchone()
             if recent_order:
                 continue
+
+            # If the customer already sent phone + address but no order was saved,
+            # escalate immediately to human_reviews instead of sending a confusing follow-up.
+            cust_contact = db.execute(
+                "SELECT phone, address FROM customers WHERE sender_id=?",
+                (sender_id,),
+            ).fetchone()
+            cust_msgs_12h = db.execute(
+                "SELECT text FROM messages WHERE sender_id=? AND direction='incoming' AND created_at>=? ORDER BY id ASC",
+                (sender_id, conversation_cutoff),
+            ).fetchall()
+            joined_incoming = "\n".join((r["text"] or "") for r in cust_msgs_12h)
+            has_phone = bool((cust_contact and cust_contact["phone"]) or phone_number(joined_incoming))
+            has_addr = bool(
+                (cust_contact and cust_contact["address"] and not invalid_shipping_address(cust_contact["address"]))
+                or any(
+                    contact_fields(line).get("address")
+                    for r in cust_msgs_12h
+                    for line in (r["text"] or "").splitlines()
+                    if line.strip()
+                )
+            )
+            if has_phone and has_addr:
+                reason_txt = "مراجعة حجز عاجلة: الزبون أرسل الرقم والعنوان ولم يُثبّت الطلب"
+                if not db.execute(
+                    "SELECT 1 FROM human_reviews WHERE sender_id=? AND status='pending' AND reason=? LIMIT 1",
+                    (sender_id, reason_txt),
+                ).fetchone():
+                    latest_msg_row = latest_incoming or {"sender_id": sender_id, "text": joined_incoming[:300]}
+                    create_human_review(
+                        db,
+                        dict(latest_msg_row, sender_id=sender_id),
+                        reason_txt,
+                        notify_telegram=False,
+                        commit=False,
+                    )
+                db.execute(
+                    """INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)
+                       VALUES (?, 'بيانات حجز بدون طلب', ?, 0, '', 0, ?)
+                       ON CONFLICT(sender_id) DO UPDATE SET
+                         tag=excluded.tag,
+                         last_review_time=excluded.last_review_time,
+                         needs_followup=0,
+                         followup_message='',
+                         updated_at=excluded.updated_at""",
+                    (sender_id, now.isoformat(), now.isoformat()),
+                )
+                db.commit()
+                continue
                 
             msgs = db.execute("""
-                SELECT direction, message_type, text
+                SELECT id, direction, message_type, text, raw_payload
                 FROM messages
                 WHERE sender_id = ? AND created_at >= ?
-                ORDER BY created_at ASC
+                ORDER BY id ASC
             """, (sender_id, conversation_cutoff)).fetchall()
+            if not msgs:
+                continue
+
+            def _is_staff_outgoing(msg_row):
+                if msg_row["direction"] != "outgoing":
+                    return False
+                try:
+                    payload = json.loads(msg_row["raw_payload"] or "{}")
+                    return isinstance(payload, dict) and payload.get("sender_type") == "staff"
+                except Exception:
+                    return False
+
+            outgoing_msgs = [m for m in msgs if m["direction"] == "outgoing"]
+            ai_outgoing_msgs = [m for m in outgoing_msgs if not _is_staff_outgoing(m)]
+            # Only follow up conversations where AI actively replied (not staff-only or unanswered)
+            # and where the customer stopped replying after AI's last reply.
+            if not ai_outgoing_msgs or _is_staff_outgoing(outgoing_msgs[-1]) or msgs[-1]["direction"] != "outgoing":
+                continue
             
             transcript = []
             for m in msgs:
-                role = "Customer" if m["direction"] == "incoming" else "AI Assistant"
+                role = "Customer" if m["direction"] == "incoming" else ("Staff" if _is_staff_outgoing(m) else "AI Assistant")
                 content = m["text"] or f"[{m['message_type']}]"
                 transcript.append(f"{role}: {content}")
             
             transcript_str = "\n".join(transcript)
+            verified_products = load_customer_products(db, sender_id, limit=5)
             interest_score = score_map.get(sender_id, 0)
             
             system_prompt = (
                 "You are an AI sales reviewer and customer success manager.\n"
-                "Review the following conversation transcript between a Customer and an Iraqi e-commerce AI Assistant.\n"
+                "Review the following conversation transcript (from the last 12 hours) between a Customer and an Iraqi e-commerce AI Assistant.\n"
                 f"The system interest score for this customer is {interest_score}%. The configured minimum is {min_interest_score}%.\n"
+                f"Verified product data for this conversation: {json.dumps(verified_products, ensure_ascii=False)}\n"
                 "1. Assign a short Arabic tag describing the customer's intent (e.g., 'يريد الشراء', 'فضولي', 'متردد', 'تم الشراء', 'منزعج').\n"
-                "2. Decide if the customer needs a proactive follow-up message to encourage a sale or provide help.\n"
-                "3. If they need a follow-up, write a highly personalized, friendly, and natural Arabic message (Iraqi dialect) based strictly on their previous conversation context. Do not sound like a bot.\n"
-                "4. Do not follow up if the customer refused, asked to stop, bought already, or the last customer text is hostile.\n"
-                "5. The message must contain one clear next-step question and must not mention internal IDs.\n\n"
+                "2. ONLY set needs_followup=true if the conversation is clearly understood (we have the relevant product/context data) AND the customer stopped replying after the AI's reply and would benefit from a gentle reminder.\n"
+                "3. Set needs_followup=false if the conversation is unclear/ambiguous, missing product facts, waiting on staff, or if the customer refused, asked to stop, bought already, or was hostile.\n"
+                "4. If needs_followup=true, write a short (1-2 sentences max), warm, natural Iraqi-dialect reminder based strictly on the conversation and verified product data, with one easy next-step question and no internal IDs.\n\n"
                 f"{sales_engagement.guide(current_store_id())}\n\n"
                 f"{sales_engagement.FOLLOWUP_GUIDE}\n\n"
                 "Return JSON exactly like this:\n"

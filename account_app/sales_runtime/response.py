@@ -114,7 +114,8 @@ class Responses:
             parts = self.ask_about_photo(scope, turn_id, snap['version'], catalog, current, messages, accepted,
                                          greeting, outcome.get('photo_stage', 'product-detail'),
                                          multiple=bool(outcome.get('multiple_images')),
-                                         unreadable=bool(outcome.get('unreadable_photo')))
+                                         unreadable=bool(outcome.get('unreadable_photo')),
+                                         matched_product_ids=outcome.get('matched_product_ids') or [])
             return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
         if outcome.get('browsing_photos') and self.product_photos:
             parts = self.browsing_photos(catalog, outcome['browsing_photos'])
@@ -1123,13 +1124,44 @@ class Responses:
         return parts
 
     def ask_about_photo(self, scope, turn_id, version, catalog, current, messages, accepted, greeting,
-                        stage, *, multiple=False, label='', unreadable=False, amounts=None):
+                        stage, *, multiple=False, label='', unreadable=False, amounts=None, matched_product_ids=None):
+        matched_products = []
+        for pid in (matched_product_ids or [])[:4]:
+            prod = catalog.products.get(pid)
+            if not prod:
+                continue
+            price_text = ''
+            try:
+                tiers = pricing.offer_tiers(prod)
+                if tiers:
+                    def _fmt_price(val):
+                        return f'{val // 1000} ألف' if val >= 1000 and val % 1000 == 0 else f'{val:,} دينار'
+                    parts_p = [f'{qty} قطعة بـ {_fmt_price(total)}' if qty > 1 else f'القطعة بـ {_fmt_price(total)}'
+                               for qty, total in sorted(tiers)[:2]]
+                    price_text = '، '.join(parts_p)
+            except (ValueError, TypeError):
+                price_text = ''
+            if not price_text:
+                raw_price = prod.get('price')
+                if isinstance(raw_price, (int, float)) and raw_price > 0:
+                    val = int(raw_price)
+                    price_text = f'{val // 1000} ألف' if val >= 1000 and val % 1000 == 0 else f'{val:,} دينار'
+                else:
+                    price_text = customer_copy.fact(str(raw_price or ''))
+            matched_products.append({
+                'name': customer_copy.reply_category(prod) or customer_copy.fact(prod.get('product_name'))[:70].strip(),
+                'stock': product_albums.stock_state(prod),
+                'price_summary': price_text,
+                'colors': customer_copy.fact(prod.get('colors') or '')[:80],
+                'sizes': customer_copy.fact(prod.get('sizes') or '')[:80],
+            })
         context = dict(mode='continue', customer_message=current, recent_messages=messages, recent_replies=accepted,
                        question_field='photo.reference', next_step=dict(field='photo.reference', options=[]),
-                       copy_budget=145,
+                       copy_budget=460 if len(matched_products) >= 2 else 145,
                        amounts=amounts or {}, greeting=greeting, action_results={},
                        photo_clarification=dict(multiple=multiple, possible_product=label, unreadable=unreadable,
-                                                quantity_quote=stage == 'photo-quantity'))
+                                                quantity_quote=stage == 'photo-quantity',
+                                                matched_products=matched_products))
         parts = self.write(context, catalog, scope, turn_id, version)
         for part in parts:
             part['reference_clarification'] = True

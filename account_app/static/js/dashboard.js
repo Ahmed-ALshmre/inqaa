@@ -534,7 +534,7 @@ function renderConversations({resetScroll = false} = {}) {
           <div class="cust-row-heading"><div class="cust-name">${esc(c.name || c.sender_id)} ${adBadge}${c.manual_followup ? '<span class="manual-followup-badge">★ متابعة</span>' : ''}</div><span class="cust-time">${time}</span></div>
           <div><span class="conversation-store-badge ${storeBadgeClass}"><i class="bi bi-shop"></i> ${esc(storeName)}</span></div>
           <div class="cust-preview" dir="auto">${preview}</div>
-          <div class="cust-statuses">${leadMeta}${badge}${problemBadge}${c.system_issue_count > 0 ? '<span class="cust-status cust-status-issue" title="خطأ تقني أو تكرار خطوات الحجز؛ يحتاج مراجعة">مشكلة نظام</span>' : ''}</div>
+          <div class="cust-statuses">${leadMeta}${badge}${(c.ai_followup_sent || c.has_sent_followup) ? '<span class="cust-status cust-status-followup" title="تمت متابعة الزبون تلقائياً"><i class="bi bi-check2-circle"></i> تمت المتابعة</span>' : ''}${problemBadge}${c.system_issue_count > 0 ? '<span class="cust-status cust-status-issue" title="خطأ تقني أو تكرار خطوات الحجز؛ يحتاج مراجعة">مشكلة نظام</span>' : ''}</div>
           ${sourceMeta ? `<div class="cust-source">${sourceMeta}</div>` : ''}
         </div>`;
     let node = nodes.get(c.sender_id);
