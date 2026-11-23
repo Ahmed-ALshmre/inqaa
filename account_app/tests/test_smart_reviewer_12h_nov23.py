@@ -157,6 +157,46 @@ class SmartReviewer12hTests(unittest.TestCase):
         self.assertEqual([3, 2], batch_calls)
         self.assertEqual(3, post_mock.call_count)
 
+    def test_multi_product_photos_passes_all_matched_products_and_prices_to_writer(self):
+        from account_app.sales_runtime.cart import Catalog
+        from account_app.sales_runtime.response import Responses
+        from account_app.sales_runtime.store import Scope, Store
+
+        db = app_module.get_db()
+        store = Store(db)
+        scope = Scope('default', 'chatwoot', '1', 'default::multi-photo-test')
+        ev_id = store.append(scope, 'm-1', kind='message', actor='customer',
+                             payload={'text': 'ممكن الأسعار', 'media_kind': 'image'})['id']
+        snap = store.snapshot(scope)
+        catalog = Catalog('default', [
+            {'store_id': 'default', 'product_id': 'P013', 'product_name': 'تراك كاروهات فرو', 'status': 'active',
+             'price': 17000, 'offer': 'قطعتين 30 الف', 'colors': 'أسود، جوزي', 'sizes': 'L-XXL', 'availability': 'متوفر'},
+            {'store_id': 'default', 'product_id': 'P015', 'product_name': 'شال كيبور', 'status': 'active',
+             'price': 22000, 'offer': '3 قطع ب22 الف', 'colors': 'أسود، بيجي', 'sizes': 'فري سايز', 'availability': 'متوفر'},
+        ])
+        captured_ctx = {}
+
+        def fake_writer(ctx):
+            captured_ctx.update(ctx)
+            return [
+                dict(type='text', text='وصلتني الصور عيوني، تراك الكاروهات الفرو متوفر والقطعة بـ 17 ألف والقطعتين بـ 30 ألف.'),
+                dict(type='text', text='والشال الكيبور متوفر بعرض 3 قطع بـ 22 ألف.'),
+                dict(type='text', text='وإذا حابة تاخذيهم سوية يوصلونج بطلب واحد وبنفس التوصيل، تحبين نثبتلج الاثنين لو نبدي بواحد منهم؟'),
+            ]
+
+        prepared = Responses(store, lambda _s: catalog, fake_writer).prepare(
+            scope, ev_id,
+            dict(action='media_unresolved', state_version=snap['version'],
+                 multiple_images=True, photo_stage='product-detail', unreadable_photo=False,
+                 matched_product_ids=['P013', 'P015']),
+        )
+        self.assertEqual('queued', prepared['action'])
+        self.assertEqual(3, prepared['parts'])
+        matched = captured_ctx['photo_clarification']['matched_products']
+        self.assertEqual(2, len(matched))
+        self.assertEqual(460, captured_ctx['copy_budget'])
+        self.assertTrue(all(item['price_summary'] for item in matched))
+
 
 if __name__ == '__main__':
     unittest.main()

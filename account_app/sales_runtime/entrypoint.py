@@ -265,9 +265,13 @@ class Entrypoint:
                 if media_kind in {'file', 'video'}:
                     return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
                 multiple_imgs = isinstance(media_ref, list) and len(media_ref) > 1
+                matched_ids = list(dict.fromkeys(observed.get('product_ids') or []))
                 if media_kind == 'image' and not multiple_imgs and observed.get('status') == 'unknown':
                     return self.handoff_service(scope, event['id'], 'product_image_unresolved')
-                return self.clarify_image(scope, event['id'], multiple=multiple_imgs)
+                return self.clarify_image(
+                    scope, event['id'], multiple=multiple_imgs or len(matched_ids) >= 2,
+                    matched_product_ids=matched_ids if len(matched_ids) >= 2 else None,
+                )
         return self.finish_turn(scope, event['id'])
 
     def finish_turn(self, scope, event_id):
@@ -289,13 +293,16 @@ class Entrypoint:
             return dict(outcome,reply=reply)
         return outcome
 
-    def clarify_image(self, scope, event_id, *, multiple=False, stage='product-detail', unreadable=False):
+    def clarify_image(self, scope, event_id, *, multiple=False, stage='product-detail', unreadable=False, matched_product_ids=None):
         """Keep an unresolved picture out of the checkout tools."""
         if not self.responses:
             return dict(action='media_unresolved', event_id=event_id)
         version = self.store.snapshot(scope)['version']
-        self.responses.prepare(scope, event_id, dict(action='media_unresolved', state_version=version,
-                                                     multiple_images=multiple, photo_stage=stage, unreadable_photo=unreadable))
+        self.responses.prepare(scope, event_id, dict(
+            action='media_unresolved', state_version=version,
+            multiple_images=multiple, photo_stage=stage, unreadable_photo=unreadable,
+            matched_product_ids=matched_product_ids or [],
+        ))
         return dict(action='media_unresolved', event_id=event_id)
 
     def handoff_fact(self, scope, event_id, version, missing):
