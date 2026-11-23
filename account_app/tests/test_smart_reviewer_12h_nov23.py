@@ -110,6 +110,12 @@ class SmartReviewer12hTests(unittest.TestCase):
         tag_after = self.db.execute("SELECT followup_sent FROM customer_tags WHERE sender_id='s-valid'").fetchone()
         self.assertEqual(1, tag_after['followup_sent'])
 
+        # Next cycle must skip s-valid completely (zero AI calls) since customer has not replied
+        with patch.object(app_module.ai_transport, 'post', return_value=fake_resp) as post_again, \
+             patch.object(app_module, 'OPENROUTER_KEY', 'test-key'):
+            app_module.run_smart_reviewer_cycle(self.db)
+        self.assertEqual(0, post_again.call_count)
+
     def test_skips_entire_store_when_store_ai_disabled(self):
         app_module.set_store_setting(self.db, 'ai_enabled', '0', 'default')
         self._seed_sender('s-store-off', [

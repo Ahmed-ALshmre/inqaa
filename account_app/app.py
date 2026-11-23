@@ -2316,6 +2316,7 @@ def send_due_followups(db=None, limit=25):
                         """INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)
                            VALUES (?, 'تمت المتابعة', ?, 0, ?, 1, ?)
                            ON CONFLICT(sender_id) DO UPDATE SET
+                             last_review_time=excluded.last_review_time,
                              followup_sent=1,
                              followup_message=excluded.followup_message,
                              needs_followup=0,
@@ -18642,6 +18643,11 @@ def run_smart_reviewer_cycle(db):
             if last_review and str(last_review) >= last_message_map.get(sender_id, ""):
                 continue
             latest_incoming = _latest_incoming_message(db, sender_id)
+            if latest_incoming and db.execute(
+                "SELECT 1 FROM followups WHERE sender_id=? AND status='sent' AND sent_at>=? LIMIT 1",
+                (sender_id, latest_incoming["created_at"]),
+            ).fetchone():
+                continue
             if latest_incoming and _looks_like_customer_rejection(latest_incoming["text"]):
                 db.execute(
                     """INSERT INTO customer_tags (sender_id, tag, last_review_time, needs_followup, followup_message, followup_sent, updated_at)
