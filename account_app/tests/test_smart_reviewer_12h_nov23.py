@@ -197,6 +197,33 @@ class SmartReviewer12hTests(unittest.TestCase):
         self.assertEqual(460, captured_ctx['copy_budget'])
         self.assertTrue(all(item['price_summary'] for item in matched))
 
+    def test_pending_input_recovers_ad_id_after_staff_reply_or_multi_day_pause(self):
+        from account_app.sales_runtime import live as sales_live
+
+        db = app_module.get_db()
+        sender = 'baraah-kids::zn-sumaya-test'
+        old_ts = (datetime.now(app_module.BAGHDAD_TZ) - timedelta(days=3)).isoformat()
+        now_ts = datetime.now(app_module.BAGHDAD_TZ).isoformat()
+        db.execute(
+            "INSERT INTO messages (sender_id, direction, message_type, text, ad_id, created_at, store_id) VALUES (?, 'incoming', 'text', 'مرحبا', '120252058171770095', ?, 'baraah-kids')",
+            (sender, old_ts),
+        )
+        staff_id = db.execute(
+            "INSERT INTO messages (sender_id, direction, message_type, text, created_at, store_id, raw_payload) VALUES (?, 'outgoing', 'text', 'ممكن توضيح', ?, 'baraah-kids', '{\"sender_type\":\"staff\"}')",
+            (sender, now_ts),
+        ).lastrowid
+        inc_id = db.execute(
+            "INSERT INTO messages (sender_id, direction, message_type, text, created_at, store_id) VALUES (?, 'incoming', 'text', 'اربيل قرية الكوري', ?, 'baraah-kids')",
+            (sender, now_ts),
+        ).lastrowid
+        db.commit()
+        row = {
+            'sender_id': sender, 'store_id': 'baraah-kids', 'channel': 'zernio',
+            'account_id': 'acc1', 'first_incoming_id': 1, 'handled_id': 0,
+        }
+        event, _ = sales_live.pending_input(app_module, db, row, inc_id, staff_id)
+        self.assertEqual('120252058171770095', event['ad'].get('ad_id'))
+
 
 if __name__ == '__main__':
     unittest.main()

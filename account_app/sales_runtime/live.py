@@ -314,14 +314,32 @@ def pending_input(module, db, row, incoming_id, staff_reply_id):
                 seen.add(key)
                 attachments.append(dict(type=item['type'], payload={'url': item['url']}))
     kind, reference = media_input(attachments)
-    if not ad and row['channel'] == 'zernio' and not row['handled_id']:
-        # A referral-only webhook can arrive before the first message.
-        saved = db.execute('SELECT data FROM conversation_ad_context WHERE sender_id=?',
-                           (row['sender_id'],)).fetchone()
-        context = delivery_state.metadata(saved[0]) if saved else {}
-        stamp = module.sales_engagement.timestamp(context.get('captured_at'))
-        if stamp and timedelta(0) <= datetime.now(module.BAGHDAD_TZ) - stamp < timedelta(hours=24):
-            ad = context
+    if not ad:
+        scope_key = scope_for(row).key
+        scope_row = db.execute('SELECT data FROM sales_v2_scopes WHERE scope=?', (scope_key,)).fetchone()
+        has_focus = bool(scope_row and delivery_state.metadata(scope_row[0]).get('focus_product_id'))
+        if not row['handled_id'] or not has_focus:
+            saved = db.execute('SELECT data FROM conversation_ad_context WHERE sender_id=?',
+                               (row['sender_id'],)).fetchone()
+            context = delivery_state.metadata(saved[0]) if saved else {}
+            stamp = module.sales_engagement.timestamp(context.get('captured_at'))
+            if context.get('ad_id') and (
+                not stamp or timedelta(0) <= datetime.now(module.BAGHDAD_TZ) - stamp < timedelta(days=7)
+            ):
+                ad = context
+            if not ad:
+                ad_msg = db.execute(
+                    '''SELECT ad_id, raw_payload, created_at FROM messages
+                       WHERE sender_id=? AND store_id=? AND direction='incoming'
+                         AND ad_id IS NOT NULL AND TRIM(ad_id) != ''
+                       ORDER BY id DESC LIMIT 1''',
+                    (row['sender_id'], row['store_id']),
+                ).fetchone()
+                if ad_msg:
+                    msg_stamp = module.sales_engagement.timestamp(ad_msg['created_at'])
+                    if not msg_stamp or timedelta(0) <= datetime.now(module.BAGHDAD_TZ) - msg_stamp < timedelta(days=7):
+                        ad = (ad_attribution.extract(delivery_state.metadata(ad_msg['raw_payload']))
+                              or {'ad_id': str(ad_msg['ad_id']).strip()})
     # A staff request takes priority even when several messages arrive together.
     text = '\n'.join(texts)
     if any(sales_playbook.human_requested(part) for part in texts):
