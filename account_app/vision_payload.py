@@ -10,7 +10,7 @@ from PIL import Image, ImageOps
 MAX_REQUEST_BYTES = 1_500_000
 
 
-def image_url(reference, *, sheet=False):
+def image_url(reference, *, sheet=False, catalog_ref=False):
     """Compress inline images only; public URLs stay URLs for the provider."""
     if not str(reference).startswith('data:'):
         return reference
@@ -18,16 +18,16 @@ def image_url(reference, *, sheet=False):
     if ';base64' not in header:
         raise ValueError('Unsupported inline image')
     raw = base64.b64decode(encoded, validate=True)
-    limit = 700_000 if sheet else 350_000
+    limit = 700_000 if sheet else (110_000 if catalog_ref else 350_000)
     with Image.open(io.BytesIO(raw)) as source:
-        edge = 2560 if sheet else 1600
+        edge = 2560 if sheet else (800 if catalog_ref else 1600)
         if len(raw) <= limit and max(source.size) <= edge and source.getexif().get(274, 1) == 1:
             return reference
         picture = ImageOps.exif_transpose(source).convert('RGB')
-        picture.thumbnail((2560, 2560) if sheet else (1600, 1600), Image.Resampling.LANCZOS)
+        picture.thumbnail((edge, edge), Image.Resampling.LANCZOS)
         for _ in range(8):
             output = io.BytesIO()
-            picture.save(output, format='JPEG', quality=88 if sheet else 84, optimize=True)
+            picture.save(output, format='JPEG', quality=88 if sheet else (80 if catalog_ref else 84), optimize=True)
             data = output.getvalue()
             if len(data) <= limit:
                 return 'data:image/jpeg;base64,' + base64.b64encode(data).decode('ascii')

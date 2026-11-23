@@ -261,12 +261,13 @@ class Entrypoint:
                     AND json_extract(reply.payload,'$.question_stage') IS NOT NULL ORDER BY reply.id DESC LIMIT 1""",
                     (previous_image, event['id'], scope.key, f'clarify-image:{previous_image}')).fetchone()
                 if asked:
-                    if json.loads(asked[0]).get('question_stage') == 'photo-link':
-                        return self.handoff_service(scope, event['id'], 'product_image_unresolved')
-                    return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
+                    return self.handoff_service(scope, event['id'], 'product_image_unresolved')
                 if media_kind in {'file', 'video'}:
                     return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
-                return self.clarify_image(scope, event['id'], multiple=isinstance(media_ref, list) and len(media_ref)>1)
+                multiple_imgs = isinstance(media_ref, list) and len(media_ref) > 1
+                if media_kind == 'image' and not multiple_imgs and observed.get('status') == 'unknown':
+                    return self.handoff_service(scope, event['id'], 'product_image_unresolved')
+                return self.clarify_image(scope, event['id'], multiple=multiple_imgs)
         return self.finish_turn(scope, event['id'])
 
     def finish_turn(self, scope, event_id):
