@@ -82,6 +82,8 @@
 .cust-status-hot {background:#f9eded;color:#994f51}
 .cust-status-warm {background:#f6f0e5;color:#87612c}
 .cust-status-followup {background:#e7f1ff;color:#1d5fa7}
+.cust-status-followup-pending {background:#fff4e5;color:#9a5b13}
+.cust-status-followup-stopped {background:#f1f3f5;color:#6c757d}
 .messenger-page #customerList .conversation-store-badge {font-size:10px;line-height:1.5;padding:2px 6px;margin:3px 0 1px;border-radius:5px;background:#f0eaf6;color:#755987;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .messenger-page #customerList .store-fatena {background:#f8edf3;color:#8c5a74}
 .messenger-page #customerList .store-khuyoot {background:#eaf3ef;color:#4a7562}
