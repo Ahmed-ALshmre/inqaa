@@ -778,6 +778,20 @@ class LinkingTests(unittest.TestCase):
         )
         self.assertEqual('human', res_track2['action'])
 
+        # Mustafa Rahman: "ماوصلني الطلب ؟؟" routes to order_tracking even with no order saved,
+        # and copy_guard blocks fake "تثبت حجز القطعتين يمي" when order_saved=False
+        res_mustafa = entry.receive(
+            store_id='khuyoot', channel='zernio', account_id='a', sender_id='mustafa-test',
+            message_id='m-mustafa-1', text='ماوصلني الطلب ؟؟',
+        )
+        self.assertEqual('human', res_mustafa['action'])
+        from account_app.sales_runtime import copy_guard
+        with self.assertRaisesRegex(ValueError, 'reply.booking'):
+            copy_guard.validate_fulfillment(
+                [dict(type='text', text='أي نعم عيني تدللين، تثبت حجز القطعتين يمي بالأحمر والكريمي لعمر سنة.')],
+                {'order_saved': False},
+            )
+
         # Bug #4: "الاحمر اكو غير لون" must NOT return no_photo ("هسه ما عدنا صور لهاللون")
         self.select()
         self.plan = dict(intent='continue', answer=dict(facts=[dict(product_id=pid1, field='colors')], catalog_photos='الاحمر اكو غير لون'))

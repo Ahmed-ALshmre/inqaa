@@ -39,7 +39,8 @@ def validate_fulfillment(parts, proof):
         raise ValueError('reply.parts: expected valid text/image parts')
     text = normalized('\n'.join(part.get('text', '') for part in parts if part.get('type') == 'text'))
     if not proof.get('order_saved') and re.search(
-            r'(?<!\w)تم\s+(?:تثبيت|تسجيل|تاكيد)\s+(?:الطلب|الحجز)|'
+            r'(?<!\w)تم\s+(?:تثبيت|تسجيل|تاكيد|حجز)\s+(?:الطلب|الحجز|قطعتين|قطع)|'
+            r'(?<!\w)(?:اتثبت|تثبت|انحجز)\s+(?:ال)?(?:حجز|طلب|قطعتين|قطع)|'
             r'(?:طلب[جچك]|حجز[جچك]|الطلب|الحجز)\s+(?:مثبت|محجوز|مسجل|تثبت)|'
             r'ثبتت\s+(?:الطلب|الحجز)|'
             r'(?:ثبتت|ثبتنا|حجزت|حجزنا)\s*(?:ال?ج|لچ|لك|لكم)(?!\w)|'
