@@ -137,6 +137,34 @@ class HandoffRecoveryTests(unittest.TestCase):
                 self.assertEqual(2, data["run"]["total"])
                 self.assertTrue(data["run"]["run_id"])
 
+    def test_auto_links_product_by_keyword_and_hydrates_booking_contact(self):
+        now_iso = datetime.now(app_module.sales_intelligence.BAGHDAD).isoformat()
+        self.conn.execute("INSERT INTO customers(sender_id, store_id, name) VALUES('s_book', 'default', 'زينب')")
+        self.conn.execute(
+            "INSERT INTO messages(sender_id, store_id, direction, message_type, text, created_at) VALUES('s_book', 'default', 'incoming', 'text', 'اريد فستان الفراشة عمر سنتين', ?)",
+            (now_iso,),
+        )
+        self.conn.execute(
+            "INSERT INTO messages(sender_id, store_id, direction, message_type, text, created_at) VALUES('s_book', 'default', 'incoming', 'text', 'بغداد المنصور قرب المول 07701234567', ?)",
+            (now_iso,),
+        )
+        self.conn.execute("INSERT INTO customer_ai_settings(sender_id, enabled, updated_at) VALUES('s_book', 0, ?)", (now_iso,))
+        self.conn.commit()
+
+        fake_products = [
+            {"product_id": "P_BUTTERFLY", "product_name": "فستان بناتي", "keywords": "فستان الفراشة", "status": "active", "stock": "متوفر", "price": "10000"}
+        ]
+        with app_module.app.app_context():
+            with patch.object(app_module, "load_active_products", return_value=fake_products):
+                linked = app_module._auto_link_product_for_recovery(self.conn, "default", "s_book")
+                self.assertIsNotNone(linked)
+                self.assertEqual("P_BUTTERFLY", linked["product_id"])
+                contact = app_module._hydrate_contact_for_recovery(self.conn, "default", "s_book")
+                self.assertEqual("07701234567", contact.get("phone"))
+                self.assertIn("المنصور", contact.get("address") or "")
+                cust = self.conn.execute("SELECT phone, address FROM customers WHERE sender_id='s_book'").fetchone()
+                self.assertEqual("07701234567", cust["phone"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19518,8 +19518,177 @@ def collect_handoff_recovery_candidates(db, store_id, hours=24):
     return candidates
 
 
+def _auto_link_product_for_recovery(db, store_id, sender_id):
+    """Link the conversation's product before resuming the main AI model so it never re-asks."""
+    products = load_active_products(db)
+    if not products:
+        return None
+    by_id = {p.get("product_id"): p for p in products if p.get("product_id")}
+    route = sales_runtime_live.route(db, sender_id)
+    existing_focus = None
+    has_pending_photo = False
+    if route:
+        scope = sales_runtime_live.scope_for(route)
+        try:
+            snap = sales_runtime_live.Store(db).snapshot(scope)["data"]
+            existing_focus = snap.get("focus_product_id")
+            pending_id, _ = sales_runtime_live.Runtime.pending_photo(snap)
+            has_pending_photo = bool(pending_id and pending_id > snap.get("resolved_photo_event", 0))
+        except Exception:
+            snap = {}
+    if existing_focus and existing_focus in by_id and not has_pending_photo:
+        return None
+
+    # 1) Already linked in customer_product_interests -> sync to sales_v2_scopes
+    linked = load_customer_products(db, sender_id)
+    if linked:
+        pid = linked[0].get("product_id")
+        if pid and pid in by_id:
+            if route:
+                sales_runtime_live.staff_product(db, sender_id, pid)
+            return by_id[pid]
+
+    recent_msgs = db.execute(
+        """SELECT id, message_type, text, image_url, ad_id, ref, media_json
+           FROM messages WHERE sender_id=? AND direction='incoming'
+           ORDER BY id DESC LIMIT 15""",
+        (sender_id,),
+    ).fetchall()
+    recent_msgs = [dict(r) for r in recent_msgs]
+
+    # 2) Match via ad_id from recent messages or ad_context
+    ad_ids_seen = []
+    for msg in recent_msgs:
+        if msg.get("ad_id") and str(msg["ad_id"]).strip():
+            ad_ids_seen.append(str(msg["ad_id"]).strip())
+    ad_row = None
+    try:
+        ad_row = db.execute(
+            "SELECT data FROM ad_context WHERE sender_id=? ORDER BY message_id DESC LIMIT 1",
+            (sender_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        ad_row = None
+    if ad_row and ad_row["data"]:
+        try:
+            ad_data = json.loads(ad_row["data"])
+            if ad_data.get("ad_id"):
+                ad_ids_seen.append(str(ad_data["ad_id"]).strip())
+        except Exception:
+            pass
+    for aid in dict.fromkeys(ad_ids_seen):
+        matched = [p for p in products if aid in [str(x).strip() for x in (p.get("ad_ids") or [])]]
+        if len(matched) == 1:
+            prod = matched[0]
+            remember_customer_product(db, sender_id, prod, "ad_recovery", confidence=100, commit=True)
+            if route:
+                sales_runtime_live.staff_product(db, sender_id, prod["product_id"])
+            return prod
+
+    # 3) Match via #productKeywords (أسماء البحث عند الزبائن)
+    combined_text = "\n".join((m.get("text") or "").strip() for m in reversed(recent_msgs) if (m.get("text") or "").strip())
+    if combined_text:
+        try:
+            from .sales_runtime.cart import Catalog as _SrCatalog
+            from .sales_runtime.references import References as _SrRefs
+            from .sales_runtime.store import Store as _SrStore
+            kw_match = _SrRefs(_SrStore(db), _SrCatalog(store_id, products)).match_keywords(combined_text)
+            if kw_match and kw_match.get("product_id") in by_id:
+                prod = by_id[kw_match["product_id"]]
+                remember_customer_product(db, sender_id, prod, "keyword_recovery", confidence=100, commit=True)
+                if route:
+                    sales_runtime_live.staff_product(db, sender_id, prod["product_id"])
+                return prod
+        except Exception:
+            pass
+
+    # 4) Match via customer's most recent photo (vision)
+    for msg in recent_msgs:
+        media_items = message_media(msg)
+        img_urls = [it["url"] for it in media_items if it.get("type") == "image" and it.get("url")]
+        if not img_urls and msg.get("image_url"):
+            img_urls = [msg["image_url"]]
+        if not img_urls:
+            continue
+        ev = {
+            "sender_id": sender_id,
+            "text": msg.get("text") or "",
+            "image_url": img_urls[0],
+            "attachments": media_items,
+            "ad_id": msg.get("ad_id"),
+            "ref": msg.get("ref"),
+        }
+        try:
+            prod, _, img_res = match_product(db, ev, products, resume_ai_on_link=False)
+        except Exception:
+            prod, img_res = None, None
+        if prod and prod.get("product_id") in by_id:
+            remember_customer_product(db, sender_id, prod, "image_recovery", confidence=100, commit=True)
+            if route:
+                sales_runtime_live.staff_product(db, sender_id, prod["product_id"], resolved_urls=tuple(img_urls))
+            return prod
+        break
+    return None
+
+
+def _hydrate_contact_for_recovery(db, store_id, sender_id):
+    """Hydrate phone/address/province from recent customer messages into sales_v2 state so booking commits directly."""
+    try:
+        from . import checkout as _checkout
+    except ImportError:
+        import checkout as _checkout
+    cust = db.execute("SELECT phone, address, province FROM customers WHERE sender_id=?", (sender_id,)).fetchone()
+    contact = {}
+    if cust:
+        for k in ("phone", "address", "province"):
+            if cust[k] and str(cust[k]).strip():
+                contact[k] = str(cust[k]).strip()
+    msgs = db.execute(
+        "SELECT text FROM messages WHERE sender_id=? AND direction='incoming' ORDER BY id DESC LIMIT 15",
+        (sender_id,),
+    ).fetchall()
+    for row in reversed(msgs):
+        txt = (row["text"] or "").strip()
+        if not txt:
+            continue
+        extracted = _checkout.contact_fields(txt, previous=contact)
+        if extracted:
+            contact.update({k: v for k, v in extracted.items() if v})
+    if not contact:
+        return {}
+    if cust:
+        db.execute(
+            """UPDATE customers SET phone=COALESCE(NULLIF(phone,''), ?),
+               address=COALESCE(NULLIF(address,''), ?),
+               province=COALESCE(NULLIF(province,''), ?)
+               WHERE sender_id=?""",
+            (contact.get("phone") or "", contact.get("address") or "", contact.get("province") or "", sender_id),
+        )
+        db.commit()
+    route = sales_runtime_live.route(db, sender_id)
+    if route:
+        scope = sales_runtime_live.scope_for(route)
+        try:
+            store_v2 = sales_runtime_live.Store(db)
+            store_v2._ensure(scope)
+            snap = store_v2.snapshot(scope)["data"]
+            cur_contact = dict(snap.get("contact") or {})
+            changed = False
+            for k in ("phone", "address", "province"):
+                if contact.get(k) and not cur_contact.get(k):
+                    cur_contact[k] = contact[k]
+                    changed = True
+            if changed:
+                snap["contact"] = cur_contact
+                db.execute("UPDATE sales_v2_scopes SET data=? WHERE scope=?", (sales_runtime_live.encode(snap), scope.key))
+                db.commit()
+        except Exception:
+            pass
+    return contact
+
+
 def process_single_handoff_recovery(db, store_id, item):
-    """Attempt to resolve a single stopped conversation and hand it back to the main AI model."""
+    """Attempt to link product, hydrate booking details, resolve a stopped conversation, and hand back to main AI."""
     sender_id = item["sender_id"]
     if not is_ai_enabled(db):
         return "error", "الذكاء الاصطناعي العام للمتجر متوقف."
@@ -19528,6 +19697,9 @@ def process_single_handoff_recovery(db, store_id, item):
         return "skipped", "لا توجد رسالة قابلة للرد."
     if delivery_state.has_answer_after(db, sender_id, latest["id"]):
         return "skipped", "تم الرد على الزبون مسبقاً."
+    orders_before = db.execute("SELECT COALESCE(MAX(id), 0) FROM orders WHERE sender_id=?", (sender_id,)).fetchone()[0]
+    linked_product = _auto_link_product_for_recovery(db, store_id, sender_id)
+    _hydrate_contact_for_recovery(db, store_id, sender_id)
     set_customer_ai_enabled(db, sender_id, True, allow_manual_resume=True)
     route = sales_runtime_live.route(db, sender_id)
     payload = {
@@ -19539,15 +19711,22 @@ def process_single_handoff_recovery(db, store_id, item):
     except Exception as exc:
         set_customer_ai_enabled(db, sender_id, False, reason="handoff_recovery_error")
         return "needs_human", f"تعذر إكمال المعالجة: {type(exc).__name__}"
+    new_order = db.execute(
+        "SELECT id FROM orders WHERE sender_id=? AND id>? ORDER BY id DESC LIMIT 1",
+        (sender_id, orders_before),
+    ).fetchone()
     auto_reply = result.get("auto_reply") or {}
-    if auto_reply.get("sent"):
+    if auto_reply.get("sent") or new_order:
         db.execute(
             """UPDATE human_reviews SET status='reviewed', replied_at=?
                WHERE sender_id=? AND COALESCE(store_id,'default')=? AND status='pending'""",
             (now_baghdad_iso(), sender_id, store_id),
         )
         db.commit()
-        return "resolved", "تم الرد على الزبون وإرجاع المحادثة للموديل الرئيسي."
+        prefix = f"تم ربط المنتج ({linked_product.get('product_name') or linked_product.get('product_id')}) + " if linked_product else ""
+        if new_order:
+            return "resolved", f"{prefix}تم تثبيت الطلب مباشرة (#{new_order['id']}) وإرجاع المحادثة للموديل الرئيسي."
+        return "resolved", f"{prefix}تم الرد على الزبون وإرجاع المحادثة للموديل الرئيسي."
     reason = result.get("reason") or ""
     if reason in {"already_answered", "conversation_changed", "non_product_sticker", "already_handled"}:
         return "skipped", result.get("error") or "تم تخطي المحادثة لتغيّر حالتها."
