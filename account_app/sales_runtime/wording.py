@@ -163,11 +163,17 @@ def fact_recovery_parts(context):
         matched_products = photo.get('matched_products') or []
         if len(matched_products) >= 2:
             out_lines = []
+            avail_items = [item for item in matched_products[:3] if item.get('stock') == 'available']
             for item in matched_products[:3]:
                 status = 'متوفر' if item.get('stock') == 'available' else 'مخلص حالياً'
                 price_part = f" ({item['price_summary']})" if item.get('price_summary') else ''
                 out_lines.append(f"{item['name']}: {status}{price_part}.")
-            out_lines.append('أي واحد منهم عجبج أكثر أو تحبين تاخذيهم سوية؟')
+            if not avail_items:
+                out_lines.append('للأسف هالقطع مخلصة حالياً، تحبين أقترحلج موديلات ثانية متوفرة بنفس العمر أو القياس؟')
+            elif len(avail_items) == 1:
+                out_lines.append(f"تحبين نكمّل على {avail_items[0]['name']} المتوفر؟")
+            else:
+                out_lines.append('أي واحد منهم عجبج أكثر أو تحبين تاخذيهم سوية؟')
             return [dict(type='text', text='\n\n'.join(out_lines))]
         if photo.get('possible_product'):
             text = f"تقصدين {photo['possible_product']}؟"

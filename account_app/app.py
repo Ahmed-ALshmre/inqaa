@@ -16781,25 +16781,30 @@ def _fallback_ai_classify_product(product, schema):
     if not audience:
         if re.search(r"ولاد[يى]|صبيان|بنين", text) and "boys" in audiences:
             audience = "boys"
-        elif re.search(r"بنات[يى]|بنوت|فستان\s*اطفال", text) and "girls" in audiences:
+        elif re.search(r"بنات[يى]|بنوت|فستان|صدري[هة]", text) and (
+            re.search(r"اطفال|طفل|بيبي|عمر\s*\d|سن[هة]|سنوات|اشهر", text) or product.get("store_id") == "baraah-kids"
+        ) and "girls" in audiences:
             audience = "girls"
-        elif re.search(r"اطفال|طفل|بيبي|عمر\s*\d|سن[هة]|سنوات|اشهر", text):
-            audience = "kids" if "kids" in audiences else ("unisex" if "unisex" in audiences else next(iter(audiences), ""))
+        elif re.search(r"اطفال|طفل|بيبي|عمر\s*\d|سن[هة]|سنوات|اشهر", text) or product.get("store_id") == "baraah-kids":
+            audience = "children" if "children" in audiences else ("girls" if "girls" in audiences else next(iter(audiences), ""))
         elif "women" in audiences:
             audience = "women"
     ptype = product.get("product_type") or ""
     if not ptype:
         type_hints = [
-            (r"تراك|بيجام|بجام", "tracksuit"), (r"فستان|نفنوف", "dress"),
-            (r"دشداش|روب|جلابي", "dishdasha"), (r"سوت|طقم|بدل[هة]|قاط", "suit"),
-            (r"تنور[هة]", "skirt"), (r"كيلوت|بنطلون|بناطير", "culotte"),
-            (r"شال|حجاب", "shawl"), (r"عباي|جب[هة]", "abaya"),
-            (r"قميص|بلوز|تيشرت|جاكيت|معطف|قبوط", "top"),
+            (r"تراك|بيجام|بجام", "tracksuits"), (r"فستان|نفنوف|صدري[هة]", "dresses"),
+            (r"دشداش|روب|جلابي", "dishdasha"), (r"سوت|طقم|بدل[هة]|قاط", "sets"),
+            (r"تنور[هة]", "skirts"), (r"كيلوت|بنطلون|بناطير", "trousers"),
+            (r"شال|حجاب|اكسسوار", "accessories"), (r"عباي|جب[هة]", "abaya"),
+            (r"جاكيت|معطف|قبوط|سترة|كوت", "outerwear"), (r"قميص|بلوز|تيشرت", "tops"),
+            (r"حذاء|حذية|بوط|شبشب", "shoes"), (r"جنط|حقيب", "bags"),
         ]
         for pat, key in type_hints:
             if re.search(pat, text) and key in types:
                 ptype = key
                 break
+        if not ptype and "other" in types:
+            ptype = "other"
     occs = list(product.get("occasions") or [])
     if not occs:
         if re.search(r"بيتي|منزل|تراك|دشداش|روب|نوم|بيجام", text) and "home" in occasions_keys:
