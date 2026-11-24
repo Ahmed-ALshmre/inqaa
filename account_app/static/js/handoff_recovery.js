@@ -14,6 +14,18 @@
 
   let pollTimer = null;
 
+  function apiUrl(path) {
+    return typeof adminApi === "function" ? adminApi(path) : path;
+  }
+
+  function storeLink(senderId) {
+    const params = new URLSearchParams(window.location.search);
+    const sid = params.get("store_id") || (typeof getActiveStoreId === "function" ? getActiveStoreId() : "");
+    return sid
+      ? `/?store_id=${encodeURIComponent(sid)}&sender_id=${encodeURIComponent(senderId)}`
+      : `/?sender_id=${encodeURIComponent(senderId)}`;
+  }
+
   function esc(str) {
     return String(str || "")
       .replace(/&/g, "&amp;")
@@ -89,7 +101,7 @@
     } else {
       tableBody.innerHTML = items.map((item, idx) => {
         const name = esc(item.customer_name || item.sender_id);
-        const link = `/?sender_id=${encodeURIComponent(item.sender_id)}`;
+        const link = storeLink(item.sender_id);
         return `
           <tr>
             <td>${idx + 1}</td>
@@ -113,7 +125,7 @@
 
   async function fetchStatus() {
     try {
-      const res = await fetch("/api/settings/handoff-recovery/status");
+      const res = await fetch(apiUrl("/api/settings/handoff-recovery/status"));
       const data = await res.json();
       if (data.ok) render(data);
     } catch (e) {
@@ -125,7 +137,7 @@
     startBtn.disabled = true;
     msgBox.innerHTML = '<div class="alert alert-info py-2 mb-0">جاري بدء المعالجة...</div>';
     try {
-      const res = await fetch("/api/settings/handoff-recovery/start", {
+      const res = await fetch(apiUrl("/api/settings/handoff-recovery/start"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hours: 24, interval_seconds: 60 }),
@@ -146,7 +158,7 @@
   stopBtn.addEventListener("click", async () => {
     stopBtn.disabled = true;
     try {
-      const res = await fetch("/api/settings/handoff-recovery/stop", { method: "POST" });
+      const res = await fetch(apiUrl("/api/settings/handoff-recovery/stop"), { method: "POST" });
       const data = await res.json();
       if (data.ok) render(data);
     } finally {

@@ -19484,7 +19484,7 @@ def collect_handoff_recovery_candidates(db, store_id, hours=24):
            WHERE COALESCE(c.store_id,'default')=? AND m.created_at>=?
              AND (
                EXISTS (SELECT 1 FROM customer_ai_settings a WHERE a.sender_id=c.sender_id AND a.enabled=0)
-               OR EXISTS (SELECT 1 FROM conversation_pause_state p WHERE p.sender_id=c.sender_id)
+               OR EXISTS (SELECT 1 FROM conversation_pause_state p WHERE p.sender_id=c.sender_id AND COALESCE(p.reason,'') != 'enabled')
                OR EXISTS (SELECT 1 FROM human_reviews r WHERE r.sender_id=c.sender_id AND COALESCE(r.store_id,'default')=? AND r.status='pending')
              )
            GROUP BY c.sender_id
