@@ -19671,9 +19671,10 @@ def api_handoff_recovery_start():
     candidates = collect_handoff_recovery_candidates(db, store_id, hours=hours)
     if not candidates:
         return jsonify({"ok": True, "run": None, "preview_candidates": [], "message": "لا توجد محادثات متوقفة في آخر 24 ساعة."})
+    import uuid as _uuid
     stop_event = threading.Event()
     run = {
-        "run_id": uuid.uuid4().hex[:10],
+        "run_id": _uuid.uuid4().hex[:10],
         "store_id": store_id,
         "status": "running",
         "started_at": now_baghdad_iso(),

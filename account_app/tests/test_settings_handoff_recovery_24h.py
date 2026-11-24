@@ -124,6 +124,19 @@ class HandoffRecoveryTests(unittest.TestCase):
             # Verified 60 seconds total waited between item 1 and item 2
             self.assertAlmostEqual(60.0, sum(sleeps), delta=1.0)
 
+    def test_start_endpoint_returns_json_without_name_error(self):
+        with app_module.app.test_request_context(
+            "/api/settings/handoff-recovery/start?store_id=default",
+            method="POST",
+            json={"hours": 24, "interval_seconds": 60},
+        ):
+            with patch.object(app_module, "_run_handoff_recovery_worker"):
+                resp = app_module.api_handoff_recovery_start.__wrapped__()
+                data = resp.get_json()
+                self.assertTrue(data["ok"])
+                self.assertEqual(2, data["run"]["total"])
+                self.assertTrue(data["run"]["run_id"])
+
 
 if __name__ == "__main__":
     unittest.main()
