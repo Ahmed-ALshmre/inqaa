@@ -14612,6 +14612,11 @@ def settings_smart_reviewer_page():
     return _admin_page("settings/smart_reviewer.html")
 
 
+@app.route("/settings/handoff-recovery")
+def settings_handoff_recovery_page():
+    return _admin_page("settings/handoff_recovery.html")
+
+
 @app.route("/advisor")
 @app.route("/settings/advisor")
 def advisor_page():
@@ -19455,6 +19460,255 @@ def api_smart_reviewer_settings():
         return jsonify({"ok": True, "settings": settings})
     settings = save_smart_reviewer_settings(db, request.get_json(silent=True) or {})
     return jsonify({"ok": True, "settings": settings})
+
+
+_HANDOFF_RECOVERY_LOCK = threading.Lock()
+_HANDOFF_RECOVERY_RUNS = {}
+
+
+def collect_handoff_recovery_candidates(db, store_id, hours=24):
+    """Collect conversations from the last `hours` stopped due to human handoff, review, or credit/service error."""
+    cutoff_iso = (datetime.now(sales_intelligence.BAGHDAD) - timedelta(hours=max(1, min(72, int(hours or 24))))).isoformat()
+    rows = db.execute(
+        """SELECT c.sender_id, COALESCE(c.name, '') AS customer_name,
+                  MAX(m.id) AS latest_incoming_id,
+                  (SELECT r.reason FROM human_reviews r
+                   WHERE r.sender_id=c.sender_id AND COALESCE(r.store_id,'default')=? AND r.status='pending'
+                   ORDER BY r.id DESC LIMIT 1) AS review_reason,
+                  (SELECT p.reason FROM conversation_pause_state p
+                   WHERE p.sender_id=c.sender_id LIMIT 1) AS pause_reason,
+                  (SELECT a.enabled FROM customer_ai_settings a
+                   WHERE a.sender_id=c.sender_id LIMIT 1) AS ai_enabled
+           FROM customers c
+           JOIN messages m ON m.sender_id=c.sender_id AND m.direction='incoming'
+           WHERE COALESCE(c.store_id,'default')=? AND m.created_at>=?
+             AND (
+               EXISTS (SELECT 1 FROM customer_ai_settings a WHERE a.sender_id=c.sender_id AND a.enabled=0)
+               OR EXISTS (SELECT 1 FROM conversation_pause_state p WHERE p.sender_id=c.sender_id)
+               OR EXISTS (SELECT 1 FROM human_reviews r WHERE r.sender_id=c.sender_id AND COALESCE(r.store_id,'default')=? AND r.status='pending')
+             )
+           GROUP BY c.sender_id
+           ORDER BY latest_incoming_id DESC""",
+        (store_id, store_id, cutoff_iso, store_id),
+    ).fetchall()
+    candidates = []
+    for row in rows:
+        sender_id = row["sender_id"]
+        latest = latest_incoming_message(db, sender_id)
+        if not latest or latest.get("message_type") == "sticker":
+            continue
+        if delivery_state.has_answer_after(db, sender_id, latest["id"]):
+            continue
+        reason = (row["review_reason"] or "").strip() or (row["pause_reason"] or "").strip()
+        if not reason:
+            reason = "توقف الذكاء الاصطناعي للمحادثة"
+        last_text = (latest.get("text") or "").strip()
+        if not last_text and latest.get("message_type") in {"image", "video", "file"}:
+            last_text = "[صورة / مرفق]"
+        candidates.append({
+            "sender_id": sender_id,
+            "customer_name": row["customer_name"] or sender_id,
+            "incoming_id": latest["id"],
+            "reason": reason,
+            "last_message": last_text[:120],
+            "status": "pending",
+            "detail": "",
+            "processed_at": None,
+        })
+    return candidates
+
+
+def process_single_handoff_recovery(db, store_id, item):
+    """Attempt to resolve a single stopped conversation and hand it back to the main AI model."""
+    sender_id = item["sender_id"]
+    if not is_ai_enabled(db):
+        return "error", "الذكاء الاصطناعي العام للمتجر متوقف."
+    latest = latest_incoming_message(db, sender_id)
+    if not latest or latest.get("message_type") == "sticker":
+        return "skipped", "لا توجد رسالة قابلة للرد."
+    if delivery_state.has_answer_after(db, sender_id, latest["id"]):
+        return "skipped", "تم الرد على الزبون مسبقاً."
+    set_customer_ai_enabled(db, sender_id, True, allow_manual_resume=True)
+    route = sales_runtime_live.route(db, sender_id)
+    payload = {
+        "incoming_id": latest["id"],
+        "control_revision": route["control_revision"] if route else None,
+    }
+    try:
+        result = resume_pending_ai_reply(db, sender_id, payload)
+    except Exception as exc:
+        set_customer_ai_enabled(db, sender_id, False, reason="handoff_recovery_error")
+        return "needs_human", f"تعذر إكمال المعالجة: {type(exc).__name__}"
+    auto_reply = result.get("auto_reply") or {}
+    if auto_reply.get("sent"):
+        db.execute(
+            """UPDATE human_reviews SET status='reviewed', replied_at=?
+               WHERE sender_id=? AND COALESCE(store_id,'default')=? AND status='pending'""",
+            (now_baghdad_iso(), sender_id, store_id),
+        )
+        db.commit()
+        return "resolved", "تم الرد على الزبون وإرجاع المحادثة للموديل الرئيسي."
+    reason = result.get("reason") or ""
+    if reason in {"already_answered", "conversation_changed", "non_product_sticker", "already_handled"}:
+        return "skipped", result.get("error") or "تم تخطي المحادثة لتغيّر حالتها."
+    if is_customer_ai_enabled(db, sender_id):
+        set_customer_ai_enabled(db, sender_id, False, reason="handoff_recovery_unresolved")
+    return "needs_human", result.get("error") or reason or "لم يتمكن الذكاء الاصطناعي من حلها؛ بقيت للتدخل البشري."
+
+
+def _handoff_recovery_snapshot(run):
+    if not run:
+        return None
+    wait_left = 0
+    if run.get("status") == "waiting" and run.get("next_run_at"):
+        wait_left = max(0, int(round(run["next_run_at"] - time.time())))
+    return {
+        "run_id": run["run_id"],
+        "store_id": run["store_id"],
+        "status": run["status"],
+        "started_at": run["started_at"],
+        "finished_at": run["finished_at"],
+        "interval_seconds": run["interval_seconds"],
+        "wait_seconds_left": wait_left,
+        "total": run["total"],
+        "processed": run["processed"],
+        "resolved": run["resolved"],
+        "remaining_human": run["remaining_human"],
+        "skipped": run["skipped"],
+        "error": run.get("error") or "",
+        "items": [dict(i) for i in run["items"]],
+    }
+
+
+def _run_handoff_recovery_worker(store_id, run, stop_event):
+    for idx, item in enumerate(run["items"]):
+        if stop_event.is_set():
+            with _HANDOFF_RECOVERY_LOCK:
+                run["status"] = "stopped"
+                run["finished_at"] = now_baghdad_iso()
+                run["next_run_at"] = None
+            return
+        with _HANDOFF_RECOVERY_LOCK:
+            run["status"] = "running"
+            run["next_run_at"] = None
+            item["status"] = "processing"
+        try:
+            with app.app_context():
+                token = _current_store_id.set(store_id)
+                try:
+                    db = get_db()
+                    outcome_status, detail = process_single_handoff_recovery(db, store_id, item)
+                finally:
+                    _current_store_id.reset(token)
+        except Exception as exc:
+            outcome_status, detail = "needs_human", f"خطأ أثناء المعالجة: {type(exc).__name__}"
+        with _HANDOFF_RECOVERY_LOCK:
+            item["processed_at"] = now_baghdad_iso()
+            item["detail"] = detail
+            if outcome_status == "error":
+                item["status"] = "needs_human"
+                run["error"] = detail
+                run["status"] = "stopped"
+                run["finished_at"] = now_baghdad_iso()
+                return
+            item["status"] = outcome_status
+            run["processed"] += 1
+            if outcome_status == "resolved":
+                run["resolved"] += 1
+            elif outcome_status == "needs_human":
+                run["remaining_human"] += 1
+            elif outcome_status == "skipped":
+                run["skipped"] += 1
+        # Wait interval_seconds (default 60s) before processing the next conversation
+        if idx + 1 < len(run["items"]):
+            interval = run["interval_seconds"]
+            with _HANDOFF_RECOVERY_LOCK:
+                run["status"] = "waiting"
+                run["next_run_at"] = time.time() + interval
+            deadline = time.time() + interval
+            while time.time() < deadline:
+                if stop_event.is_set():
+                    with _HANDOFF_RECOVERY_LOCK:
+                        run["status"] = "stopped"
+                        run["finished_at"] = now_baghdad_iso()
+                        run["next_run_at"] = None
+                    return
+                time.sleep(min(1.0, max(0.05, deadline - time.time())))
+    with _HANDOFF_RECOVERY_LOCK:
+        run["status"] = "completed"
+        run["finished_at"] = now_baghdad_iso()
+        run["next_run_at"] = None
+
+
+@app.route("/api/settings/handoff-recovery/status", methods=["GET"])
+@_dash_require
+def api_handoff_recovery_status():
+    store_id = current_store_id()
+    db = get_db()
+    with _HANDOFF_RECOVERY_LOCK:
+        entry = _HANDOFF_RECOVERY_RUNS.get(store_id)
+        run_snap = _handoff_recovery_snapshot(entry["run"]) if entry else None
+    preview = []
+    if not run_snap or run_snap["status"] not in {"running", "waiting"}:
+        preview = collect_handoff_recovery_candidates(db, store_id, hours=24)
+    return jsonify({"ok": True, "run": run_snap, "preview_candidates": preview})
+
+
+@app.route("/api/settings/handoff-recovery/start", methods=["POST"])
+@_dash_require
+def api_handoff_recovery_start():
+    store_id = current_store_id()
+    db = get_db()
+    if not is_ai_enabled(db):
+        return jsonify({"ok": False, "error": "الذكاء الاصطناعي العام للمتجر مطفي. فعّله أولاً قبل بدء المعالجة."}), 400
+    data = request.get_json(silent=True) or {}
+    hours = max(1, min(72, int(data.get("hours") or 24)))
+    interval_seconds = max(5, min(600, int(data.get("interval_seconds") or 60)))
+    with _HANDOFF_RECOVERY_LOCK:
+        existing = _HANDOFF_RECOVERY_RUNS.get(store_id)
+        if existing and existing["run"]["status"] in {"running", "waiting"}:
+            return jsonify({"ok": True, "run": _handoff_recovery_snapshot(existing["run"]), "preview_candidates": []})
+    candidates = collect_handoff_recovery_candidates(db, store_id, hours=hours)
+    if not candidates:
+        return jsonify({"ok": True, "run": None, "preview_candidates": [], "message": "لا توجد محادثات متوقفة في آخر 24 ساعة."})
+    stop_event = threading.Event()
+    run = {
+        "run_id": uuid.uuid4().hex[:10],
+        "store_id": store_id,
+        "status": "running",
+        "started_at": now_baghdad_iso(),
+        "finished_at": None,
+        "interval_seconds": interval_seconds,
+        "next_run_at": None,
+        "total": len(candidates),
+        "processed": 0,
+        "resolved": 0,
+        "remaining_human": 0,
+        "skipped": 0,
+        "error": "",
+        "items": candidates,
+    }
+    with _HANDOFF_RECOVERY_LOCK:
+        _HANDOFF_RECOVERY_RUNS[store_id] = {"run": run, "stop_event": stop_event}
+    t = threading.Thread(target=_run_handoff_recovery_worker, args=(store_id, run, stop_event), daemon=True)
+    t.start()
+    return jsonify({"ok": True, "run": _handoff_recovery_snapshot(run), "preview_candidates": []})
+
+
+@app.route("/api/settings/handoff-recovery/stop", methods=["POST"])
+@_dash_require
+def api_handoff_recovery_stop():
+    store_id = current_store_id()
+    with _HANDOFF_RECOVERY_LOCK:
+        entry = _HANDOFF_RECOVERY_RUNS.get(store_id)
+        if entry:
+            entry["stop_event"].set()
+            if entry["run"]["status"] in {"running", "waiting"}:
+                entry["run"]["status"] = "stopped"
+                entry["run"]["finished_at"] = now_baghdad_iso()
+                entry["run"]["next_run_at"] = None
+        run_snap = _handoff_recovery_snapshot(entry["run"]) if entry else None
+    return jsonify({"ok": True, "run": run_snap, "preview_candidates": []})
 
 
 @app.route("/api/settings/followup", methods=["GET", "POST"])

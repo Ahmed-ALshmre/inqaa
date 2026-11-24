@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}معالجة التدخل البشري تلقائياً (آخر 24 ساعة){% endblock %}
+{% block content %}
+<section class="admin-page-head">
+  <div>
+    <p class="admin-kicker">Handoff Recovery</p>
+    <h1>معالجة التدخل البشري تلقائياً (آخر 24 ساعة)</h1>
+    <p>يجمع المحادثات المتوقفة آخر 24 ساعة بسبب الرصيد أو التدخل البشري، يراجعها ويرد على الزبون ويعيد تسليمها للموديل الرئيسي — بانتظار دقيقة واحدة بين كل محادثة والثانية.</p>
+  </div>
+</section>
+
+<!-- Top Live Summary Counters -->
+<section class="admin-panel mb-3" id="handoffSummaryBar">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-secondary fs-6" id="hrStatusBadge">جاهز للفحص</span>
+      <span class="text-muted small" id="hrCountdownText"></span>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="hrRefreshBtn" type="button">
+        <i class="bi bi-arrow-clockwise"></i> تحديث القائمة
+      </button>
+      <button class="btn btn-primary btn-sm" id="hrStartBtn" type="button">
+        <i class="bi bi-play-fill"></i> بدء معالجة حالات آخر 24 ساعة (دقيقة بين كل محادثة)
+      </button>
+      <button class="btn btn-danger btn-sm d-none" id="hrStopBtn" type="button">
+        <i class="bi bi-stop-fill"></i> إيقاف المعالجة
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-3 text-center">
+    <div class="col-6 col-md-3">
+      <div class="p-3 rounded border bg-light">
+        <div class="small text-muted mb-1">إجمالي الحالات (24 ساعة)</div>
+        <div class="fs-3 fw-bold text-dark" id="hrStatTotal">0</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="p-3 rounded border bg-light">
+        <div class="small text-muted mb-1">تمت معالجتها</div>
+        <div class="fs-3 fw-bold text-primary" id="hrStatProcessed">0</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="p-3 rounded border" style="background:#edf9f0; border-color:#b7ebc6 !important;">
+        <div class="small text-success mb-1">تم حلها وإرجاعها للبوت</div>
+        <div class="fs-3 fw-bold text-success" id="hrStatResolved">0</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="p-3 rounded border" style="background:#fff6ed; border-color:#ffd8b0 !important;">
+        <div class="small text-warning mb-1" style="color:#b45309 !important;">بقيت للتدخل البشري</div>
+        <div class="fs-3 fw-bold" style="color:#b45309;" id="hrStatRemaining">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-status mt-3" id="hrMessage"></div>
+</section>
+
+<!-- Live Queue Table -->
+<section class="admin-panel">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h2 class="h6 mb-0">قائمة المحادثات المتوقفة آخر 24 ساعة</h2>
+    <span class="small text-muted" id="hrTableHint"></span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>الزبون</th>
+          <th>سبب التوقف</th>
+          <th>آخر رسالة</th>
+          <th>الحالة</th>
+          <th>النتيجة / التفاصيل</th>
+        </tr>
+      </thead>
+      <tbody id="hrTableBody">
+        <tr><td colspan="6" class="text-center text-muted py-4">جاري تحميل الحالات...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/handoff_recovery.js?v=1"></script>
+{% endblock %}
