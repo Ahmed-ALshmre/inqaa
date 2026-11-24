@@ -304,6 +304,26 @@ class SmartReviewer12hTests(unittest.TestCase):
         self.assertIn('home', boys['occasions'])
         self.assertTrue(boys['recommendation_groups'])
 
+    def test_references_resolves_unique_product_by_customer_search_keywords(self):
+        from account_app.sales_runtime.cart import Catalog
+        from account_app.sales_runtime.references import References
+        from account_app.sales_runtime.store import Scope, Store
+
+        store = Store(self.db)
+        scope = Scope('baraah-kids', 'zernio', 'acc', 'baraah-kids::kw-test')
+        catalog = Catalog('baraah-kids', [
+            {'store_id': 'baraah-kids', 'product_id': 'P021', 'product_name': 'فستان',
+             'keywords': 'فستان فيونكة، بدلة الاميرات، فستان احمر فيونكة', 'status': 'active'},
+            {'store_id': 'baraah-kids', 'product_id': 'P022', 'product_name': 'فستان',
+             'keywords': 'فستان وردي، فستان توتو', 'status': 'active'},
+        ])
+        refs = References(store, catalog)
+        hit = refs.resolve(scope, text='اريد فستان فيونكة لعمر سنتين')
+        self.assertEqual({'status': 'known', 'source': 'keyword', 'product_id': 'P021'}, hit)
+        # Ambiguous / generic word alone must not falsely lock one product
+        miss = refs.resolve(scope, text='اريد فستان لعمر سنتين')
+        self.assertEqual('none', miss['status'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -16772,7 +16772,7 @@ def api_classify_products():
 
 def _fallback_ai_classify_product(product, schema):
     text = customer_copy.normalized(" ".join(str(product.get(k) or "") for k in (
-        "product_name", "description", "fabric", "sizes", "colors", "cut", "season"
+        "product_name", "keywords", "description", "fabric", "sizes", "colors", "cut", "season"
     )))
     audiences = set((schema.get("audiences") or {}).keys())
     types = set((schema.get("product_types") or {}).keys())

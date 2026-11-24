@@ -3,7 +3,7 @@ from copy import deepcopy
 import re
 from urllib.parse import urlsplit
 
-from .. import ad_attribution, product_albums, product_variants, variant_inventory
+from .. import ad_attribution, checkout, product_albums, product_variants, variant_inventory
 from .store import Conflict
 
 
@@ -67,7 +67,38 @@ class References:
             return dict(status='ambiguous' if matches else 'unknown', source='ad')
         if direct_links:
             return dict(status='unknown', source='product_link')
+        keyword_match = self.match_keywords(text)
+        if keyword_match:
+            return keyword_match
         return dict(status='none')
+
+    def match_keywords(self, text):
+        clean_text = checkout.normalized(text or '').strip()
+        if len(clean_text) < 3:
+            return None
+        matches = []
+        for product in self.catalog.products.values():
+            if product.get('status', 'active') != 'active':
+                continue
+            raw_kw = str(product.get('keywords') or '').strip()
+            if not raw_kw:
+                continue
+            aliases = [checkout.normalized(part).strip() for part in re.split(r'[,،؛\n|]+', raw_kw)]
+            best_len = 0
+            for alias in aliases:
+                if len(alias) < 4:
+                    continue
+                if re.search(rf'(?<!\w){re.escape(alias)}(?!\w)', clean_text):
+                    best_len = max(best_len, len(alias))
+            if best_len:
+                matches.append((best_len, product['product_id']))
+        if not matches:
+            return None
+        top_len = max(item[0] for item in matches)
+        top_ids = list(dict.fromkeys(pid for length, pid in matches if length == top_len))
+        if len(top_ids) == 1:
+            return dict(status='known', source='keyword', product_id=top_ids[0])
+        return None
 
     def match_links(self, links):
         identities = {key for link in links if (key := link_identity(link))}

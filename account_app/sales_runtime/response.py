@@ -802,6 +802,7 @@ class Responses:
                     continue
                 catalog_map.append({
                     'name': customer_copy.reply_category(p) or customer_copy.fact(p.get('product_name'))[:60],
+                    'search_names': customer_copy.fact(str(p.get('keywords') or ''))[:80],
                     'stock': 'متوفر' if product_albums.stock_state(p) == 'available' else 'مخلص',
                     'audience': p.get('audience') or '',
                     'type': p.get('product_type') or '',
@@ -1171,6 +1172,7 @@ class Responses:
             matched_products.append({
                 'photo_number': idx,
                 'name': customer_copy.reply_category(prod) or customer_copy.fact(prod.get('product_name'))[:70].strip(),
+                'search_names': customer_copy.fact(str(prod.get('keywords') or ''))[:80],
                 'stock': product_albums.stock_state(prod),
                 'price_summary': price_text,
                 'colors': customer_copy.fact(prod.get('colors') or '')[:80],
