@@ -270,7 +270,7 @@ class Entrypoint:
                     return self.handoff_service(scope, event['id'], 'product_image_unresolved')
                 return self.clarify_image(
                     scope, event['id'], multiple=multiple_imgs or len(matched_ids) >= 2,
-                    matched_product_ids=matched_ids if len(matched_ids) >= 2 else None,
+                    matched_product_ids=matched_ids or None,
                 )
         return self.finish_turn(scope, event['id'])
 

@@ -1171,6 +1171,7 @@ class Responses:
                     price_text = customer_copy.fact(str(raw_price or ''))
             matched_products.append({
                 'photo_number': idx,
+                'product_id': pid,
                 'name': customer_copy.reply_category(prod) or customer_copy.fact(prod.get('product_name'))[:70].strip(),
                 'search_names': customer_copy.fact(str(prod.get('keywords') or ''))[:80],
                 'stock': product_albums.stock_state(prod),
@@ -1178,14 +1179,49 @@ class Responses:
                 'colors': customer_copy.fact(prod.get('colors') or '')[:80],
                 'sizes': customer_copy.fact(prod.get('sizes') or '')[:80],
             })
+        per_model_photos = bool(self.product_photos and len(matched_products) >= 2)
         context = dict(mode='continue', customer_message=current, recent_messages=messages, recent_replies=accepted,
                        question_field='photo.reference', next_step=dict(field='photo.reference', options=[]),
                        copy_budget=460 if len(matched_products) >= 2 else 145,
                        amounts=amounts or {}, greeting=greeting, action_results={},
                        photo_clarification=dict(multiple=multiple, possible_product=label, unreadable=unreadable,
                                                 quantity_quote=stage == 'photo-quantity',
+                                                per_model_photos=per_model_photos,
                                                 matched_products=matched_products))
         parts = self.write(context, catalog, scope, turn_id, version)
+
+        def _model_photo(prod):
+            if not self.product_photos or not prod:
+                return []
+            try:
+                return self.product_photos(prod, [], include_unavailable=True)[:1]
+            except TypeError:
+                return self.product_photos(prod, [])[:1]
+
+        if per_model_photos:
+            interleaved = []
+            if len(parts) >= len(matched_products):
+                for idx, item in enumerate(matched_products):
+                    prod = catalog.products.get(item['product_id'])
+                    for photo_part in _model_photo(prod):
+                        interleaved.append(dict(photo_part))
+                    text_part = dict(parts[idx])
+                    text_part['product_id'] = item['product_id']
+                    interleaved.append(text_part)
+                for extra in parts[len(matched_products):]:
+                    interleaved.append(dict(extra))
+            else:
+                for item in matched_products:
+                    prod = catalog.products.get(item['product_id'])
+                    for photo_part in _model_photo(prod):
+                        interleaved.append(dict(photo_part))
+                interleaved.extend(dict(p) for p in parts)
+            parts = interleaved
+        elif self.product_photos and len(matched_products) == 1 and multiple:
+            prod = catalog.products.get(matched_products[0]['product_id'])
+            photos = _model_photo(prod)
+            if photos:
+                parts = [dict(photos[0]), *(dict(p, product_id=matched_products[0]['product_id']) for p in parts)]
         for part in parts:
             part['reference_clarification'] = True
         parts[-1].update(question_field='product', question_key='product', question_stage=stage)

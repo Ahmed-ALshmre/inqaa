@@ -161,19 +161,26 @@ def fact_recovery_parts(context):
     photo = context.get('photo_clarification')
     if photo:
         matched_products = photo.get('matched_products') or []
-        if len(matched_products) >= 2:
+        if len(matched_products) >= 1:
+            items = matched_products[:4]
+            avail_items = [item for item in items if item.get('stock') == 'available']
             out_lines = []
-            avail_items = [item for item in matched_products[:3] if item.get('stock') == 'available']
-            for item in matched_products[:3]:
-                status = 'متوفر' if item.get('stock') == 'available' else 'مخلص حالياً'
-                price_part = f" ({item['price_summary']})" if item.get('price_summary') else ''
+            for item in items:
+                status = 'متوفر' if item.get('stock') == 'available' else 'للأسف مخلص حالياً'
+                price_part = f" ({item['price_summary']})" if item.get('price_summary') and item.get('stock') == 'available' else ''
                 out_lines.append(f"{item['name']}: {status}{price_part}.")
             if not avail_items:
-                out_lines.append('للأسف هالقطع مخلصة حالياً، تحبين أقترحلج موديلات ثانية متوفرة بنفس العمر أو القياس؟')
+                closing = 'للأسف هالقطع مخلصة حالياً، تحبين أقترحلج موديلات ثانية متوفرة بنفس العمر أو القياس؟'
             elif len(avail_items) == 1:
-                out_lines.append(f"تحبين نكمّل على {avail_items[0]['name']} المتوفر؟")
+                closing = f"تحبين نكمّل على {avail_items[0]['name']} المتوفر؟"
             else:
-                out_lines.append('أي واحد منهم عجبج أكثر أو تحبين تاخذيهم سوية؟')
+                closing = 'أي واحد منهم عجبج أكثر أو تحبين تاخذيهم سوية بنفس التوصيل؟'
+            if photo.get('per_model_photos') and len(items) >= 2:
+                parts = [dict(type='text', text=line) for line in out_lines]
+                if len(parts) < 5:
+                    parts.append(dict(type='text', text=closing))
+                return parts
+            out_lines.append(closing)
             return [dict(type='text', text='\n\n'.join(out_lines))]
         if photo.get('possible_product'):
             text = f"تقصدين {photo['possible_product']}؟"

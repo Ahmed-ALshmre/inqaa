@@ -684,6 +684,55 @@ class LinkingTests(unittest.TestCase):
         self.assertIsInstance(res, list)
         self.assertEqual(40000, captured['amounts']['subtotal'])
 
+    def test_multi_model_photos_interleaves_photo_and_reply_including_sold_out_and_ignores_non_catalog(self):
+        from account_app.sales_runtime.response import Responses
+        from account_app.sales_runtime.wording import fact_recovery_parts
+
+        pid1 = self.products[0]['product_id']
+        pid2 = self.products[1]['product_id']
+        self.products[0]['price'] = '10000'
+        self.products[1]['price'] = '15000'
+        self.products[1]['stock'] = 'نفذ'
+
+        def fake_photos(prod, colors, *, include_unavailable=False):
+            if prod['product_id'] == pid2 and not include_unavailable:
+                return []
+            return [dict(type='image', url=f"https://example.test/product_image/{prod['product_id']}.jpg",
+                         product_id=prod['product_id'], color='')]
+
+        captured = {}
+        def writer(ctx):
+            captured.update(ctx)
+            return [
+                dict(type='text', text='حبيبتي هذا الموديل الأول متوفر وسعره 10 آلاف.'),
+                dict(type='text', text='وهذا الموديل الثاني للأسف مخلص حالياً.'),
+                dict(type='text', text='تحبين نثبتلج الأول؟'),
+            ]
+
+        responses = Responses(self.store, self.loader, writer, product_photos=fake_photos)
+        ev_id = self.event('شكد سعرهن؟')
+        # Simulate 3 photos sent by customer: pid1 (available), pid2 (sold out), and 1 non-catalog photo (ignored)
+        parts = responses.ask_about_photo(
+            self.scope, ev_id, self.version(), self.loader('khuyoot'),
+            'شكد سعرهن؟', [{'actor': 'customer', 'text': 'شكد سعرهن؟'}], [],
+            {'omit_welcome': False, 'omit_return_salam': False},
+            'product-detail', multiple=True, matched_product_ids=[pid1, pid2],
+        )
+        self.assertTrue(captured['photo_clarification']['per_model_photos'])
+        # Expect exact order: [IMAGE pid1, TEXT pid1, IMAGE pid2 (even though sold out!), TEXT pid2, CLOSING TEXT]
+        self.assertEqual(['image', 'text', 'image', 'text', 'text'], [p['type'] for p in parts])
+        self.assertEqual(pid1, parts[0]['product_id'])
+        self.assertEqual(pid1, parts[1]['product_id'])
+        self.assertEqual(pid2, parts[2]['product_id'])
+        self.assertEqual(pid2, parts[3]['product_id'])
+        self.assertIn('مخلص', parts[3]['text'])
+
+        # Fallback recovery also produces per-model text bubbles
+        rec = fact_recovery_parts(captured)
+        self.assertEqual(3, len(rec))
+        self.assertIn('متوفر', rec[0]['text'])
+        self.assertIn('مخلص', rec[1]['text'])
+
 
 if __name__ == '__main__':
     unittest.main()

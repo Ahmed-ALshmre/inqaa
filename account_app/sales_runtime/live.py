@@ -468,10 +468,10 @@ def make_entry(module, db, scope, allow_write):
                 return dict(source='auto_product', product_id=product_id)
         return None
 
-    def product_photos(product, colors):
+    def product_photos(product, colors, *, include_unavailable=False):
         origin = urlsplit(module.PUBLIC_URL).netloc
         stocked_colors = None
-        if product.get('variant_stock'):
+        if product.get('variant_stock') and not include_unavailable:
             if product_albums.stock_state(product) != 'available':
                 return []
             stocked_colors = {row['color'] for row in variant_inventory.choices(product)}
