@@ -2836,6 +2836,49 @@ body .toast-container, body.mobile-conversation-open .toast-container { top: max
   }
 }
 
-.cust-status-followup {background:#e7f1ff;color:#1d5fa7}
-.cust-status-followup-pending {background:#fff4e5;color:#9a5b13}
-.cust-status-followup-stopped {background:#f1f3f5;color:#6c757d}
+.cust-status-followup {background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.cust-status-followup-pending {background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+.cust-status-followup-stopped {background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
+
+/* === Navigation Visual Polish (Desktop Sidebar & Mobile Bottom Nav) === */
+.admin-sidebar a {
+  border-radius: 12px !important;
+  margin: 2px 10px !important;
+  padding: 10px 12px !important;
+  font-weight: 600 !important;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.14s ease !important;
+}
+.admin-sidebar a i {
+  font-size: 1.05rem;
+  opacity: 0.9;
+}
+.admin-sidebar a:hover {
+  background: rgba(15, 118, 110, 0.08) !important;
+  color: #0f766e !important;
+}
+.admin-sidebar a.active {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.14), rgba(20, 145, 134, 0.08)) !important;
+  color: #0f766e !important;
+  box-shadow: inset -3px 0 0 #0f766e;
+}
+.soof-bottom-nav {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(14px) !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.06) !important;
+}
+.soof-bottom-nav a,
+.soof-bottom-nav button {
+  font-weight: 600 !important;
+  transition: color 0.15s ease, transform 0.12s ease !important;
+}
+.soof-bottom-nav a:active,
+.soof-bottom-nav button:active {
+  transform: scale(0.94);
+}
+.soof-bottom-nav a.active > span,
+.soof-bottom-nav a[aria-current="page"] > span {
+  background: rgba(15, 118, 110, 0.12) !important;
+  color: #0f766e !important;
+  border-radius: 12px !important;
+}

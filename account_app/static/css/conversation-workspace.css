@@ -28,3 +28,118 @@
 .msg-consultation{display:inline-flex;align-items:center;gap:3px;margin-inline-start:6px;padding:1px 5px;border-radius:5px;background:var(--surface-2,#eae6f7);color:var(--text,#463578);font-weight:600}
 .messenger-page .inbox-primary-filters{flex-wrap:wrap}
 @media(max-width:600px){.messenger-page .conversation-focus-bar{margin:6px 10px 8px}.messenger-page .conversation-focus-bar .chat-product-card>.bi-chevron-left{display:none}}
+
+/* === Visual Polish: Conversation Cards, Chat Bubbles, Filters & Tags === */
+.messenger-page .customer-item {
+  margin: 5px 8px !important;
+  padding: 11px 12px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  background: #ffffff !important;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.14s ease !important;
+}
+.messenger-page .customer-item:hover {
+  background: #f8fbfa !important;
+  border-color: rgba(15, 118, 110, 0.22) !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05) !important;
+}
+.messenger-page .customer-item.active {
+  background: linear-gradient(135deg, #effaf6 0%, #f5fdf9 100%) !important;
+  border-color: rgba(15, 118, 110, 0.38) !important;
+  box-shadow: 0 6px 18px rgba(15, 118, 110, 0.10), inset -3px 0 0 #0f766e !important;
+}
+.messenger-page .customer-item .avatar-circle {
+  box-shadow: 0 3px 10px rgba(15, 118, 110, 0.14);
+  font-weight: 700;
+}
+
+/* Filter Tabs & Search Bar */
+.messenger-page #conversationFilters,
+.messenger-page .inbox-primary-filters {
+  gap: 6px !important;
+  padding: 4px 2px;
+}
+.messenger-page #conversationFilters .btn,
+.messenger-page .inbox-primary-filters .btn {
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 5px 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #475569 !important;
+  transition: all 0.15s ease !important;
+}
+.messenger-page #conversationFilters .btn:hover,
+.messenger-page .inbox-primary-filters .btn:hover {
+  border-color: #99d5cc !important;
+  color: #0f766e !important;
+  background: #f0fdfa !important;
+}
+.messenger-page #conversationFilters .btn.active,
+.messenger-page .inbox-primary-filters .btn.active {
+  background: linear-gradient(135deg, #0f766e 0%, #149186 100%) !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.24) !important;
+}
+
+/* Chat Area & Bubbles */
+.messenger-page .chat-header {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+}
+.messenger-page .messages-area {
+  background-color: #f4f7f6 !important;
+  background-image: radial-gradient(rgba(15, 118, 110, 0.06) 1px, transparent 1px) !important;
+  background-size: 18px 18px !important;
+}
+.messenger-page .msg-wrapper.incoming .msg-bubble {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.07) !important;
+  border-top-right-radius: 6px !important;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05) !important;
+}
+.messenger-page .msg-wrapper.outgoing .msg-bubble {
+  background: linear-gradient(135deg, #0f766e 0%, #158f84 100%) !important;
+  border-top-left-radius: 6px !important;
+  box-shadow: 0 4px 14px rgba(15, 118, 110, 0.20) !important;
+}
+
+/* Modern Crisp Pill Tags */
+.cust-statuses {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+  margin-top: 6px !important;
+}
+.cust-status {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 9px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.45 !important;
+  letter-spacing: 0 !important;
+  border: 1px solid transparent !important;
+  white-space: nowrap !important;
+}
+.cust-status i { font-size: 11px; line-height: 1; }
+.cust-status-booked { background: #ecfdf5 !important; color: #047857 !important; border-color: #a7f3d0 !important; }
+.cust-status-review { background: #fff1f2 !important; color: #be123c !important; border-color: #fecdd3 !important; }
+.cust-status-issue { background: #fef2f2 !important; color: #b91c1c !important; border-color: #fecaca !important; }
+.cust-status-hot { background: #fff7ed !important; color: #c2410c !important; border-color: #fed7aa !important; }
+.cust-status-warm { background: #eef2ff !important; color: #4338ca !important; border-color: #c7d2fe !important; }
+.cust-status-followup-pending { background: #fffbeb !important; color: #b45309 !important; border-color: #fde68a !important; }
+.cust-status-followup { background: #eff6ff !important; color: #1d4ed8 !important; border-color: #bfdbfe !important; }
+.cust-status-followup-stopped { background: #f1f5f9 !important; color: #475569 !important; border-color: #cbd5e1 !important; }
+.conversation-store-badge {
+  border-radius: 999px !important;
+  padding: 2px 8px !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
