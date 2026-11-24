@@ -505,7 +505,8 @@ class Runtime:
                 and state['contact'].get('phone')
                 and state['contact'].get('address')
             )
-            if (pending and booking_contact_now and reference['status'] != 'known'
+            confirming_active_cart = bool(cart_products and checkout.is_confirmation(text_now))
+            if (pending and (booking_contact_now or confirming_active_cart) and reference['status'] != 'known'
                     and (state.get('focus_product_id') or cart_products)):
                 fallback_pid = state.get('focus_product_id') or state['cart'][0]['product_id']
                 reference = dict(status='known', source='checkout', product_id=fallback_pid)
