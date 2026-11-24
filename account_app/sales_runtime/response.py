@@ -1146,7 +1146,7 @@ class Responses:
     def ask_about_photo(self, scope, turn_id, version, catalog, current, messages, accepted, greeting,
                         stage, *, multiple=False, label='', unreadable=False, amounts=None, matched_product_ids=None):
         matched_products = []
-        for pid in (matched_product_ids or [])[:4]:
+        for idx, pid in enumerate((matched_product_ids or [])[:4], start=1):
             prod = catalog.products.get(pid)
             if not prod:
                 continue
@@ -1169,6 +1169,7 @@ class Responses:
                 else:
                     price_text = customer_copy.fact(str(raw_price or ''))
             matched_products.append({
+                'photo_number': idx,
                 'name': customer_copy.reply_category(prod) or customer_copy.fact(prod.get('product_name'))[:70].strip(),
                 'stock': product_albums.stock_state(prod),
                 'price_summary': price_text,
