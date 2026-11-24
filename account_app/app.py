@@ -16770,6 +16770,160 @@ def api_classify_products():
         revision=catalog_linking.revision(load_products_from_file(),store))
 
 
+def _fallback_ai_classify_product(product, schema):
+    text = customer_copy.normalized(" ".join(str(product.get(k) or "") for k in (
+        "product_name", "description", "fabric", "sizes", "colors", "cut", "season"
+    )))
+    audiences = set((schema.get("audiences") or {}).keys())
+    types = set((schema.get("product_types") or {}).keys())
+    occasions_keys = set((schema.get("occasions") or {}).keys())
+    audience = product.get("audience") or ""
+    if not audience:
+        if re.search(r"ولاد[يى]|صبيان|بنين", text) and "boys" in audiences:
+            audience = "boys"
+        elif re.search(r"بنات[يى]|بنوت|فستان\s*اطفال", text) and "girls" in audiences:
+            audience = "girls"
+        elif re.search(r"اطفال|طفل|بيبي|عمر\s*\d|سن[هة]|سنوات|اشهر", text):
+            audience = "kids" if "kids" in audiences else ("unisex" if "unisex" in audiences else next(iter(audiences), ""))
+        elif "women" in audiences:
+            audience = "women"
+    ptype = product.get("product_type") or ""
+    if not ptype:
+        type_hints = [
+            (r"تراك|بيجام|بجام", "tracksuit"), (r"فستان|نفنوف", "dress"),
+            (r"دشداش|روب|جلابي", "dishdasha"), (r"سوت|طقم|بدل[هة]|قاط", "suit"),
+            (r"تنور[هة]", "skirt"), (r"كيلوت|بنطلون|بناطير", "culotte"),
+            (r"شال|حجاب", "shawl"), (r"عباي|جب[هة]", "abaya"),
+            (r"قميص|بلوز|تيشرت|جاكيت|معطف|قبوط", "top"),
+        ]
+        for pat, key in type_hints:
+            if re.search(pat, text) and key in types:
+                ptype = key
+                break
+    occs = list(product.get("occasions") or [])
+    if not occs:
+        if re.search(r"بيتي|منزل|تراك|دشداش|روب|نوم|بيجام", text) and "home" in occasions_keys:
+            occs.append("home")
+        if re.search(r"طلع[هة]|رسمي|قاط|فستان|تنور|كيلوت|سوت|طقم|عباي|شال", text) and "outing" in occasions_keys:
+            occs.append("outing")
+        if not occs and "everyday" in occasions_keys:
+            occs.append("everyday")
+    groups = list(product.get("recommendation_groups") or [])
+    if not groups:
+        aud_label = (schema.get("audiences") or {}).get(audience, "")
+        type_label = (schema.get("product_types") or {}).get(ptype, "")
+        occ_label = (schema.get("occasions") or {}).get(occs[0], "") if occs else ""
+        grp = " ".join(part for part in (type_label, aud_label, occ_label) if part).strip()
+        if grp:
+            groups.append(grp)
+    return {
+        "audience": audience if audience in audiences else "",
+        "product_type": ptype if ptype in types else "",
+        "occasions": [o for o in occs if o in occasions_keys],
+        "recommendation_groups": groups[:3],
+    }
+
+
+@app.post('/api/products/manage/ai-classify')
+@_dash_require
+def api_ai_classify_products():
+    import secrets
+    token = session.get('csrf_token') or ''
+    if not token or not secrets.compare_digest(request.headers.get('X-CSRF-Token', ''), token):
+        return jsonify(error='حدّث الصفحة ثم حاول مجدداً.'), 403
+    with _products_file_lock:
+        all_products = load_products_from_file(all_stores=True)
+        store = current_store_id()
+        store_products = [p for p in all_products if p.get('store_id', 'default') == store]
+        if not store_products:
+            return jsonify(ok=True, changed=0, groups=0, revision=catalog_linking.revision(all_products, store))
+        registry = catalog_taxonomy.listing(get_db(), store, all_products)
+        schema = catalog_editor_schema()
+        ai_map = {}
+        if OPENROUTER_KEY:
+            try:
+                compact_items = [
+                    {
+                        "product_id": p.get("product_id"),
+                        "name": p.get("product_name"),
+                        "desc": str(p.get("description") or "")[:180],
+                        "sizes": p.get("sizes"),
+                        "fabric": p.get("fabric"),
+                        "season": p.get("season"),
+                    }
+                    for p in store_products
+                ]
+                prompt = (
+                    "صنّف واربط كل منتجات هذا المتجر حتى يفهمها الذكاء الاصطناعي ويقترح بدائل ومكملات لرفع السلة.\n"
+                    f"القيم المسموحة للجمهور (audience): {json.dumps(schema.get('audiences') or {}, ensure_ascii=False)}\n"
+                    f"القيم المسموحة لنوع القطعة (product_type): {json.dumps(schema.get('product_types') or {}, ensure_ascii=False)}\n"
+                    f"القيم المسموحة للاستخدام (occasions): {json.dumps(schema.get('occasions') or {}, ensure_ascii=False)}\n"
+                    "أرجع JSON فقط بشكل كائن مفاتيحه product_id وقيمته:\n"
+                    '{"audience":"...","product_type":"...","occasions":["..."],"recommendation_groups":["اسم مجموعة يربط الموديلات المتشابهة مثل تراك ولادي بيتي أو بدل بناتي طلعة"]}\n'
+                    "اربط المنتجات المتشابهة بنفس اسم المجموعة بالضبط."
+                )
+                resp = ai_transport.post(
+                    OPENROUTER_URL,
+                    headers={"Authorization": f"Bearer {OPENROUTER_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model": get_ai_model(get_db(), "main_model", MAIN_MODEL),
+                        "messages": [
+                            {"role": "system", "content": prompt},
+                            {"role": "user", "content": json.dumps(compact_items, ensure_ascii=False)},
+                        ],
+                        "max_tokens": 2500,
+                        "temperature": 0.2,
+                    },
+                    timeout=45,
+                )
+                resp.raise_for_status()
+                raw = resp.json()["choices"][0]["message"]["content"].strip()
+                raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.M).strip()
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    ai_map = parsed
+            except Exception as exc:
+                print(f"[AI-Classify] fallback used: {exc}")
+
+        valid_aud = set((schema.get("audiences") or {}).keys())
+        valid_type = set((schema.get("product_types") or {}).keys())
+        valid_occ = set((schema.get("occasions") or {}).keys())
+        updated = all_products
+        changed = 0
+        for prod in store_products:
+            pid = prod.get("product_id")
+            if not pid:
+                continue
+            guess = _fallback_ai_classify_product(prod, schema)
+            ai_item = ai_map.get(pid) if isinstance(ai_map.get(pid), dict) else {}
+            aud = ai_item.get("audience") if ai_item.get("audience") in valid_aud else guess["audience"]
+            ptype = ai_item.get("product_type") if ai_item.get("product_type") in valid_type else guess["product_type"]
+            occs = [o for o in (ai_item.get("occasions") or []) if o in valid_occ] or guess["occasions"]
+            groups = [str(g).strip() for g in (ai_item.get("recommendation_groups") or []) if str(g).strip()][:3] or guess["recommendation_groups"]
+            changes = {"recommendation_enabled": True}
+            if aud:
+                changes["audience"] = aud
+            if ptype:
+                changes["product_type"] = ptype
+            if occs:
+                changes["occasions"] = occs
+            if groups:
+                changes["recommendation_groups"] = groups
+            try:
+                updated = catalog_linking.classify(
+                    updated, store,
+                    {"product_ids": [pid], "changes": changes, "occasions_mode": "replace", "recommendation_groups_mode": "replace"},
+                    registry,
+                )
+                changed += 1
+            except (ValueError, TypeError):
+                continue
+        save_products_to_file(updated)
+        refreshed = [p for p in updated if p.get("store_id", "default") == store]
+        group_count = len({g for p in refreshed for g in (p.get("recommendation_groups") or [])})
+    return jsonify(ok=True, changed=changed, groups=group_count, revision=catalog_linking.revision(updated, store))
+
+
 @app.route("/api/products/manage", methods=["POST"])
 @_dash_require
 def api_create_product():

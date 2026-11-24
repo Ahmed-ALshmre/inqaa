@@ -792,6 +792,26 @@ class Responses:
         )
         if market['opportunity'] and question != 'catalog.show_option':
             context['recommendations'] = None
+        if (re.search(r'ولاد[يى]|بنات[يى]|بيتي|طلع[هة]|موديلات|شنو\s+ع(?:ند|د)كم|اكو\s+بعد|غير\s+موديل|بديل|اضيف|ويا(?:ه|ها)', clean)
+                or product_albums.stock_state(product) == 'out' if product else False):
+            catalog_map = []
+            for p in catalog.products.values():
+                if p.get('status', 'active') != 'active':
+                    continue
+                if p.get('recommendation_enabled') is False:
+                    continue
+                catalog_map.append({
+                    'name': customer_copy.reply_category(p) or customer_copy.fact(p.get('product_name'))[:60],
+                    'stock': 'متوفر' if product_albums.stock_state(p) == 'available' else 'مخلص',
+                    'audience': p.get('audience') or '',
+                    'type': p.get('product_type') or '',
+                    'occasions': p.get('occasions') or [],
+                    'groups': p.get('recommendation_groups') or [],
+                    'sizes': customer_copy.fact(p.get('sizes') or '')[:60],
+                    'price': customer_copy.fact(str(p.get('price') or ''))[:40],
+                })
+            if catalog_map:
+                context['store_catalog_map'] = catalog_map[:25]
         if state.get('focus_source') == 'image' and focus:
             context['verified_photo_product_id'] = focus
         if tracked:

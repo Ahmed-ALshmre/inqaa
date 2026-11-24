@@ -2,7 +2,7 @@
 {% block title %}ربط وتصنيف المنتجات — صوف{% endblock %}
 {% block styles %}<link rel="stylesheet" href="/static/css/product_links.css?v=1">{% endblock %}
 {% block content %}
-<header class="link-heading"><div><p class="link-kicker">كتالوج مرتب · اقتراح مناسب</p><h1>ربط وتصنيف المنتجات</h1><p>اختر المنتجات ثم حدد لمن تناسب، استخداماتها ونوعها. اجمع البدائل في مجموعة واحدة.</p></div><div class="link-nav"><a id="linkProducts" class="btn btn-outline-primary" href="/products">بطاقات المنتجات</a><a id="linkCategories" class="btn btn-outline-secondary" href="/product-categories">إدارة الفئات والمجموعات</a></div></header>
+<header class="link-heading"><div><p class="link-kicker">كتالوج مرتب · اقتراح مناسب</p><h1>ربط وتصنيف المنتجات</h1><p>اختر المنتجات ثم حدد لمن تناسب، استخداماتها ونوعها. اجمع البدائل في مجموعة واحدة ليفهم الذكاء الاصطناعي كل الموديلات ويرفع قيمة السلة.</p></div><div class="link-nav"><button type="button" id="linkAiAutoClassify" class="btn btn-success"><i class="bi bi-stars"></i> تصنيف وربط الكل بالـ AI</button><a id="linkProducts" class="btn btn-outline-primary" href="/products">بطاقات المنتجات</a><a id="linkCategories" class="btn btn-outline-secondary" href="/product-categories">إدارة الفئات والمجموعات</a></div></header>
 <div class="link-overview"><div><strong id="linkProductCount">—</strong><span>منتج في المتجر</span></div><div><strong id="linkMissingCount">—</strong><span>يحتاج إكمال تصنيف</span></div><div><strong id="linkGroupCount">—</strong><span>مجموعة اقتراح</span></div><label>المتجر<select id="linkStore" class="form-select" aria-label="المتجر"></select></label></div>
 <div class="link-layout">
 <section class="link-library"><div class="link-filters"><input id="linkSearch" class="form-control" type="search" placeholder="اسم المنتج أو الكود أو المجموعة" aria-label="البحث عن منتج"><select id="linkAudienceFilter" class="form-select" aria-label="تصفية الجمهور"><option value="">كل الجمهور</option></select><select id="linkTypeFilter" class="form-select" aria-label="تصفية النوع"><option value="">كل الأنواع</option></select><select id="linkUseFilter" class="form-select" aria-label="تصفية الاستخدام"><option value="">كل الاستخدامات</option></select><label class="link-check"><input id="linkMissingOnly" type="checkbox"> غير مكتمل فقط</label></div>
@@ -20,4 +20,4 @@
 </aside></div>
 <script id="linkSchema" type="application/json">{{ catalog_schema|tojson }}</script>
 {% endblock %}
-{% block scripts %}<script src="/static/js/product_links.js?v=1"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/product_links.js?v=2"></script>{% endblock %}

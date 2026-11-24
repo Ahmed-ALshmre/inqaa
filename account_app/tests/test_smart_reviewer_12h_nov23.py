@@ -274,6 +274,36 @@ class SmartReviewer12hTests(unittest.TestCase):
         self.assertEqual(1, res['sent'])
         self.assertEqual('P011', build_mock.call_args.args[3]['product_id'])
 
+    def test_fact_recovery_multi_photo_renders_matched_products_never_asks_to_resend(self):
+        from account_app.sales_runtime.wording import fact_recovery_parts
+        parts = fact_recovery_parts({
+            'mode': 'continue',
+            'question_field': 'photo.reference',
+            'amounts': {},
+            'photo_clarification': {
+                'multiple': True,
+                'matched_products': [
+                    {'name': 'تراك ولادي بيتي', 'stock': 'available', 'price_summary': 'القطعة بـ 10 ألف'},
+                    {'name': 'فستان بناتي طلعة', 'stock': 'out', 'price_summary': 'القطعة بـ 12 ألف'},
+                ],
+            },
+        })
+        self.assertIsNotNone(parts)
+        text = parts[0]['text']
+        self.assertIn('تراك ولادي بيتي', text)
+        self.assertIn('مخلص حالياً', text)
+        self.assertNotIn('ممكن تدزين صورة', text)
+
+    def test_fallback_ai_classify_product_assigns_audience_type_occasions_and_groups(self):
+        schema = app_module.catalog_editor_schema()
+        boys = app_module._fallback_ai_classify_product(
+            {'product_id': 'P1', 'product_name': 'تراك ولادي بيتي شتوي', 'sizes': 'عمر 2 إلى 6 سنوات'},
+            schema,
+        )
+        self.assertEqual('boys', boys['audience'])
+        self.assertIn('home', boys['occasions'])
+        self.assertTrue(boys['recommendation_groups'])
+
 
 if __name__ == '__main__':
     unittest.main()

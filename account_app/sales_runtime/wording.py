@@ -160,14 +160,23 @@ def fact_recovery_parts(context):
     question = context['question_field']
     photo = context.get('photo_clarification')
     if photo:
+        matched_products = photo.get('matched_products') or []
+        if len(matched_products) >= 2:
+            out_lines = []
+            for item in matched_products[:3]:
+                status = 'متوفر' if item.get('stock') == 'available' else 'مخلص حالياً'
+                price_part = f" ({item['price_summary']})" if item.get('price_summary') else ''
+                out_lines.append(f"{item['name']}: {status}{price_part}.")
+            out_lines.append('أي واحد منهم عجبج أكثر أو تحبين تاخذيهم سوية؟')
+            return [dict(type='text', text='\n\n'.join(out_lines))]
         if photo.get('possible_product'):
             text = f"تقصدين {photo['possible_product']}؟"
         elif photo.get('multiple'):
-            text = 'ممكن تدزين صورة القطعة اللي تقصدينها وحدها أو رابطها؟'
+            text = 'وصلتني الصور عيوني، يا قطعة منهم تقصدين بالضبط؟'
         elif photo.get('unreadable'):
             text = 'ممكن اسم القطعة أو رابطها حتى ألكالج الموديل؟'
         else:
-            text = 'ممكن رابط القطعة أو صورة أوضح إلها؟'
+            text = 'وصلتني الصورة عيوني، بس گليلي اسم الموديل أو وصفه حتى أتأكدلج منه؟'
         parts = [dict(type='text', text=text)]
         if photo.get('quantity_quote') and 'delivery_fee' in context['amounts']:
             parts.insert(0, dict(type='text', text='التوصيل {{delivery_fee}}.'))
