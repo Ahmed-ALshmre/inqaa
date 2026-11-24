@@ -1,75 +1,344 @@
 {% extends "base.html" %}
 {% block title %}معالجة التدخل البشري تلقائياً (آخر 24 ساعة){% endblock %}
 {% block content %}
-<section class="admin-page-head">
-  <div>
-    <p class="admin-kicker">Handoff Recovery</p>
+<style>
+  .hr-hero {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: linear-gradient(135deg, #f8faff 0%, #eef4ff 100%);
+    border: 1px solid #dbe7ff;
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .hr-hero-icon {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+  }
+  .hr-hero h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 4px;
+    color: #0f172a;
+  }
+  .hr-hero p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #475569;
+    line-height: 1.6;
+  }
+  .hr-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .hr-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #d5e2ff;
+    color: #1e40af;
+  }
+  .hr-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .hr-status-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .hr-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+  .hr-status-idle { background: #f1f5f9; color: #334155; }
+  .hr-status-running { background: #dbeafe; color: #1d4ed8; }
+  .hr-status-waiting { background: #e0f2fe; color: #0369a1; }
+  .hr-status-completed { background: #dcfce7; color: #15803d; }
+  .hr-status-stopped { background: #fef3c7; color: #b45309; }
+  .hr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .hr-actions .btn {
+    border-radius: 10px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+  }
+  .hr-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .hr-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .hr-stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+  }
+  .hr-stat-icon {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+  }
+  .hr-stat-total .hr-stat-icon { background: #f1f5f9; color: #334155; }
+  .hr-stat-processed .hr-stat-icon { background: #eff6ff; color: #2563eb; }
+  .hr-stat-resolved { background: #f3fcf6; border-color: #bbf7d0; }
+  .hr-stat-resolved .hr-stat-icon { background: #dcfce7; color: #16a34a; }
+  .hr-stat-remaining { background: #fffaf2; border-color: #fde68a; }
+  .hr-stat-remaining .hr-stat-icon { background: #fef3c7; color: #d97706; }
+  .hr-stat-label {
+    font-size: 0.78rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .hr-stat-val {
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: #0f172a;
+  }
+  .hr-stat-resolved .hr-stat-val { color: #15803d; }
+  .hr-stat-remaining .hr-stat-val { color: #b45309; }
+  .hr-progress-wrap {
+    margin-top: 14px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .hr-progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #2563eb 0%, #10b981 100%);
+    transition: width 0.4s ease;
+  }
+  .hr-avatar {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 700;
+    font-size: 0.88rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hr-reason-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+  }
+  .hr-item-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .hr-b-pending { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+  .hr-b-processing { background: #dbeafe; color: #1d4ed8; }
+  .hr-b-resolved { background: #dcfce7; color: #15803d; }
+  .hr-b-human { background: #fef3c7; color: #b45309; }
+  .hr-b-skipped { background: #e2e8f0; color: #475569; }
+  .hr-desktop-table { display: block; }
+  .hr-mobile-list { display: none; }
+  .hr-mcard {
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 13px 14px;
+    background: #fff;
+    margin-bottom: 10px;
+  }
+  .hr-mcard-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .hr-mcard-msg {
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 0.84rem;
+    color: #334155;
+    margin: 8px 0;
+    word-break: break-word;
+  }
+  .hr-spin {
+    display: inline-block;
+    animation: hrSpin 1.1s linear infinite;
+  }
+  @keyframes hrSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @media (max-width: 991px) {
+    .hr-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 767px) {
+    .hr-hero { padding: 14px; flex-direction: column; gap: 10px; }
+    .hr-hero-icon { width: 42px; height: 42px; min-width: 42px; font-size: 1.15rem; }
+    .hr-hero h1 { font-size: 1.08rem; }
+    .hr-toolbar { flex-direction: column; align-items: stretch; }
+    .hr-actions { flex-direction: column; width: 100%; }
+    .hr-actions .btn { width: 100%; padding: 10px 14px; }
+    .hr-stat-card { padding: 12px; gap: 10px; }
+    .hr-stat-icon { width: 36px; height: 36px; min-width: 36px; font-size: 1rem; }
+    .hr-stat-val { font-size: 1.3rem; }
+    .hr-desktop-table { display: none; }
+    .hr-mobile-list { display: block; }
+  }
+</style>
+
+<section class="hr-hero">
+  <div class="hr-hero-icon"><i class="bi bi-arrow-repeat"></i></div>
+  <div class="flex-grow-1">
     <h1>معالجة التدخل البشري تلقائياً (آخر 24 ساعة)</h1>
-    <p>يجمع المحادثات المتوقفة آخر 24 ساعة بسبب الرصيد أو التدخل البشري، يراجعها ويرد على الزبون ويعيد تسليمها للموديل الرئيسي — بانتظار دقيقة واحدة بين كل محادثة والثانية.</p>
+    <p>تجميع المحادثات المتوقفة بسبب الرصيد أو التدخل البشري، ربط المنتج وتثبيت الطلب تلقائياً عند توفر البيانات، وإعادة تسليم المحادثة للموديل الرئيسي.</p>
+    <div class="hr-chips">
+      <span class="hr-chip"><i class="bi bi-hourglass-split"></i> انتظار دقيقة بين كل محادثة</span>
+      <span class="hr-chip"><i class="bi bi-link-45deg"></i> ربط تلقائي للمنتج</span>
+      <span class="hr-chip"><i class="bi bi-bag-check"></i> تثبيت مباشر للطلبات المكتملة</span>
+    </div>
   </div>
 </section>
 
 <!-- Top Live Summary Counters -->
 <section class="admin-panel mb-3" id="handoffSummaryBar">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-    <div class="d-flex align-items-center gap-2">
-      <span class="badge bg-secondary fs-6" id="hrStatusBadge">جاهز للفحص</span>
-      <span class="text-muted small" id="hrCountdownText"></span>
+  <div class="hr-toolbar">
+    <div class="hr-status-wrap">
+      <span class="hr-status-pill hr-status-idle" id="hrStatusBadge">
+        <i class="bi bi-radar"></i> <span>جاهز للفحص</span>
+      </span>
+      <span class="text-muted small fw-semibold" id="hrCountdownText"></span>
     </div>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="hr-actions">
       <button class="btn btn-outline-secondary btn-sm" id="hrRefreshBtn" type="button">
         <i class="bi bi-arrow-clockwise"></i> تحديث القائمة
       </button>
       <button class="btn btn-primary btn-sm" id="hrStartBtn" type="button">
-        <i class="bi bi-play-fill"></i> بدء معالجة حالات آخر 24 ساعة (دقيقة بين كل محادثة)
+        <i class="bi bi-rocket-takeoff-fill"></i> بدء المعالجة (دقيقة بين كل محادثة)
       </button>
       <button class="btn btn-danger btn-sm d-none" id="hrStopBtn" type="button">
-        <i class="bi bi-stop-fill"></i> إيقاف المعالجة
+        <i class="bi bi-stop-circle-fill"></i> إيقاف المعالجة
       </button>
     </div>
   </div>
 
-  <div class="row g-3 text-center">
-    <div class="col-6 col-md-3">
-      <div class="p-3 rounded border bg-light">
-        <div class="small text-muted mb-1">إجمالي الحالات (24 ساعة)</div>
-        <div class="fs-3 fw-bold text-dark" id="hrStatTotal">0</div>
+  <div class="hr-stats-grid">
+    <div class="hr-stat-card hr-stat-total">
+      <div class="hr-stat-icon"><i class="bi bi-inboxes-fill"></i></div>
+      <div>
+        <div class="hr-stat-label">إجمالي الحالات (24س)</div>
+        <div class="hr-stat-val" id="hrStatTotal">0</div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="p-3 rounded border bg-light">
-        <div class="small text-muted mb-1">تمت معالجتها</div>
-        <div class="fs-3 fw-bold text-primary" id="hrStatProcessed">0</div>
+    <div class="hr-stat-card hr-stat-processed">
+      <div class="hr-stat-icon"><i class="bi bi-cpu-fill"></i></div>
+      <div>
+        <div class="hr-stat-label">تمت معالجتها</div>
+        <div class="hr-stat-val" id="hrStatProcessed">0</div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="p-3 rounded border" style="background:#edf9f0; border-color:#b7ebc6 !important;">
-        <div class="small text-success mb-1">تم حلها وإرجاعها للبوت</div>
-        <div class="fs-3 fw-bold text-success" id="hrStatResolved">0</div>
+    <div class="hr-stat-card hr-stat-resolved">
+      <div class="hr-stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+      <div>
+        <div class="hr-stat-label">تم حلها للبوت</div>
+        <div class="hr-stat-val" id="hrStatResolved">0</div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="p-3 rounded border" style="background:#fff6ed; border-color:#ffd8b0 !important;">
-        <div class="small text-warning mb-1" style="color:#b45309 !important;">بقيت للتدخل البشري</div>
-        <div class="fs-3 fw-bold" style="color:#b45309;" id="hrStatRemaining">0</div>
+    <div class="hr-stat-card hr-stat-remaining">
+      <div class="hr-stat-icon"><i class="bi bi-person-exclamation"></i></div>
+      <div>
+        <div class="hr-stat-label">بقيت للبشري</div>
+        <div class="hr-stat-val" id="hrStatRemaining">0</div>
       </div>
     </div>
+  </div>
+
+  <div class="hr-progress-wrap" aria-label="تقدم المعالجة">
+    <div class="hr-progress-bar" id="hrProgressBar"></div>
   </div>
 
   <div class="admin-status mt-3" id="hrMessage"></div>
 </section>
 
-<!-- Live Queue Table -->
+<!-- Live Queue (Desktop Table + Mobile Cards) -->
 <section class="admin-panel">
-  <div class="d-flex align-items-center justify-content-between mb-2">
-    <h2 class="h6 mb-0">قائمة المحادثات المتوقفة آخر 24 ساعة</h2>
-    <span class="small text-muted" id="hrTableHint"></span>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h2 class="h6 mb-0 d-flex align-items-center gap-2">
+      <i class="bi bi-chat-left-dots-fill text-primary"></i>
+      <span>قائمة المحادثات المتوقفة آخر 24 ساعة</span>
+    </h2>
+    <span class="badge bg-light text-dark border" id="hrTableHint">0 محادثة</span>
   </div>
-  <div class="table-responsive">
-    <table class="table table-sm align-middle mb-0">
-      <thead>
+
+  <div class="table-responsive hr-desktop-table">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
         <tr>
-          <th>#</th>
+          <th style="width:42px;">#</th>
           <th>الزبون</th>
           <th>سبب التوقف</th>
           <th>آخر رسالة</th>
@@ -78,12 +347,16 @@
         </tr>
       </thead>
       <tbody id="hrTableBody">
-        <tr><td colspan="6" class="text-center text-muted py-4">جاري تحميل الحالات...</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-hourglass-split"></i> جاري تحميل الحالات...</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="hr-mobile-list" id="hrMobileList">
+    <div class="text-center text-muted py-4"><i class="bi bi-hourglass-split"></i> جاري تحميل الحالات...</div>
   </div>
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/handoff_recovery.js?v=2"></script>
+<script src="/static/js/handoff_recovery.js?v=3"></script>
 {% endblock %}
