@@ -157,10 +157,20 @@ class Entrypoint:
                                   or declarations(text, state['contact'])))
         if explicit_cancellation(text) and not state.get('order_id'):
             return self.handoff_service(scope, event['id'], 'order_cancellation')
-        looking_for_order = bool(state.get('order_id') or re.search(r'(?<!\w)(?:طلبي|حجزي)(?!\w)', clean))
+        looking_for_order = bool(
+            state.get('order_id')
+            or re.search(
+                r'(?<!\w)(?:طلبي|حجزي)(?!\w)|'
+                r'(?:وين|اين|نسيتون[يى]).{0,18}(?:ال)?طلب|'
+                r'حجزت.{0,28}(?:انتظر|يوصل|يمتى|متى|وين)|'
+                r'ما\s*(?:راح\s*)?(?:تبعث|تدز|ترسل|توصل)\w*.{0,18}(?:ال)?طلب',
+                clean,
+            )
+        )
         delay_complaint = bool(re.search(
             r'(?:مو\s+)?صار(?:لي|\s+لي)?\s+(?:.{0,20}\s+)?(?:يومين|يوم(?:ا|اً)?|ايام|اسبوع|اسبوعين)(?!\w)'
-            r'|كل\s+مر[هة]\s+(?:ت)?عيدولي\s+نفس\s+الكلام|(?:خوم|معقول)\s+(?:ا)?ضل\s+انتظر', clean))
+            r'|كل\s+مر[هة]\s+(?:ت)?عيدولي\s+نفس\s+الكلام|(?:خوم|معقول)\s+(?:ا)?ضل\s+انتظر'
+            r'|نسيتون[يى].{0,18}(?:ال)?طلب|حجزت.{0,28}انتظر\s+يوصل', clean))
         carrier_request = bool(re.search(
             r'(?:اتصل(?:ي|و|وا)?|بلغ(?:ي|و|وا)?|تواصل(?:ي|و|وا)?)\s+(?:وي[هةا]?|مع|على|ع|ب)?\s*(?:ال)?مندوب|'
             r'(?:لا+[،,]?\s+)?خلي\s+(?:يدز\w*|يوصل\w*|يسلم\w*)\s+ل', clean))
@@ -260,12 +270,12 @@ class Entrypoint:
                     AND current.received_at-prior.received_at<=1800
                     AND json_extract(reply.payload,'$.question_stage') IS NOT NULL ORDER BY reply.id DESC LIMIT 1""",
                     (previous_image, event['id'], scope.key, f'clarify-image:{previous_image}')).fetchone()
-                if asked:
+                multiple_imgs = isinstance(media_ref, list) and len(media_ref) > 1
+                matched_ids = list(dict.fromkeys(observed.get('product_ids') or []))
+                if asked and not matched_ids:
                     return self.handoff_service(scope, event['id'], 'product_image_unresolved')
                 if media_kind in {'file', 'video'}:
                     return self.clarify_image(scope, event['id'], stage='photo-link', unreadable=True)
-                multiple_imgs = isinstance(media_ref, list) and len(media_ref) > 1
-                matched_ids = list(dict.fromkeys(observed.get('product_ids') or []))
                 if media_kind == 'image' and not multiple_imgs and observed.get('status') == 'unknown':
                     return self.handoff_service(scope, event['id'], 'product_image_unresolved')
                 return self.clarify_image(

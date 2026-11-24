@@ -497,6 +497,18 @@ class Runtime:
                     and (state.get('purchase_event') or state.get('checkout_prompt'))
                     and contact_only(evidence['payload'].get('text', ''))):
                 reference = dict(status='known', source='checkout', product_id=state['cart'][0]['product_id'])
+            # If the customer sends complete booking contact (phone + address) while a
+            # known product is already in focus or cart, proceed to checkout instead of
+            # stalling on an older unresolved photo.
+            booking_contact_now = bool(
+                captured.get('fields')
+                and state['contact'].get('phone')
+                and state['contact'].get('address')
+            )
+            if (pending and booking_contact_now and reference['status'] != 'known'
+                    and (state.get('focus_product_id') or cart_products)):
+                fallback_pid = state.get('focus_product_id') or state['cart'][0]['product_id']
+                reference = dict(status='known', source='checkout', product_id=fallback_pid)
             decline = bool(pending and purchase_declined(text_now))
             if pending and reference['status'] != 'known' and len(pair) != 2 and not album_ids and not decline:
                 return dict(action='continue', state_version=snap['version'], photo_pending=pending_id,

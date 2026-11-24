@@ -733,6 +733,62 @@ class LinkingTests(unittest.TestCase):
         self.assertIn('متوفر', rec[0]['text'])
         self.assertIn('مخلص', rec[1]['text'])
 
+    def test_live_audit_4_bugs_fixed(self):
+        from account_app.sales_runtime.entrypoint import Entrypoint
+        from account_app.sales_runtime.response import Responses
+
+        pid1 = self.products[0]['product_id']
+        pid2 = self.products[1]['product_id']
+
+        # Bug #1: per_model_photos sets question_field=None & all_sold_out=True when all matched models sold out
+        self.products[0]['stock'] = 'نفذ'
+        self.products[1]['stock'] = 'نفذ'
+        captured = {}
+        def writer(ctx):
+            captured.update(ctx)
+            return [
+                dict(type='text', text='الأول مخلص حالياً.'),
+                dict(type='text', text='الثاني مخلص حالياً.'),
+            ]
+        def fake_photos(prod, colors, *, include_unavailable=False):
+            return [dict(type='image', url=f"https://example.test/product_image/{prod['product_id']}.jpg",
+                         product_id=prod['product_id'], color='')]
+        responses = Responses(self.store, self.loader, writer, product_photos=fake_photos)
+        ev_id = self.event('متوفرات؟')
+        responses.ask_about_photo(
+            self.scope, ev_id, self.version(), self.loader('khuyoot'),
+            'متوفرات؟', [{'actor': 'customer', 'text': 'متوفرات؟'}], [],
+            {'omit_welcome': False, 'omit_return_salam': False},
+            'product-detail', multiple=True, matched_product_ids=[pid1, pid2],
+        )
+        self.assertEqual('alternatives.photos', captured['question_field'])
+        self.assertTrue(captured['photo_clarification']['all_sold_out'])
+
+        # Bug #2: Zahrat Al-Rabie ("عيوني نسيتوني وين الطلب" / "حجزت وانتظر يوصلني") routes to order_tracking, NOT photo pitch
+        self.products[0]['stock'] = 'متوفر'
+        entry = Entrypoint(self.db, lambda sid: self.products, lambda sid, p: 5000, self.decide)
+        res_track = entry.receive(
+            store_id='khuyoot', channel='zernio', account_id='a', sender_id='zahra-test',
+            message_id='m-track-1', text='عيوني نسيتوني وين الطلب 🤔🤔🤔',
+        )
+        self.assertEqual('human', res_track['action'])
+        res_track2 = entry.receive(
+            store_id='khuyoot', channel='zernio', account_id='a', sender_id='zahra-test-2',
+            message_id='m-track-2', text='حياتي حجزت وانتظر يوصلني شكلكم ما راح تبعثولي الطلب',
+        )
+        self.assertEqual('human', res_track2['action'])
+
+        # Bug #4: "الاحمر اكو غير لون" must NOT return no_photo ("هسه ما عدنا صور لهاللون")
+        self.select()
+        self.plan = dict(intent='continue', answer=dict(facts=[dict(product_id=pid1, field='colors')], catalog_photos='الاحمر اكو غير لون'))
+        ev_color = self.event('الاحمر اكو غير لون')
+        out_color = self.runtime.turn(self.scope, ev_color)
+        writer_color = Mock(return_value=[dict(type='text', text='إي حبيبتي متوفر منه الأسود والماروني.')])
+        resp_color = Responses(self.store, self.loader, writer_color, product_photos=lambda p, c: [])
+        prep_color = resp_color.prepare(self.scope, ev_color, out_color)
+        self.assertEqual('queued', prep_color['action'])
+        writer_color.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()

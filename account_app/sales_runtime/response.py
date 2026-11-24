@@ -284,7 +284,12 @@ class Responses:
         if photo_choice and photo_choice['product_id'] != focus:
             photo_choice = None
         product_unresolved = not focus and not lines
-        if self.product_photos and product and not photo_prefix and (photo_text or plan.get('catalog_photos') or catalog_photo_request(current)):
+        asking_other_colors = bool(
+            re.search(r'(?:غير|ثان[يى]|اخر|أخر|بعد)\s*(?:ال)?لون|(?:اكو|عندكم|عدكم)\s+غير\s+(?:ال)?لون', checkout.normalized(current))
+            and not re.search(r'صور[هة]?|دز[يى]|ارسل[يى]|اشوف|ورين[يى]|شوفين[يى]', checkout.normalized(current))
+        )
+        if (self.product_photos and product and not photo_prefix and not asking_other_colors
+                and (photo_text or plan.get('catalog_photos') or catalog_photo_request(current))):
             colors = product_variants.requested(photo_text or current)['colors']
             photos = self.product_photos(product, colors)
             color_key = f'product.{focus}.color'
@@ -1180,13 +1185,16 @@ class Responses:
                 'sizes': customer_copy.fact(prod.get('sizes') or '')[:80],
             })
         per_model_photos = bool(self.product_photos and len(matched_products) >= 2)
+        all_sold_out = bool(matched_products) and all(item.get('stock') != 'available' for item in matched_products)
+        q_field = ('alternatives.photos' if all_sold_out else 'product') if per_model_photos else 'photo.reference'
         context = dict(mode='continue', customer_message=current, recent_messages=messages, recent_replies=accepted,
-                       question_field='photo.reference', next_step=dict(field='photo.reference', options=[]),
+                       question_field=q_field, next_step=dict(field=q_field, options=[]),
                        copy_budget=460 if len(matched_products) >= 2 else 145,
                        amounts=amounts or {}, greeting=greeting, action_results={},
                        photo_clarification=dict(multiple=multiple, possible_product=label, unreadable=unreadable,
                                                 quantity_quote=stage == 'photo-quantity',
                                                 per_model_photos=per_model_photos,
+                                                all_sold_out=all_sold_out,
                                                 matched_products=matched_products))
         parts = self.write(context, catalog, scope, turn_id, version)
 
