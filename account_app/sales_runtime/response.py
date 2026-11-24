@@ -1106,7 +1106,7 @@ class Responses:
                     fee = next(iter(fees.values()))
             if type(fee) is int:
                 amounts['delivery_fee'] = fee
-        quantity = sales_playbook.requested_quantity(current)
+        quantity = sales_playbook.requested_quantity(current) or quoted_offer_quantity(current)
         if quantity and 'price' in requested and product and outcome.get('latest_verified_image'):
             try:
                 quote = pricing.quote([dict(product_id=product_id, quantity=quantity)], [product],

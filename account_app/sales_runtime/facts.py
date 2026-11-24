@@ -118,10 +118,19 @@ def requested_fields(text):
 
 
 def quoted_offer_quantity(text):
-    """Read «هي ٢ ب٢٥؟» as a quote question without using the stated price."""
-    match = re.search(r'^\s*(?:(?:هي|يعني|العرض)\s+)([2-9]|1\d|20)\s+بـ?\s*\d{2,6}(?:\s+الف)?\s*[؟?]?\s*$',
-                      customer_copy.normalized(text), re.M)
-    return int(match[1]) if match else None
+    """Read «هي ٢ ب٢٥؟» or «أربعة ب40» as a quote question without using the stated price."""
+    clean = customer_copy.normalized(text)
+    match = re.search(
+        r'^\s*(?:(?:هي|يعني|العرض)\s+)?([2-9]|1\d|20|قطعتين|اثنين|ثنين|ثلاث[هة]?|اربع[هة]?|خمس[هة]?|ست[هة]?)'
+        r'\s+بـ?\s*\d{2,6}(?:\s+الف)?\s*[؟?]?\s*$',
+        clean, re.M,
+    )
+    if not match:
+        return None
+    token = match[1].rstrip('هة')
+    if token.isdigit():
+        return int(token)
+    return {'قطعتين': 2, 'اثنين': 2, 'ثنين': 2, 'ثلاث': 3, 'اربع': 4, 'خمس': 5, 'ست': 6}.get(token)
 
 
 def refers_to_photo_colors(clean):

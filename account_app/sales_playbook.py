@@ -221,12 +221,26 @@ def size_range_question(product):
 
 def requested_quantity(text):
     text = sales_strategy.normalized(text)
-    words = {'ثلاث': 3, 'اربع': 4, 'أربع': 4, 'خمس': 5}
-    match = re.search(r'(?<!\w)(ثلاث[هة]?|[اأ]ربع[هة]?|خمس[هة]?)\s+قطع(?!\w)', text)
+    words = {'اثنين': 2, 'ثنين': 2, 'قطعتين': 2, 'ثلاث': 3, 'اربع': 4, 'خمس': 5, 'ست': 6}
+    collective = {'اثنينهن': 2, 'اثنينهم': 2, 'ثنتينهن': 2, 'ثنتينهم': 2,
+                  'ثلاثتهن': 3, 'ثلاثتهم': 3, 'اربعتهن': 4, 'اربعتهم': 4,
+                  'خمستهن': 5, 'خمستهم': 5, 'ستتهن': 6, 'ستتهم': 6}
+    match = re.search(r'(?<!\w)(اثنينه[نم]|ثنتينه[نم]|ثلاثته[نم]|اربعته[نم]|خمسته[نم]|ستته[نم])(?!\w)', text)
+    if match:
+        return collective.get(match[1])
+    match = re.search(r'(?<!\w)(ثلاث[هة]?|اربع[هة]?|خمس[هة]?|ست[هة]?)\s+قطع(?!\w)', text)
     if match:
         return words.get(match[1].rstrip('هة'))
     if re.search(r'قطعتين|قطعتان|ثنين', text):
         return 2
+    match = re.search(r'(?<!\w)(?:اريد|ريد|رايد|احسب\w*|تحسب\w*|اخذ|احجز\w*|حجزي|ثبت\w*)\s+'
+                      r'(اثنين|ثنين|ثلاث[هة]?|اربع[هة]?|خمس[هة]?|ست[هة]?)'
+                      r'(?!\s*(?:سنو|سني|سنه|سنة|اشهر|شهور|شهر|كيلو|سانت|سم|متر))(?!\w)', text)
+    if match:
+        return words.get(match[1].rstrip('هة'))
+    match = re.search(r'(?<!\w)(اثنين|ثنين|قطعتين|ثلاث[هة]?|اربع[هة]?|خمس[هة]?|ست[هة]?)\s+بـ?\s*\d{2,6}(?!\w)', text)
+    if match:
+        return words.get(match[1].rstrip('هة'))
     match = re.search(r'(?<!\d)(\d+)\s*قطع', text)
     return int(match[1]) if match and 2 <= int(match[1]) <= 20 else None
 

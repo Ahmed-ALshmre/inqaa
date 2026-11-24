@@ -650,6 +650,40 @@ class LinkingTests(unittest.TestCase):
         backup.advise.assert_called_once()
         self.assertEqual(1,self.db.execute('SELECT COUNT(*) FROM human_reviews').fetchone()[0])
 
+    def test_noor_alwilaya_multi_piece_arabic_counts_and_price_check(self):
+        from account_app import sales_playbook
+        from account_app.sales_runtime import facts
+        from account_app.sales_runtime.response import Responses
+
+        self.assertEqual(4, sales_playbook.requested_quantity('نعم اربعتهن\nشكد سعرهن'))
+        self.assertEqual(4, sales_playbook.requested_quantity('أربعة ب40'))
+        self.assertEqual(4, sales_playbook.requested_quantity('سنتين\nاريد اربعه بيش تحسبوهن'))
+        self.assertEqual(3, sales_playbook.requested_quantity('ثلاثتهن بيش'))
+        self.assertIsNone(sales_playbook.requested_quantity('اريد عمر اربع سنوات'))
+
+        self.assertEqual(4, facts.quoted_offer_quantity('أربعة ب40'))
+        self.assertEqual(2, facts.quoted_offer_quantity('هي 2 ب25؟'))
+        self.assertIn('price', facts.requested_fields('أربعة ب40'))
+
+        self.products[0]['price'] = '10000'
+        self.products[0]['offer'] = ''
+        captured = {}
+        def writer(ctx):
+            captured.update(ctx)
+            return [dict(type='text', text='سعر 4 قطع 40 ألف.')]
+        responses = Responses(self.store, self.loader, writer)
+        res = responses.answer_pending_photo(
+            self.scope, 5,
+            dict(photo_pending=3, state_version=1, provisional_product='P1', latest_verified_image=True),
+            self.loader('khuyoot'),
+            dict(delivery_fee={'بغداد': 5000}, delivery_time='24-48 ساعة'),
+            'أربعة ب40',
+            [{'actor': 'customer', 'text': 'أربعة ب40'}],
+            [], {'omit_welcome': False, 'omit_return_salam': False}, {},
+        )
+        self.assertIsInstance(res, list)
+        self.assertEqual(40000, captured['amounts']['subtotal'])
+
 
 if __name__ == '__main__':
     unittest.main()
