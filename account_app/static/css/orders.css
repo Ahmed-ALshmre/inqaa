@@ -1,34 +1,123 @@
 /* Orders scroll as a document; chat viewport rules must not constrain them. */
 html.orders-root { height:auto; min-height:100%; overflow-y:auto; overflow-x:hidden; }
-body.orders-page { height:auto!important; min-height:100dvh; overflow:visible!important; padding:0!important; }
+body.orders-page { height:auto!important; min-height:100dvh; overflow:visible!important; padding:0!important; background:#f5f7f6; }
 .orders-page .navbar-custom { position:sticky!important; top:0; height:auto!important; min-height:64px; gap:10px; padding:10px 16px!important; }
 .orders-page .navbar-custom .nav-actions { position:static!important; width:auto!important; height:auto!important; min-height:0; transform:none!important; display:flex!important; flex-wrap:wrap; padding:0!important; border:0; box-shadow:none; }
 .orders-page .orders-layout { height:auto; min-height:0; width:100%; max-width:1500px; margin:0 auto!important; padding:20px 16px 32px!important; overflow:visible; }
-.orders-page .orders-table-wrap { max-height:none!important; height:auto; }
-.orders-page .orders-table td { overflow-wrap:anywhere; }
-.orders-page .orders-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
-.orders-page .orders-stat { min-width:0; }
-.orders-page .orders-stat small { white-space:normal; }
+
+/* Header & Stat Cards */
+.orders-page .orders-header {
+  display:flex; flex-direction:column; gap:14px;
+  background:#fff; border:1px solid #e2e8f0; border-radius:16px;
+  padding:16px 18px; margin-bottom:14px;
+  box-shadow:0 4px 16px rgba(15,23,42,.04);
+}
+.orders-title-block { display:flex; align-items:center; gap:12px; }
+.orders-hero-icon {
+  width:44px; height:44px; min-width:44px; border-radius:12px;
+  background:linear-gradient(135deg,#0f766e,#149186); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:1.25rem;
+  box-shadow:0 5px 14px rgba(15,118,110,.22);
+}
+.orders-page .orders-stats {
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; width:100%;
+}
+.orders-page .orders-stat {
+  display:flex; align-items:center; gap:10px; min-width:0;
+  padding:12px 14px; border-radius:14px; border:1px solid #e2e8f0;
+  background:#f8fafc; text-align:right;
+  transition:transform .14s ease, box-shadow .14s ease;
+}
+.orders-page .orders-stat:hover { transform:translateY(-1px); box-shadow:0 5px 14px rgba(15,23,42,.05); }
+.orders-stat-icon {
+  width:38px; height:38px; min-width:38px; border-radius:11px;
+  display:flex; align-items:center; justify-content:center; font-size:1.1rem;
+}
+.orders-stat-total .orders-stat-icon { background:#e2e8f0; color:#334155; }
+.orders-stat-new .orders-stat-icon { background:#eff6ff; color:#2563eb; }
+.orders-stat-people .orders-stat-icon { background:#f3e8ff; color:#7c3aed; }
+.orders-stat-conv { background:#f0fdf4!important; border-color:#bbf7d0!important; }
+.orders-stat-conv .orders-stat-icon { background:#dcfce7; color:#15803d; }
+.orders-stat-rev { background:#fffbeb!important; border-color:#fde68a!important; }
+.orders-stat-rev .orders-stat-icon { background:#fef3c7; color:#b45309; }
+.orders-page .orders-stat small { display:block; font-size:.76rem; color:#64748b; font-weight:600; white-space:normal; }
+.orders-page .orders-stat span { display:block; color:#0f172a; font-size:1.35rem; font-weight:800; line-height:1.25; }
+.orders-stat-conv span { color:#15803d!important; }
+.orders-stat-rev span { color:#b45309!important; font-size:1.2rem!important; }
+.orders-stat-sub { display:block; font-style:normal; font-size:.7rem; color:#64748b; margin-top:1px; }
+
+/* Toolbar & Date Presets */
+.orders-page .orders-toolbar {
+  background:#fff; border:1px solid #e2e8f0; border-radius:16px;
+  padding:14px 16px; margin-bottom:14px;
+  box-shadow:0 4px 14px rgba(15,23,42,.03);
+}
+.orders-toolbar-top {
+  display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px;
+  margin-bottom:10px;
+}
+.orders-store-wrap { min-width:210px; flex:0 1 260px; }
+.orders-presets { display:flex; flex-wrap:wrap; gap:6px; }
+.orders-preset-btn {
+  border-radius:999px!important; font-weight:600; font-size:.8rem; padding:5px 12px;
+  border:1px solid #cbd5e1!important; background:#f8fafc!important; color:#475569!important;
+  transition:all .15s ease;
+}
+.orders-preset-btn:hover { border-color:#0f766e!important; color:#0f766e!important; background:#f0fdfa!important; }
+.orders-preset-btn.active {
+  background:linear-gradient(135deg,#0f766e,#149186)!important; border-color:#0f766e!important;
+  color:#fff!important; box-shadow:0 4px 10px rgba(15,118,110,.22);
+}
+.orders-search-group .input-group-text,
+.orders-date-group .input-group-text {
+  background:#f8fafc; border-color:#cbd5e1; color:#475569; font-weight:600;
+}
+.orders-search-group .form-control,
+.orders-date-group .form-control {
+  border-color:#cbd5e1; background:#fff; color:#0f172a;
+}
+.orders-date-row { display:flex; align-items:center; gap:8px; }
+.orders-date-group { flex:1 1 0; }
+.orders-clear-date { border-radius:8px; flex:0 0 auto; }
+
+/* Table */
+.orders-page .orders-table-wrap {
+  max-height:none!important; height:auto;
+  background:#fff; border:1px solid #e2e8f0; border-radius:16px;
+  overflow:hidden; box-shadow:0 4px 16px rgba(15,23,42,.04);
+}
+.orders-page .orders-table thead th {
+  background:#f8fafc; color:#475569; font-size:.8rem; font-weight:700;
+  border-bottom:1px solid #e2e8f0; padding:11px 10px; white-space:nowrap;
+}
+.orders-page .orders-table td { overflow-wrap:anywhere; border-color:#f1f5f9; padding:10px; color:#0f172a; }
 .orders-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:24px 0 calc(24px + env(safe-area-inset-bottom)); }
 .orders-page .modal-dialog { max-height:calc(100dvh - 24px); }
 .orders-page .modal-content { max-height:calc(100dvh - 24px); overflow-y:auto; }
 .orders-page .nav-actions a { overflow-wrap:anywhere; }
+.orders-page .orders-table td[data-label="الهاتف"],
+.orders-page .orders-table td[data-label="رقم الطلب"],
+.orders-page .orders-table td[data-label="مع التوصيل"] { white-space:nowrap; overflow-wrap:normal; }
+
+@media(max-width:1100px) {
+  .orders-page .orders-stats { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
 @media(max-width:768px) {
   .orders-page .navbar-custom { position:relative!important; }
   .orders-page .navbar-custom .nav-actions { width:100%!important; justify-content:center; gap:8px!important; }
   .orders-page .nav-actions>a { min-width:44px; min-height:44px; flex:1 1 auto; }
   .orders-page .orders-layout { padding:12px 10px 32px!important; }
-  .orders-page .orders-header { display:block; }
-  .orders-page .orders-stats { grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:12px; width:100%; }
+  .orders-page .orders-header { padding:14px; }
+  .orders-page .orders-stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .orders-stat-rev { grid-column:span 2; }
+  .orders-toolbar-top { flex-direction:column; align-items:stretch; }
+  .orders-store-wrap { flex:1 1 auto; }
+  .orders-date-row { flex-wrap:wrap; }
+  .orders-date-group { flex:1 1 140px; }
   .orders-page .orders-table { width:100%!important; min-width:0!important; table-layout:auto; }
   .orders-page .orders-table tbody { width:100%; min-width:0; }
   .orders-page .orders-table tbody tr:not(.orders-empty-row) td { display:block; text-align:right; min-width:0; }
   .orders-page .orders-table tbody tr:not(.orders-empty-row) td::before { display:block; margin-bottom:4px; }
   .orders-page .orders-actions { grid-template-columns:repeat(3,minmax(0,1fr))!important; }
   .orders-page .orders-actions .btn { padding:8px 3px; min-width:0; min-height:44px; font-size:12px; }
-  .orders-page .orders-toolbar .d-flex { flex-wrap:wrap; }
 }
-.orders-page .orders-stat span { color:var(--primary); font-size:24px; line-height:1.4; }
-.orders-page .orders-table td[data-label="الهاتف"],
-.orders-page .orders-table td[data-label="رقم الطلب"],
-.orders-page .orders-table td[data-label="مع التوصيل"] { white-space:nowrap; overflow-wrap:normal; }

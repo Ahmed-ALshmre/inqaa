@@ -76,6 +76,60 @@ function orderSearchText(order) {
   ].join(' ').toLowerCase();
 }
 
+function baghdadDateStr(daysOffset = 0) {
+  const now = new Date();
+  const baghdadMs = now.getTime() + (now.getTimezoneOffset() + 180) * 60000 + daysOffset * 86400000;
+  const d = new Date(baghdadMs);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function setActivePresetButton(preset) {
+  document.querySelectorAll('#orderDatePresets .orders-preset-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === preset);
+  });
+}
+
+function applyDatePreset(preset) {
+  const df = document.getElementById('orderDateFrom');
+  const dt = document.getElementById('orderDateTo');
+  if (!df || !dt) return;
+  const today = baghdadDateStr(0);
+  if (preset === 'today') {
+    df.value = today;
+    dt.value = today;
+  } else if (preset === 'yesterday') {
+    const yest = baghdadDateStr(-1);
+    df.value = yest;
+    dt.value = yest;
+  } else if (preset === '7days') {
+    df.value = baghdadDateStr(-6);
+    dt.value = today;
+  } else if (preset === 'month') {
+    df.value = today.slice(0, 8) + '01';
+    dt.value = today;
+  } else {
+    df.value = '';
+    dt.value = '';
+    preset = 'all';
+  }
+  setActivePresetButton(preset);
+  loadOrders();
+}
+
+function onManualDateChange(which) {
+  const df = document.getElementById('orderDateFrom');
+  const dt = document.getElementById('orderDateTo');
+  if (df && dt && df.value && dt.value && df.value > dt.value) {
+    if (which === 'from') dt.value = df.value;
+    else df.value = dt.value;
+  }
+  setActivePresetButton('');
+  loadOrders();
+}
+
 async function loadOrders(append = false) {
   const request = ++orderRequest;
   const body = document.getElementById('ordersBody');
@@ -87,7 +141,10 @@ async function loadOrders(append = false) {
     more.hidden = true;
     document.getElementById('ordersLoaded').textContent = '';
     body.innerHTML = '<tr class="orders-empty-row"><td colspan="11">جاري تحميل الطلبات…</td></tr>';
-    for (const id of ['ordersTotal','ordersNew','ordersPeople','ordersConversion']) document.getElementById(id).textContent = '—';
+    for (const id of ['ordersTotal','ordersNew','ordersPeople','ordersConversion','ordersRevenue']) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    }
   }
   const params = new URLSearchParams({offset: String(orderOffset), limit: '100'});
   for (const [key, id] of [['date_from','orderDateFrom'],['date_to','orderDateTo'],['store_id','orderStore'],['q','orderSearch']]) {
@@ -101,10 +158,19 @@ async function loadOrders(append = false) {
     if (!res.ok) throw new Error(data.error || 'فشل تحميل الطلبات');
     allOrders = append ? allOrders.concat(data.orders || []) : (data.orders || []);
     orderOffset = data.next_offset;
-    document.getElementById('ordersTotal').textContent = data.total;
-    document.getElementById('ordersNew').textContent = data.new_count;
-    document.getElementById('ordersPeople').textContent = data.people_count;
-    document.getElementById('ordersConversion').textContent = `${Number(data.people_to_order_conversion || 0).toFixed(1)}%`;
+    const activeOrders = data.active_orders ?? data.total ?? 0;
+    const cancelledCount = data.cancelled_count ?? 0;
+    document.getElementById('ordersTotal').textContent = activeOrders;
+    const totalSub = document.getElementById('ordersTotalSub');
+    if (totalSub) totalSub.textContent = cancelledCount > 0 ? `(${cancelledCount} ملغى من أصل ${data.total})` : `إجمالي ${data.total} طلب`;
+    document.getElementById('ordersNew').textContent = data.new_count ?? 0;
+    document.getElementById('ordersPeople').textContent = data.people_count ?? 0;
+    const conv = Number(data.people_to_order_conversion ?? data.conversion_rate ?? 0);
+    document.getElementById('ordersConversion').textContent = `${conv.toFixed(1)}%`;
+    const convSub = document.getElementById('ordersConversionSub');
+    if (convSub) convSub.textContent = `${data.ordering_people_count ?? 0} حاجز من ${data.people_count ?? 0}`;
+    const revEl = document.getElementById('ordersRevenue');
+    if (revEl) revEl.textContent = Number(data.total_revenue || 0).toLocaleString('en-US');
     more.hidden = !data.has_more;
     document.getElementById('ordersLoaded').textContent = `المعروض: ${allOrders.length} طلب`;
     renderOrders();
@@ -268,13 +334,16 @@ async function resendOrderTelegram(orderId, btn) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const today = new Date();
-  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = baghdadDateStr(0);
   const df = document.getElementById('orderDateFrom');
   const dt = document.getElementById('orderDateTo');
   if (df) df.value = todayStr;
   if (dt) dt.value = todayStr;
+  setActivePresetButton('today');
+
+  document.querySelectorAll('#orderDatePresets .orders-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyDatePreset(btn.dataset.preset));
+  });
 
   document.getElementById('orderEditForm')?.addEventListener('submit', saveEditedOrder);
   const selectedStore = new URLSearchParams(location.search).get('store_id') || 'all';

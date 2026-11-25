@@ -14196,26 +14196,54 @@ def _orders_payload(db, limit=500, date_from=None, date_to=None, offset=0, store
     if date_from and date_to and date_from > date_to:
         raise ValueError("Invalid date range")
     if store_id and store_id != "all":
-        conditions.append("COALESCE(o.store_id,'default')=?")
+        conditions.append("COALESCE(NULLIF(o.store_id,''),'default')=?")
         params.append(store_id)
     where = " AND ".join(conditions) or "1=1"
-    totals = db.execute(f"SELECT COUNT(*) total, SUM(CASE WHEN COALESCE(o.status,'new')='new' THEN 1 ELSE 0 END) new_count, COUNT(DISTINCT CASE WHEN COALESCE(o.status,'new')!='cancelled' THEN NULLIF(o.sender_id,'') END) buyers FROM orders o WHERE {where}", params).fetchone()
-    # The denominator uses the same dates and store, including manual buyers
-    # without incoming messages. Multiple orders by one person count once.
+    not_cancelled = "LOWER(COALESCE(o.status,'new')) NOT IN ('cancelled','canceled','ملغي')"
+    totals = db.execute(
+        f"""SELECT
+              COUNT(*) AS total,
+              SUM(CASE WHEN {not_cancelled} THEN 1 ELSE 0 END) AS active_orders,
+              SUM(CASE WHEN NOT ({not_cancelled}) THEN 1 ELSE 0 END) AS cancelled_count,
+              SUM(CASE WHEN COALESCE(o.status,'new')='new' THEN 1 ELSE 0 END) AS new_count,
+              COUNT(DISTINCT CASE WHEN {not_cancelled} THEN COALESCE(NULLIF(o.sender_id,''), 'order:' || o.id) END) AS buyers,
+              COALESCE(SUM(CASE WHEN {not_cancelled} THEN COALESCE(o.total_amount, COALESCE(o.product_total,0)+COALESCE(o.delivery_fee,0), 0) ELSE 0 END), 0) AS total_revenue
+            FROM orders o WHERE {where}""",
+        params,
+    ).fetchone()
+    # The denominator uses the same dates and store, attributing messages with
+    # blank store_id via customers.store_id so store conversion is exact.
     people_conditions, people_params = [], []
     for value, operator in ((date_from, ">="), (date_to, "<=")):
         if value:
             people_conditions.append(f"substr(activity_time,1,10) {operator} ?")
             people_params.append(value)
     if store_id and store_id != "all":
-        people_conditions.append("COALESCE(store_id,'default')=?")
+        people_conditions.append("COALESCE(NULLIF(store_id,''),'default')=?")
         people_params.append(store_id)
     people_where = " AND ".join(people_conditions) or "1=1"
-    people = db.execute(f"""SELECT COUNT(DISTINCT NULLIF(sender_id,'')) FROM (
-        SELECT sender_id,store_id,created_at activity_time FROM messages WHERE direction='incoming'
-        UNION ALL SELECT sender_id,store_id,first_seen_at FROM customers
-        UNION ALL SELECT sender_id,store_id,created_at FROM orders
-    ) WHERE {people_where}""", people_params).fetchone()[0]
+    people = db.execute(
+        f"""SELECT COUNT(DISTINCT person_key) FROM (
+              SELECT NULLIF(m.sender_id,'') AS person_key,
+                     COALESCE(NULLIF(m.store_id,''), NULLIF(c.store_id,''), 'default') AS store_id,
+                     m.created_at AS activity_time
+              FROM messages m
+              LEFT JOIN customers c ON c.sender_id=m.sender_id
+              WHERE m.direction='incoming'
+              UNION ALL
+              SELECT NULLIF(sender_id,'') AS person_key,
+                     COALESCE(NULLIF(store_id,''), 'default') AS store_id,
+                     first_seen_at AS activity_time
+              FROM customers
+              UNION ALL
+              SELECT COALESCE(NULLIF(o.sender_id,''), 'order:' || o.id) AS person_key,
+                     COALESCE(NULLIF(o.store_id,''), 'default') AS store_id,
+                     o.created_at AS activity_time
+              FROM orders o
+              WHERE {not_cancelled}
+            ) WHERE person_key IS NOT NULL AND {people_where}""",
+        people_params,
+    ).fetchone()[0]
     if search:
         conditions.append("(" + " OR ".join(f"instr(lower(COALESCE({column},'')),lower(?))>0" for column in ("o.id", "o.sender_id", "o.customer_name", "c.name", "o.phone", "o.product_name", "o.province", "o.address", "o.status")) + ")")
         params.extend([search] * 9)
@@ -14232,11 +14260,22 @@ def _orders_payload(db, limit=500, date_from=None, date_to=None, offset=0, store
         except (ValueError, TypeError):
             order["items"] = []
         orders.append(order)
-    conversion = round(100 * totals["buyers"] / people, 2) if people else 0
-    return {"orders": orders, "total": totals["total"], "new_count": totals["new_count"] or 0,
-            "people_count": people, "ordering_people_count": totals["buyers"],
-            "people_to_order_conversion": conversion, "conversion_rate": conversion,
-            "has_more": len(rows) > limit, "next_offset": offset + len(orders)}
+    buyers = totals["buyers"] or 0
+    conversion = round(min(100.0, 100.0 * buyers / people), 1) if people else 0.0
+    return {
+        "orders": orders,
+        "total": totals["total"] or 0,
+        "active_orders": totals["active_orders"] or 0,
+        "cancelled_count": totals["cancelled_count"] or 0,
+        "new_count": totals["new_count"] or 0,
+        "total_revenue": int(totals["total_revenue"] or 0),
+        "people_count": people or 0,
+        "ordering_people_count": buyers,
+        "people_to_order_conversion": conversion,
+        "conversion_rate": conversion,
+        "has_more": len(rows) > limit,
+        "next_offset": offset + len(orders),
+    }
 
 
 @app.route("/orders", methods=["GET"])
