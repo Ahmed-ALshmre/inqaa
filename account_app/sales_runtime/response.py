@@ -246,7 +246,7 @@ class Responses:
                     amounts={}, action_results=dict(photos_attached=bool(photos)), copy_budget=145,
                     available_alternative_photos=len(photos))
                 parts = self.write(context, catalog, scope, turn_id, snap['version'])
-                return self.save(scope, key, reply_key, turn_id, snap['version'], [*photos, *parts])
+                return self.save(scope, key, reply_key, turn_id, snap['version'], [*photos[:4], *parts][:5])
             if market['offer_kind']:
                 parts = self.catalog_offer_parts(catalog, state, market)
                 return self.save(scope, key, reply_key, turn_id, snap['version'], parts)

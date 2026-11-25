@@ -792,6 +792,19 @@ class LinkingTests(unittest.TestCase):
                 {'order_saved': False},
             )
 
+        # Overnight Nov 25 fixes:
+        # 1) "ادزين" must NOT trigger wholesale topic
+        from account_app import sales_answers, checkout, sales_recovery
+        self.assertNotIn('wholesale', sales_answers.topics('زين عادي ادزين الحذاء الجواريب والله بنتي مريضه'))
+        self.assertIn('wholesale', sales_answers.topics('شكد سعر الدرزن جملة؟'))
+        # 2) Kurdish booking message extracts phone + province + address
+        kf = checkout.contact_fields('بێنێرە بوم ئەوەژمارەکەمە 07725239299 کەلار بنگرد گەراج بەغداد قەدیم')
+        self.assertEqual('07725239299', kf.get('phone'))
+        self.assertEqual('السليمانية', kf.get('province'))
+        self.assertTrue(kf.get('address'))
+        # 3) "ابعثي صورة الوردي" recognized as catalog photo request
+        self.assertTrue(sales_recovery.simple_photo_request('ابعثي صورة الوردي'))
+
         # Bug #4: "الاحمر اكو غير لون" must NOT return no_photo ("هسه ما عدنا صور لهاللون")
         self.select()
         self.plan = dict(intent='continue', answer=dict(facts=[dict(product_id=pid1, field='colors')], catalog_photos='الاحمر اكو غير لون'))
