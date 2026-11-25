@@ -145,10 +145,10 @@ def validate_next_step(parts, step):
 
 def checkout_question(field, gender, *, final_detail):
     welcome = 'حبيبتي' if gender == 'female' else 'عيني'
-    labels = {'contact.phone': 'رقم الموبايل', 'contact.address': 'العنوان',
-              'contact.province': 'المحافظة', 'contact.details': 'رقم الموبايل والعنوان'}
+    labels = {'contact.phone': 'رقم الموبايل', 'contact.address': 'العنوان بالتفصيل',
+              'contact.province': 'المحافظة', 'contact.details': 'رقم الموبايل والعنوان بالتفصيل'}
     request = 'باقي بس' if final_detail else 'دزّيلي' if gender == 'female' else 'دزلي'
-    return f'{welcome}، {request} {labels[field]} حتى أثبت الحجز.'
+    return f'{welcome}، {request} {labels[field]} حتى أثبتلج الحجز مباشرة 🌷' if gender == 'female' else f'{welcome}، {request} {labels[field]} حتى أثبتلك الحجز مباشرة 🌷'
 
 
 def fact_recovery_parts(context):
@@ -212,11 +212,11 @@ def fact_recovery_parts(context):
     message = context['customer_message']
     if fit and ('sizes' in requested or sales_answers.fit_question(message)):
         if not fit['within_catalog_range']:
-            lines.append('هالقياس ما يرهمج بهالموديل.')
+            lines.append('حبيبتي هالقياس للأسف ما يرهمج بهالموديل، بس تدللين نكدر نشوفلج غيره يناسبج.')
         elif fit_stock == 'available' and not context.get('variant_stock_feedback'):
-            lines.append('إي عيني، القياس اللي يرهمج متوفر.')
+            lines.append('إي عيني، القياس اللي يرهمج متوفر ويطلع كلش مرتب عليج.')
         else:
-            lines.append('وزنج ضمن القياس اللي يرهم بهالموديل.')
+            lines.append('وزنج ضمن القياس اللي يرهم بهالموديل عيوني.')
         covered.add('sizes')
     feedback = context.get('business_feedback') or {}
     inventory = context.get('variant_stock')
@@ -225,12 +225,12 @@ def fact_recovery_parts(context):
     selected_size = selected['sizes'][0] if len(selected['sizes']) == 1 else ''
     if progress.get('selection_recorded') and selected_color and not feedback and not context.get('stock_conflict'):
         if not requested:
-            lines.append(f'تمام، {selected_color}.')
+            lines.append(f'عاش ذوقج عيوني، اختيار اللون {selected_color} كلش حلو ومرتب.')
     if feedback and feedback.get('field') in {'color', 'size'} and feedback.get('requested'):
         selected_value = customer_copy.fact(feedback['requested'])
         if selected_value:
             label = 'اللون' if feedback['field'] == 'color' else 'القياس'
-            lines.append(f'{label} {selected_value} ما متوفر بهالموديل.')
+            lines.append(f'حبيبتي {label} {selected_value} للأسف مخلص بهالموديل حالياً.')
             covered.add('colors' if feedback['field'] == 'color' else 'sizes')
     if ('availability' in sales_answers.topics(message) and selected_color and selected_size
             and not context.get('stock_conflict') and {'colors', 'sizes'}.issubset(requested)):
@@ -284,24 +284,25 @@ def fact_recovery_parts(context):
             covered.add('delivery_fee')
 
     asks = {
-        'product': 'ممكن اسم الموديل أو صورته حتى ألكالج القطعة؟',
-        'quote.province': 'التوصيل لأي محافظة؟',
-        'price.accept': 'يناسبج هالحساب حتى نكمّل؟',
-        'offer.quantity': 'تفضلين قطعة لو عرض القطعتين؟',
-        'purchase_intent': 'تحبين أثبتلج الطلب؟',
-        'alternatives.photos': 'تحبين تشوفين صور الموديلات البديلة؟',
-        'catalog.show_option': 'تحبين أدزلج صورته؟',
-        'inventory.alternative': 'تحبين أشوفلج لون أو قياس ثاني؟',
+        'product': 'حبيبتي دزّيلي صورة الموديل اللي عجبج حتى أشوفلج تفاصيله وتوفره فوراً؟',
+        'quote.province': 'لأي محافظة التوصيل عيوني؟',
+        'price.accept': 'ها عيوني، يناسبج هالحساب حتى نكمّل الحجز؟',
+        'offer.quantity': 'تحبين تاخذين قطعة وحدة لو تستفادين من عرض القطعتين بنفس التوصيل؟',
+        'purchase_intent': 'تحبين نثبتلج الحجز هسه قبل ما يخلص القياس؟',
+        'alternatives.photos': 'تحبين أدزلج صور موديلات بديلة متوفرة تعجبج؟',
+        'catalog.show_option': 'تحبين أدزلج صورته تشوفين شكله وتفاصيله؟',
+        'inventory.alternative': 'تحبين أشوفلج لون أو قياس ثاني متوفر يناسبج؟',
         'alternative.color': 'شنو اللون اللي ببالج حتى أشوفلج خيار قريب؟',
     }
-    by_field = {'color': 'يا لون يعجبج؟', 'size': 'شنو القياس اللي يناسبج؟',
-                'weight_kg': 'شكد الوزن تقريباً؟', 'age_months': 'شكد عمر الطفل؟'}
+    by_field = {'color': 'يا لون عجبج أكثر حتى نعتمدلج إياه؟', 'size': 'شنو القياس اللي يناسبج عيوني؟',
+                'weight_kg': 'شكد الوزن تقريباً حتى أختارلج القياس المضبوط؟',
+                'age_months': 'فدوة شكد عمر الطفل حتى أشوفلج القياس المضبوط إله؟'}
     if question and question.startswith('contact.'):
         ask = checkout_question(question, 'female', final_detail=question != 'contact.details')
     else:
         ask = asks.get(question) or by_field.get((question or '').rsplit('.', 1)[-1])
         if not ask and (question or '').startswith('alternative.') and feedback:
-            ask = 'تحبين أراويج موديل ثاني يناسبج؟'
+            ask = 'تحبين أراويج موديل ثاني متوفر يناسبج؟'
     unanswered = requested - covered
     if question == 'quote.province':
         unanswered.discard('delivery_fee')
