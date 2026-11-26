@@ -778,13 +778,13 @@ class LinkingTests(unittest.TestCase):
         )
         self.assertEqual('human', res_track2['action'])
 
-        # Mustafa Rahman: "ماوصلني الطلب ؟؟" routes to order_tracking even with no order saved,
-        # and copy_guard blocks fake "تثبت حجز القطعتين يمي" when order_saved=False
-        res_mustafa = entry.receive(
-            store_id='khuyoot', channel='zernio', account_id='a', sender_id='mustafa-test',
-            message_id='m-mustafa-1', text='ماوصلني الطلب ؟؟',
-        )
-        self.assertEqual('human', res_mustafa['action'])
+        # Mustafa Rahman & JANNAT: missing-order phrasing routes to order_tracking even with no order saved
+        for idx, msg in enumerate(('ماوصلني الطلب ؟؟', 'طلبي ماكو شو 😞', 'سلام عليكم طلبي مااجة اليوم', 'شوكت يجي الطلب'), 1):
+            res_missing = entry.receive(
+                store_id='khuyoot', channel='zernio', account_id='a', sender_id=f'missing-ord-{idx}',
+                message_id=f'm-miss-{idx}', text=msg,
+            )
+            self.assertEqual('human', res_missing['action'], msg)
         from account_app.sales_runtime import copy_guard
         with self.assertRaisesRegex(ValueError, 'reply.booking'):
             copy_guard.validate_fulfillment(
