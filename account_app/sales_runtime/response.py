@@ -1288,7 +1288,7 @@ class Responses:
             try:
                 return self.validate_parts(parts, context, catalog, strict)
             except ValueError:
-                return None
+                pass
         return self.greeting_recovery(context) or self.courtesy_recovery(context)
 
     @staticmethod
@@ -1313,12 +1313,27 @@ class Responses:
 
     @staticmethod
     def greeting_recovery(context):
-        clean = checkout.normalized(context.get('customer_message', '')).strip(' .!؟?،🌷').lower()
-        if (context.get('progress', {}).get('product_unresolved') and context.get('mode') == 'continue'
-                and re.fullmatch(r'(?:(?:السلام|سلام)\s+عليكم(?:\s+ورحمة\s+الله(?:\s+وبركاته)?)?|مرحبا|هلاو?|هلو+|صباح الخير|مساء الخير|شلونكم|شخباركم|hi|hello|hey)', clean)):
+        if context.get('mode') != 'continue':
+            return None
+        clean = checkout.normalized(context.get('customer_message', '')).strip(' .!؟?،🌷🌹❤🌸').lower()
+        clean = re.sub(r'\s+(?:حبيبتي|عيني|حبي|عمري|حياتي|خويه|اخي|اختي)$', '', clean).strip()
+        if re.fullmatch(r'(?:(?:السلام|سلام)\s+عليكم(?:\s+ورحمة\s+الله(?:\s+وبركاته)?)?|مرحبا|مراحب|هلاو?|هلو+|صباح الخير|مساء الخير|شلونكم|شخباركم|hi|hello|hey)', clean):
             greeting = ('وعليكم السلام، يا هلا بيج 🌷' if clean.startswith(('السلام', 'سلام')) else
                         'صباح النور 🌷' if clean == 'صباح الخير' else
                         'مساء النور 🌷' if clean == 'مساء الخير' else 'يا هلا بيج 🌷')
+            q_field = context.get('question_field')
+            if q_field == 'product':
+                return [dict(type='text', text=f'{greeting} دزّيلي صورة الموديل اللي عجبج حتى أشوفلج تفاصيله وتوفره فوراً؟')]
+            if q_field is None:
+                return [dict(type='text', text=greeting)]
+            tail = {
+                'color': 'يا لون عجبج أكثر حتى نعتمدلج إياه؟',
+                'size': 'شنو القياس اللي يناسبج عيوني؟',
+                'age_months': 'فدوة شكد عمر الطفل حتى أشوفلج القياس المضبوط إله؟',
+                'weight_kg': 'شكد الوزن تقريباً حتى أختارلج القياس المضبوط؟',
+            }.get((q_field or '').rsplit('.', 1)[-1])
+            if tail:
+                return [dict(type='text', text=f'{greeting} {tail}')]
             return [dict(type='text', text=greeting)]
         return None
     def validate_parts(self, parts, context, catalog, strict):

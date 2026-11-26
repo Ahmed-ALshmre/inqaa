@@ -804,6 +804,11 @@ class LinkingTests(unittest.TestCase):
         self.assertTrue(kf.get('address'))
         # 3) "ابعثي صورة الوردي" recognized as catalog photo request
         self.assertTrue(sales_recovery.simple_photo_request('ابعثي صورة الوردي'))
+        # 4) Pure greeting "مرحبا" recovers cleanly even when product is already known (ad context)
+        g_parts = Responses.greeting_recovery(dict(mode='continue', customer_message='مرحبا', question_field='cart.one.age_months', progress={}))
+        self.assertTrue(g_parts and 'يا هلا' in g_parts[0]['text'] and 'عمر' in g_parts[0]['text'])
+        g_parts2 = Responses.greeting_recovery(dict(mode='continue', customer_message='مرحبا حبيبتي', question_field=None, progress={}))
+        self.assertTrue(g_parts2 and '؟' not in g_parts2[0]['text'])
 
         # Bug #4: "الاحمر اكو غير لون" must NOT return no_photo ("هسه ما عدنا صور لهاللون")
         self.select()
