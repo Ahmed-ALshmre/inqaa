@@ -178,9 +178,47 @@ def capture(store, scope, event_id, allow_write):
     if evidence['actor'] != 'customer':
         return {}
     snapshot = store.snapshot(scope)
-    text = evidence['payload'].get('text', '')
-    fields = declarations(text, snapshot['data']['contact'])
-    _, note = delivery_note(text)
+    current_contact = dict(snapshot['data']['contact'])
+    # Also scan any un-replied / superseded customer bubbles after the last
+    # completed turn so a phone or address sent just before a follow-up bubble
+    # (e.g. "0780..." followed by "دزيته الج") is never lost to turn_superseded.
+    done_rows = store.db.execute(
+        "SELECT operation_key FROM sales_v2_operations WHERE scope=? AND operation_key LIKE 'turn-v3:%:done'",
+        (scope.key,),
+    ).fetchall()
+    last_done_id = 0
+    for (op_key,) in done_rows:
+        parts = str(op_key or '').split(':')
+        if len(parts) >= 3 and parts[1].isdigit():
+            last_done_id = max(last_done_id, int(parts[1]))
+    recent_rows = store.db.execute(
+        """SELECT id, payload FROM sales_v2_events
+           WHERE scope=? AND actor='customer' AND kind='message' AND id>? AND id<=?
+           ORDER BY id ASC LIMIT 12""",
+        (scope.key, last_done_id, event_id),
+    ).fetchall()
+    if not recent_rows or recent_rows[-1][0] != event_id:
+        recent_rows = [(event_id, None)]
+    fields = {}
+    note = ''
+    for row_id, raw_payload in recent_rows:
+        if row_id == event_id or raw_payload is None:
+            row_text = evidence['payload'].get('text', '')
+        else:
+            import json
+            try:
+                row_text = (json.loads(raw_payload) or {}).get('text', '')
+            except Exception:
+                row_text = ''
+        if not row_text:
+            continue
+        merged_prev = {**current_contact, **{k: v for k, v in fields.items() if v}}
+        row_fields = declarations(row_text, merged_prev)
+        _, row_note = delivery_note(row_text)
+        if row_fields:
+            fields.update(row_fields)
+        if row_note:
+            note = row_note
     if not fields and not note:
         return {}
 

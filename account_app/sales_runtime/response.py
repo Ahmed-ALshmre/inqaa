@@ -252,7 +252,6 @@ class Responses:
                 return self.save(scope, key, reply_key, turn_id, snap['version'], parts)
             matches = (alternatives(catalog, focus, current, requested=True)['matches']
                        if product and not market['matches'] and not market['browse']
-                       and not any(line.get('size') or line.get('age_months') or line.get('weight_kg') for line in lines)
                        and accepted and accepted[-1].get('photo_offer_product') == focus
                        else market['matches'])
             pictured = []
@@ -289,6 +288,7 @@ class Responses:
             and not re.search(r'صور[هة]?|دز[يى]|ارسل[يى]|اشوف|ورين[يى]|شوفين[يى]', checkout.normalized(current))
         )
         if (self.product_photos and product and not photo_prefix and not asking_other_colors
+                and product_albums.stock_state(product) == 'available'
                 and (photo_text or plan.get('catalog_photos') or catalog_photo_request(current))):
             colors = product_variants.requested(photo_text or current)['colors']
             photos = self.product_photos(product, colors)

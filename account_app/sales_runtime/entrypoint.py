@@ -152,24 +152,31 @@ class Entrypoint:
         tracking = checkout.is_existing_order_followup(text) or bool(state.get('order_id') and
             sales_answers.same_day_delivery(text)) or bool(re.search(
             r'(?:شوكت|يمتى|متى)\s+(?:راح\s+)?(?:يوصل|توصل)\s+(?:ال)?طلب(?!\w)', clean))
-        sending_checkout = (state['cart'] and not state.get('order_id') and not prior_order
-                             and (state.get('purchase_event') or state.get('checkout_prompt')
-                                  or declarations(text, state['contact'])))
+        has_contact_now = bool(declarations(text, state['contact']))
+        sending_checkout = (
+            not state.get('order_id') and not prior_order
+            and (
+                has_contact_now
+                or (state['cart'] and (state.get('purchase_event') or state.get('checkout_prompt')))
+            )
+        )
         if explicit_cancellation(text) and not state.get('order_id'):
             return self.handoff_service(scope, event['id'], 'order_cancellation')
+        hypothetical_order = bool(re.search(
+            r'(?<!\w)(?:اذا|لو)\s+(?:طلبت|حجزت|اوصي|وصيت|اطلب|احجز)(?!\w)', clean))
         looking_for_order = bool(
             state.get('order_id')
-            or re.search(
+            or (not hypothetical_order and re.search(
                 r'(?<!\w)(?:طلبي|حجزي)(?!\w)|'
                 r'(?:وين|اين|نسيتون[يى]).{0,18}(?:ال)?طلب|'
                 r'ما\s*وصل(?:ني|تني|نا|ت|ل)?\s*(?:ال)?طلب|'
-                r'(?:شوكت|اشوكت|يمتى|متى)\s+(?:يجي|يوصل|يصل|توصل|تصل)\s+(?:ال)?طلب|'
+                r'(?:شوكت|اشوكت|يمتى|متى)\s+يجي\s+(?:ال)?طلب|'
                 r'حجزت.{0,28}(?:انتظر|يوصل|يمتى|متى|وين)|'
                 r'ما\s*(?:راح\s*)?(?:تبعث|تدز|ترسل|توصل)\w*.{0,18}(?:ال)?طلب',
                 clean,
-            )
+            ))
         )
-        delay_complaint = bool(re.search(
+        delay_complaint = bool(not hypothetical_order and re.search(
             r'(?:مو\s+)?صار(?:لي|\s+لي)?\s+(?:.{0,20}\s+)?(?:يومين|يوم(?:ا|اً)?|ايام|اسبوع|اسبوعين)(?!\w)'
             r'|كل\s+مر[هة]\s+(?:ت)?عيدولي\s+نفس\s+الكلام|(?:خوم|معقول)\s+(?:ا)?ضل\s+انتظر'
             r'|نسيتون[يى].{0,18}(?:ال)?طلب|حجزت.{0,28}انتظر\s+يوصل|ما\s*وصل(?:ني|تني|نا|ت|ل)?\s*(?:ال)?طلب'
