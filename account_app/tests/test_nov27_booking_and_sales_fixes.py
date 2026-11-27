@@ -5,6 +5,8 @@ from account_app import checkout, sales_recovery
 from account_app.sales_runtime import copy_guard
 from account_app.sales_runtime.contact import capture as capture_contact
 from account_app.sales_runtime.entrypoint import Entrypoint
+from account_app.sales_runtime.orders import Orders, migrate_tasks
+from account_app.sales_runtime.runtime import Runtime
 from account_app.sales_runtime.store import Scope, Store
 
 
@@ -25,16 +27,58 @@ class TestNov27BookingAndSalesFixes(unittest.TestCase):
         self.scope = Scope('baraah-kids', 'zernio', 'acc1', 'cust1')
         self.products = [
             {
+                'store_id': 'baraah-kids',
                 'product_id': 'P019',
+                'product_name': 'طقم نزلات',
                 'name': 'طقم نزلات',
+                'price': '20000',
                 'price_iqd': 20000,
-                'colors': ['أحمر', 'وردي'],
-                'sizes': 'من سنة إلى 5 سنوات',
+                'colors': 'أحمر، وردي',
+                'sizes': 'من 1 إلى 5 سنوات',
+                'size_system': 'age',
                 'selection_mode': 'age',
-                'min_age_months': 12,
-                'max_age_months': 60,
+                'age_min_months': 12,
+                'age_max_months': 60,
                 'status': 'active',
-                'stock_status': 'available',
+                'stock': 'متوفر',
+                'ad_id': '120251829540240095',
+                'ad_ids': ['120251829540240095'],
+            },
+            {
+                'store_id': 'baraah-kids',
+                'product_id': 'P024',
+                'product_name': 'تراك بناتي سحاب',
+                'name': 'تراك بناتي سحاب',
+                'price': '12000 او قطعتين ب 20000',
+                'price_iqd': 12000,
+                'colors': 'وردي، أحمر',
+                'sizes': 'من 2 إلى 8 سنوات',
+                'size_system': 'age',
+                'selection_mode': 'age',
+                'age_min_months': 24,
+                'age_max_months': 96,
+                'status': 'active',
+                'stock': 'متوفر',
+                'ad_id': '120252087323640095',
+                'ad_ids': ['120252087323640095'],
+            },
+            {
+                'store_id': 'baraah-kids',
+                'product_id': 'P012',
+                'product_name': 'تراك ولادي',
+                'name': 'تراك ولادي',
+                'price': '15000',
+                'price_iqd': 15000,
+                'colors': 'أسود، أخضر',
+                'sizes': 'من 1 إلى 3 سنوات',
+                'size_system': 'age',
+                'selection_mode': 'age',
+                'age_min_months': 12,
+                'age_max_months': 36,
+                'status': 'active',
+                'stock': 'متوفر',
+                'ad_id': '120252094682870095',
+                'ad_ids': ['120252094682870095'],
             },
         ]
 
@@ -99,6 +143,81 @@ class TestNov27BookingAndSalesFixes(unittest.TestCase):
                 self.assertTrue(sales_recovery.promises_photo_attachment(txt))
                 with self.assertRaises(ValueError):
                     copy_guard.validate_copy([dict(type='text', text=txt)], None, {})
+
+    def test_e2e_um_zuzu_single_burst_with_delivery_preference_books_order(self):
+        # End-to-end booking test: cart ready + customer sends "طوريج حي ضباط\n07734560441\nمثل كتلج اريده جمعه أو سبت"
+        migrate_tasks(self.db)
+        from account_app.sales_runtime.cart import Catalog as CartCatalog
+        loader = lambda sid: CartCatalog(sid, self.products)
+        orders = Orders(self.store, loader, lambda s, p: 5000)
+        decide = lambda ctx: dict(intent='continue', changes=[], contact={}, answer={})
+        rt = Runtime(self.store, loader, orders, decide, lambda sid: {'delivery_fee': {'كربلاء': 5000}, 'delivery_time': '24 ساعة إلى يومين'})
+        # Seed cart with 2 tracksuits (pink + red, 8 years = 96 months)
+        e0 = self.store.append(self.scope, 'init-umzuzu', kind='message', actor='customer', payload=dict(text='اريد الوردي والاحمر عمر 8'))
+        snap = self.store.snapshot(self.scope)
+        def seed_cart(st):
+            st['focus_product_id'] = 'P024'
+            st['cart'] = [
+                dict(line_id='L1', product_id='P024', color='وردي', size_system='age', age_months=96, quantity=1),
+                dict(line_id='L2', product_id='P024', color='أحمر', size_system='age', age_months=96, quantity=1),
+            ]
+            return dict(seeded=True)
+        self.store.apply(self.scope, 'seed-umzuzu', snap['version'], {}, seed_cart)
+        e1 = self.store.append(
+            self.scope, 'umzuzu-details', kind='message', actor='customer',
+            payload=dict(text='طوريج حي ضباط\n07734560441\nمثل كتلج\nاريده جمعه أو سبت'),
+        )
+        outcome = rt.turn(self.scope, e1['id'])
+        self.assertEqual('booked', outcome['action'])
+        row = self.db.execute('SELECT phone, province, address, total_amount FROM orders').fetchone()
+        self.assertEqual(('07734560441', 'كربلاء', 'طوريج حي ضباط', 25000), row)
+
+    def test_e2e_zahrat_ayloul_superseded_phone_then_dazetah_books_order(self):
+        # End-to-end booking test: address saved on E1, phone sent on E2 (superseded), E3 "دزيته الج" -> MUST BOOK!
+        migrate_tasks(self.db)
+        from account_app.sales_runtime.cart import Catalog as CartCatalog
+        loader = lambda sid: CartCatalog(sid, self.products)
+        orders = Orders(self.store, loader, lambda s, p: 5000)
+        decide = lambda ctx: dict(intent='continue', changes=[], contact={}, answer={})
+        rt = Runtime(self.store, loader, orders, decide, lambda sid: {'delivery_fee': {'كربلاء': 5000}, 'delivery_time': '24 ساعة إلى يومين'})
+        scope2 = Scope('baraah-kids', 'zernio', 'acc1', 'zahra-e2e')
+        self.store.append(scope2, 'z0', kind='message', actor='customer', payload=dict(text='اي احجزيلي'))
+        snap = self.store.snapshot(scope2)
+        def seed_cart(st):
+            st['focus_product_id'] = 'P019'
+            st['cart'] = [dict(line_id='L1', product_id='P019', color='أحمر', size_system='age', age_months=18, quantity=1)]
+            return dict(seeded=True)
+        self.store.apply(scope2, 'seed-zahra', snap['version'], {}, seed_cart)
+        e1 = self.store.append(scope2, 'z1', kind='message', actor='customer', payload=dict(text='كربلاء المقدسة حي العامل مقابيل المستوصف'))
+        out1 = rt.turn(scope2, e1['id'])
+        self.assertEqual('continue', out1['action'])
+        # Customer sends phone, then immediately sends "دزيته الج" before z2 finishes
+        self.store.append(scope2, 'z2', kind='message', actor='customer', payload=dict(text='٠٧٨٠٧٣٧٨٠٢٩'))
+        e3 = self.store.append(scope2, 'z3', kind='message', actor='customer', payload=dict(text='دزيته الج'))
+        out3 = rt.turn(scope2, e3['id'])
+        self.assertEqual('booked', out3['action'])
+        row = self.db.execute("SELECT phone, province, total_amount FROM orders WHERE sender_id='zahra-e2e'").fetchone()
+        self.assertEqual(('07807378029', 'كربلاء', 25000), row)
+
+    def test_new_ad_click_overrides_old_image_focus_while_repeated_ad_does_not(self):
+        from account_app.sales_runtime.cart import Catalog as CartCatalog
+        loader = lambda sid: CartCatalog(sid, self.products)
+        orders = Orders(self.store, loader, lambda s, p: 5000)
+        rt = Runtime(self.store, loader, orders, lambda ctx: dict(intent='continue', changes=[], contact={}, answer={}), lambda sid: {})
+        scope3 = Scope('baraah-kids', 'zernio', 'acc1', 'ad-switch')
+        self.store.append(scope3, 'a1', kind='message', actor='customer', payload=dict(text='مرحبا', ad={'ad_id': '120251829540240095'}))
+        snap = self.store.snapshot(scope3)
+        self.store.apply(scope3, 'img-focus', snap['version'], {}, lambda st: st.update(focus_product_id='P024', focus_source='image') or dict(ok=True))
+        state = self.store.snapshot(scope3)['data']
+        # Repeated old ad_id -> ignored so image focus P024 stays
+        self.store.append(scope3, 'a2', kind='message', actor='customer', payload=dict(text='شكد السعر', ad={'ad_id': '120251829540240095'}))
+        ref_old = rt.reference_for(scope3, loader('baraah-kids'), state, dict(text='شكد السعر', ad={'ad_id': '120251829540240095'}))
+        self.assertEqual('none', ref_old['status'])
+        # Brand-new ad_id (120252094682870095 -> P012) -> honored!
+        self.store.append(scope3, 'a3', kind='message', actor='customer', payload=dict(text='شكد السعر', ad={'ad_id': '120252094682870095'}))
+        ref_new = rt.reference_for(scope3, loader('baraah-kids'), state, dict(text='شكد السعر', ad={'ad_id': '120252094682870095'}))
+        self.assertEqual('known', ref_new['status'])
+        self.assertEqual('P012', ref_new['product_id'])
 
 
 if __name__ == '__main__':

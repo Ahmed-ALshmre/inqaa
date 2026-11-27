@@ -221,10 +221,25 @@ def apply_intent(state,plan,event_id,evidence,quote=None,last_reply=None, *, con
               and contacts.get('phone') and contacts.get('address') and contacts['phone']!=contacts['address']
               and event_id in (contacts['phone'],contacts['address'],contacts.get('province')))
     explicit_shipping_choice = any(shipping_selection(line)[0] for line in text.splitlines())
+    price_enquiry = bool(re.search(
+        r'(?:شكد|اشكد|كم|بشكد)\s*(?:سعر|واصل|يطلع|يصير|حساب|مجموع|توصيل)|'
+        r'واصل(?:ات|ة|ه)?\s*(?:شكد|اشكد|كم|بشكد)|(?:ال)?سعر\s*(?:شكد|اشكد|كم)',
+        value,
+    ))
     answered_with_details = bool((purchase_prompt or explicit_shipping_choice or complete_choice(state))
         and contacts.get('phone') == event_id == contacts.get('address')
         and state['contact'].get('province')
         and contact_only(text, quoted_total=(quote or {}).get('total')))
-    if confirmed_color_correction or purchase_selected(text) or contextual or declared or confirmed_purchase or answered_with_details:
+    full_details_booking = bool(
+        state['cart']
+        and (complete_choice(state) or purchase_prompt or explicit_shipping_choice or plan.get('intent') == 'buy')
+        and all(state['contact'].get(f) for f in ('phone', 'address', 'province'))
+        and event_id in (contacts.get('phone'), contacts.get('address'), contacts.get('province'))
+        and not pending
+        and not price_enquiry
+        and not purchase_declined(value)
+    )
+    if (confirmed_color_correction or purchase_selected(text) or contextual or declared
+            or confirmed_purchase or answered_with_details or full_details_booking):
         state['purchase_event']=event_id
     return False

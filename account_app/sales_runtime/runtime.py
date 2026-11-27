@@ -278,7 +278,27 @@ class Runtime:
         if reference['status'] == 'known':
             if (state.get('focus_source') == 'image' and reference['source'] == 'ad'
                     and reference['product_id'] != state.get('focus_product_id')):
-                return dict(status='none')
+                # Ignore a stale repeated ad_id from earlier in the same chat,
+                # but honor a brand-new ad click for a different product.
+                current_ad_id = (ad or {}).get('ad_id') if isinstance(ad, dict) else (ad if isinstance(ad, str) else None)
+                seen_ad = False
+                if current_ad_id:
+                    prior_ads = self.store.db.execute(
+                        "SELECT payload FROM sales_v2_events WHERE scope=? AND actor='customer' ORDER BY id DESC LIMIT 30",
+                        (scope.key,),
+                    ).fetchall()
+                    # Skip the very latest event (which is the current turn itself).
+                    for (raw_p,) in prior_ads[1:]:
+                        try:
+                            p_ad = (json.loads(raw_p) or {}).get('ad')
+                        except Exception:
+                            p_ad = None
+                        p_ad_id = p_ad.get('ad_id') if isinstance(p_ad, dict) else (p_ad if isinstance(p_ad, str) else None)
+                        if p_ad_id and str(p_ad_id) == str(current_ad_id):
+                            seen_ad = True
+                            break
+                if seen_ad or not current_ad_id:
+                    return dict(status='none')
             return reference
         if pending and reference['status'] == 'none':
             ad = ad or self.store.evidence(scope, pending_id)['payload'].get('ad')

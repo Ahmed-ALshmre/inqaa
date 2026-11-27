@@ -763,6 +763,13 @@ class Responses:
                 step_options = matching_sizes if len(matching_sizes) <= 2 else []
         context = dict(
             mode=mode, state=state, facts=allowed_facts, product_facts=product_facts,
+            **({'current_product': dict(
+                name=customer_copy.fact(product.get('product_name') or ''),
+                category=customer_copy.reply_category(product) or '',
+                stock='متوفر' if product_albums.stock_state(product) == 'available' else 'مخلص',
+                sizes=customer_copy.fact(product.get('sizes') or ''),
+                colors=customer_copy.fact(product.get('colors') or ''),
+            )} if product else {}),
             **({'consultant_guidance': outcome['consultant_guidance']} if outcome.get('consultant_guidance') else {}),
             question_field=question, goal=plan.get('goal',''), policies=policy,
             customer_message=current, requested_fields=requested,
@@ -805,17 +812,21 @@ class Responses:
                     continue
                 if p.get('recommendation_enabled') is False:
                     continue
-                catalog_map.append({
-                    'name': customer_copy.reply_category(p) or customer_copy.fact(p.get('product_name'))[:60],
+                if product_albums.stock_state(p) != 'available':
+                    continue
+                entry_map = {
+                    'name': customer_copy.fact(p.get('product_name'))[:60] or customer_copy.reply_category(p),
                     'search_names': customer_copy.fact(str(p.get('keywords') or ''))[:80],
-                    'stock': 'متوفر' if product_albums.stock_state(p) == 'available' else 'مخلص',
+                    'stock': 'متوفر',
                     'audience': p.get('audience') or '',
                     'type': p.get('product_type') or '',
                     'occasions': p.get('occasions') or [],
                     'groups': p.get('recommendation_groups') or [],
                     'sizes': customer_copy.fact(p.get('sizes') or '')[:60],
-                    'price': customer_copy.fact(str(p.get('price') or ''))[:40],
-                })
+                }
+                if not amounts:
+                    entry_map['price'] = customer_copy.fact(str(p.get('price') or ''))[:40]
+                catalog_map.append(entry_map)
             if catalog_map:
                 context['store_catalog_map'] = catalog_map[:25]
         if state.get('focus_source') == 'image' and focus:

@@ -266,12 +266,13 @@ def fact_recovery_parts(context):
         piece_label = 'القطعة' if price_unit == 1 else f'البكج ({price_unit} قطع)'
         offer_qty = context.get('promotion_quantity')
         price_lines = {
-            'unit_price': f'{piece_label} بـ{{{{unit_price}}}}.',
-            'offer_total': f'عرض {offer_qty} قطع بـ{{{{offer_total}}}}.' if offer_qty != 2 else 'القطعتين بالعرض بـ{{offer_total}}.',
-            'subtotal': 'سعر القطع {{subtotal}}.',
-            'discount': 'الخصم {{discount}}.',
-            'delivery_fee': 'التوصيل {{delivery_fee}}.',
-            'total': 'المجموع ويا التوصيل {{total}}.',
+            'unit_price': f'سعر {piece_label} {{{{unit_price}}}} عيوني، والدفع عند الاستلام بعد الفحص كدام المندوب.',
+            'offer_total': (f'وعليه عرض خاص {offer_qty} قطع بـ{{{{offer_total}}}} بنفس التوصيل.'
+                            if offer_qty != 2 else 'وعليه عرض خاص القطعتين بـ{{offer_total}} بنفس التوصيل، يطلع عليج أوفر هواية.'),
+            'subtotal': 'سعر القطع {{subtotal}} عيوني.',
+            'discount': 'والخصم {{discount}}.',
+            'delivery_fee': 'التوصيل {{delivery_fee}} لكل المحافظات مع حق الفحص كدام المندوب قبل الدفع.',
+            'total': 'المجموع الكلي ويا التوصيل {{total}} والدفع عند الاستلام.',
             'discounted_subtotal': 'سعر القطع بعد الخصم {{discounted_subtotal}}.',
             'alternative_price': 'وسعر البديل {{alternative_price}}.',
         }
