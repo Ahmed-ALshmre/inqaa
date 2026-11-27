@@ -113,7 +113,7 @@ class BurstTimingTests(unittest.TestCase):
 
     def test_twenty_seconds_after_latest_message_without_extra_old_jobs(self):
         for value, kind in [('صورة','image'),('شنو قماشه؟','text'),('07701234567','text'),('', 'audio')]:
-            self.assertEqual(20, sales_progress.debounce_seconds(value,kind,35))
+            self.assertEqual(10, sales_progress.debounce_seconds(value,kind,35))
             self.assertEqual(0, sales_progress.debounce_seconds(value,kind,0))
         with patch.object(ai_jobs.time,'time',return_value=100):
             first = ai_jobs.enqueue(self.db,'khuyoot','customer','sales_runtime',dict(incoming_id=1),'1',delay=20)

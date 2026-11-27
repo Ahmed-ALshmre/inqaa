@@ -103,7 +103,7 @@ for _k, _v in {
     "CHECKER_ENABLED":         "0",
     "VISION_ENABLED":          "0",
     "DISABLE_CLIP":            "1",
-    "DEBOUNCE_DELAY":          "20",
+    "DEBOUNCE_DELAY":          "10",
     "HUMAN_REVIEW_ALL_IMAGES": "1",
 
 # IMAGE_AI_PATCH_NOTES:
@@ -354,7 +354,7 @@ if PUBLIC_URL:
 else:
     print("[Config] ⚠️  PUBLIC_URL not set — image URLs may resolve to localhost", flush=True)
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "admin123")
-DEBOUNCE_DELAY     = max(0, int(os.environ.get("DEBOUNCE_DELAY", "20")))
+DEBOUNCE_DELAY     = max(0, int(os.environ.get("DEBOUNCE_DELAY", "10")))
 ASYNC_WEBHOOK      = os.environ.get("ASYNC_WEBHOOK", "1") == "1"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))

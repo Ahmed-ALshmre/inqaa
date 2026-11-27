@@ -107,7 +107,7 @@ def unique_category_product(text, products, store_id):
 
 
 def debounce_seconds(text, message_type, configured):
-    """Collect the entire customer burst for twenty seconds after its last event."""
+    """Collect the entire customer burst for ten seconds after its last event."""
     if configured <= 0:
         return 0
-    return 20
+    return 10
