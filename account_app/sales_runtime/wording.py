@@ -144,9 +144,9 @@ def validate_next_step(parts, step):
 
 
 def checkout_question(field, gender, *, final_detail):
-    welcome = 'حبيبتي' if gender == 'female' else 'عيني'
-    labels = {'contact.phone': 'رقم الموبايل', 'contact.address': 'العنوان بالتفصيل',
-              'contact.province': 'المحافظة', 'contact.details': 'رقم الموبايل والعنوان بالتفصيل'}
+    welcome = 'من عيوني' if gender == 'female' else 'عيني'
+    labels = {'contact.phone': 'رقم الموبايل', 'contact.address': 'العنوان الكامل',
+              'contact.province': 'المحافظة', 'contact.details': 'العنوان الكامل ورقم الموبايل'}
     request = 'باقي بس' if final_detail else 'دزّيلي' if gender == 'female' else 'دزلي'
     return f'{welcome}، {request} {labels[field]} حتى أثبتلج الحجز مباشرة 🌷' if gender == 'female' else f'{welcome}، {request} {labels[field]} حتى أثبتلك الحجز مباشرة 🌷'
 
@@ -154,6 +154,7 @@ def checkout_question(field, gender, *, final_detail):
 def fact_recovery_parts(context):
     """Render independently verifiable answers when both writing attempts fail."""
     from .. import sales_answers, variant_inventory
+    from . import hybrid_playbook
 
     if context['mode'] != 'continue' or context.get('provisional_photo'):
         return None
@@ -250,6 +251,12 @@ def fact_recovery_parts(context):
             lines.append(f'{selected_color} بقياس {selected_size} {status}.')
             covered.update({'colors', 'sizes'})
     for field in context.get('requested_fields', ()):
+        if field == 'inspection_policy' and hybrid_playbook.is_inspection_risk_question(message):
+            zero_risk = hybrid_playbook.deterministic_inspection_risk_line(context.get('policies'))
+            if zero_risk:
+                lines.append(zero_risk)
+                covered.add('inspection_policy')
+                continue
         value = facts.get(field)
         if field in covered or not isinstance(value, str) or len(value) > 215 or field == 'sizes' and value == 'none':
             continue

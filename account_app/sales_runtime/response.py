@@ -4,6 +4,7 @@ import os
 import re
 
 from .. import catalog_profile, checkout, customer_copy, owner_sales, pricing, product_albums, product_variants, reply_layout, sales_answers, sales_intelligence, sales_playbook, sales_strategy, sales_voice, variant_inventory
+from . import hybrid_playbook
 from .backup import BackupFailed, consult
 from .cart import CartService
 from .store import Conflict, digest
@@ -713,6 +714,30 @@ class Responses:
                     amounts['unit_price'] = price
             except ValueError:
                 pass
+        if (product and not quote_turn and not promotion
+                and hybrid_playbook.is_total_with_delivery_question(current)
+                and 'total' not in amounts):
+            base_amount = amounts.get('unit_price') or amounts.get('subtotal')
+            if base_amount is None:
+                try:
+                    qty_for_total = quantity or sum(line['quantity'] for line in lines) or pricing.terms(product)[0]
+                    base_amount = pricing.quote([dict(product_id=focus, quantity=qty_for_total)], [product], None)['product_total']
+                except ValueError:
+                    base_amount = None
+            fee_for_total = amounts.get('delivery_fee')
+            if fee_for_total is None:
+                if product_free_delivery:
+                    fee_for_total = 0
+                elif product_fee is not None:
+                    fee_for_total = product_fee
+                elif isinstance(policy.get('delivery_fee'), dict):
+                    province = destination(current) or state['contact'].get('province') or state.get('quote_province')
+                    fees_map = policy.get('delivery_fee')
+                    fee_for_total = fees_map.get(province)
+                    if fee_for_total is None and fees_map and len(set(fees_map.values())) == 1:
+                        fee_for_total = next(iter(fees_map.values()))
+            if type(base_amount) is int and type(fee_for_total) is int:
+                amounts['total'] = base_amount + fee_for_total
         if promotion:
             requested_fee = amounts.get('delivery_fee') if 'delivery_fee' in requested else None
             amounts = {'unit_price': retail_price, 'offer_total': promotion[1]}
@@ -792,6 +817,18 @@ class Responses:
             catalog_memory=dict(market, matches=[], opportunity=None) if market['opportunity'] and question != 'catalog.show_option' else market,
             learned_sales_tactics=sales_intelligence.learned_tactics(
                 self.store.db, scope.store, current, bool(market['matches'])),
+            hybrid_sales_playbook=hybrid_playbook.build_playbook(
+                current,
+                state=state,
+                product=product,
+                policy=policy,
+                catalog_stock=product_albums.stock_state(product) if product else 'unknown',
+                question=question,
+                amounts=amounts,
+                recommendations=recommendations,
+                market=market,
+                recent_messages=messages,
+            ),
             promotion_quantity=promotion[0] if promotion else None,
             free_delivery_min_quantity=free_quantity if free_quantity and free_quantity > 1 else None,
             stock_conflict=stock_conflict, catalog_stock=product_albums.stock_state(product) if product else 'unknown',
@@ -1210,16 +1247,24 @@ class Responses:
             })
         per_model_photos = bool(self.product_photos and len(matched_products) >= 2)
         all_sold_out = bool(matched_products) and all(item.get('stock') != 'available' for item in matched_products)
-        q_field = ('alternatives.photos' if all_sold_out else 'product') if per_model_photos else 'photo.reference'
+        q_field = ('alternatives.photos' if all_sold_out else 'photo.reference') if per_model_photos else 'photo.reference'
+        photo_clarification = dict(multiple=multiple, possible_product=label, unreadable=unreadable,
+                                   quantity_quote=stage == 'photo-quantity',
+                                   per_model_photos=per_model_photos,
+                                   all_sold_out=all_sold_out,
+                                   matched_products=matched_products)
         context = dict(mode='continue', customer_message=current, recent_messages=messages, recent_replies=accepted,
                        question_field=q_field, next_step=dict(field=q_field, options=[]),
                        copy_budget=460 if len(matched_products) >= 2 else 145,
                        amounts=amounts or {}, greeting=greeting, action_results={},
-                       photo_clarification=dict(multiple=multiple, possible_product=label, unreadable=unreadable,
-                                                quantity_quote=stage == 'photo-quantity',
-                                                per_model_photos=per_model_photos,
-                                                all_sold_out=all_sold_out,
-                                                matched_products=matched_products))
+                       photo_clarification=photo_clarification,
+                       hybrid_sales_playbook=hybrid_playbook.build_playbook(
+                           current,
+                           question=q_field,
+                           amounts=amounts or {},
+                           photo_clarification=photo_clarification,
+                           recent_messages=messages,
+                       ))
         parts = self.write(context, catalog, scope, turn_id, version)
 
         def _model_photo(prod):
@@ -1481,7 +1526,7 @@ class Responses:
                 raise ValueError('reply.layout: remove repetition or break long prose into complete short ideas')
             raw_parts = list(layout['reply_parts'])
             if sales_turn and not layout['exception']:
-                raw_parts = self.split_short_bubbles(raw_parts, max_len=135, max_parts=4)
+                raw_parts = self.split_short_bubbles(raw_parts, max_len=115, max_parts=4)
             parts = [dict(type='text', text=part) for part in raw_parts]
             if len(parts) > 1:
                 for part in parts:
