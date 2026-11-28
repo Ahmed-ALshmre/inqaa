@@ -3169,7 +3169,7 @@ def _customer_gender_from_db(db, sender_id: str, *, text='', history=(), custome
             (sender_id,),
         ).fetchone()
         profile = dict(row) if row else {}
-        profile.update({k: v for k, v in (customer or {}).items() if k in {'name', 'gender'} and v})
+        profile.update({k: v for k, v in (customer or {}).items() if k in {'name', 'gender'} and (v or (k == 'name' and v is not None))})
         incoming = db.execute(
             "SELECT text,direction FROM messages WHERE sender_id=? AND direction='incoming' "
             "ORDER BY id DESC LIMIT 20", (sender_id,),
@@ -3581,11 +3581,16 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
     if not OPENROUTER_KEY:
         return _followup_fallback_message(stage, product)
 
+    followup_store = current_store_id()
+    followup_gender = _customer_gender_from_db(
+        db, sender_id,
+        customer={'name': ''} if followup_store in owner_sales.WOMENS_STORES else None,
+    )
     system_prompt = (
         f"{render_setting_template(db, 'prompt_followup_system', DEFAULT_FOLLOWUP_SYSTEM_PROMPT)}\n\n"
-        f"{sales_engagement.guide(current_store_id())}\n\n"
+        f"{sales_engagement.guide(followup_store)}\n\n"
         f"{sales_engagement.FOLLOWUP_GUIDE}\n\n"
-        f"{owner_sales.address_guidance(_customer_gender_from_db(db, sender_id))}\n\n"
+        f"{owner_sales.address_guidance(followup_gender)}\n\n"
         'إذا بقي سؤال عن طول القطعة أو البطانة أو الإغلاق فلا تعد لسؤال الحجز أو الوزن. '
         'استخدم المعلومة الجديدة إن أصبحت متوفرة؛ إذا ما زالت مجهولة اترك reply فارغاً لتُحسم مراجعتها أولاً. '
         'لا تستخدم مجرد تذكير العميل بما اختاره كدليل أنك أضفت فائدة جديدة.\n'
@@ -3647,7 +3652,7 @@ def generate_ai_followup_message(db, sender_id, stage, product=None):
             if problem or repeated or conversation_quality.grounded_error(reply, product, load_active_products(db)):
                 sales_learning.record(db, current_store_id(), 'stock_contradiction' if problem else 'repeated_contact' if repeated else 'unsupported_claim')
                 return None
-            return owner_sales.surface(reply[:500].strip(), _customer_gender_from_db(db, sender_id), warm=False, store_id=current_store_id())
+            return owner_sales.surface(reply[:500].strip(), followup_gender, warm=False, store_id=followup_store)
         return None
     except Exception as exc:
         print(f"[FollowUpAI] error for {sender_id}: {exc}", flush=True)

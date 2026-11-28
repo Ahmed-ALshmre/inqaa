@@ -46,6 +46,7 @@ def validate_fulfillment(parts, proof):
             r'(?:ثبتت|ثبتنا|حجزت|حجزنا)\s*(?:ال?ج|لچ|لك|لكم)(?!\w)|'
             r'(?:راح|هسه)\s+(?:نجهز|نرتب|نشحن)\w*\s+(?:ال?ج|لچ|لك)(?!\w)|'
             r'اعتمدت(?:لج|لچ|لك)?\s+(?:الطلب|الحجز)|'
+            r'اعتمدت\s+[^.؟!\n]{0,35}لتثبيت\s+(?:ال)?(?:حجز|طلب)|'
             r'(?:يوصلج|يوصلچ|يوصلك)\s+نفس\s+الموديل', text):
         raise ValueError('reply.booking: saving a selection is not a committed order')
     if not proof.get('carrier_contacted') and re.search(

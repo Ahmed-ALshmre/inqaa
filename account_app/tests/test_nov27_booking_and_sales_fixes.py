@@ -90,6 +90,8 @@ class TestNov27BookingAndSalesFixes(unittest.TestCase):
         # Colloquial Baghdad districts without "ال"
         self.assertEqual('بغداد', checkout.contact_fields('زعفرانية شارع المعهد').get('province'))
         self.assertEqual('بغداد', checkout.contact_fields('بنوك قرب السوق').get('province'))
+        self.assertEqual('بغداد', checkout.contact_fields('عنواني لشعب شارع الصحه رقمي07717419444').get('province'))
+        self.assertEqual('بغداد', checkout.contact_fields('الشعب قرب السوق').get('province'))
 
     def test_superseded_phone_bubble_is_recovered_on_followup_turn(self):
         # Zahrat Ayloul: address saved on E1 (completed), then E2 ("٠٧٨٠٧٣٧٨٠٢٩")
@@ -143,6 +145,12 @@ class TestNov27BookingAndSalesFixes(unittest.TestCase):
                 self.assertTrue(sales_recovery.promises_photo_attachment(txt))
                 with self.assertRaises(ValueError):
                     copy_guard.validate_copy([dict(type='text', text=txt)], None, {})
+        # Fake booking claim mentioning province adoption before order_saved must be blocked
+        with self.assertRaisesRegex(ValueError, 'reply.booking'):
+            copy_guard.validate_fulfillment(
+                [dict(type='text', text='وبالنسبة لطلب البنوتات اعتمدت محافظة بغداد لتثبيت حجزه وتدللين عيوني.')],
+                {'order_saved': False},
+            )
 
     def test_e2e_um_zuzu_single_burst_with_delivery_preference_books_order(self):
         # End-to-end booking test: cart ready + customer sends "طوريج حي ضباط\n07734560441\nمثل كتلج اريده جمعه أو سبت"
