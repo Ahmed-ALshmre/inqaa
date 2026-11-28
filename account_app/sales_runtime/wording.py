@@ -250,13 +250,15 @@ def fact_recovery_parts(context):
             status = 'موجود' if matching and not feedback else 'ما متوفر'
             lines.append(f'{selected_color} بقياس {selected_size} {status}.')
             covered.update({'colors', 'sizes'})
+    if context.get('catalog_stock') == 'out' and question == 'alternatives.photos':
+        lines.append('حبيبتي هالموديل للأسف مخلص حالياً.')
+        covered.update({'sizes', 'colors'})
+    if hybrid_playbook.is_inspection_risk_question(message):
+        zero_risk = hybrid_playbook.deterministic_inspection_risk_line(context.get('policies'))
+        if zero_risk:
+            lines.append(zero_risk)
+            covered.update({'inspection_policy', 'payment'})
     for field in context.get('requested_fields', ()):
-        if field == 'inspection_policy' and hybrid_playbook.is_inspection_risk_question(message):
-            zero_risk = hybrid_playbook.deterministic_inspection_risk_line(context.get('policies'))
-            if zero_risk:
-                lines.append(zero_risk)
-                covered.add('inspection_policy')
-                continue
         value = facts.get(field)
         if field in covered or not isinstance(value, str) or len(value) > 215 or field == 'sizes' and value == 'none':
             continue
