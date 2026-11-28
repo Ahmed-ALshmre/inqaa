@@ -1,12 +1,15 @@
 """Revocable, read-only operational access. No SQL or dashboard write proxy."""
 import hashlib
 import json
+import os
 import re
 import secrets
 import time
 from functools import wraps
 from pathlib import Path
+from urllib.parse import quote
 
+import requests
 from flask import g, jsonify, render_template, request, send_file, session
 
 
@@ -337,3 +340,68 @@ def install(m):
                 if m._incoming_media_filename.fullmatch(filename) and path.parent==root and path.is_file():
                     return send_file(path,as_attachment=True)
         return jsonify(error='Archived media unavailable; no external fetch was performed'),404
+
+    def _zernio_get(path, params=None):
+        token = os.environ.get('ZERNIO_API_KEY', '').strip()
+        if not token:
+            return jsonify(error='ZERNIO_API_KEY is not configured on this server'), 503
+        try:
+            resp = requests.get(
+                m.zernio.API_URL + path,
+                params=params or {},
+                headers={'Authorization': 'Bearer ' + token},
+                timeout=(10, 25),
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            return jsonify(error='Zernio upstream request failed'), 502
+        if not 200 <= resp.status_code < 300:
+            return jsonify(error=f'Zernio returned HTTP {resp.status_code}'), 502
+        try:
+            body = resp.json()
+        except ValueError:
+            return jsonify(error='Zernio returned non-JSON response'), 502
+        return jsonify(redact(body))
+
+    @app.get('/api/live/v1/zernio/accounts')
+    @reader
+    def live_zernio_accounts():
+        bindings = m.zernio.account_bindings()
+        items = [dict(account_id=aid, store_id=info.get('store_id'), platform=info.get('platform'))
+                 for aid, info in bindings.items()]
+        return jsonify(items=items, key_present=bool(os.environ.get('ZERNIO_API_KEY', '').strip()))
+
+    @app.get('/api/live/v1/zernio/conversations')
+    @reader
+    def live_zernio_conversations():
+        bindings = m.zernio.account_bindings()
+        account_id = (request.args.get('accountId') or request.args.get('account_id') or '').strip()
+        store_id = (request.args.get('store_id') or '').strip()
+        if not account_id and store_id:
+            account_id = next((aid for aid, info in bindings.items() if info.get('store_id') == store_id), '')
+        if account_id and account_id not in bindings:
+            raise ValueError('Unknown Zernio accountId')
+        limit = min(max(1, integer('limit', 50)), 100)
+        params = {'limit': limit}
+        if account_id:
+            params['accountId'] = account_id
+        for key in ('cursor', 'platform', 'status'):
+            if request.args.get(key):
+                params[key] = request.args[key][:200]
+        return _zernio_get('/inbox/conversations', params)
+
+    @app.get('/api/live/v1/zernio/conversations/<conversation_id>/messages')
+    @reader
+    def live_zernio_conversation_messages(conversation_id):
+        bindings = m.zernio.account_bindings()
+        account_id = (request.args.get('accountId') or request.args.get('account_id') or '').strip()
+        if account_id and account_id not in bindings:
+            raise ValueError('Unknown Zernio accountId')
+        limit = min(max(1, integer('limit', 50)), 100)
+        params = {'limit': limit}
+        if account_id:
+            params['accountId'] = account_id
+        for key in ('cursor', 'before', 'after'):
+            if request.args.get(key):
+                params[key] = request.args[key][:200]
+        return _zernio_get('/inbox/conversations/' + quote(conversation_id, safe='') + '/messages', params)
