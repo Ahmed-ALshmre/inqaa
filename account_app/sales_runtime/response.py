@@ -324,7 +324,7 @@ class Responses:
                     break
                 requested = list(dict.fromkeys([*fields, *requested]))
         if matched_photo_only and not requested and not lines:
-            requested.append('price')
+            requested.extend(['price', 'sizes'])
         offer_question = bool(re.fullmatch(r'(?:شنو|شني|ما هو|ماهو)\s+(?:ال)?عرض(?:كم|ه)?', clean))
         if offer_question and 'price' not in requested:
             requested.append('price')
@@ -573,7 +573,15 @@ class Responses:
                 if quantity_objection:
                     stage = 'price-quantity'
         if fit and not fit['within_catalog_range'] and not feedback:
-            question = None
+            alt_recs = alternatives(catalog, focus, current, requested=True) if product else {'matches': []}
+            can_send_alt = bool(self.product_photos and any(
+                self.product_photos(catalog.get(match['product_id']), []) for match in alt_recs.get('matches', [])))
+            if can_send_alt:
+                recommendations = alt_recs
+                question = 'alternatives.photos'
+                stage = 'fit-alternatives'
+            else:
+                question = None
         if (product and product.get('selection_mode') == 'weight' and question
                 and (question == f'product.{focus}.size'
                      or any(question == f"cart.{line['line_id']}.size" for line in lines if line['product_id'] == focus))):
@@ -659,6 +667,11 @@ class Responses:
                 previous = [p for p in previous if p.get('quote_key') == offer_key]
             if previous:
                 question = None
+        if (question is None and product_unresolved and not state.get('order_id')
+                and not only_same_day_question(current)
+                and not (accepted and accepted[-1].get('question_field') == 'product')):
+            question = 'product'
+            stage = 'policy-invite'
         recap = bool(not feedback and (purchase_turn or selected or repeat_selection)
                      and set(requested) <= {'colors', 'sizes'})
         available_fields = set(requested) if requested or contact_turn or acknowledgment else set(FACT_FIELDS)

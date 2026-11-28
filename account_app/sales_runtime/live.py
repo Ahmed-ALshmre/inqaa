@@ -609,7 +609,9 @@ def schedule_live_followup(module, db, scope, entry, action):
                 )
             except Exception:
                 pass
+        delay_by_stage = {'checkout': 30, 'selection': 45, 'conversation': 90}
         return scheduler(db, scope.sender, stage=stage, product=product,
+                         delay_minutes=delay_by_stage.get(stage),
                          meta={'source': 'sales_runtime_v2', 'store_id': scope.store})
     except Exception:
         return None
